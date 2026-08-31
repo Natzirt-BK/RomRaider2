@@ -129,6 +129,8 @@ Validation and known limits
 
 - Linux OpenPort 2.0 Subaru ECU identification and sustained SSM/ISO9141
   logging have passed an in-car test.
+- RC2 includes an automated fix for unexpected interface disconnect recovery;
+  its connected USB-removal retest is deferred to RC3.
 - Mitsubishi MUT-II vehicle logging still requires connected qualification.
 - The Windows portable package passes automated build and startup checks;
   connected-hardware validation remains pending.

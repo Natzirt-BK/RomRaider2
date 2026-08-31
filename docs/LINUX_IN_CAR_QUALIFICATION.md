@@ -86,6 +86,9 @@ suffix redacted.
 The USB-removal test found two failures in the earlier candidate: file capture
 remained selected after the interface disconnected, and Reset Connection could
 not restart the stopped query worker. RC2 closes and flushes the capture when
-the connection stops and uses the real worker state when reconnecting. The
-rebuilt RC2 candidate must repeat the complete checklist before the Linux
-checkpoint is marked passed.
+the connection stops and uses the real worker state when reconnecting.
+
+The connected USB-removal retest is deferred to RC3. RC2 is qualified for the
+normal connection, capture, stop, disconnect, and reconnect workflow. Its new
+unexpected-disconnect recovery has automated coverage but is not claimed as a
+completed connected-vehicle qualification.

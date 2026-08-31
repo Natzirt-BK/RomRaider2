@@ -63,8 +63,9 @@ Linux. Windows users can download a self-contained portable RomRaider2 package.
 
 The Linux OpenPort 2.0 Subaru SSM/ISO9141 path has completed ECU identification
 and sustained in-car logging. Mitsubishi MUT-II vehicle logging and Windows
-connected-hardware testing are still qualification items. ECU memory writing
-and flashing are not enabled in RomRaider2 RC2.
+connected-hardware testing are still qualification items. The RC2 unexpected
+USB-disconnect fix has automated coverage; its connected retest is deferred to
+RC3. ECU memory writing and flashing are not enabled in RomRaider2 RC2.
 
 Release archives contain software only. Vehicle ROMs, definitions, logger
 profiles, captured logs, and owner-specific tuning material are not included.

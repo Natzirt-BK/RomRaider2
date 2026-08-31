@@ -154,8 +154,8 @@ normal Editor UI.
 
 ## Next checkpoints
 
-- Complete the current-candidate Linux Subaru read-only qualification in
-  `docs/LINUX_IN_CAR_QUALIFICATION.md`.
+- Repeat the connected USB-removal recovery test for RC3 and complete the
+  remaining Linux Subaru checklist in `docs/LINUX_IN_CAR_QUALIFICATION.md`.
 - Evaluate compatible external renderers behind the visualization-provider API.
 - Extend history grouping to preset and future bulk-analysis transformations.
 - Add analysis overlays and reusable channel/graph workspace presets.
