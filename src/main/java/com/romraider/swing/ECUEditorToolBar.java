@@ -301,7 +301,9 @@ public class ECUEditorToolBar extends JToolBar implements ActionListener {
     }
 
     public void updateButtons() {
-        String file = getEditor().getLastSelectedRomFileName();
+        ECUEditor editor = ECUEditorManager.getECUEditorWithoutCreation();
+        String file = editor == null ? ""
+                : editor.getLastSelectedRomFileName();
 
         openImage.setToolTipText(rb.getString("OPEN"));
         saveImage.setToolTipText(MessageFormat.format(
@@ -324,7 +326,7 @@ public class ECUEditorToolBar extends JToolBar implements ActionListener {
         readEcu.setEnabled(false);
         writeEcu.setEnabled(false);
         connect.setEnabled(true);
-        compare.setEnabled(getEditor().getImages().size() > 1);
+        compare.setEnabled(editor != null && editor.getImages().size() > 1);
         revalidate();
     }
 

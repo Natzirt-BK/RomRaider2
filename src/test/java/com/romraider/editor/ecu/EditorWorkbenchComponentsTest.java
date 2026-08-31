@@ -353,9 +353,11 @@ public class EditorWorkbenchComponentsTest {
 
     @Test
     public void editorAppBarOmitsManualPlatformSelection() {
+        ECUEditorManager.clearECUEditor();
         ECUEditorToolBar editorToolbar = new ECUEditorToolBar("Editor");
         ApplicationControlsPanel full = new ApplicationControlsPanel();
 
+        assertNull(ECUEditorManager.getECUEditorWithoutCreation());
         assertEquals(0, count(editorToolbar, JComboBox.class));
         assertEquals(5, count(full, JComboBox.class));
     }

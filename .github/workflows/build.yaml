@@ -26,7 +26,8 @@ jobs:
         run: |
           packaging/java21/verify-audited-dependencies.sh
           cp packaging/default/settings.xml settings.xml
-          timeout 10m xvfb-run -a ant clean unittest build-linux
+          timeout 10m xvfb-run -a ant clean unittest
+          ant clean build-linux
           packaging/java21/audit-runtime-modules.sh build/linux/lib/RomRaider2.jar
       - name: Check whitespace
         run: git diff --check
