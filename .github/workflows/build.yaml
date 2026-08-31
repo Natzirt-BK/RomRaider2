@@ -43,6 +43,9 @@ jobs:
           distribution: temurin
           java-version: "21"
           architecture: x64
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc,i686-pc-windows-msvc
       - name: Install Ant
         shell: pwsh
         run: choco install ant --no-progress -y
@@ -50,6 +53,7 @@ jobs:
         shell: pwsh
         run: |
           ant clean build-windows
+          ./packaging/java21/build-j2534-bridges.ps1
           ./packaging/java21/build-windows-app-image.ps1
           ./packaging/java21/build-windows-release.ps1
       - name: Upload Windows x64 preview

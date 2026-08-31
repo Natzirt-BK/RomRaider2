@@ -34,6 +34,7 @@ import javax.swing.JSplitPane;
 import javax.swing.SwingUtilities;
 import javax.swing.ScrollPaneConstants;
 import javax.swing.RowFilter;
+import javax.swing.text.View;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.TableColumnModel;
@@ -69,24 +70,25 @@ import com.romraider.ui.swing.ModernSearchField;
 public final class EditorInspectorPanel extends JPanel implements PlatformContextListener {
     private static final long serialVersionUID = 1L;
     private static final int LIVE_VALUE_PAGE_SIZE = 4;
-    private final JLabel selectionTitle = new JLabel("No table selected");
-    private final JLabel tableName = valueLabel();
-    private final JLabel category = valueLabel();
-    private final JLabel address = valueLabel();
-    private final JLabel tableType = valueLabel();
-    private final JLabel dimensions = valueLabel();
-    private final JLabel scale = valueLabel();
-    private final JLabel valueRange = valueLabel();
-    private final JLabel access = valueLabel();
-    private final JLabel liveSupport = valueLabel();
+    private final WrappingLabel selectionTitle = new WrappingLabel(
+            "No table selected");
+    private final WrappingLabel tableName = valueLabel();
+    private final WrappingLabel category = valueLabel();
+    private final WrappingLabel address = valueLabel();
+    private final WrappingLabel tableType = valueLabel();
+    private final WrappingLabel dimensions = valueLabel();
+    private final WrappingLabel scale = valueLabel();
+    private final WrappingLabel valueRange = valueLabel();
+    private final WrappingLabel access = valueLabel();
+    private final WrappingLabel liveSupport = valueLabel();
     private final JTextArea description = new JTextArea();
-    private final JLabel romFile = valueLabel();
-    private final JLabel romId = valueLabel();
-    private final JLabel romSize = valueLabel();
-    private final JLabel tableCount = valueLabel();
-    private final JLabel platform = valueLabel();
-    private final JLabel module = valueLabel();
-    private final JLabel realtime = valueLabel();
+    private final WrappingLabel romFile = valueLabel();
+    private final WrappingLabel romId = valueLabel();
+    private final WrappingLabel romSize = valueLabel();
+    private final WrappingLabel tableCount = valueLabel();
+    private final WrappingLabel platform = valueLabel();
+    private final WrappingLabel module = valueLabel();
+    private final WrappingLabel realtime = valueLabel();
     private final JTextArea notes = new JTextArea();
     private Rom noteRom;
     private Table noteTable;
@@ -452,7 +454,10 @@ public final class EditorInspectorPanel extends JPanel implements PlatformContex
         split.setName("CHANGES AND HISTORY SPLIT");
         split.setResizeWeight(0.54);
         split.setContinuousLayout(true);
-        split.setOneTouchExpandable(true);
+        // A BasicSplitPane one-touch control is wider than this compact
+        // divider. Its clipped arrow was visible as black specks above the
+        // history summary on Linux and Windows.
+        split.setOneTouchExpandable(false);
         split.setDividerSize(5);
         split.setMinimumSize(new Dimension(0, 0));
         split.setBorder(BorderFactory.createEmptyBorder());
@@ -937,7 +942,7 @@ public final class EditorInspectorPanel extends JPanel implements PlatformContex
     }
 
     private static void addRow(JPanel panel, GridBagConstraints c, int row,
-            String label, JLabel value) {
+            String label, WrappingLabel value) {
         c.gridy = row; c.gridx = 0; c.gridwidth = 1; c.weightx = 0;
         JLabel key = new JLabel(label);
         key.setForeground(UiThemeService.getInstance().color(
@@ -948,12 +953,54 @@ public final class EditorInspectorPanel extends JPanel implements PlatformContex
         panel.add(value, c);
     }
 
-    private static JLabel valueLabel() {
-        JLabel label = new JLabel("—");
+    private static WrappingLabel valueLabel() {
+        WrappingLabel label = new WrappingLabel("—");
         label.setFont(label.getFont().deriveFont(Font.BOLD));
-        label.setMinimumSize(new java.awt.Dimension(0,
-                label.getPreferredSize().height));
         return label;
+    }
+
+    /**
+     * Read-only text that behaves like a label but reports the height needed
+     * to word-wrap at its current width. Swing's JLabel only wraps static HTML
+     * and otherwise lets long Inspector values paint into neighbouring rows.
+     */
+    private static final class WrappingLabel extends JTextArea {
+        private static final long serialVersionUID = 1L;
+        private static final int INITIAL_WRAP_WIDTH = 160;
+
+        private WrappingLabel(String text) {
+            super(text);
+            setEditable(false);
+            setFocusable(false);
+            setOpaque(false);
+            setLineWrap(true);
+            setWrapStyleWord(true);
+            setRows(1);
+            setColumns(0);
+            setBorder(BorderFactory.createEmptyBorder());
+        }
+
+        @Override
+        public Dimension getPreferredSize() {
+            int width = getWidth() > 0 ? getWidth() : INITIAL_WRAP_WIDTH;
+            java.awt.Insets insets = getInsets();
+            int textWidth = Math.max(1,
+                    width - insets.left - insets.right);
+            View root = getUI() == null ? null : getUI().getRootView(this);
+            int height = getFontMetrics(getFont()).getHeight();
+            if (root != null) {
+                root.setSize(textWidth, Integer.MAX_VALUE);
+                height = Math.max(height,
+                        (int) Math.ceil(root.getPreferredSpan(View.Y_AXIS)));
+            }
+            return new Dimension(width,
+                    height + insets.top + insets.bottom);
+        }
+
+        @Override
+        public Dimension getMinimumSize() {
+            return new Dimension(0, getFontMetrics(getFont()).getHeight());
+        }
     }
 
     private static String safe(String value, String fallback) {

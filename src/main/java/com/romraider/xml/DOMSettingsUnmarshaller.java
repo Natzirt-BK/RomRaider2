@@ -172,9 +172,9 @@ public final class DOMSettingsUnmarshaller {
         }
         try {
             settings.setThemeMode(ThemeMode.valueOf(unmarshallAttribute(
-                    displayNode, "theme", ThemeMode.DARK.name())));
+                    displayNode, "theme", ThemeMode.LIGHT.name())));
         } catch (IllegalArgumentException ignored) {
-            settings.setThemeMode(ThemeMode.DARK);
+            settings.setThemeMode(ThemeMode.LIGHT);
         }
         try {
             settings.setDisplayMode(DisplayMode.valueOf(unmarshallAttribute(
@@ -236,6 +236,8 @@ public final class DOMSettingsUnmarshaller {
 
             } else if (n.getNodeType() == ELEMENT_NODE && n.getNodeName().equalsIgnoreCase("splitpane")) {
                 settings.setSplitPaneLocation(unmarshallAttribute(n, "location", 150));
+                settings.setNavigationPanelVisible(unmarshallAttribute(n,
+                        "navigation-visible", true));
 
             }
         }

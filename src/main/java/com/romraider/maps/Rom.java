@@ -87,7 +87,10 @@ public class Rom extends DefaultMutableTreeNode implements Serializable  {
     //This might also be possible to achieve by using the same Data Tables
     protected HashMap<Integer, LinkedList<DataCell>> byteCellMapping = new HashMap<Integer, LinkedList<DataCell>>();
     
-    private final LinkedHashMap<String, TableTreeNode> tableNodes = new LinkedHashMap<String, TableTreeNode>();
+    private final LinkedHashMap<String, Table> tableCatalog =
+            new LinkedHashMap<String, Table>();
+    private final LinkedHashMap<String, TableTreeNode> tableNodes =
+            new LinkedHashMap<String, TableTreeNode>();
     private final LinkedList<DataflowSimulation> simulations = new LinkedList<DataflowSimulation>();
     private LinkedList<ChecksumManager> checksumManagers = new LinkedList<ChecksumManager>();
 
@@ -202,7 +205,9 @@ public class Rom extends DefaultMutableTreeNode implements Serializable  {
 
     public void addTableByName(Table table) {
         table.setRom(this);
-        tableNodes.put(table.getName().toLowerCase(), new TableTreeNode(table));
+        String key = table.getName().toLowerCase();
+        tableCatalog.put(key, table);
+        tableNodes.put(key, new TableTreeNode(table));
     }
     
     public void addSimulation(DataflowSimulation sim) {
@@ -215,17 +220,13 @@ public class Rom extends DefaultMutableTreeNode implements Serializable  {
     }
     
     public void removeTableByName(Table table) {
-        if(tableNodes.containsKey(table.getName().toLowerCase())) {
-            tableNodes.remove(table.getName().toLowerCase());
-        }
+        String key = table.getName().toLowerCase();
+        tableCatalog.remove(key);
+        tableNodes.remove(key);
     }
 
     public Table getTableByName(String tableName) {
-        TableTreeNode node = getTableNodeByName(tableName);
-
-        if(node != null)
-            return node.getTable();
-        return null;
+        return tableCatalog.get(tableName.toLowerCase());
     }
 
     public TableTreeNode getTableNodeByName(String tableName) {
@@ -239,9 +240,9 @@ public class Rom extends DefaultMutableTreeNode implements Serializable  {
 
     public List<Table> findTables(String regex) {
         List<Table> result = new ArrayList<Table>();
-        for (TableTreeNode tableNode : tableNodes.values()) {
-            String name = tableNode.getTable().getName();
-            if (name.matches(regex)) result.add(tableNode.getTable());
+        for (Table table : tableCatalog.values()) {
+            String name = table.getName();
+            if (name.matches(regex)) result.add(table);
         }
         return result;
     }
@@ -284,16 +285,16 @@ public class Rom extends DefaultMutableTreeNode implements Serializable  {
     
     public void populateTables(byte[] binData, JProgressPane progress) {
         this.binData = binData;
-        int size = tableNodes.size();
+        int size = tableCatalog.size();
         int i = 0;
         faultyTables.clear();
 
-        for(String name: tableNodes.keySet()) {
+        for(String name: new ArrayList<String>(tableCatalog.keySet())) {
             // update progress
             int currProgress = (int) (i / (double) size * 100);
             progress.update(rb.getString("POPTABLES"), currProgress);
 
-            Table table = tableNodes.get(name.toLowerCase()).getTable();
+            Table table = tableCatalog.get(name.toLowerCase());
             try {
                 if (table.getStorageAddress() >= 0) {
                     try {
@@ -312,7 +313,7 @@ public class Rom extends DefaultMutableTreeNode implements Serializable  {
                         size--;
                     }
                 } else {
-                    tableNodes.remove(table.getName().toLowerCase());
+                    removeTableByName(table);
                     size--;
                 }
 
@@ -323,6 +324,7 @@ public class Rom extends DefaultMutableTreeNode implements Serializable  {
         }
 
         for(String s: faultyTables) {
+            tableCatalog.remove(s.toLowerCase());
             tableNodes.remove(s.toLowerCase());
         }
     }
@@ -380,8 +382,8 @@ public class Rom extends DefaultMutableTreeNode implements Serializable  {
     public String toString() {
         String output = "";
         output = output + "\n---- Rom ----" + romID.toString();
-        for(String s : tableNodes.keySet()) {
-            output = output + tableNodes.get(s).getTable();
+        for(Table table : tableCatalog.values()) {
+            output = output + table;
         }
         output = output + "\n---- End Rom ----";
 
@@ -393,12 +395,15 @@ public class Rom extends DefaultMutableTreeNode implements Serializable  {
     }
 
     public Vector<Table> getTables() {
-        Vector<Table> tables = new Vector<Table>();
-        for(TableTreeNode tableNode : tableNodes.values()) {
-            tables.add(tableNode.getTable());
-        }
+        Vector<Table> tables = new Vector<Table>(tableCatalog.values());
         Collections.sort(tables);
         return tables;
+    }
+
+    /** Tables in definition order without exposing the Swing tree model. */
+    public List<Table> getTableCatalog() {
+        return Collections.unmodifiableList(
+                new ArrayList<Table>(tableCatalog.values()));
     }
 
     public HashMap<String, TableTreeNode> getTableNodes() {
@@ -519,6 +524,7 @@ public class Rom extends DefaultMutableTreeNode implements Serializable  {
 
         clearByteMapping();
         checksumManagers.clear();
+        tableCatalog.clear();
         tableNodes.clear();
         binData = null;
         doc = null;

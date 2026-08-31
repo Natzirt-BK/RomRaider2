@@ -199,13 +199,13 @@ public final class J2534ConnectionISO14230 implements ConnectionManager {
     }
 
     private void initJ2534(ConnectionProperties connectionProperties, String library) {
-        api = new J2534Impl(Protocol.ISO14230, library);
+        api = J2534BackendFactory.create(Protocol.ISO14230, library);
         deviceId = api.open();
         try {
-            version(deviceId);
             channelId = api.connect(
                     deviceId, Flag.ISO9141_NO_CHECKSUM.getValue(),
                     connectionProperties.getBaudRate());
+            version(deviceId);
             setConfig(channelId, (KwpConnectionProperties) connectionProperties);
             msgId = api.startPassMsgFilter(channelId, (byte) 0x00, (byte) 0x00);
             if (LOGGER.isDebugEnabled())

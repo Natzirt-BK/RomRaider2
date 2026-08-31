@@ -177,6 +177,8 @@ public class ECUEditor extends AbstractFrame {
     private boolean inspectorRequestedVisible;
     private boolean inspectorAutoCollapsed;
     private int inspectorWidth = 270;
+    private boolean navigationVisible;
+    private int navigationWidth = 250;
     private Rom lastSelectedRom = null;
     private ECUEditorToolBar toolBar;
     private ECUEditorMenuBar menuBar;
@@ -288,9 +290,12 @@ public class ECUEditor extends AbstractFrame {
 
         splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT,
 				workspacePanel, workspaceSplitPane);
-        splitPane.setDividerSize(5);
-        splitPane.setDividerLocation(Math.max(190,
-                Math.min(300, settings.getSplitPaneLocation())));
+        navigationVisible = settings.isNavigationPanelVisible();
+        navigationWidth = Math.max(190,
+                Math.min(300, settings.getSplitPaneLocation()));
+        workspacePanel.setVisible(navigationVisible);
+        splitPane.setDividerSize(navigationVisible ? 5 : 0);
+        splitPane.setDividerLocation(navigationVisible ? navigationWidth : 0);
         splitPane.addPropertyChangeListener(this);
         splitPane.setContinuousLayout(true);
         addComponentListener(new ComponentAdapter() {
@@ -386,6 +391,7 @@ public class ECUEditor extends AbstractFrame {
         // create toolbars
         toolBar = new ECUEditorToolBar(rb.getString("EDTOOLS"));
         toolBar.setInspectorVisible(inspectorVisible);
+        toolBar.setNavigationVisible(navigationVisible);
 
         tableToolBar = new TableToolBar();
 
@@ -577,7 +583,9 @@ public class ECUEditor extends AbstractFrame {
         for (Rom rom : getImages()) {
             RomRecoveryService.getInstance().markResolved(rom);
         }
-        settings.setSplitPaneLocation(splitPane.getDividerLocation());
+        settings.setSplitPaneLocation(navigationVisible
+                ? splitPane.getDividerLocation() : navigationWidth);
+        settings.setNavigationPanelVisible(navigationVisible);
         settings.setWindowMaximized(getExtendedState() == MAXIMIZED_BOTH);
         settings.setWindowSize(getSize());
         settings.setWindowLocation(getLocation());
@@ -946,6 +954,16 @@ public class ECUEditor extends AbstractFrame {
             public void actionPerformed(ActionEvent event) { showUnifiedSearch(); }
         });
         getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(
+                KeyStroke.getKeyStroke(KeyEvent.VK_B, InputEvent.CTRL_DOWN_MASK),
+                "toggleNavigationPanel");
+        getRootPane().getActionMap().put("toggleNavigationPanel",
+                new AbstractAction() {
+            private static final long serialVersionUID = 1L;
+            public void actionPerformed(ActionEvent event) {
+                toggleNavigationPanel();
+            }
+        });
+        getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(
                 KeyStroke.getKeyStroke(KeyEvent.VK_Z, InputEvent.CTRL_DOWN_MASK),
                 "undoEdit");
         getRootPane().getActionMap().put("undoEdit", new AbstractAction() {
@@ -1128,6 +1146,29 @@ public class ECUEditor extends AbstractFrame {
         setInspectorVisible(inspectorRequestedVisible);
     }
 
+    public void toggleNavigationPanel() {
+        if (navigationVisible && splitPane.getWidth() > 0) {
+            navigationWidth = Math.max(190, splitPane.getDividerLocation());
+        }
+        setNavigationVisible(!navigationVisible);
+    }
+
+    private void setNavigationVisible(boolean visible) {
+        navigationVisible = visible;
+        settings.setNavigationPanelVisible(visible);
+        workspacePanel.setVisible(visible);
+        splitPane.setDividerSize(visible ? 5 : 0);
+        splitPane.setDividerLocation(visible ? navigationWidth : 0);
+        if (toolBar != null) toolBar.setNavigationVisible(visible);
+        splitPane.revalidate();
+        splitPane.repaint();
+        if (visible) workspacePanel.focusSearch();
+    }
+
+    public boolean isNavigationVisible() {
+        return navigationVisible;
+    }
+
     private void setInspectorVisible(boolean visible) {
         inspectorVisible = visible;
         workspaceSplitPane.getRightComponent().setVisible(inspectorVisible);
@@ -1144,7 +1185,8 @@ public class ECUEditor extends AbstractFrame {
 
         int maximumNavigation = Math.max(180,
                 Math.min(300, (int) (width * 0.24)));
-        if (splitPane.getDividerLocation() > maximumNavigation) {
+        if (navigationVisible
+                && splitPane.getDividerLocation() > maximumNavigation) {
             splitPane.setDividerLocation(maximumNavigation);
         }
 
@@ -1308,6 +1350,8 @@ public class ECUEditor extends AbstractFrame {
             form.setVisible(true);
         } else if ("toggle-inspector".equals(entry.getTargetId())) {
             toggleInspector();
+        } else if ("toggle-navigation".equals(entry.getTargetId())) {
+            toggleNavigationPanel();
         } else if ("search-maps".equals(entry.getTargetId())) {
             focusTableSearch();
         } else if ("undo-edit".equals(entry.getTargetId())) {
@@ -1340,6 +1384,9 @@ public class ECUEditor extends AbstractFrame {
                 "Compare two open ROM images", "difference", "diff"));
         entries.add(command("toggle-inspector", "Show or Hide Inspector", "View",
                 "Toggle the right-side inspector", "sidebar", "properties"));
+        entries.add(command("toggle-navigation", "Show or Hide Calibrations", "View",
+                "Toggle Calibrations, Favorites, and Recent Tables",
+                "left sidebar", "browser", "ctrl b"));
         entries.add(command("search-maps", "Search Maps", "Editor",
                 "Focus the current ROM map filter", "tables", "ctrl p"));
         entries.add(command("undo-edit", "Undo Last Edit", "Editor",

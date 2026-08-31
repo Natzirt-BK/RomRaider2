@@ -15,7 +15,6 @@ import java.util.Map;
 import com.romraider.search.SearchEntry;
 import com.romraider.search.SearchKind;
 import com.romraider.search.UnifiedSearchIndex;
-import com.romraider.swing.TableTreeNode;
 
 public final class EditorWorkspaceService {
     private static final EditorWorkspaceService INSTANCE = new EditorWorkspaceService();
@@ -51,8 +50,7 @@ public final class EditorWorkspaceService {
     public void indexRom(Rom rom) {
         String romId = romIdentity(rom);
         List<SearchEntry> entries = new ArrayList<SearchEntry>();
-        for (TableTreeNode node : rom.getTableNodes().values()) {
-            Table table = node.getTable();
+        for (Table table : rom.getTableCatalog()) {
             entries.add(new SearchEntry(SearchKind.TABLE, romId,
                     table.getName(), table.getName(), table.getCategory(),
                     table.getDescription(), Arrays.asList(rom.getFileName(), romId)));

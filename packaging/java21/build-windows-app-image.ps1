@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
     [string]$OutputRoot,
-    [string]$ApplicationJar
+    [string]$ApplicationJar,
+    [string]$J2534BridgeRoot
 )
 
 $ErrorActionPreference = "Stop"
@@ -13,6 +14,9 @@ if (-not $OutputRoot) {
 }
 if (-not $ApplicationJar) {
     $ApplicationJar = Join-Path $RepoRoot "build/windows/lib/RomRaider2.jar"
+}
+if (-not $J2534BridgeRoot) {
+    $J2534BridgeRoot = Join-Path $RepoRoot "build/j2534-bridge"
 }
 
 $JdkRoot = $env:JAVA_HOME
@@ -39,6 +43,14 @@ if ($JavaSettings -notmatch "os\.arch\s*=\s*(amd64|x86_64)(?:\s|$)") {
 }
 if (-not (Test-Path -LiteralPath $ApplicationJar -PathType Leaf)) {
     throw "Build RomRaider2 for Windows first; jar not found: $ApplicationJar"
+}
+foreach ($BridgeFile in @(
+    "j2534-bridge-32.exe", "j2534-bridge-64.exe",
+    "LICENSE-j2534-bridge.txt", "SOURCE.txt"
+)) {
+    if (-not (Test-Path -LiteralPath (Join-Path $J2534BridgeRoot $BridgeFile) -PathType Leaf)) {
+        throw "Build both J2534 architecture bridges first; missing: $BridgeFile"
+    }
 }
 
 $ClassVersion = (& $Javap -verbose -classpath $ApplicationJar com.romraider.ECUExec |
@@ -103,6 +115,7 @@ try {
         $InputRoot,
         (Join-Path $InputRoot "lib/common"),
         (Join-Path $InputRoot "lib/windows/64"),
+        (Join-Path $InputRoot "lib/windows/j2534"),
         (Join-Path $InputRoot "lib"),
         (Join-Path $InputRoot "plugins"),
         (Join-Path $InputRoot "licenses")
@@ -116,6 +129,12 @@ try {
         Copy-Item -Destination (Join-Path $InputRoot "lib/common")
     Copy-Item -LiteralPath (Join-Path $RepoRoot "lib/windows/64/phidget21.dll") `
         -Destination (Join-Path $InputRoot "lib/windows/64/phidget21.dll")
+    Copy-Item -LiteralPath (Join-Path $J2534BridgeRoot "j2534-bridge-32.exe") `
+        -Destination (Join-Path $InputRoot "lib/windows/j2534/j2534-bridge-32.exe")
+    Copy-Item -LiteralPath (Join-Path $J2534BridgeRoot "j2534-bridge-64.exe") `
+        -Destination (Join-Path $InputRoot "lib/windows/j2534/j2534-bridge-64.exe")
+    Copy-Item -LiteralPath (Join-Path $J2534BridgeRoot "SOURCE.txt") `
+        -Destination (Join-Path $InputRoot "lib/windows/j2534/SOURCE.txt")
     Copy-Item -LiteralPath (Join-Path $RepoRoot "lib/log4j2.xml") `
         -Destination (Join-Path $InputRoot "lib/log4j2.xml")
     Copy-Item -Path (Join-Path $RepoRoot "plugins/*.plugin") `
@@ -162,6 +181,7 @@ try {
         --add-launcher "RomRaider2 Logger=$LoggerProperties" `
         --add-modules $ExpectedModules `
         --java-options '-Djava.library.path=$APPDIR/lib/windows/64' `
+        --java-options '-Dromraider2.j2534.bridge.dir=$APPDIR/lib/windows/j2534' `
         --java-options '-Dromraider2.plugins.dir=$APPDIR/plugins' `
         --java-options '-Dromraider2.settings.dir=$APPDIR/../config/user' `
         --java-options '-Dromraider2.customize.dir=$APPDIR/../customize' `
@@ -227,6 +247,9 @@ if ($LauncherConfig -notmatch [regex]::Escape('romraider2.log.dir=$APPDIR/../log
 }
 if ($LauncherConfig -notmatch [regex]::Escape('log4j.configurationFile=$APPDIR/lib/log4j2.xml')) {
     throw "The packaged launcher does not select its Log4j configuration."
+}
+if ($LauncherConfig -notmatch [regex]::Escape('romraider2.j2534.bridge.dir=$APPDIR/lib/windows/j2534')) {
+    throw "The packaged launcher does not locate the J2534 architecture bridges."
 }
 foreach ($Customization in @(
     "nameSequences.properties", "ncslearning.properties",

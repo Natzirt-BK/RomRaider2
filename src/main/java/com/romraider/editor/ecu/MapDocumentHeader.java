@@ -16,6 +16,7 @@ import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
 import javax.swing.JToggleButton;
 import javax.swing.SwingUtilities;
+import javax.swing.UIManager;
 
 import com.romraider.maps.Scale;
 import com.romraider.maps.Table;
@@ -114,7 +115,7 @@ final class MapDocumentHeader extends JPanel {
         actions.add(redo);
         if (contextMenu instanceof TableMenuBar) {
             TableMenuBar menu = (TableMenuBar) contextMenu;
-            final JToggleButton view3d = new JToggleButton("3D View",
+            final AccentToggleButton view3d = new AccentToggleButton("3D View",
                     ModernIconFactory.icon(Action.VIEW_3D));
             view3d.setName("OPEN 3D VIEW");
             view3d.setEnabled(integratedVisualizationAvailable);
@@ -243,7 +244,7 @@ final class MapDocumentHeader extends JPanel {
         return value == null || value.trim().isEmpty() ? fallback : value.trim();
     }
 
-    private static void updateVisualizationTooltip(JToggleButton button,
+    private static void updateVisualizationTooltip(AccentToggleButton button,
             boolean visible) {
         button.setText(visible ? "Hide 3D" : "Show 3D");
         if (!button.isEnabled()) {
@@ -254,6 +255,52 @@ final class MapDocumentHeader extends JPanel {
             button.setToolTipText(visible
                     ? "Hide the integrated interactive map surface"
                     : "Show the integrated interactive map surface");
+        }
+        button.refreshStyle();
+    }
+
+    /** A primary action treatment that remains readable in every theme. */
+    private static final class AccentToggleButton extends JToggleButton {
+        private static final long serialVersionUID = 1L;
+
+        private AccentToggleButton(String text, javax.swing.Icon icon) {
+            super(text, icon);
+            setFocusPainted(false);
+            refreshStyle();
+        }
+
+        @Override
+        public void updateUI() {
+            super.updateUI();
+            refreshStyle();
+        }
+
+        @Override
+        public void setEnabled(boolean enabled) {
+            super.setEnabled(enabled);
+            refreshStyle();
+        }
+
+        private void refreshStyle() {
+            if (isEnabled()) {
+                java.awt.Color accent = UiThemeService.getInstance().color(
+                        ThemeToken.ACCENT);
+                setOpaque(true);
+                setContentAreaFilled(true);
+                setBackground(accent);
+                setForeground(UiThemeService.contrastText(accent));
+                setBorder(BorderFactory.createCompoundBorder(
+                        BorderFactory.createLineBorder(accent.brighter()),
+                        BorderFactory.createEmptyBorder(3, 7, 3, 7)));
+            } else {
+                setBackground(UIManager.getColor("ToggleButton.background"));
+                setForeground(UIManager.getColor("ToggleButton.disabledText"));
+                javax.swing.border.Border border = UIManager.getBorder(
+                        "ToggleButton.border");
+                setBorder(border == null
+                        ? BorderFactory.createEmptyBorder(4, 8, 4, 8)
+                        : border);
+            }
         }
     }
 

@@ -45,6 +45,7 @@
 - [x] Responsive labeled Editor command bar with RomRaider2 identity
 - [x] Responsive command-bar overflow that preserves every action at narrow widths
 - [x] Three-column desktop workbench with collapsible context inspector
+- [x] Persistent hide/show control for the complete calibration navigation rail
 - [x] Touch workbench that preserves the central calibration canvas
 - [x] Persistent ROM/platform/table status and primary-action bar
 - [x] Single-row status bar with left session/ROM state, centered platform, and slim reset action
@@ -54,6 +55,7 @@
 - [x] UI-independent application activity model with measured/indeterminate states
 - [x] Idle-collapsing activity capsule with elapsed time and recent-task drawer
 - [x] Context inspector for table, ROM, platform, module, and realtime state
+- [x] Narrow Inspector word wrapping for selection titles and detail values
 - [x] Verified tabbed calibration workspace replacing visible MDI windows
 - [x] Integrated map, visualization, and datalog document layout
 - [x] Java 21-safe interactive Java2D map-surface provider
@@ -91,6 +93,7 @@
 - [x] Direct undoable selected-cell revert with changed-selection awareness
 - [x] Per-cell current, original/compared, and delta tooltip context
 - [x] Responsive value toolbar with explicit secondary-control overflow
+- [x] Theme-refreshed table-toolbar overflow and accented Show 3D action
 - [x] Bounded, atomic ROM crash-recovery snapshots with integrity validation
 - [x] Live recovery status with safe cleanup after save or intentional discard
 - [x] Startup recovery discovery with restore, discard, and keep-for-later review
@@ -116,6 +119,8 @@
 - [x] Portable-package log isolation with explicit bundled Log4j configuration
 - [x] Single actionable Dyno missing-profile state with unavailable controls disabled
 - [x] Native Windows/Linux chrome for ordinary dialogs without Metal stippled title bars
+- [x] Searchable, responsive Definition File Manager with priority and file-status details
+- [x] Light first-run default and runtime refresh of custom tab-header theme colors
 - [x] Theme-aware Logger status bar plus readable missing-definition state in About
 - [x] Centered switch-state workspace and responsive offline-analysis statistics table
 - [x] Seeded and verified initial Linux user settings matching the Windows package
@@ -128,6 +133,9 @@
 - [x] Sustained in-car Subaru SSM/ISO9141 logging without receive gaps
 - [x] Connection-loss file capture shutdown and restartable Logger query worker
 - [x] Release-packaged J2534 discovery metadata with definition-neutral defaults
+- [x] Architecture-aware Windows J2534 discovery across native/WOW6432 registry views
+- [x] Automatic direct or isolated x86/x64 J2534 DLL routing with pinned helper builds
+- [x] Cross-bitness protocol coverage for raw transmit flags, timeouts, and ISO15765 flow control
 - [x] Software-only application packaging with no vehicle definitions, profiles, ROMs, or logs
 - [x] Truthful J2534 interface presentation without an irrelevant COM-port selector
 - [x] External-sensor configuration guard and live port-selection reconnect
@@ -144,6 +152,10 @@
 - [x] Immediate replay offer for the latest successfully completed Logger capture
 - [x] Persistent typed log markers stored beside CSV captures without modifying them
 - [x] Linked configurable X/Y graph with shared cursor, range, and marker navigation
+- [x] Explicit incremental Swing exit sequence with prototype and removal gates
+- [x] Swing dependency boundary audit with ordered extraction and enforcement gates
+- [x] Workspace indexing and ROM comparison detached from Swing `TableTreeNode`
+- [x] Neutral ROM table catalog stored independently from its Swing compatibility tree
 
 ## Safety state
 
@@ -156,6 +168,10 @@ normal Editor UI.
 
 - Repeat the connected USB-removal recovery test for RC3 and complete the
   remaining Linux Subaru checklist in `docs/LINUX_IN_CAR_QUALIFICATION.md`.
+- Move the Swing tree-node mirror out of `Rom`, then build the packaged
+  replacement-shell prototype defined in
+  `docs/ROMRAIDER2_UI_DIRECTION.md`; promote it only after the calibration-grid
+  and cross-platform acceptance gates pass.
 - Evaluate compatible external renderers behind the visualization-provider API.
 - Extend history grouping to preset and future bulk-analysis transformations.
 - Add analysis overlays and reusable channel/graph workspace presets.

@@ -8,6 +8,10 @@ VIII/IX. This release candidate is distributed through Ecu Tools by NatZirt.
 New in RomRaider2
 -----------------
 
+- Windows checks both J2534 registry views, loads matching vendor DLLs directly,
+  and uses bundled x86/x64 helper processes for bitness mismatches. The official
+  vendor driver remains unchanged; no separate Java or disabled driver signing
+  is required.
 - Official and custom Logger definition files can now be installed directly,
   including current v370 files that still use the legacy XML format. The
   selected source file is not changed.
@@ -46,7 +50,8 @@ Logger and analysis
 
 Interface and runtime
 
-- Dark, light, system, and high-contrast themes.
+- Light is the first-run default, with dark, system, and high-contrast themes
+  available from Display Preferences.
 - 75%–300% scaling plus Compact, Touch, Garage, Dyno, and In-Car modes.
 - Integrated window controls and responsive edge/corner resizing.
 - Native window-manager chrome for ordinary Windows/Linux dialogs, removing
@@ -58,6 +63,15 @@ Interface and runtime
 - Self-contained 64-bit Java 21 application images for Linux and Windows.
 - Versioned settings isolated from RomRaider and RomRaider DimeMod.
 - Privacy-safe local diagnostic reports with no automatic upload.
+- The Calibrations/Favorites/Recent Tables rail can be hidden from the command
+  bar and restored with Ctrl+B; its visibility and width are remembered.
+- Definition File Manager now provides searchable priority rows, file details
+  and availability, top/bottom ordering, open-folder access, and a responsive
+  Apply/Save workflow using the existing definition loader.
+- Inspector titles and detail values now word-wrap to the available rail width
+  instead of clipping or painting across neighbouring rows.
+- The integrated Show 3D action uses a high-contrast accent treatment so it is
+  immediately distinguishable from secondary map controls.
 
 Fixes from the inherited RomRaider/DimeMod build
 ------------------------------------------------
@@ -85,6 +99,12 @@ Fixes from the inherited RomRaider/DimeMod build
   labels with tooltips instead of wrapping them below the visible window.
 - The Inspector Changes view keeps changed-cell counts visible in a fixed
   left-hand column and allows its table/history divider to collapse fully.
+- The Inspector Changes/History divider no longer paints clipped one-touch
+  arrows as black specks above the edit-history summary.
+- Runtime Light/Dark switching now recolors custom calibration and utility tab
+  headers instead of leaving dark tab surfaces in the Light theme.
+- The table toolbar's detached More popup now refreshes with the active theme,
+  keeping its Live trace control readable in Dark mode.
 - Frameless application windows provide direct lower-left and lower-right
   corner resize grips in addition to edge resizing.
 - The Editor now assembles its menu and complete command toolbar on Swing's

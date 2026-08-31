@@ -19,6 +19,7 @@ import java.util.Arrays;
 
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
+import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
 import javax.swing.JLabel;
 import javax.swing.JList;
@@ -59,7 +60,10 @@ import com.romraider.swing.TableFrame;
 import com.romraider.swing.TableToolBar;
 import com.romraider.swing.JProgressPane;
 import com.romraider.ui.DisplayMode;
+import com.romraider.ui.ThemeMode;
+import com.romraider.ui.ThemeToken;
 import com.romraider.ui.TouchTargetService;
+import com.romraider.ui.UiThemeService;
 import com.romraider.ui.swing.ApplicationControlsPanel;
 import com.romraider.swing.ECUEditorToolBar;
 
@@ -164,9 +168,18 @@ public class EditorWorkbenchComponentsTest {
         table.setName("Fuel Target");
         inspector.showSelection(null, table);
         assertEquals("1 values",
-                findNamed(inspector, JLabel.class, "Dimensions").getText());
+                findNamed(inspector, JTextArea.class, "Dimensions").getText());
         assertEquals("Editable",
-                findNamed(inspector, JLabel.class, "Access").getText());
+                findNamed(inspector, JTextArea.class, "Access").getText());
+
+        JTextArea name = findNamed(inspector, JTextArea.class, "Name");
+        name.setText("Primary open-loop fueling target with compensation");
+        name.setSize(90, 200);
+        int narrowHeight = name.getPreferredSize().height;
+        name.setSize(320, 200);
+        assertTrue(name.getLineWrap());
+        assertTrue(name.getWrapStyleWord());
+        assertTrue(narrowHeight > name.getPreferredSize().height);
     }
 
     @Test
@@ -275,6 +288,7 @@ public class EditorWorkbenchComponentsTest {
         assertEquals(0, changeSplit.getTopComponent().getMinimumSize().height);
         assertEquals(0,
                 changeSplit.getBottomComponent().getMinimumSize().height);
+        assertFalse(changeSplit.isOneTouchExpandable());
         assertFalse(open.isEnabled());
         changes.setRowSelectionInterval(0, 0);
         assertTrue(open.isEnabled());
@@ -360,6 +374,13 @@ public class EditorWorkbenchComponentsTest {
         assertNull(ECUEditorManager.getECUEditorWithoutCreation());
         assertEquals(0, count(editorToolbar, JComboBox.class));
         assertEquals(5, count(full, JComboBox.class));
+        JToggleButton navigation = findNamed(editorToolbar,
+                JToggleButton.class, "TOGGLE NAVIGATION");
+        assertNotNull(navigation);
+        editorToolbar.setNavigationVisible(false);
+        assertTrue(navigation.getToolTipText().startsWith("Show Calibrations"));
+        editorToolbar.setNavigationVisible(true);
+        assertTrue(navigation.getToolTipText().startsWith("Hide Calibrations"));
     }
 
     @Test
@@ -386,6 +407,29 @@ public class EditorWorkbenchComponentsTest {
         assertEquals("Increase by fine step",
                 findButton(toolbar, "+").getAccessibleContext()
                         .getAccessibleName());
+    }
+
+    @Test
+    public void tableToolbarOverflowRefreshesForDarkTheme() {
+        ThemeMode previous = UiThemeService.getInstance().getCurrentMode();
+        try {
+            UiThemeService.getInstance().apply(ThemeMode.LIGHT);
+            TableToolBar toolbar = new TableToolBar();
+            JButton more = findNamed(toolbar, JButton.class,
+                    "TABLE TOOLBAR MORE ACTIONS");
+            JPopupMenu overflow = (JPopupMenu) more.getClientProperty(
+                    "TABLE_TOOLBAR_MORE_POPUP");
+            JCheckBox liveTrace = find(overflow, JCheckBox.class);
+
+            UiThemeService.getInstance().apply(ThemeMode.DARK);
+            SwingUtilities.updateComponentTreeUI(toolbar);
+
+            assertEquals("Live trace", liveTrace.getText());
+            assertEquals(UiThemeService.getInstance().color(
+                    ThemeToken.PRIMARY_TEXT), liveTrace.getForeground());
+        } finally {
+            UiThemeService.getInstance().apply(previous);
+        }
     }
 
     @Test
@@ -497,6 +541,30 @@ public class EditorWorkbenchComponentsTest {
 
         workspace.requestCloseActiveTab();
         assertEquals(0, workspace.getTabsForTesting().getTabCount());
+    }
+
+    @Test
+    public void customWorkspaceTabsRefreshWhenThemeChanges() {
+        ThemeMode previous = UiThemeService.getInstance().getCurrentMode();
+        try {
+            UiThemeService.getInstance().apply(ThemeMode.DARK);
+            EditorTabbedWorkspace workspace = new EditorTabbedWorkspace(null);
+            workspace.openUtility("dashboard", "Dashboard", null, new JPanel());
+            workspace.openUtility("live", "Live Data", null, new JPanel());
+
+            UiThemeService.getInstance().apply(ThemeMode.LIGHT);
+            SwingUtilities.updateComponentTreeUI(workspace);
+
+            JTabbedPane tabs = workspace.getTabsForTesting();
+            JPanel unselected = (JPanel) tabs.getTabComponentAt(0);
+            JPanel selected = (JPanel) tabs.getTabComponentAt(1);
+            assertEquals(UiThemeService.getInstance().color(
+                    ThemeToken.BACKGROUND), unselected.getBackground());
+            assertEquals(UiThemeService.getInstance().color(
+                    ThemeToken.SURFACE), selected.getBackground());
+        } finally {
+            UiThemeService.getInstance().apply(previous);
+        }
     }
 
     @Test
@@ -761,6 +829,11 @@ public class EditorWorkbenchComponentsTest {
         assertEquals("Show 3D", toggle.getText());
         assertFalse(toggle.isSelected());
         assertFalse(host.isVisible());
+        assertTrue(toggle.isOpaque());
+        assertEquals(UiThemeService.getInstance().color(ThemeToken.ACCENT),
+                toggle.getBackground());
+        assertEquals(UiThemeService.contrastText(toggle.getBackground()),
+                toggle.getForeground());
         assertEquals(0, document.getMapSplitForTesting().getDividerSize());
         assertTrue(toggle.getToolTipText().contains("Show"));
 

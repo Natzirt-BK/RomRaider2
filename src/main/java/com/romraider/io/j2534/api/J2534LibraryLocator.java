@@ -61,6 +61,8 @@ public class J2534LibraryLocator {
     private static final Logger LOGGER = Logger.getLogger(J2534LibraryLocator.class);
     private static final String FUNCTIONLIBRARY = "FunctionLibrary";
     private static final int KEY_READ = 0x20019;
+    private static final int KEY_WOW64_64KEY = 0x0100;
+    private static final int KEY_WOW64_32KEY = 0x0200;
     private static final int ERROR_NO_MORE_ITEMS = 0x103;
     private static final Set<J2534Library> libraries = new HashSet<J2534Library>();
     private static List<String> WIN_LIBRARIES = new ArrayList<String>();
@@ -78,6 +80,7 @@ public class J2534LibraryLocator {
         }
         if (!j2534Protocol.equalsIgnoreCase(protocol)) {
             libraries.clear();
+            j2534Protocol = protocol;
         }
         if (libraries.isEmpty()) {
             File libFile = null;
@@ -135,41 +138,73 @@ public class J2534LibraryLocator {
         return libraries;
     }
 
-    private static void listLibraries(final String protocol) throws Exception {
+    private static void listLibraries(final String protocol) {
+        // The process architecture is deliberately irrelevant here: an x64
+        // app may need an x86 helper and a future x86 app may need an x64
+        // helper. Unsupported WOW64 flags simply produce no handle.
+        int[] views = {KEY_READ | KEY_WOW64_64KEY, KEY_READ | KEY_WOW64_32KEY};
+        for (int access : views) {
+            try {
+                listLibraries(protocol, access);
+            } catch (Exception e) {
+                if (LOGGER.isDebugEnabled()) {
+                    LOGGER.debug("Unable to inspect the "
+                            + (access == (KEY_READ | KEY_WOW64_32KEY) ? 32 : 64)
+                            + "-bit J2534 registry view: " + e.getMessage());
+                }
+            }
+        }
+    }
+
+    private static void listLibraries(final String protocol, final int access)
+            throws Exception {
         final Advapi32 advapi32 = Advapi32.INSTANCE;
         final HKEY hklm = HKEY_LOCAL_MACHINE;
         final String passThru = "SOFTWARE\\PassThruSupport.04.04";
-        final HKEYByReference passThruHandle = getHandle(advapi32, hklm, passThru);
+        final HKEYByReference passThruHandle = getHandle(
+                advapi32, hklm, passThru, access);
 
         if(passThruHandle != null) {
-	        List<String> vendors = getKeys(advapi32, passThruHandle.getValue());
-	        for (String vendor : vendors) {
-	            final HKEYByReference vendorKey =
-	                    getHandle(advapi32, passThruHandle.getValue(), vendor);
-	            final int supported = getDWord(advapi32, vendorKey.getValue(), protocol);
-	            if (supported == 0 ) continue;
-	            final String library = getSZ(advapi32, vendorKey.getValue(), FUNCTIONLIBRARY);
-	            if (LOGGER.isDebugEnabled())
-                    LOGGER.debug(String.format("Found J2534 Vendor:%s | Library:%s",
-	                    vendor, library));
-	            if (ParamChecker.isNullOrEmpty(library)) continue;
-	            libraries.add(new J2534Library(vendor, library));
-	            advapi32.RegCloseKey(vendorKey.getValue());
-	        }
-	        advapi32.RegCloseKey(passThruHandle.getValue());
+            try {
+                List<String> vendors = getKeys(advapi32, passThruHandle.getValue());
+                for (String vendor : vendors) {
+                    final HKEYByReference vendorKey = getHandle(
+                            advapi32, passThruHandle.getValue(), vendor, access);
+                    if (vendorKey == null) continue;
+                    try {
+                        final int supported = getDWord(
+                                advapi32, vendorKey.getValue(), protocol);
+                        if (supported == 0) continue;
+                        final String library = getSZ(advapi32,
+                                vendorKey.getValue(), FUNCTIONLIBRARY);
+                        if (LOGGER.isDebugEnabled()) {
+                            LOGGER.debug(String.format(
+                                    "Found J2534 Vendor:%s | Library:%s | Registry:%d-bit",
+                                    vendor, library,
+                                    access == (KEY_READ | KEY_WOW64_32KEY) ? 32 : 64));
+                        }
+                        if (ParamChecker.isNullOrEmpty(library)) continue;
+                        libraries.add(new J2534Library(vendor, library));
+                    } finally {
+                        advapi32.RegCloseKey(vendorKey.getValue());
+                    }
+                }
+            } finally {
+                advapi32.RegCloseKey(passThruHandle.getValue());
+            }
         }
     }
 
     private static HKEYByReference getHandle(
             final Advapi32 advapi32,
-            final HKEY hKey, String lpSubKey) {
+            final HKEY hKey, String lpSubKey, final int access) {
 
         HKEYByReference phkResult = new HKEYByReference();
         int ret = advapi32.RegOpenKeyEx(
             hKey,
             lpSubKey,
             0,
-            KEY_READ,
+            access,
             phkResult);
 
         if(ret != ERROR_SUCCESS) {
@@ -202,10 +237,10 @@ public class J2534LibraryLocator {
         int ret = 0;
         do {
             char[] lpName = new char[255];
-            IntByReference lpcName = new IntByReference(-1);
+            IntByReference lpcName = new IntByReference(lpName.length);
             IntByReference lpReserved = null;
             char[] lpClass = new char[255];
-            IntByReference lpcClass = new IntByReference(-1);
+            IntByReference lpcClass = new IntByReference(lpClass.length);
             FILETIME lpftLastWriteTime = new FILETIME();
             ret = advapi32.RegEnumKeyEx(
                     hkey,
@@ -238,7 +273,7 @@ public class J2534LibraryLocator {
 
         IntByReference lpType = new IntByReference(-1);
         byte[] lpData = new byte[16];
-        IntByReference lpcbData = new IntByReference(-1);
+        IntByReference lpcbData = new IntByReference(lpData.length);
         int ret = advapi32.RegQueryValueEx(
                 hkey,
                 valueName,
@@ -270,7 +305,8 @@ public class J2534LibraryLocator {
 
         final IntByReference lpType = new IntByReference(-1);
         final char[] lpData = new char[1024];
-        final IntByReference lpcbData = new IntByReference(-1);
+        final IntByReference lpcbData = new IntByReference(
+                lpData.length * Native.WCHAR_SIZE);
         final int ret = advapi32.RegQueryValueEx(
                 hkey,
                 valueName,

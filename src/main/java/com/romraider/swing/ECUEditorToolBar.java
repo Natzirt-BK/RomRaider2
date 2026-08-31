@@ -75,6 +75,8 @@ public class ECUEditorToolBar extends JToolBar implements ActionListener {
     private final JButton moreActions = new JButton("More \u25be");
     private final JButton search = new JButton(
             ModernIconFactory.icon(Action.SEARCH));
+    private final JToggleButton navigation = new JToggleButton(
+            ModernIconFactory.icon(Action.HIDE_LEFT_PANEL));
     private final JToggleButton inspector = new JToggleButton(
             ModernIconFactory.icon(Action.SHOW_RIGHT_PANEL));
     private final JLabel connectionStatus = new JLabel("● ECU OFFLINE");
@@ -132,6 +134,7 @@ public class ECUEditorToolBar extends JToolBar implements ActionListener {
                 "No integrated ECU communication session is active");
         context.add(connectionStatus, BorderLayout.WEST);
         JPanel viewControls = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
+        viewControls.add(navigation);
         viewControls.add(search);
         viewControls.add(inspector);
         context.add(viewControls, BorderLayout.EAST);
@@ -155,6 +158,10 @@ public class ECUEditorToolBar extends JToolBar implements ActionListener {
         search.setFocusable(false);
         search.setPreferredSize(new Dimension(36, 36));
         search.setMinimumSize(new Dimension(36, 36));
+        navigation.setFocusPainted(false);
+        navigation.setFocusable(false);
+        navigation.setPreferredSize(new Dimension(36, 36));
+        navigation.setMinimumSize(new Dimension(36, 36));
         inspector.setFocusPainted(false);
         inspector.setFocusable(false);
         inspector.setPreferredSize(new Dimension(36, 36));
@@ -169,6 +176,10 @@ public class ECUEditorToolBar extends JToolBar implements ActionListener {
         search.setName("UNIFIED SEARCH");
         search.setToolTipText("Search everything (Ctrl+Shift+P)");
         search.getAccessibleContext().setAccessibleName("Search everything");
+        navigation.setName("TOGGLE NAVIGATION");
+        navigation.setToolTipText("Hide Calibrations and saved table lists (Ctrl+B)");
+        navigation.getAccessibleContext().setAccessibleName(
+                "Hide Calibrations and saved table lists");
         inspector.setName("TOGGLE INSPECTOR");
         inspector.setToolTipText("Show Inspector");
         inspector.getAccessibleContext().setAccessibleName("Show Inspector");
@@ -192,6 +203,7 @@ public class ECUEditorToolBar extends JToolBar implements ActionListener {
         preferences.addActionListener(this);
         moreActions.addActionListener(event -> showMoreActions());
         search.addActionListener(this);
+        navigation.addActionListener(this);
         inspector.addActionListener(this);
     }
 
@@ -364,6 +376,8 @@ public class ECUEditorToolBar extends JToolBar implements ActionListener {
             form.setVisible(true);
         } else if (e.getSource() == inspector) {
             getEditor().toggleInspector();
+        } else if (e.getSource() == navigation) {
+            getEditor().toggleNavigationPanel();
         } else if (e.getSource() == search) {
             getEditor().showUnifiedSearch();
         }
@@ -376,6 +390,17 @@ public class ECUEditorToolBar extends JToolBar implements ActionListener {
         inspector.setToolTipText(visible ? "Hide Inspector" : "Show Inspector");
         inspector.getAccessibleContext().setAccessibleName(
                 inspector.getToolTipText());
+    }
+
+    public void setNavigationVisible(boolean visible) {
+        navigation.setSelected(visible);
+        navigation.setIcon(ModernIconFactory.icon(visible
+                ? Action.HIDE_LEFT_PANEL : Action.SHOW_LEFT_PANEL));
+        navigation.setToolTipText(visible
+                ? "Hide Calibrations and saved table lists (Ctrl+B)"
+                : "Show Calibrations and saved table lists (Ctrl+B)");
+        navigation.getAccessibleContext().setAccessibleName(
+                navigation.getToolTipText());
     }
 
     private static JSeparator groupSeparator() {

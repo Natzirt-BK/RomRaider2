@@ -50,7 +50,7 @@ layouts from them are approved or adopted by this table.
 | Candidate | npkern | https://github.com/fenugrec/npkern | GPL-3.0-or-later | RAM reflashing kernel, ISO14230/K-line command layer, SH7055/SH7058 flash backends, ROM/RAM reads, erase/program primitives | Relevant to Subaru-capable SH705x work and recovery design. Kernel binaries and source must be treated as code, not undocumented assets. No adoption until CPU/ECU applicability and license path are verified. |
 | Candidate | FastECU M32R flasher | https://github.com/miikasyvanen/FastECU-m32r-flasher | GPL-3.0 | Bench recovery for specific early Subaru Hitachi ECUs | Recovery-focused and narrowly scoped. Hardware procedures and supported ECU identities must not be generalized. |
 | Candidate | NikolaKozina j2534 | https://github.com/NikolaKozina/j2534 | BSD-3-Clause | OpenPort 2.0/libusb J2534 implementation used with RomRaider on Linux and Windows | Permissive candidate for transport work. Preserve BSD notice and review protocol coverage, error handling, concurrency, device ownership, voltage APIs, and platform/bitness behavior. |
-| Candidate | j2534-bridge | https://github.com/mickeyl/j2534-bridge | Verify before reuse | Out-of-process J2534 bitness isolation | Relevant to loading 32-bit vendor drivers from a 64-bit application and fault isolation. License and maintenance status must be verified from the canonical repository before adoption. |
+| Adopted | j2534-bridge | https://github.com/mickeyl/j2534-bridge | MIT | Out-of-process J2534 bitness isolation | Revision `7234e12c280ae8e91467319a59856f36b81c0e16` is built as static-runtime x86 and x64 Windows helpers. A documented patch preserves raw transmit flags/timeouts and v04.04 ISO15765 flow-control messages required by RomRaider's existing J2534 facade. RomRaider2 supplies an independent Java named-pipe client and chooses the helper only for a mismatched vendor DLL. The vendor driver and registry entry remain unchanged. |
 | Candidate — blocked | RomRaider Graph3d.jar | Distributed by https://github.com/RomRaider/RomRaider in `lib/` | No source or component-specific license record located | Existing Java 3D table visualization | The binary exposes an embeddable Swing panel backed by Java 3D, but RomRaider2 will not deepen or adapt this dependency until its canonical source, copyright, and license are identified. Existing standalone behavior remains unchanged. Java 3D itself is a separate dependency and does not establish the license of `Graph3d.jar`. |
 | Candidate | Jzy3d | https://github.com/jzy3d/jzy3d-api | BSD-3-Clause | Integrated 3D calibration surface renderer | Upstream documents Swing/AWT support and native JOGL plus CPU-rendered paths. The current development line is snapshot-based and its own test configuration exports internal `sun.awt`/`sun.java2d` packages, so it is not being bundled blindly. Revisit a pinned stable release only after minimal dependency, Java 21, CachyOS/Windows, HiDPI, cleanup, and headless validation; preserve the BSD notice if adopted. |
 | Evaluated — not selected | Orson Charts | https://github.com/jfree/orson-charts | GPL-3.0-or-later | Integrated 3D calibration surface renderer | Technically relevant pure-Java Swing renderer, but adopting it would raise the combined distribution's effective licensing floor to GPLv3. Not selected without an explicit project licensing decision. |
@@ -67,6 +67,19 @@ layouts from them are approved or adopted by this table.
 | Java2D calibration surface fallback | `Java2dSurfaceVisualizationProvider`, `Java2dSurfacePanel`, `MapVisualizationRegistry` | None | Provides a Java 21-safe integrated surface behind the replaceable renderer boundary. It uses only supported JDK Java2D APIs while Jzy3d remains under technical review and Orson requires a distribution-license decision. |
 
 ## Adopted components
+
+| Field | j2534-bridge adoption record |
+| --- | --- |
+| Project and repository | j2534-bridge, https://github.com/mickeyl/j2534-bridge |
+| Revision | `7234e12c280ae8e91467319a59856f36b81c0e16`, 2026-06-10 |
+| License | MIT |
+| Upstream files | Rust bridge process built with its locked Cargo dependency graph for `i686-pc-windows-msvc` and `x86_64-pc-windows-msvc` |
+| RomRaider2 files | `packaging/java21/build-j2534-bridges.ps1`, `packaging/j2534-bridge/romraider2-j2534-options.patch`, the `BridgeJson`, `J2534BridgeClient`, and `BridgedJ2534` Java classes, and `licenses/j2534-bridge-MIT.txt` |
+| Reuse type | Pinned upstream bridge executables with a narrowly scoped source patch plus an independent Java protocol client |
+| Modifications | The patch makes the Windows helper console-free, adds optional raw transmit flags/write timeout fields and v04.04 flow-control bytes to the existing JSON protocol, then carries those values into `PassThruWriteMsgs` and `PassThruStartMsgFilter`. RomRaider2 also detects PE architecture, searches both Windows J2534 registry views, and selects direct or bridged loading. |
+| Attribution | The complete MIT license and a source/revision record ship in the Windows release. |
+| Validation | Java protocol/PE tests and Windows package presence checks; clean Windows x86-DLL/x64-host and real OpenPort connected tests remain required. |
+| Reviewer/date | RomRaider2 project audit, 2026-08-31 |
 
 | Field | JNA adoption record |
 | --- | --- |

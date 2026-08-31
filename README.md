@@ -9,6 +9,20 @@ RomRaider2 is part of **Ecu Tools by NatZirt**, a project that makes established
 Subaru and Lancer Evolution tuning software practical to install and use on
 Linux. Windows users can download a self-contained portable RomRaider2 package.
 
+## Download RomRaider2
+
+| Platform | Download | What to do |
+| --- | --- | --- |
+| **Windows 10/11 x64** | **[Download Windows ZIP](https://github.com/Natzirt-BK/RomRaider2/releases/download/romraider2-1.1.0-rc2/RomRaider2_ECU_Studio_1.1.0_Windows_x64.zip)** | Extract the ZIP and open `RomRaider2.exe`. Java 21 is included. |
+| **Linux x64** | **[Download Linux ZIP](https://github.com/Natzirt-BK/RomRaider2/releases/download/romraider2-1.1.0-rc2/RomRaider2_ECU_Studio_1.1.0_Linux_x64.zip)** | Extract the ZIP and open `bin/RomRaider2`. Java 21 is included. |
+
+[Release notes, checksums, and all downloads](https://github.com/Natzirt-BK/RomRaider2/releases/tag/romraider2-1.1.0-rc2)
+
+The Windows package does not require a separate Java installation. Do not
+disable Windows driver-signing protection: install the normal signed driver for
+your interface, and RomRaider2 will select its direct or bundled J2534 bridge
+path automatically.
+
 ## What RomRaider2 adds
 
 - A modern tabbed calibration workspace with favorites, recent and changed-map
@@ -47,6 +61,10 @@ Linux. Windows users can download a self-contained portable RomRaider2 package.
 - OpenPort/J2534 receive handling waits for complete messages and resynchronizes
   when Subaru SSM queries change, eliminating the observed logging gaps.
 - J2534 logging no longer presents an irrelevant serial COM-port selector.
+- Windows J2534 discovery checks both 32-bit and 64-bit registry views. A vendor
+  DLL matching RomRaider2 loads directly; a mismatched DLL uses the bundled
+  architecture bridge automatically, without changing the vendor driver or
+  disabling Windows driver-signing protection.
 - External serial sensors validate configuration and reconnect when their port
   changes; Windows-only plugins are hidden on unsupported systems.
 - Logger definitions can be validated and installed into managed user data,
@@ -62,20 +80,22 @@ Linux. Windows users can download a self-contained portable RomRaider2 package.
 ## Current validation and limits
 
 The Linux OpenPort 2.0 Subaru SSM/ISO9141 path has completed ECU identification
-and sustained in-car logging. Mitsubishi MUT-II vehicle logging and Windows
-connected-hardware testing are still qualification items. The RC2 unexpected
-USB-disconnect fix has automated coverage; its connected retest is deferred to
-RC3. ECU memory writing and flashing are not enabled in RomRaider2 RC2.
+and sustained in-car logging. Windows packages now include automatic 32/64-bit
+J2534 user-mode bridging, but its clean-machine and connected OpenPort tests are
+still qualification items. Mitsubishi MUT-II vehicle logging is also unverified
+on a vehicle. The RC2 unexpected USB-disconnect fix has automated coverage; its
+connected retest is deferred to RC3. ECU memory writing and flashing are not
+enabled in RomRaider2 RC2.
 
 Release archives contain software only. Vehicle ROMs, definitions, logger
 profiles, captured logs, and owner-specific tuning material are not included.
 Always match definitions by exact ROM ID and begin with a supervised read-only
 connection test.
 
-## Downloads and Linux setup
+## Linux installer and development
 
-Packages and supported Linux installation commands are on the
-[Ecu Tools by NatZirt release page](https://github.com/Natzirt-BK/subaru-ecu-tools-linux/releases/tag/romraider2-1.1.0-rc2).
+Supported Linux installation commands are also available from the
+[Ecu Tools by NatZirt installer release](https://github.com/Natzirt-BK/subaru-ecu-tools-linux/releases/tag/romraider2-1.1.0-rc2).
 
 See `docs/Building_RomRaider_VSCode.md` for the current Java 21 development
 setup. `docs/Building_RomRaider.txt` is retained for historical build context.

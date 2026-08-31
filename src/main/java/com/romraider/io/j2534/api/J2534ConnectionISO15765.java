@@ -115,11 +115,11 @@ public final class J2534ConnectionISO15765 implements ConnectionManager {
     }
 
     private void initJ2534(int baudRate, String library) {
-        api = new J2534Impl(Protocol.ISO15765, library);
+        api = J2534BackendFactory.create(Protocol.ISO15765, library);
         deviceId = api.open();
         try {
-            version(deviceId);
             channelId = api.connect(deviceId, 0, baudRate);
+            version(deviceId);
             setConfig(channelId);
 
             final byte[] mask = {

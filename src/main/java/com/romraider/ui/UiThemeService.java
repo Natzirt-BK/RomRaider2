@@ -13,8 +13,8 @@ import javax.swing.plaf.ColorUIResource;
 
 public final class UiThemeService {
     private static final UiThemeService INSTANCE = new UiThemeService();
-    private ThemeMode currentMode = ThemeMode.DARK;
-    private ThemePalette currentPalette = ThemePalettes.dark();
+    private ThemeMode currentMode = ThemeMode.LIGHT;
+    private ThemePalette currentPalette = ThemePalettes.light();
 
     private UiThemeService() {
     }

@@ -20,7 +20,7 @@ public final class ModernIconFactory {
         COMPARE, DEFINITION, CATEGORY, DOWNLOAD, PROPERTIES, LOGGER, CONNECT, TOOLS, HELP, USER,
         FAVORITE, BACK, FORWARD, COLOR, VIEW_3D,
         TABLE_1D, TABLE_2D, TABLE_3D, SWITCH,
-        HIDE_RIGHT_PANEL, SHOW_RIGHT_PANEL,
+        HIDE_LEFT_PANEL, SHOW_LEFT_PANEL, HIDE_RIGHT_PANEL, SHOW_RIGHT_PANEL,
         HIDE_BOTTOM_PANEL, SHOW_BOTTOM_PANEL, SEARCH, DASHBOARD, UNDO, REDO
     }
 
@@ -185,6 +185,14 @@ public final class ModernIconFactory {
                 case SHOW_RIGHT_PANEL:
                     g.drawLine(17, 3, 17, 17);
                     path(g, 13,5, 8,10, 13,15);
+                    break;
+                case HIDE_LEFT_PANEL:
+                    g.drawLine(3, 3, 3, 17);
+                    path(g, 12,5, 7,10, 12,15);
+                    break;
+                case SHOW_LEFT_PANEL:
+                    g.drawLine(3, 3, 3, 17);
+                    path(g, 7,5, 12,10, 7,15);
                     break;
                 case HIDE_BOTTOM_PANEL:
                     g.drawLine(3, 17, 17, 17);

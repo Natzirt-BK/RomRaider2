@@ -121,6 +121,8 @@ public final class DOMSettingsBuilder {
         // splitpane location
         IIOMetadataNode splitpane = new IIOMetadataNode("splitpane");
         splitpane.setAttribute("location", String.valueOf(settings.getSplitPaneLocation()));
+        splitpane.setAttribute("navigation-visible",
+                String.valueOf(settings.isNavigationPanelVisible()));
         windowSettings.appendChild(splitpane);
 
         return windowSettings;

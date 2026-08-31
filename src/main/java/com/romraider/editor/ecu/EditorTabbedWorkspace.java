@@ -125,6 +125,18 @@ public final class EditorTabbedWorkspace extends JPanel {
         showCorrectCard();
     }
 
+    @Override
+    public void updateUI() {
+        super.updateUI();
+        // Custom tab headers use semantic colors rather than UI defaults.
+        // Re-resolve them whenever a runtime theme switch updates the tree.
+        if (tabs != null) {
+            tabs.setBackground(UiThemeService.getInstance().color(
+                    ThemeToken.BACKGROUND));
+            updateTabHeaderStyles();
+        }
+    }
+
     public void open(TableFrame frame) {
         if (frame == null) return;
         if (documents.containsKey(frame)) {

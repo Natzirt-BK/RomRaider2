@@ -178,6 +178,7 @@ public class Settings implements Serializable {
     private final Dimension windowSize = new Dimension(800, 600);
     private final Point windowLocation = new Point();
     private int splitPaneLocation = 150;
+    private boolean navigationPanelVisible = true;
     private boolean windowMaximized;
 
     private String recentVersion = "x";
@@ -218,7 +219,7 @@ public class Settings implements Serializable {
     private VehiclePlatform vehiclePlatform = VehiclePlatform.SUBARU;
     private VehicleModule vehicleModule = VehicleModule.ENGINE_ECU;
     private UiScale uiScale = UiScale.AUTOMATIC;
-    private ThemeMode themeMode = ThemeMode.DARK;
+    private ThemeMode themeMode = ThemeMode.LIGHT;
     private DisplayMode displayMode = DisplayMode.NORMAL;
     private EditorWorkspacePreferences editorWorkspacePreferences =
             new EditorWorkspacePreferences();
@@ -366,6 +367,14 @@ public class Settings implements Serializable {
 
     public void setSplitPaneLocation(int splitPaneLocation) {
         this.splitPaneLocation = splitPaneLocation;
+    }
+
+    public boolean isNavigationPanelVisible() {
+        return navigationPanelVisible;
+    }
+
+    public void setNavigationPanelVisible(boolean navigationPanelVisible) {
+        this.navigationPanelVisible = navigationPanelVisible;
     }
 
     public boolean isWindowMaximized() {

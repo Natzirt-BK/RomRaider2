@@ -48,6 +48,7 @@ import javax.swing.JPopupMenu;
 import javax.swing.JTextArea;
 import javax.swing.JToolBar;
 import javax.swing.KeyStroke;
+import javax.swing.SwingUtilities;
 import javax.swing.border.Border;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
@@ -106,10 +107,7 @@ public class TableToolBar extends JToolBar implements MouseListener, ItemListene
     private final JButton clearOverlay = new JButton("Clear trace");
     private final JLabel liveDataValue = new JLabel();
 
-    private final Border toolbarBorder = BorderFactory.createCompoundBorder(
-            BorderFactory.createMatteBorder(0, 0, 1, 0,
-                    UiThemeService.getInstance().color(ThemeToken.RAISED_SURFACE)),
-            BorderFactory.createEmptyBorder(3, 6, 3, 6));
+    private Border toolbarBorder = createToolbarBorder();
 
     private Table selectedTable = null;
     private Table pendingValueTable;
@@ -267,6 +265,9 @@ public class TableToolBar extends JToolBar implements MouseListener, ItemListene
         moreActions.putClientProperty("TABLE_TOOLBAR_MORE_POPUP",
                 moreActionsPopup);
         moreActions.addActionListener(event -> {
+            // Stored popups are not descendants of the application window, so
+            // Swing's normal theme refresh does not reach these controls.
+            refreshTheme();
             TouchTargetService.apply(moreActionsPopup,
                     SettingsManager.getSettings().getDisplayMode());
             moreActionsPopup.show(moreActions, 0, moreActions.getHeight());
@@ -298,6 +299,47 @@ public class TableToolBar extends JToolBar implements MouseListener, ItemListene
         }
         for (Component control : controls) panel.add(control);
         return panel;
+    }
+
+    @Override
+    public void updateUI() {
+        super.updateUI();
+        if (moreActionsPopup != null) {
+            SwingUtilities.updateComponentTreeUI(moreActionsPopup);
+            refreshTheme();
+        }
+    }
+
+    private void refreshTheme() {
+        UiThemeService theme = UiThemeService.getInstance();
+        setBackground(theme.color(ThemeToken.SURFACE));
+        selectionStatus.setForeground(theme.color(ThemeToken.SECONDARY_TEXT));
+        overlayLog.setForeground(theme.color(ThemeToken.PRIMARY_TEXT));
+        liveDataValue.setForeground(theme.color(ThemeToken.PRIMARY_TEXT));
+        refreshGroupLabelColors(this);
+        refreshGroupLabelColors(moreActionsPopup);
+        toolbarBorder = createToolbarBorder();
+        setBorder(toolbarBorder);
+    }
+
+    private static void refreshGroupLabelColors(java.awt.Container root) {
+        for (Component component : root.getComponents()) {
+            if (component instanceof JLabel) {
+                ((JLabel) component).setForeground(UiThemeService.getInstance()
+                        .color(ThemeToken.SECONDARY_TEXT));
+            }
+            if (component instanceof java.awt.Container) {
+                refreshGroupLabelColors((java.awt.Container) component);
+            }
+        }
+    }
+
+    private static Border createToolbarBorder() {
+        return BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(0, 0, 1, 0,
+                        UiThemeService.getInstance().color(
+                                ThemeToken.RAISED_SURFACE)),
+                BorderFactory.createEmptyBorder(3, 6, 3, 6));
     }
 
     @Override

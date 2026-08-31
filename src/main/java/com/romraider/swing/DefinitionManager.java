@@ -27,6 +27,8 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.text.MessageFormat;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.Properties;
 import java.util.ResourceBundle;
 import java.util.Scanner;
@@ -37,14 +39,17 @@ import javax.swing.*;
 import org.apache.log4j.Logger;
 
 import com.romraider.Settings;
-import com.romraider.editor.ecu.ECUEditorManager;
+import com.romraider.ui.BrandImages;
+import com.romraider.ui.ModernIconFactory;
+import com.romraider.ui.ModernIconFactory.Action;
+import com.romraider.ui.TouchTargetService;
 import com.romraider.util.CustomizationFiles;
 import com.romraider.util.ResourceUtil;
 import com.romraider.util.SettingsManager;
 import com.romraider.xml.ConversionLayer.ConversionLayer;
 import com.romraider.xml.ConversionLayer.ConversionLayerFactory;
 
-public class DefinitionManager extends javax.swing.JFrame implements ActionListener {
+public class DefinitionManager extends AbstractFrame implements ActionListener {
 
     private static final long serialVersionUID = -3920843496218196737L;
     private static final ResourceBundle rb = new ResourceUtil().getBundle(
@@ -56,14 +61,29 @@ public class DefinitionManager extends javax.swing.JFrame implements ActionListe
     private final Properties props = loadSequences();
 
     Vector<String> fileNames;
+    private final Vector<String> visibleFileNames = new Vector<String>();
 
     public DefinitionManager() {
-        this.setIconImage(ECUEditorManager.getECUEditor().getIconImage());
         initComponents();
+        BrandImages.apply(this);
         initSettings();
 
-        definitionList.setFont(new Font("Tahoma", Font.PLAIN, 11));
         definitionList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        definitionList.addListSelectionListener(event -> {
+            if (!event.getValueIsAdjusting()) updateSelectionState();
+        });
+        searchField.getDocument().addDocumentListener(
+                new javax.swing.event.DocumentListener() {
+            public void insertUpdate(javax.swing.event.DocumentEvent event) {
+                updateListModel();
+            }
+            public void removeUpdate(javax.swing.event.DocumentEvent event) {
+                updateListModel();
+            }
+            public void changedUpdate(javax.swing.event.DocumentEvent event) {
+                updateListModel();
+            }
+        });
 
         btnCancel.addActionListener(this);
         btnSave.addActionListener(this);
@@ -73,6 +93,10 @@ public class DefinitionManager extends javax.swing.JFrame implements ActionListe
         btnMoveDown.addActionListener(this);
         btnApply.addActionListener(this);
         btnUndo.addActionListener(this);
+        btnMoveTop.addActionListener(this);
+        btnMoveBottom.addActionListener(this);
+        btnOpenFolder.addActionListener(this);
+        updateSelectionState();
     }
 
     private void initSettings() {
@@ -87,10 +111,9 @@ public class DefinitionManager extends javax.swing.JFrame implements ActionListe
         updateListModel();
     }
 
-    // <editor-fold defaultstate="collapsed" desc=" Generated Code ">//GEN-BEGIN:initComponents
     private void initComponents() {
         jScrollPane1 = new javax.swing.JScrollPane();
-        definitionList = new javax.swing.JList();
+        definitionList = new javax.swing.JList<String>();
         defLabel = new javax.swing.JLabel();
         btnMoveUp = new javax.swing.JButton();
         btnMoveDown = new javax.swing.JButton();
@@ -100,86 +123,146 @@ public class DefinitionManager extends javax.swing.JFrame implements ActionListe
         btnCancel = new javax.swing.JButton();
         btnApply = new javax.swing.JButton();
         btnUndo = new javax.swing.JButton();
+        btnMoveTop = new javax.swing.JButton("⇈ Top");
+        btnMoveBottom = new javax.swing.JButton("⇊ Bottom");
+        btnOpenFolder = new javax.swing.JButton("Open Definitions Folder");
+        searchField = new javax.swing.JTextField();
 
         setDefaultCloseOperation(javax.swing.WindowConstants.DISPOSE_ON_CLOSE);
-        setTitle(rb.getString("TITLE"));
+        setTitle("Definition File Manager");
+        setJMenuBar(new JMenuBar());
+        setMinimumSize(new Dimension(760, 520));
         jScrollPane1.setViewportView(definitionList);
+        definitionList.setName("DEFINITION PRIORITY LIST");
+        definitionList.setFixedCellHeight(48);
+        definitionList.setCellRenderer(new DefinitionPathRenderer());
 
-        defLabel.setText(rb.getString("FILEPRIORITY"));
+        defLabel.setText("Definition File Priority");
+        defLabel.setFont(defLabel.getFont().deriveFont(Font.BOLD, 18f));
 
-        btnMoveUp.setText(rb.getString("MOVEUP"));
+        btnMoveUp.setText("↑ " + rb.getString("MOVEUP"));
 
-        btnMoveDown.setText(rb.getString("MOVEDOWN"));
+        btnMoveDown.setText("↓ " + rb.getString("MOVEDOWN"));
 
         btnAddDefinition.setText(rb.getString("ADD"));
+        btnAddDefinition.setIcon(ModernIconFactory.icon(Action.OPEN));
 
         btnRemoveDefinition.setText(rb.getString("REMOVE"));
+        btnRemoveDefinition.setIcon(ModernIconFactory.icon(Action.CLOSE));
 
         btnSave.setText(rb.getString("SAVE"));
+        btnSave.setIcon(ModernIconFactory.icon(Action.SAVE));
 
         btnCancel.setText(rb.getString("CANCEL"));
 
         btnApply.setText(rb.getString("APPLY"));
 
         btnUndo.setText(rb.getString("UNDO"));
+        btnUndo.setIcon(ModernIconFactory.icon(Action.UNDO));
+        btnMoveTop.setToolTipText("Move selected definition to highest priority");
+        btnMoveBottom.setToolTipText("Move selected definition to lowest priority");
+        btnOpenFolder.setIcon(ModernIconFactory.icon(Action.CATEGORY));
+        searchField.setName("DEFINITION SEARCH");
+        searchField.setToolTipText("Filter definitions by name or path");
 
-        GroupLayout layout = new GroupLayout(getContentPane());
-        getContentPane().setLayout(layout);
-        layout.setHorizontalGroup(
-                layout.createParallelGroup(GroupLayout.Alignment.LEADING)
-                .addGroup(layout.createSequentialGroup()
-                        .addContainerGap()
-                        .addGroup(layout.createParallelGroup(GroupLayout.Alignment.LEADING)
-                                .addComponent(jScrollPane1, GroupLayout.DEFAULT_SIZE, 448, Short.MAX_VALUE)
-                                .addGroup(GroupLayout.Alignment.TRAILING, layout.createSequentialGroup()
-                                        .addGroup(layout.createParallelGroup(GroupLayout.Alignment.TRAILING)
-                                                .addGroup(layout.createSequentialGroup()
-                                                        .addComponent(btnSave)
-                                                        .addPreferredGap(LayoutStyle.ComponentPlacement.RELATED)
-                                                        .addComponent(btnApply)
-                                                        .addPreferredGap(LayoutStyle.ComponentPlacement.RELATED)
-                                                        .addComponent(btnUndo)
-                                                        .addPreferredGap(LayoutStyle.ComponentPlacement.RELATED)
-                                                        .addComponent(btnCancel))
-                                                .addGroup(layout.createSequentialGroup()
-                                                        .addGroup(layout.createParallelGroup(GroupLayout.Alignment.LEADING)
-                                                                .addComponent(defLabel)
-                                                                .addGroup(layout.createSequentialGroup()
-                                                                        .addComponent(btnMoveDown)
-                                                                        .addPreferredGap(LayoutStyle.ComponentPlacement.RELATED)
-                                                                        .addComponent(btnMoveUp)))
-                                                        .addPreferredGap(LayoutStyle.ComponentPlacement.RELATED, 80, Short.MAX_VALUE)
-                                                        .addComponent(btnAddDefinition)))
-                                        .addPreferredGap(LayoutStyle.ComponentPlacement.RELATED)
-                                        .addComponent(btnRemoveDefinition)))
-                        .addContainerGap())
-                );
+        JPanel heading = new JPanel(new BorderLayout(12, 0));
+        JPanel headingText = new JPanel();
+        headingText.setLayout(new BoxLayout(headingText, BoxLayout.Y_AXIS));
+        headingText.add(defLabel);
+        headingText.add(new JLabel(
+                "Definitions are loaded from top to bottom; higher files override lower files."));
+        heading.add(headingText, BorderLayout.CENTER);
+        heading.add(btnOpenFolder, BorderLayout.EAST);
 
-        layout.linkSize(SwingConstants.HORIZONTAL, new Component[]{btnAddDefinition, btnMoveDown, btnMoveUp, btnRemoveDefinition});
+        JPanel filter = new JPanel(new BorderLayout(8, 0));
+        filter.add(new JLabel("Search"), BorderLayout.WEST);
+        filter.add(searchField, BorderLayout.CENTER);
 
-        layout.setVerticalGroup(
-                layout.createParallelGroup(GroupLayout.Alignment.LEADING)
-                        .addGroup(layout.createSequentialGroup()
-                                .addContainerGap()
-                                .addComponent(defLabel)
-                                .addPreferredGap(LayoutStyle.ComponentPlacement.RELATED)
-                                .addComponent(jScrollPane1, GroupLayout.PREFERRED_SIZE, GroupLayout.DEFAULT_SIZE, GroupLayout.PREFERRED_SIZE)
-                                .addPreferredGap(LayoutStyle.ComponentPlacement.RELATED)
-                                .addGroup(layout.createParallelGroup(GroupLayout.Alignment.BASELINE)
-                                        .addComponent(btnMoveUp)
-                                        .addComponent(btnMoveDown)
-                                        .addComponent(btnRemoveDefinition, GroupLayout.PREFERRED_SIZE, 23, GroupLayout.PREFERRED_SIZE)
-                                        .addComponent(btnAddDefinition))
-                                .addPreferredGap(LayoutStyle.ComponentPlacement.RELATED)
-                                .addGroup(layout.createParallelGroup(GroupLayout.Alignment.BASELINE)
-                                        .addComponent(btnSave)
-                                        .addComponent(btnApply)
-                                        .addComponent(btnUndo)
-                                        .addComponent(btnCancel))
-                                .addContainerGap(GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
-                );
+        JPanel moveActions = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
+        moveActions.add(btnMoveUp);
+        moveActions.add(btnMoveDown);
+        moveActions.add(btnMoveTop);
+        moveActions.add(btnMoveBottom);
+        JPanel fileActions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
+        fileActions.add(btnAddDefinition);
+        fileActions.add(btnRemoveDefinition);
+        JPanel listActions = new JPanel(new BorderLayout());
+        listActions.add(moveActions, BorderLayout.WEST);
+        listActions.add(fileActions, BorderLayout.EAST);
+
+        JPanel listPanel = new JPanel(new BorderLayout(0, 8));
+        listPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        listPanel.add(filter, BorderLayout.NORTH);
+        listPanel.add(jScrollPane1, BorderLayout.CENTER);
+        listPanel.add(listActions, BorderLayout.SOUTH);
+
+        JPanel details = createDetailsPanel();
+        JSplitPane content = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT,
+                listPanel, details);
+        content.setName("DEFINITION MANAGER SPLIT");
+        content.setResizeWeight(0.72);
+        content.setContinuousLayout(true);
+        content.setDividerLocation(680);
+
+        JPanel footer = new JPanel(new BorderLayout());
+        footer.setBorder(BorderFactory.createEmptyBorder(8, 10, 10, 10));
+        footer.add(btnUndo, BorderLayout.WEST);
+        JPanel commit = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
+        commit.add(btnCancel);
+        commit.add(btnApply);
+        commit.add(btnSave);
+        footer.add(commit, BorderLayout.EAST);
+
+        JPanel root = new JPanel(new BorderLayout(0, 8));
+        root.setBorder(BorderFactory.createEmptyBorder(14, 14, 0, 14));
+        root.add(heading, BorderLayout.NORTH);
+        root.add(content, BorderLayout.CENTER);
+        root.add(footer, BorderLayout.SOUTH);
+        setContentPane(root);
+        TouchTargetService.apply(root,
+                SettingsManager.getSettings().getDisplayMode());
+        setPreferredSize(new Dimension(1040, 650));
         pack();
-    }// </editor-fold>//GEN-END:initComponents
+        setLocationRelativeTo(null);
+    }
+
+    private JPanel createDetailsPanel() {
+        JPanel panel = new JPanel(new GridBagLayout());
+        panel.setName("DEFINITION DETAILS");
+        panel.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createTitledBorder("Details"),
+                BorderFactory.createEmptyBorder(10, 10, 10, 10)));
+        GridBagConstraints constraints = new GridBagConstraints();
+        constraints.gridx = 0;
+        constraints.gridy = 0;
+        constraints.weightx = 1;
+        constraints.fill = GridBagConstraints.HORIZONTAL;
+        constraints.anchor = GridBagConstraints.NORTHWEST;
+        addDetail(panel, constraints, "Name", detailName);
+        addDetail(panel, constraints, "Type", detailType);
+        addDetail(panel, constraints, "Path", detailPath);
+        addDetail(panel, constraints, "Status", detailStatus);
+        addDetail(panel, constraints, "Priority", detailPriority);
+        addDetail(panel, constraints, "Last modified", detailModified);
+        constraints.weighty = 1;
+        panel.add(Box.createVerticalGlue(), constraints);
+        panel.setMinimumSize(new Dimension(250, 260));
+        return panel;
+    }
+
+    private static void addDetail(JPanel panel, GridBagConstraints constraints,
+            String title, JLabel value) {
+        JLabel heading = new JLabel(title);
+        heading.setFont(heading.getFont().deriveFont(Font.BOLD));
+        panel.add(heading, constraints);
+        constraints.gridy++;
+        value.setText("—");
+        value.setVerticalAlignment(SwingConstants.TOP);
+        panel.add(value, constraints);
+        constraints.gridy++;
+        panel.add(Box.createVerticalStrut(12), constraints);
+        constraints.gridy++;
+    }
 
     @Override
     public void actionPerformed(ActionEvent e) {
@@ -207,6 +290,15 @@ public class DefinitionManager extends javax.swing.JFrame implements ActionListe
 
         } else if (e.getSource() == btnUndo) {
             initSettings();
+
+        } else if (e.getSource() == btnMoveTop) {
+            moveSelectionToEdge(true);
+
+        } else if (e.getSource() == btnMoveBottom) {
+            moveSelectionToEdge(false);
+
+        } else if (e.getSource() == btnOpenFolder) {
+            openDefinitionsFolder();
 
         }
 
@@ -305,35 +397,158 @@ public class DefinitionManager extends javax.swing.JFrame implements ActionListe
     }
 
     public void moveSelection(int direction) {
-        int selectedIndex = definitionList.getSelectedIndex();
-        String fileName = fileNames.get(selectedIndex);
+        String fileName = definitionList.getSelectedValue();
+        if (fileName == null) return;
+        int selectedIndex = fileNames.indexOf(fileName);
 
         if (direction == MOVE_UP && selectedIndex > 0) {
             fileNames.remove(selectedIndex);
             fileNames.add(--selectedIndex, fileName);
 
-        } else if (direction == MOVE_DOWN && selectedIndex < definitionList.getModel().getSize()) {
+        } else if (direction == MOVE_DOWN
+                && selectedIndex < fileNames.size() - 1) {
             fileNames.remove(selectedIndex);
             fileNames.add(++selectedIndex, fileName);
 
         }
         updateListModel();
-        definitionList.setSelectedIndex(selectedIndex);
+        definitionList.setSelectedValue(fileName, true);
+    }
+
+    private void moveSelectionToEdge(boolean top) {
+        String fileName = definitionList.getSelectedValue();
+        if (fileName == null) return;
+        fileNames.remove(fileName);
+        fileNames.add(top ? 0 : fileNames.size(), fileName);
+        updateListModel();
+        definitionList.setSelectedValue(fileName, true);
     }
 
     public void removeSelection() {
-        int index = definitionList.getSelectedIndex();
-        if (index < 0) return;
-        fileNames.remove(index);
+        String fileName = definitionList.getSelectedValue();
+        if (fileName == null) return;
+        fileNames.remove(fileName);
         updateListModel();
 
     }
 
     public void updateListModel() {
-        definitionList.setListData(fileNames);
+        String selected = definitionList == null
+                ? null : definitionList.getSelectedValue();
+        String query = searchField == null ? ""
+                : searchField.getText().trim().toLowerCase();
+        visibleFileNames.clear();
+        for (String path : fileNames) {
+            File file = new File(path);
+            if (query.isEmpty()
+                    || path.toLowerCase().contains(query)
+                    || file.getName().toLowerCase().contains(query)) {
+                visibleFileNames.add(path);
+            }
+        }
+        definitionList.setListData(visibleFileNames);
+        if (selected != null && visibleFileNames.contains(selected)) {
+            definitionList.setSelectedValue(selected, true);
+        } else if (!visibleFileNames.isEmpty()) {
+            definitionList.setSelectedIndex(0);
+        } else {
+            updateSelectionState();
+        }
     }
 
-    // Variables declaration - do not modify//GEN-BEGIN:variables
+    private void updateSelectionState() {
+        String path = definitionList.getSelectedValue();
+        boolean selected = path != null;
+        int priority = selected ? fileNames.indexOf(path) : -1;
+        btnMoveUp.setEnabled(selected && priority > 0);
+        btnMoveTop.setEnabled(selected && priority > 0);
+        btnMoveDown.setEnabled(selected && priority < fileNames.size() - 1);
+        btnMoveBottom.setEnabled(selected && priority < fileNames.size() - 1);
+        btnRemoveDefinition.setEnabled(selected);
+        if (!selected) {
+            detailName.setText("—");
+            detailType.setText("—");
+            detailPath.setText("—");
+            detailStatus.setText("—");
+            detailPriority.setText("—");
+            detailModified.setText("—");
+            return;
+        }
+        File file = new File(path);
+        detailName.setText(file.getName());
+        detailType.setText(file.isDirectory() ? "Definition folder"
+                : "XML definition file");
+        detailPath.setText("<html>" + escape(path) + "</html>");
+        detailStatus.setText(file.exists() ? "Available" : "File not found");
+        detailPriority.setText((priority + 1) + " of " + fileNames.size());
+        detailModified.setText(file.exists()
+                ? new SimpleDateFormat("MMM d, yyyy h:mm a").format(
+                        new Date(file.lastModified())) : "—");
+    }
+
+    private void openDefinitionsFolder() {
+        String path = definitionList.getSelectedValue();
+        File folder = path == null
+                ? SettingsManager.getSettings().getLastDefinitionDir()
+                : new File(path).getParentFile();
+        if (folder == null) folder = new File(System.getProperty("user.home"));
+        try {
+            if (!Desktop.isDesktopSupported()
+                    || !Desktop.getDesktop().isSupported(Desktop.Action.OPEN)) {
+                throw new IOException("Opening folders is not supported by this desktop");
+            }
+            Desktop.getDesktop().open(folder);
+        } catch (IOException | SecurityException exception) {
+            IntegratedOptionDialog.show(this,
+                    "Unable to open " + folder + ":\n" + exception.getMessage(),
+                    "Open Definitions Folder", JOptionPane.WARNING_MESSAGE,
+                    new Object[] {"OK"}, "OK");
+        }
+    }
+
+    private static String escape(String value) {
+        return value.replace("&", "&amp;").replace("<", "&lt;")
+                .replace(">", "&gt;");
+    }
+
+    private final class DefinitionPathRenderer extends JPanel
+            implements ListCellRenderer<String> {
+        private static final long serialVersionUID = 1L;
+        private final JLabel name = new JLabel();
+        private final JLabel path = new JLabel();
+        private final JLabel priority = new JLabel();
+
+        private DefinitionPathRenderer() {
+            super(new BorderLayout(10, 2));
+            JPanel text = new JPanel();
+            text.setOpaque(false);
+            text.setLayout(new BoxLayout(text, BoxLayout.Y_AXIS));
+            name.setFont(name.getFont().deriveFont(Font.BOLD));
+            text.add(name);
+            text.add(path);
+            add(priority, BorderLayout.WEST);
+            add(text, BorderLayout.CENTER);
+            setBorder(BorderFactory.createEmptyBorder(5, 8, 5, 8));
+        }
+
+        public Component getListCellRendererComponent(JList<? extends String> list,
+                String value, int index, boolean selected, boolean focus) {
+            File file = new File(value);
+            priority.setText(String.valueOf(fileNames.indexOf(value) + 1));
+            name.setText(file.getName());
+            path.setText(value);
+            Color background = selected ? list.getSelectionBackground()
+                    : list.getBackground();
+            Color foreground = selected ? list.getSelectionForeground()
+                    : list.getForeground();
+            setBackground(background);
+            priority.setForeground(foreground);
+            name.setForeground(foreground);
+            path.setForeground(foreground);
+            return this;
+        }
+    }
+
     private javax.swing.JButton btnAddDefinition;
     private javax.swing.JButton btnApply;
     private javax.swing.JButton btnCancel;
@@ -342,10 +557,19 @@ public class DefinitionManager extends javax.swing.JFrame implements ActionListe
     private javax.swing.JButton btnRemoveDefinition;
     private javax.swing.JButton btnSave;
     private javax.swing.JButton btnUndo;
+    private javax.swing.JButton btnMoveTop;
+    private javax.swing.JButton btnMoveBottom;
+    private javax.swing.JButton btnOpenFolder;
     private javax.swing.JLabel defLabel;
-    private javax.swing.JList definitionList;
+    private javax.swing.JList<String> definitionList;
     private javax.swing.JScrollPane jScrollPane1;
-    // End of variables declaration//GEN-END:variables
+    private javax.swing.JTextField searchField;
+    private final javax.swing.JLabel detailName = new javax.swing.JLabel();
+    private final javax.swing.JLabel detailType = new javax.swing.JLabel();
+    private final javax.swing.JLabel detailPath = new javax.swing.JLabel();
+    private final javax.swing.JLabel detailStatus = new javax.swing.JLabel();
+    private final javax.swing.JLabel detailPriority = new javax.swing.JLabel();
+    private final javax.swing.JLabel detailModified = new javax.swing.JLabel();
 
     /**
      * Load String search sequences from a user customized properties file.

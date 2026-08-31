@@ -1,0 +1,392 @@
+diff --git a/src/client.rs b/src/client.rs
+index a0b71bf..adfba5d 100644
+--- a/src/client.rs
++++ b/src/client.rs
+@@ -486,6 +486,8 @@ impl BridgeClient {
+             arb_id,
+             data: data.to_vec(),
+             extended,
++            tx_flags: if extended { 0x100 } else { 0 },
++            timeout_ms: 1000,
+         })?;
+         match response {
+             Response::Ok { .. } => Ok(()),
+@@ -717,6 +719,8 @@ impl BridgeClient {
+             mask: mask.to_vec(),
+             pattern: pattern.to_vec(),
+             extended,
++            flow_control: None,
++            tx_flags: if extended { 0x100 } else { 0 },
+         })?;
+         match response {
+             Response::Ok {
+@@ -746,6 +750,8 @@ impl BridgeClient {
+             mask: mask.to_vec(),
+             pattern: pattern.to_vec(),
+             extended,
++            flow_control: None,
++            tx_flags: if extended { 0x100 } else { 0 },
+         })?;
+         match response {
+             Response::Ok {
+diff --git a/src/j2534.rs b/src/j2534.rs
+index df01de9..d51d189 100644
+--- a/src/j2534.rs
++++ b/src/j2534.rs
+@@ -1110,6 +1110,7 @@ impl J2534Connection {
+                     protocol_id,
+                     &[0u8; 4],
+                     &[0u8; 4],
++                    None,
+                     0,
+                 )
+             };
+@@ -1147,6 +1148,7 @@ impl J2534Connection {
+                         protocol_id,
+                         &[0u8; 4],
+                         &[0x10, 0xDA, 0xF1, 0x10],
++                        None,
+                         CAN_29BIT_ID,
+                     )
+                 };
+@@ -1219,6 +1221,7 @@ impl J2534Connection {
+                             protocol_id,
+                             &[0u8; 4],
+                             &[0x10, 0xDA, 0xF1, 0x10],
++                            None,
+                             CAN_29BIT_ID,
+                         )
+                     };
+@@ -1314,6 +1317,7 @@ impl J2534Connection {
+         protocol_id: u32,
+         mask: &[u8],
+         pattern: &[u8],
++        flow_control: Option<&[u8]>,
+         tx_flags: u32,
+     ) -> Result<u32, String> {
+         unsafe {
+@@ -1338,13 +1342,27 @@ impl J2534Connection {
+             pattern_msg.data[..pat_len].copy_from_slice(&pattern[..pat_len]);
+             pattern_msg.data_size = pat_len as u32;
+ 
++            let mut flow_msg = PassThruMsg {
++                protocol_id,
++                tx_flags,
++                ..Default::default()
++            };
++            let flow_ptr = if let Some(flow) = flow_control {
++                let flow_len = flow.len().min(12);
++                flow_msg.data[..flow_len].copy_from_slice(&flow[..flow_len]);
++                flow_msg.data_size = flow_len as u32;
++                &flow_msg as *const PassThruMsg
++            } else {
++                std::ptr::null()
++            };
++
+             let mut filter_id: c_ulong = 0;
+             let result = filter_fn(
+                 channel_id,
+                 filter_type,
+                 &mask_msg,
+                 &pattern_msg,
+-                std::ptr::null(),
++                flow_ptr,
+                 &mut filter_id,
+             );
+             if result != STATUS_NOERROR {
+@@ -1443,6 +1461,17 @@ impl J2534Connection {
+     }
+ 
+     pub fn send_message(&self, arb_id: u32, data: &[u8], extended: bool) -> Result<(), String> {
++        self.send_message_with_options(arb_id, data, extended, 0, 1000)
++    }
++
++    pub fn send_message_with_options(
++        &self,
++        arb_id: u32,
++        data: &[u8],
++        extended: bool,
++        tx_flags: u32,
++        timeout_ms: u32,
++    ) -> Result<(), String> {
+         let is_can = self.protocol_id == PROTOCOL_CAN || self.protocol_id == PROTOCOL_ISO15765;
+         let data_len;
+ 
+@@ -1452,12 +1481,14 @@ impl J2534Connection {
+             data_len = if is_can { data.len().min(8) } else { buf.len() };
+             let mut msg = PassThruMsgV0500::new(&mut buf);
+             msg.protocol_id = self.protocol_id;
+-            msg.tx_flags = if is_can && extended { CAN_29BIT_ID } else { 0 };
++            msg.tx_flags = tx_flags | if is_can && extended { CAN_29BIT_ID } else { 0 };
+             msg.data_length = buf.len() as u32;
+             msg.extra_data_index = buf.len() as u32;
+             let mut num_msgs: c_ulong = 1;
+             let write_fn = Self::resolve_write_fn_v0500(&self.library)?;
+-            let result = unsafe { write_fn(self.channel_id, &mut msg, &mut num_msgs, 1000) };
++            let result = unsafe {
++                write_fn(self.channel_id, &mut msg, &mut num_msgs, timeout_ms)
++            };
+             if result != STATUS_NOERROR {
+                 return Err(format!(
+                     "ERR_J2534_WRITE_FAILED: error code {} [{}]",
+@@ -1471,7 +1502,7 @@ impl J2534Connection {
+                 ..Default::default()
+             };
+             data_len = if is_can {
+-                msg.tx_flags = if extended { CAN_29BIT_ID } else { 0 };
++                msg.tx_flags = tx_flags | if extended { CAN_29BIT_ID } else { 0 };
+                 msg.data[0] = ((arb_id >> 24) & 0xFF) as u8;
+                 msg.data[1] = ((arb_id >> 16) & 0xFF) as u8;
+                 msg.data[2] = ((arb_id >> 8) & 0xFF) as u8;
+@@ -1481,7 +1512,7 @@ impl J2534Connection {
+                 msg.data_size = (4 + dl) as u32;
+                 dl
+             } else {
+-                msg.tx_flags = 0;
++                msg.tx_flags = tx_flags;
+                 let dl = data.len().min(msg.data.len());
+                 msg.data[..dl].copy_from_slice(&data[..dl]);
+                 msg.data_size = dl as u32;
+@@ -1493,7 +1524,7 @@ impl J2534Connection {
+                     .library
+                     .get(b"PassThruWriteMsgs\0")
+                     .map_err(|e| format!("ERR_J2534_FUNC_NOT_FOUND: PassThruWriteMsgs - {}", e))?;
+-                let result = write_fn(self.channel_id, &mut msg, &mut num_msgs, 1000);
++                let result = write_fn(self.channel_id, &mut msg, &mut num_msgs, timeout_ms);
+                 if result != STATUS_NOERROR {
+                     return Err(format!(
+                         "ERR_J2534_WRITE_FAILED: error code {} [{}]",
+@@ -2708,6 +2739,18 @@ impl J2534Connection {
+         mask: &[u8],
+         pattern: &[u8],
+         extended: bool,
++    ) -> Result<u32, String> {
++        self.add_filter_with_options(filter_type, mask, pattern, None, extended, 0)
++    }
++
++    pub fn add_filter_with_options(
++        &self,
++        filter_type: u32,
++        mask: &[u8],
++        pattern: &[u8],
++        flow_control: Option<&[u8]>,
++        extended: bool,
++        tx_flags: u32,
+     ) -> Result<u32, String> {
+         // Pad to 4 bytes
+         let mut mask4 = [0u8; 4];
+@@ -2717,7 +2760,7 @@ impl J2534Connection {
+         let pl = pattern.len().min(4);
+         pat4[..pl].copy_from_slice(&pattern[..pl]);
+ 
+-        let tx_flags = if extended { CAN_29BIT_ID } else { 0 };
++        let tx_flags = tx_flags | if extended { CAN_29BIT_ID } else { 0 };
+         if self.is_v0500 {
+             Self::install_filter_v0500(
+                 &self.library,
+@@ -2736,6 +2779,7 @@ impl J2534Connection {
+                 self.protocol_id,
+                 &mask4,
+                 &pat4,
++                flow_control,
+                 tx_flags,
+             )
+         }
+@@ -2748,6 +2792,18 @@ impl J2534Connection {
+         mask: &[u8],
+         pattern: &[u8],
+         extended: bool,
++    ) -> Result<u32, String> {
++        self.add_filter_raw_with_options(filter_type, mask, pattern, None, extended, 0)
++    }
++
++    pub fn add_filter_raw_with_options(
++        &self,
++        filter_type: u32,
++        mask: &[u8],
++        pattern: &[u8],
++        flow_control: Option<&[u8]>,
++        extended: bool,
++        tx_flags: u32,
+     ) -> Result<u32, String> {
+         let mask_len = mask.len().min(12);
+         let pattern_len = pattern.len().min(12);
+@@ -2756,7 +2812,7 @@ impl J2534Connection {
+             return Err("ERR_J2534_ADD_FILTER_FAILED: mask/pattern must be 1-12 bytes".to_string());
+         }
+ 
+-        let tx_flags = if extended { CAN_29BIT_ID } else { 0 };
++        let tx_flags = tx_flags | if extended { CAN_29BIT_ID } else { 0 };
+         if self.is_v0500 {
+             Self::install_filter_v0500(
+                 &self.library,
+@@ -2775,6 +2831,7 @@ impl J2534Connection {
+                 self.protocol_id,
+                 &mask[..mask_len],
+                 &pattern[..pattern_len],
++                flow_control,
+                 tx_flags,
+             )
+         }
+diff --git a/src/main.rs b/src/main.rs
+index d0a0084..af69a5e 100644
+--- a/src/main.rs
++++ b/src/main.rs
+@@ -1,3 +1,5 @@
++#![cfg_attr(windows, windows_subsystem = "windows")]
++
+ //! J2534 Bridge Process
+ //!
+ //! A standalone process that loads J2534 DLLs and communicates with the main app
+diff --git a/src/protocol.rs b/src/protocol.rs
+index feb1fbd..8d90ac5 100644
+--- a/src/protocol.rs
++++ b/src/protocol.rs
+@@ -31,6 +31,10 @@ pub enum Request {
+         arb_id: u32,
+         data: Vec<u8>,
+         extended: bool,
++        #[serde(default)]
++        tx_flags: u32,
++        #[serde(default = "default_write_timeout")]
++        timeout_ms: u32,
+     },
+ 
+     /// Send multiple CAN messages in a single PassThruWriteMsgs call
+@@ -113,6 +117,10 @@ pub enum Request {
+         mask: Vec<u8>,
+         pattern: Vec<u8>,
+         extended: bool,
++        #[serde(default)]
++        flow_control: Option<Vec<u8>>,
++        #[serde(default)]
++        tx_flags: u32,
+     },
+ 
+     /// Add a message filter with raw mask/pattern sizes (for spec testing)
+@@ -121,6 +129,10 @@ pub enum Request {
+         mask: Vec<u8>,
+         pattern: Vec<u8>,
+         extended: bool,
++        #[serde(default)]
++        flow_control: Option<Vec<u8>>,
++        #[serde(default)]
++        tx_flags: u32,
+     },
+ 
+     /// Remove a message filter
+@@ -156,6 +168,10 @@ fn default_max_drain_reads() -> u32 {
+     64
+ }
+ 
++fn default_write_timeout() -> u32 {
++    1000
++}
++
+ /// Response from the bridge to the main app
+ #[derive(Debug, Clone, Serialize, Deserialize)]
+ #[serde(tag = "status")]
+@@ -394,6 +410,8 @@ mod tests {
+             arb_id: 0x7DF,
+             data: vec![0x02, 0x01, 0x00],
+             extended: false,
++            tx_flags: 0,
++            timeout_ms: 1000,
+         };
+         let json = serde_json::to_string(&req).unwrap();
+         let parsed: Request = serde_json::from_str(&json).unwrap();
+@@ -402,10 +420,14 @@ mod tests {
+                 arb_id,
+                 data,
+                 extended,
++                tx_flags,
++                timeout_ms,
+             } => {
+                 assert_eq!(arb_id, 0x7DF);
+                 assert_eq!(data, vec![0x02, 0x01, 0x00]);
+                 assert!(!extended);
++                assert_eq!(tx_flags, 0);
++                assert_eq!(timeout_ms, 1000);
+             }
+             _ => panic!("Expected SendMessage"),
+         }
+@@ -542,6 +564,8 @@ mod tests {
+             mask: vec![0xFF, 0xFF, 0xFF, 0xFF],
+             pattern: vec![0x00, 0x00, 0x07, 0xE0],
+             extended: false,
++            flow_control: None,
++            tx_flags: 0,
+         };
+         let json = serde_json::to_string(&req).unwrap();
+         let parsed: Request = serde_json::from_str(&json).unwrap();
+@@ -551,11 +575,15 @@ mod tests {
+                 mask,
+                 pattern,
+                 extended,
++                flow_control,
++                tx_flags,
+             } => {
+                 assert_eq!(filter_type, "pass");
+                 assert_eq!(mask.len(), 4);
+                 assert_eq!(pattern.len(), 4);
+                 assert!(!extended);
++                assert!(flow_control.is_none());
++                assert_eq!(tx_flags, 0);
+             }
+             _ => panic!("Expected AddFilter"),
+         }
+diff --git a/src/worker.rs b/src/worker.rs
+index fa52a64..65c5ff0 100644
+--- a/src/worker.rs
++++ b/src/worker.rs
+@@ -262,7 +262,11 @@ fn execute_direct_request(conn: &J2534Connection, request: Request) -> Response
+             arb_id,
+             data,
+             extended,
+-        } => match conn.send_message(arb_id, &data, extended) {
++            tx_flags,
++            timeout_ms,
++        } => match conn.send_message_with_options(
++            arb_id, &data, extended, tx_flags, timeout_ms,
++        ) {
+             Ok(()) => Response::ok_none(),
+             Err(err) => Response::error(-1, err),
+         },
+@@ -369,8 +373,17 @@ fn execute_direct_request(conn: &J2534Connection, request: Request) -> Response
+             mask,
+             pattern,
+             extended,
++            flow_control,
++            tx_flags,
+         } => match parse_filter_type(&filter_type) {
+-            Ok(filter_type) => match conn.add_filter(filter_type, &mask, &pattern, extended) {
++            Ok(filter_type) => match conn.add_filter_with_options(
++                filter_type,
++                &mask,
++                &pattern,
++                flow_control.as_deref(),
++                extended,
++                tx_flags,
++            ) {
+                 Ok(filter_id) => Response::ok(ResponseData::Number(filter_id)),
+                 Err(err) => Response::error(-1, err),
+             },
+@@ -382,8 +395,17 @@ fn execute_direct_request(conn: &J2534Connection, request: Request) -> Response
+             mask,
+             pattern,
+             extended,
++            flow_control,
++            tx_flags,
+         } => match parse_filter_type(&filter_type) {
+-            Ok(filter_type) => match conn.add_filter_raw(filter_type, &mask, &pattern, extended) {
++            Ok(filter_type) => match conn.add_filter_raw_with_options(
++                filter_type,
++                &mask,
++                &pattern,
++                flow_control.as_deref(),
++                extended,
++                tx_flags,
++            ) {
+                 Ok(filter_id) => Response::ok(ResponseData::Number(filter_id)),
+                 Err(err) => Response::error(-1, err),
+             },

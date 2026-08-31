@@ -25,6 +25,7 @@ import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.GridLayout;
+import java.awt.Rectangle;
 import java.awt.Toolkit;
 import java.awt.datatransfer.DataFlavor;
 import java.awt.datatransfer.StringSelection;
@@ -47,7 +48,10 @@ import javax.swing.JCheckBox;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
+import javax.swing.JViewport;
 import javax.swing.KeyStroke;
+import javax.swing.Scrollable;
+import javax.swing.SwingConstants;
 import javax.swing.UIManager;
 import org.apache.log4j.Logger;
 
@@ -61,7 +65,7 @@ import com.romraider.util.NumberUtil;
 import com.romraider.util.ResourceUtil;
 import com.romraider.util.SettingsManager;
 
-public abstract class TableView extends JPanel implements Serializable {
+public abstract class TableView extends JPanel implements Serializable, Scrollable {
     private static final long serialVersionUID = 6559256489995552645L;
     protected static final Logger LOGGER = Logger.getLogger(TableView.class);
     private static final ResourceBundle rb = new ResourceUtil().getBundle(TableView.class.getName());
@@ -84,6 +88,7 @@ public abstract class TableView extends JPanel implements Serializable {
     protected int minHeight = 100;
     protected int minWidthNoOverlay = 465;
     protected int minWidthOverlay = 700;
+    private boolean embeddedDocumentMode;
 
     protected int highlightBeginX;
     protected int highlightBeginY;
@@ -576,6 +581,7 @@ public abstract class TableView extends JPanel implements Serializable {
 
     /** Removes duplicate title chrome when this view is hosted in a document. */
     public void setEmbeddedDocumentMode(boolean embedded) {
+        embeddedDocumentMode = embedded;
         if (tableHeader == null) return;
         BorderLayout layout = (BorderLayout) tableHeader.getLayout();
         Component title = layout.getLayoutComponent(BorderLayout.WEST);
@@ -589,6 +595,76 @@ public abstract class TableView extends JPanel implements Serializable {
         tableHeader.setVisible(!embedded || axis != null);
         tableHeader.revalidate();
         tableHeader.repaint();
+    }
+
+    @Override
+    public Dimension getPreferredScrollableViewportSize() {
+        return getPreferredSize();
+    }
+
+    @Override
+    public int getScrollableUnitIncrement(Rectangle visibleRect,
+            int orientation, int direction) {
+        return orientation == SwingConstants.VERTICAL
+                ? Math.max(16, cellHeight) : Math.max(16, cellWidth);
+    }
+
+    @Override
+    public int getScrollableBlockIncrement(Rectangle visibleRect,
+            int orientation, int direction) {
+        int extent = orientation == SwingConstants.VERTICAL
+                ? visibleRect.height : visibleRect.width;
+        return Math.max(getScrollableUnitIncrement(visibleRect, orientation,
+                direction), extent - getScrollableUnitIncrement(visibleRect,
+                        orientation, direction));
+    }
+
+    @Override
+    public boolean getScrollableTracksViewportWidth() {
+        return embeddedDocumentMode && viewportExtent().width
+                >= minimumReadableGridWidth();
+    }
+
+    @Override
+    public boolean getScrollableTracksViewportHeight() {
+        return embeddedDocumentMode && viewportExtent().height
+                >= minimumReadableGridHeight();
+    }
+
+    private Dimension viewportExtent() {
+        return getParent() instanceof JViewport
+                ? ((JViewport) getParent()).getExtentSize()
+                : new Dimension();
+    }
+
+    private int minimumReadableGridWidth() {
+        int columns = centerLayout.getColumns();
+        if (columns <= 0) {
+            int rows = Math.max(1, centerLayout.getRows());
+            columns = Math.max(1,
+                    (centerPanel.getComponentCount() + rows - 1) / rows);
+        }
+        Font font = getSettings().getTableFont();
+        int readableCellWidth = Math.min(cellWidth, Math.max(34,
+                getFontMetrics(font).stringWidth("-00.00") + 8));
+        int chrome = Math.max(0, getPreferredSize().width
+                - centerPanel.getPreferredSize().width);
+        return chrome + columns * readableCellWidth;
+    }
+
+    private int minimumReadableGridHeight() {
+        int rows = centerLayout.getRows();
+        if (rows <= 0) {
+            int columns = Math.max(1, centerLayout.getColumns());
+            rows = Math.max(1,
+                    (centerPanel.getComponentCount() + columns - 1) / columns);
+        }
+        Font font = getSettings().getTableFont();
+        int readableCellHeight = Math.min(cellHeight,
+                Math.max(18, getFontMetrics(font).getHeight() + 6));
+        int chrome = Math.max(0, getPreferredSize().height
+                - centerPanel.getPreferredSize().height);
+        return chrome + rows * readableCellHeight;
     }
 
     protected JLabel createAxisCornerCell() {

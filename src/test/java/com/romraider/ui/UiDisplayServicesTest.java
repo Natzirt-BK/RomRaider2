@@ -6,6 +6,7 @@
 package com.romraider.ui;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
@@ -318,11 +319,20 @@ public class UiDisplayServicesTest {
     }
 
     @Test
+    public void restoresNavigationRailVisibilityWithWindowLayout()
+            throws Exception {
+        Settings settings = load("<settings><window><splitpane location=\"245\" "
+                + "navigation-visible=\"false\"/></window></settings>");
+        assertEquals(245, settings.getSplitPaneLocation());
+        assertFalse(settings.isNavigationPanelVisible());
+    }
+
+    @Test
     public void invalidDisplayPreferencesMigrateToSafeDefaults() throws Exception {
         Settings settings = load("<settings><display-preferences schema=\"1\" "
                 + "scale=\"HUGE\" theme=\"NEON\" mode=\"TABLET\"/></settings>");
         assertEquals(UiScale.AUTOMATIC, settings.getUiScale());
-        assertEquals(ThemeMode.DARK, settings.getThemeMode());
+        assertEquals(ThemeMode.LIGHT, settings.getThemeMode());
         assertEquals(DisplayMode.NORMAL, settings.getDisplayMode());
     }
 
@@ -331,7 +341,7 @@ public class UiDisplayServicesTest {
         Settings settings = load("<settings><display-preferences schema=\"5\" "
                 + "scale=\"PERCENT_300\" theme=\"LIGHT\" mode=\"IN_CAR\"/></settings>");
         assertEquals(UiScale.AUTOMATIC, settings.getUiScale());
-        assertEquals(ThemeMode.DARK, settings.getThemeMode());
+        assertEquals(ThemeMode.LIGHT, settings.getThemeMode());
         assertEquals(DisplayMode.NORMAL, settings.getDisplayMode());
     }
 

@@ -10,7 +10,6 @@ import java.util.Map;
 
 import com.romraider.maps.Rom;
 import com.romraider.maps.Table;
-import com.romraider.swing.TableTreeNode;
 
 /** UI-independent table comparison using indexed, case-insensitive names. */
 public final class RomComparisonService {
@@ -57,8 +56,7 @@ public final class RomComparisonService {
 
     private static Map<String, Table> tablesByName(Rom rom) {
         Map<String, Table> tables = new LinkedHashMap<String, Table>();
-        for (TableTreeNode node : rom.getTableNodes().values()) {
-            Table table = node.getTable();
+        for (Table table : rom.getTableCatalog()) {
             tables.put(table.getName().toLowerCase(Locale.ENGLISH), table);
         }
         return tables;

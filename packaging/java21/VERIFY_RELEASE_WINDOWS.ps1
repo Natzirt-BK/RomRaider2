@@ -8,6 +8,10 @@ foreach ($RequiredFile in @(
     "runtime/release",
     "app/RomRaider2.jar",
     "app/lib/windows/64/phidget21.dll",
+    "app/lib/windows/j2534/j2534-bridge-32.exe",
+    "app/lib/windows/j2534/j2534-bridge-64.exe",
+    "app/lib/windows/j2534/SOURCE.txt",
+    "app/licenses/j2534-bridge-MIT.txt",
     "config/settings.default.xml",
     "config/user/settings.xml",
     "customize/j2534Libraries.properties"
@@ -51,6 +55,9 @@ if ($LauncherConfig -notmatch [regex]::Escape('romraider2.log.dir=$APPDIR/../log
 }
 if ($LauncherConfig -notmatch [regex]::Escape('log4j.configurationFile=$APPDIR/lib/log4j2.xml')) {
     throw "The packaged launcher does not select its Log4j configuration."
+}
+if ($LauncherConfig -notmatch [regex]::Escape('romraider2.j2534.bridge.dir=$APPDIR/lib/windows/j2534')) {
+    throw "The packaged launcher does not locate the J2534 architecture bridges."
 }
 foreach ($RetiredDependency in @(
     "Graph3d.jar", "j3dcore.jar", "j3dutils.jar", "vecmath.jar",

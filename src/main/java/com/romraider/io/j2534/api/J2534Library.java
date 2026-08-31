@@ -19,6 +19,8 @@
 
 package com.romraider.io.j2534.api;
 
+import java.util.Objects;
+
 /**
  * Each class instance holds the Vendor and Library details for a J2534
  * installed device.  On Windows these are discovered on the local computer
@@ -54,5 +56,19 @@ public class J2534Library {
      */
     public String getLibrary() {
         return library;
+    }
+
+    @Override
+    public boolean equals(Object object) {
+        if (this == object) return true;
+        if (!(object instanceof J2534Library)) return false;
+        J2534Library other = (J2534Library) object;
+        return Objects.equals(vendor, other.vendor)
+                && Objects.equals(library, other.library);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(vendor, library);
     }
 }
