@@ -22,6 +22,8 @@ grep -q '^JAVA_VERSION="21\.' lib/runtime/release
 ! grep -Eq 'ecudefinitionfile|<definition |<profile ' \
     config/settings.default.xml
 cmp -s config/settings.default.xml config/user/settings.xml
+grep -Eq '<display-preferences[^>]+theme="LIGHT"' \
+    config/settings.default.xml
 grep -Fq 'linux=j2534.so' customize/j2534Libraries.properties
 
 grep -Fq 'romraider2.settings.dir=$APPDIR/../../config/user' \

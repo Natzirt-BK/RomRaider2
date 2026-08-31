@@ -4,9 +4,11 @@ package com.romraider.editor.ecu;
 import java.awt.BorderLayout;
 import java.awt.CardLayout;
 import java.awt.Component;
+import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.GridBagLayout;
+import java.awt.Rectangle;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.InputEvent;
@@ -29,6 +31,7 @@ import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
+import javax.swing.Scrollable;
 import javax.swing.JTabbedPane;
 import javax.swing.KeyStroke;
 import javax.swing.SwingConstants;
@@ -48,7 +51,7 @@ import com.romraider.ui.UiThemeService;
 import com.romraider.util.SettingsManager;
 
 /** A modern document surface that hosts calibration tables in closable tabs. */
-public final class EditorTabbedWorkspace extends JPanel {
+public final class EditorTabbedWorkspace extends JPanel implements Scrollable {
     public interface Listener {
         void tableActivated(TableFrame frame);
         void closeRequested(TableFrame frame);
@@ -123,6 +126,39 @@ public final class EditorTabbedWorkspace extends JPanel {
         });
         add(tabs, TABS_CARD);
         showCorrectCard();
+    }
+
+    @Override
+    public Dimension getPreferredScrollableViewportSize() {
+        return getPreferredSize();
+    }
+
+    @Override
+    public int getScrollableUnitIncrement(Rectangle visibleRect,
+            int orientation, int direction) {
+        return 24;
+    }
+
+    @Override
+    public int getScrollableBlockIncrement(Rectangle visibleRect,
+            int orientation, int direction) {
+        int extent = orientation == SwingConstants.VERTICAL
+                ? visibleRect.height : visibleRect.width;
+        return Math.max(24, extent - 24);
+    }
+
+    /**
+     * The workbench owns the outer viewport and must always follow its size.
+     * Individual document surfaces own any content scrolling they require.
+     */
+    @Override
+    public boolean getScrollableTracksViewportWidth() {
+        return true;
+    }
+
+    @Override
+    public boolean getScrollableTracksViewportHeight() {
+        return true;
     }
 
     @Override

@@ -13,7 +13,7 @@
         <tableclickbehavior value="0"/>
     </options>
     <platform-selection schema="1" vehicle="SUBARU" module="ENGINE_ECU"/>
-    <display-preferences schema="1" scale="AUTOMATIC" theme="DARK" mode="NORMAL"/>
+    <display-preferences schema="1" scale="AUTOMATIC" theme="LIGHT" mode="NORMAL"/>
     <logger locale="system">
         <autoConnectOnStartup value="false"/>
         <serial port="" refresh="true"/>

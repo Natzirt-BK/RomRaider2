@@ -43,6 +43,9 @@ $InitialUserSettings = Get-Content -LiteralPath (Join-Path $ReleaseRoot "config/
 if ($InitialUserSettings -ne $DefaultSettings) {
     throw "The initial Windows user settings do not match the neutral release defaults."
 }
+if ($DefaultSettings -notmatch '<display-preferences[^>]+theme="LIGHT"') {
+    throw "The packaged first-run theme is not Light."
+}
 $LauncherConfig = Get-Content -LiteralPath (Join-Path $ReleaseRoot "app/RomRaider2.cfg") -Raw
 if ($LauncherConfig -notmatch [regex]::Escape('romraider2.settings.dir=$APPDIR/../config/user')) {
     throw "The packaged launcher does not isolate RomRaider2 settings."
