@@ -1,0 +1,32 @@
+Apache Log4j 2.26.1
+===================
+
+Project: https://logging.apache.org/log4j/2.x/
+Repository: https://github.com/apache/logging-log4j2
+License: Apache License 2.0
+SPDX: Apache-2.0
+
+Bundled unmodified artifacts:
+
+  log4j-api-2.26.1.jar
+  log4j-core-2.26.1.jar
+  log4j-1.2-api-2.26.1.jar
+
+The complete Apache 2.0 license and artifact-specific NOTICE remain embedded
+unmodified in each jar at `META-INF/LICENSE` and `META-INF/NOTICE`.
+
+The Maven Central SHA-1 sidecars were verified after download:
+
+  b9864ed8d0c01f65f3b0bf70f1447e5cc1b49c24  log4j-api-2.26.1.jar
+  1941359537713285d224714f63ca4e5cf004d575  log4j-core-2.26.1.jar
+  63906a988b6ec20e25aee2353cba54a5ff6c42ba  log4j-1.2-api-2.26.1.jar
+
+The downloaded artifacts are additionally recorded here with SHA-256:
+
+  f1810a4704ccce019d02bba029dc02a4f2ac0c997f647b465e7d409c1927f822  log4j-api-2.26.1.jar
+  2ec8c3bf5a6d7c89be8620116a2fc973f7dda1ad0261ad393c4d4726edfd3dcb  log4j-core-2.26.1.jar
+  6f063c9c533788cb548d88ddb4bc7c59fbdb830182fc23d19e8d16ed0d8e2986  log4j-1.2-api-2.26.1.jar
+
+RomRaider2 uses the official Log4j 1.2 API bridge temporarily while its
+existing logging call sites are migrated incrementally to the Log4j 2 API.
+Configuration and runtime level control already use Log4j 2 directly.

@@ -1,0 +1,9 @@
+# Audited runtime dependencies. Paths are relative to the repository root.
+4fb141dd8ef6b0585ffceea4bc49602fbc6312fa977e2c488794ea3e6aafecae  lib/common/jna.jar
+3b3864f5b449e9c3c24b16861524b622b086563f44e0cd8384c8efc5a6052f82  lib/common/platform.jar
+b5f7ec40d622864b92dc679159cdbaa3030d37884f0af2deef45b56c16bda7a6  lib/common/jSerialComm-2.11.4.jar
+f1810a4704ccce019d02bba029dc02a4f2ac0c997f647b465e7d409c1927f822  lib/common/log4j-api-2.26.1.jar
+2ec8c3bf5a6d7c89be8620116a2fc973f7dda1ad0261ad393c4d4726edfd3dcb  lib/common/log4j-core-2.26.1.jar
+6f063c9c533788cb548d88ddb4bc7c59fbdb830182fc23d19e8d16ed0d8e2986  lib/common/log4j-1.2-api-2.26.1.jar
+ff1734127c22113831915a061515655e42a3ff421d400c20d25ba77d21198411  lib/common/jep.jar
+1f19b4adf6bc1e77152a19f5a1d4afc3f79e10db37ce995ff0c425d8462ef0c6  3rdparty/sources/jep-2.4.1-ext-1.1.1-gpl.zip

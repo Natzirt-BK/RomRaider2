@@ -1,0 +1,25 @@
+jSerialComm 2.11.4
+==================
+
+Project: https://github.com/Fazecast/jSerialComm
+Artifact: jSerialComm-2.11.4.jar
+License selected for RomRaider2 distribution: Apache License 2.0
+SPDX: Apache-2.0 OR LGPL-3.0-or-later
+
+The complete selected license and required Fazecast notice are shipped as:
+
+  jSerialComm-2.11.4-LICENSE-APACHE-2.0.txt
+  jSerialComm-2.11.4-NOTICE.txt
+
+The Maven Central SHA-1 sidecar was verified after download:
+
+  SHA-1
+  102c7175af7ea5d9af0847c1c054afc446b4d394
+
+The downloaded release artifact is additionally recorded here with SHA-256:
+
+  SHA-256
+  b5f7ec40d622864b92dc679159cdbaa3030d37884f0af2deef45b56c16bda7a6
+
+No jSerialComm source code is copied or modified by RomRaider2. The upstream
+artifact, including its platform-native libraries, is bundled unmodified.

@@ -1,0 +1,3 @@
+datasource.class=com.romraider.logger.external.innovate.lm2.mts.plugin.Lm2MtsDataSource
+datasource.pollmode=true
+datasource.os=Windows

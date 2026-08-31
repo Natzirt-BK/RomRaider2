@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<classpath>
+	<classpathentry kind="src" path="src/main/java"/>
+	<classpathentry kind="src" path="src/main/resources"/>
+	<classpathentry kind="src" path="src/test/java"/>
+	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>
+	<classpathentry kind="lib" path="lib/common/com4j.jar"/>
+	<classpathentry kind="lib" path="lib/common/j3dcore.jar"/>
+	<classpathentry kind="lib" path="lib/common/j3dutils.jar"/>
+	<classpathentry kind="lib" path="lib/common/vecmath.jar"/>
+	<classpathentry kind="lib" path="lib/common/Graph3d.jar"/>
+	<classpathentry kind="lib" path="lib/common/jama-1.0.2.jar"/>
+	<classpathentry kind="lib" path="lib/common/jep.jar"/>
+	<classpathentry kind="lib" path="lib/common/jamlab.jar"/>
+	<classpathentry kind="lib" path="lib/common/log4j-1.2.14.jar"/>
+	<classpathentry kind="lib" path="lib/common/jfreechart-1.0.9.jar"/>
+	<classpathentry kind="lib" path="lib/common/jcommon-1.0.12.jar"/>
+	<classpathentry kind="lib" path="lib/common/jna.jar">
+		<attributes>
+			<attribute name="javadoc_location" value="http://twall.github.com/jna/3.4.0/javadoc/"/>
+		</attributes>
+	</classpathentry>
+	<classpathentry kind="lib" path="lib/common/platform.jar">
+		<attributes>
+			<attribute name="javadoc_location" value="http://twall.github.com/jna/3.4.0/javadoc/"/>
+		</attributes>
+	</classpathentry>
+	<classpathentry kind="lib" path="lib/common/phidget21.jar">
+		<attributes>
+			<attribute name="javadoc_location" value="http://www.phidgets.com/documentation/web/javadoc/"/>
+		</attributes>
+	</classpathentry>
+	<classpathentry kind="con" path="org.eclipse.jdt.junit.JUNIT_CONTAINER/4"/>
+	<classpathentry kind="lib" path="lib/common/jSerialComm-2.9.1.jar"/>
+	<classpathentry kind="output" path="target"/>
+</classpath>

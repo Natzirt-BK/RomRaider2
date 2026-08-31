@@ -1,0 +1,27 @@
+JEP Java Expression Parser 2.4.1
+Copyright 2007 Nathan Funk and Richard Morris
+
+Project: https://www.singularsys.com/jep/
+Original source archive:
+https://www.singularsys.com/download/jep-2.4.1-ext-1.1.1-gpl.zip
+
+License: GNU General Public License, version 2
+
+RomRaider2 distributes the unmodified JEP 2.4.1 binary and retains the
+vendor's original corresponding-source archive at:
+
+  3rdparty/sources/jep-2.4.1-ext-1.1.1-gpl.zip
+
+The source archive contains the complete GPLv2 license text, copyright
+notices, build files, documentation, source, and the exact binary found at
+dist/jep-2.4.1.jar.
+
+SHA-256:
+
+  ff1734127c22113831915a061515655e42a3ff421d400c20d25ba77d21198411  lib/common/jep.jar
+  1f19b4adf6bc1e77152a19f5a1d4afc3f79e10db37ce995ff0c425d8462ef0c6  3rdparty/sources/jep-2.4.1-ext-1.1.1-gpl.zip
+
+No modifications were made to JEP. RomRaider2 replaces RomRaider's
+unversioned March 2006 JEP binary with the official final 2.4.1 binary so the
+distributed artifact has an identifiable version and exact corresponding
+source.

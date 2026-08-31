@@ -1,0 +1,21 @@
+{
+  "name": "RomRaider2",
+  "finish": "satin/matte graphite with restrained red accents",
+  "colors": {
+    "background": "#10151B",
+    "surface": "#171E26",
+    "surfaceRaised": "#202934",
+    "graphite": "#2A333E",
+    "steel": "#77818D",
+    "accentRed": "#D71920",
+    "accentRedDark": "#8E1117",
+    "textPrimary": "#E4E8ED",
+    "textSecondary": "#A9B1BA",
+    "border": "#303A46"
+  },
+  "notes": [
+    "Use color tokens as starting points and tune them against the real UI.",
+    "Avoid excessive gloss, bloom, gradients, or red saturation in routine controls.",
+    "Reserve strong red for brand marks, dangerous actions, errors, and active flashing warnings."
+  ]
+}

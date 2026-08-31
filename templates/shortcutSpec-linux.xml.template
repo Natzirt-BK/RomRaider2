@@ -1,0 +1,138 @@
+<!-- @warning.generated-file@ -->
+
+<shortcuts>
+    <skipIfNotSupported/>
+    <programGroup defaultName="@name.package@" location="programGroup"/>
+
+    <shortcut
+            name="@name.package@ ECU Editor"
+            programGroup="yes"
+            desktop="yes"
+            applications="no"
+            startMenu="no"
+            startup="no"
+            target="$JAVA_HOME/bin/java"
+            commandLine="@jvm.args.linux@ -jar &quot;$INSTALL_PATH/@name.package@.jar&quot;"
+            initialState="normal"
+            iconFile="$INSTALL_PATH/romraider-ico.ico"
+            workingDirectory="$INSTALL_PATH"
+            type="Application"
+            encoding="UTF-8"
+            description="@description.package@">
+        <createForPack name="Base"/>
+    </shortcut>
+
+    <shortcut
+            name="@name.package@ Logger"
+            programGroup="yes"
+            desktop="yes"
+            applications="no"
+            startMenu="no"
+            startup="no"
+            target="$JAVA_HOME/bin/java"
+            commandLine="@jvm.args.linux@ -jar &quot;$INSTALL_PATH/@name.package@.jar&quot; -logger"
+            initialState="normal"
+            iconFile="$INSTALL_PATH/romraider-ico.ico"
+            workingDirectory="$INSTALL_PATH"
+            type="Application"
+            encoding="UTF-8"
+            description="@description.package@">
+        <createForPack name="Base"/>
+    </shortcut>
+
+    <shortcut
+            name="@name.package@ Logger Fullscreen"
+            programGroup="yes"
+            desktop="yes"
+            applications="no"
+            startMenu="no"
+            startup="no"
+            target="$JAVA_HOME/bin/java"
+            commandLine="@jvm.args.linux@ -jar &quot;$INSTALL_PATH/@name.package@.jar&quot; -logger.fullscreen"
+            initialState="normal"
+            iconFile="$INSTALL_PATH/romraider-ico.ico"
+            workingDirectory="$INSTALL_PATH"
+            type="Application"
+            encoding="UTF-8"
+            description="@description.package@">
+        <createForPack name="Base"/>
+    </shortcut>
+
+    <shortcut
+            name="@name.package@ Logger Touch Screen"
+            programGroup="yes"
+            desktop="yes"
+            applications="no"
+            startMenu="no"
+            startup="no"
+            target="$JAVA_HOME/bin/java"
+            commandLine="@jvm.args.linux@ -jar &quot;$INSTALL_PATH/@name.package@.jar&quot; -logger.touch"
+            initialState="normal"
+            iconFile="$INSTALL_PATH/romraider-ico.ico"
+            workingDirectory="$INSTALL_PATH"
+            type="Application"
+            encoding="UTF-8"
+            description="@description.package@">
+        <createForPack name="Base"/>
+    </shortcut>
+
+    <shortcut
+            name="@name.package@ License"
+            programGroup="yes"
+            desktop="yes"
+            applications="no"
+            startMenu="no"
+            startup="no"
+            target="less"
+            workingDirectory=""
+            commandLine="-L $INSTALL_PATH/license.txt"
+            initialState="normal"
+            iconFile="text-plain"
+            iconIndex="0"
+            url=""
+            type="Application"
+            encoding="UTF-8"
+            description="@name.package@ License agreement">
+        <createForPack name="Base"/>
+    </shortcut>
+
+    <shortcut
+            name="@name.package@ Release Notes"
+            programGroup="yes"
+            desktop="yes"
+            applications="no"
+            startMenu="no"
+            startup="no"
+            target="less"
+            workingDirectory=""
+            commandLine="-L $INSTALL_PATH/release_notes.txt"
+            initialState="normal"
+            iconFile="text-plain"
+            iconIndex="0"
+            url=""
+            type="Application"
+            encoding="UTF-8"
+            description="@name.package@ Release Notes">
+        <createForPack name="Base"/>
+    </shortcut>
+
+    <shortcut
+            name="@name.package@ Uninstaller"
+            programGroup="yes"
+            desktop="yes"
+            applications="no"
+            startMenu="no"
+            startup="no"
+            target="nohup"
+            commandLine="java -jar &quot;$INSTALL_PATH/Uninstaller/uninstaller.jar&quot; &gt; /dev/null 2&gt;&amp;1"
+            initialState="normal"
+            iconFile="$INSTALL_PATH/icon-close.png"
+            iconIndex="0"
+            workingDirectory=""
+            type="Application"
+            encoding="UTF-8"
+            description="@name.package@ uninstaller">
+        <createForPack name="Base"/>
+    </shortcut>
+
+</shortcuts>

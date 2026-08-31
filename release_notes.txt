@@ -1,0 +1,147 @@
+RomRaider2 ECU Studio 1.1.0 RC2
+================================
+
+RomRaider2 is a modernized RomRaider-based ECU editor, logger, diagnostics,
+and log analysis application for Subaru and Mitsubishi Lancer Evolution
+VIII/IX. This release candidate is distributed through Ecu Tools by NatZirt.
+
+New in RomRaider2
+-----------------
+
+- Official and custom Logger definition files can now be installed directly,
+  including current v370 files that still use the legacy XML format. The
+  selected source file is not changed.
+- The Logger can close and reopen without an optional cars_def.xml file, and
+  repeated launch clicks no longer create competing Logger windows.
+
+Editor and workspace
+
+- Modern tabbed calibration workspace with persistent tab order.
+- Favorites, recent maps, changed-map navigation, and recently closed tabs.
+- Fuzzy table filtering and unified search for maps, logger parameters, DTCs,
+  settings, and commands.
+- ROM comparison with direct navigation to modified maps.
+- Grouped undo/redo, selected-cell revert, change summaries, and table notes.
+- Integrity-checked crash-recovery snapshots with startup restore/discard review;
+  restored data opens as an unsaved workspace and cannot overwrite its source.
+- Optional integrated 3D map view.
+- Integrated live-data cards, traces, and datalog workspace.
+- A definition-aware DimeMod feature panel distinguishes mapped features from
+  verified runtime state without enabling RAM writes.
+
+Logger and analysis
+
+- Shared Subaru and Lancer Evolution VIII/IX platform selection.
+- OpenPort 2.0 J2534 Subaru SSM/ISO9141 logging.
+- Read-only Mitsubishi MUT-II logging foundation for Evolution VIII/IX.
+- Offline RomRaider CSV analysis with statistics, linked table/graph selection,
+  sample ranges, 0.25x–8x playback, persistent typed markers, and configurable
+  linked X/Y plotting.
+- The latest successfully completed Logger capture can be replayed immediately
+  in Analysis without changing the current workspace.
+- External serial sensor configuration checks and live port reconnection.
+- A real Logger definition installer that validates an extracted XML file,
+  copies it into managed user data, preserves a backup, activates it, saves the
+  setting, and reloads the Logger without redirecting to an obsolete forum.
+
+Interface and runtime
+
+- Dark, light, system, and high-contrast themes.
+- 75%–300% scaling plus Compact, Touch, Garage, Dyno, and In-Car modes.
+- Integrated window controls and responsive edge/corner resizing.
+- Native window-manager chrome for ordinary Windows/Linux dialogs, removing
+  the legacy Metal stippled title bars and close buttons.
+- Native KDE and Windows file dialogs with operating-system Places/Explorer
+  navigation, plus an application-themed fallback on other Linux desktops.
+- Native dialog use can be disabled consistently on Windows or Linux, and a
+  failed Logger-definition activation restores both the prior file and setting.
+- Self-contained 64-bit Java 21 application images for Linux and Windows.
+- Versioned settings isolated from RomRaider and RomRaider DimeMod.
+- Privacy-safe local diagnostic reports with no automatic upload.
+
+Fixes from the inherited RomRaider/DimeMod build
+------------------------------------------------
+
+- Calibration tabs now respond across their complete headers.
+- The 3D map no longer opens automatically and its drag axes follow the pointer.
+- Status-bar items share a baseline and remain correctly aligned while resizing.
+- Logger status and statistics text now follow the active theme instead of
+  becoming black-on-dark, and missing definitions show "Not installed" rather
+  than exposing a null value in About.
+- Switch-state controls are centered in the map workspace, and offline log
+  statistics expand across wide displays while retaining readable minima.
+- Windows menus, tabs, combo boxes, tables, and file choosers now retain
+  readable foreground and background contrast in every application theme.
+- Windows per-monitor DPI scaling is applied exactly once, preventing oversized
+  buttons, clipped controls, and hidden Settings tabs.
+- Switching from Touch, Garage, Dyno, or In-Car back to Normal now restores the
+  original control metrics instead of retaining enlarged touch dimensions.
+- The editor command bar moves secondary actions into a More menu when the
+  window is too narrow to display every action without clipping.
+- Vehicle/module selection now lives in Logger connection setup, where it
+  actually controls protocol and target selection, instead of occupying the
+  Editor and Logger toolbars as unexplained global controls.
+- The Editor bottom bar remains a single row and shortens long ROM/context
+  labels with tooltips instead of wrapping them below the visible window.
+- The Inspector Changes view keeps changed-cell counts visible in a fixed
+  left-hand column and allows its table/history divider to collapse fully.
+- Frameless application windows provide direct lower-left and lower-right
+  corner resize grips in addition to edge resizing.
+- The Editor now assembles its menu and complete command toolbar on Swing's
+  event thread before the window is first shown, preventing missing controls
+  that appeared only after clicking an unfocused fresh launch.
+- Settings display controls use a responsive three-column layout, and the
+  calibration Scale tab is now labeled Data Units to distinguish it from UI
+  scaling.
+- The Favorites header no longer collides with its action button in a narrow
+  editor sidebar.
+- OpenPort/J2534 reception waits for complete messages and resynchronizes when
+  Subaru SSM queries change, preventing the observed receive gaps.
+- J2534 logging no longer shows an irrelevant serial COM-port selector.
+- An unexpected interface disconnect now closes and flushes active file logs,
+  resets the recording control, and leaves the Logger able to reconnect.
+- Windows-only logger plugins are hidden on unsupported systems.
+- Unsupported diagnostics are hidden by the selected platform, and Evo modules
+  show their present logging-only qualification state instead of Subaru tools.
+- The legacy RAM-tune test application is hidden unless explicitly enabled for
+  Subaru research; normal editor operation exposes no ECU memory-write path.
+- Missing Logger definitions now offer the managed installer or
+  external-sensors-only operation instead of redirecting to a forum page.
+- Legitimate Logger definitions may reuse scoped IDs across protocols, and a
+  failed definition activation restores its prior protocol and transport too.
+- Dyno presents one compact, actionable missing-profile state when no
+  cars_def.xml is installed and disables controls that cannot operate.
+- Runtime XML parsing rejects external entities, and closing/reopening Editor or
+  Logger no longer accumulates UI listeners or serial-port refresh workers.
+- Portable packages select their bundled logging configuration and keep rolling
+  system logs inside the package instead of writing to legacy RomRaider data.
+- Raw exceptions are no longer displayed to users or uploaded automatically.
+- Legacy Java, JNA, serial, and logging dependencies were replaced with audited
+  Java 21-compatible components.
+- Linux and Windows packages now resolve and verify the complete runtime
+  customization set, preventing Definition Manager and learning-table failures
+  when the application is launched outside its installation directory.
+- Linux application images now seed their isolated user settings just like the
+  Windows package, eliminating the first-launch missing-settings warning.
+
+Validation and known limits
+---------------------------
+
+- Linux OpenPort 2.0 Subaru ECU identification and sustained SSM/ISO9141
+  logging have passed an in-car test.
+- Mitsubishi MUT-II vehicle logging still requires connected qualification.
+- The Windows portable package passes automated build and startup checks;
+  connected-hardware validation remains pending.
+- ECU memory writing and flashing are not enabled in RomRaider2 RC2.
+- Vehicle ROMs, definitions, logger profiles, and captured logs are distributed
+  separately and are not included in application or source packages.
+
+License and upstream work
+-------------------------
+
+RomRaider2 remains GPL-licensed and retains required RomRaider authorship and
+notices. It is derived from the RomRaider and DimeSPb/RomRaider codebases.
+
+- https://github.com/RomRaider/RomRaider
+- https://github.com/DimeSPb/RomRaider
+- https://www.romraider.com/

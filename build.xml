@@ -1,0 +1,434 @@
+<?xml version="1.0"?>
+
+<!-- Master build file for RomRaider
+
+ RomRaider Open-Source Tuning, Logging and Reflashing
+ Copyright (C) 2006-2022 RomRaider.com
+
+ This program is free software; you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation; either version 2 of the License, or
+ (at your option) any later version.
+
+ This program is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
+
+ You should have received a copy of the GNU General Public License along
+ with this program; if not, write to the Free Software Foundation, Inc.,
+ 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+
+-->
+
+<project name="romraider" default="help" basedir=".">
+
+    <!-- =================================================================== -->
+    <!-- Help                                                                -->
+    <!--   All externally callable targets should be listed here, along      -->
+    <!--   with common property overrides                                    -->
+    <!-- =================================================================== -->
+    <target name="help" depends="-init">
+        <echo message="help        [Print this message                     ]" />
+        <echo message="clean       [Clean generated files                  ]" />
+        <echo message="prepare     [Create directories for output files    ]" />
+        <echo message="            [  and generate files from templates    ]" />
+        <echo message="build       [Compile the Java source files          ]" />
+        <echo message="rebuild     [Call the clean and build targets       ]" />
+        <echo message="javadoc     [Generate the API documentation of the  ]" />
+        <echo message="            [  Java source code                     ]" />
+        <echo message="installer   [Create the installation packages       ]" />
+        <echo message="standalone  [Create the ZIP packages                ]" />
+        <echo message="all         [Complete rebuild and packaging         ]" />
+        <echo message="unittest    [Run all unit tests                     ]" />
+    </target>
+
+    <!-- =================================================================== -->
+    <!-- Initialization target - only callable internally                    -->
+    <!-- =================================================================== -->
+    <target name="-init" unless="initialized" description="Initialize the build environment">
+        <property name="initialized" value="true" />
+        <!-- set the various timestamp properties we may need -->
+        <tstamp>
+            <format property="time.rfc822" pattern="EEE, dd MMM yyyy HH:mm:ss Z" locale="en"/>
+            <format property="time.year" pattern="yyyy" locale="en"/>
+            <format property="month.number" pattern="MM" locale="en"/>
+            <format property="month.day" pattern="dd" locale="en"/>
+        </tstamp>
+        <!-- Nashorn was removed in Java 15. Keep the existing uppercase build
+             label without requiring a JavaScript engine. -->
+        <condition property="month.upper" value="JAN"><equals arg1="${month.number}" arg2="01"/></condition>
+        <condition property="month.upper" value="FEB"><equals arg1="${month.number}" arg2="02"/></condition>
+        <condition property="month.upper" value="MAR"><equals arg1="${month.number}" arg2="03"/></condition>
+        <condition property="month.upper" value="APR"><equals arg1="${month.number}" arg2="04"/></condition>
+        <condition property="month.upper" value="MAY"><equals arg1="${month.number}" arg2="05"/></condition>
+        <condition property="month.upper" value="JUN"><equals arg1="${month.number}" arg2="06"/></condition>
+        <condition property="month.upper" value="JUL"><equals arg1="${month.number}" arg2="07"/></condition>
+        <condition property="month.upper" value="AUG"><equals arg1="${month.number}" arg2="08"/></condition>
+        <condition property="month.upper" value="SEP"><equals arg1="${month.number}" arg2="09"/></condition>
+        <condition property="month.upper" value="OCT"><equals arg1="${month.number}" arg2="10"/></condition>
+        <condition property="month.upper" value="NOV"><equals arg1="${month.number}" arg2="11"/></condition>
+        <condition property="month.upper" value="DEC"><equals arg1="${month.number}" arg2="12"/></condition>
+        <property name="mnth.day" value="${month.upper}${month.day}"/>
+
+        <!-- set os specific properties -->
+        <property name="os.windows" value="windows" />
+        <property name="ext.windows" value="bat" />
+        <property name="os.linux" value="linux" />
+        <property name="ext.linux" value="sh" />
+
+        <condition property="os" value="${os.windows}" else="${os.linux}">
+            <os family="windows" />
+        </condition>
+
+        <condition property="is.windows">
+            <equals arg1="${os}" arg2="${os.windows}" />
+        </condition>
+
+        <!-- Java 21 is the RomRaider2 development and release baseline. -->
+        <property name="javac.release" value="21" />
+        <property name="debug" value="off" />
+        <property name="deprecation" value="on" />
+        <property name="javac.verbose" value="off" />
+
+        <!-- version properties are set in this file, both for the product itself and
+                for some of the external dependencies (jar files and such) -->
+        <property file="version.properties" />
+
+        <!-- basic project properties -->
+        <property name="src.dir" value="${basedir}/src" />
+        <property name="src.java.dir" value="${src.dir}/main/java" />
+        <property name="src.res.dir" value="${src.dir}/main/resources" />
+        <property name="graphics.dir" value="${src.res.dir}/graphics" />
+        <property name="docs.dir" value="${basedir}/docs" />
+        <property name="build.dir" value="${basedir}/build" />
+        <property name="template.dir" value="${basedir}/templates" />
+        <property name="3rdparty.dir" value="${basedir}/3rdparty" />
+
+        <!-- all generated files should go to somewhere in the build directory -->
+        <property name="classes.dir" value="${build.dir}/classes" />
+        <property name="javadoc.dir" value="${build.dir}/javadoc" />
+        <property name="dist.dir" value="${build.dir}/dist" />
+        <property name="testclasses.dir" value="${build.dir}/test" />
+
+        <!-- package naming properties -->
+        <property name="jar.package" value="${name.package}.jar" />
+        <property name="jar.installer-prefix"
+                  value="${name.package}${version.major}.${version.minor}.${version.patch}-${version.buildnumber}" />
+
+        <!-- support tools -->
+        <!-- creates EXE wrappers around java apps -->
+        <property name="launch4j.dir" location="${3rdparty.dir}/launch4j" />
+        <!-- installer packager -->
+        <property name="izpack.dir" value="${3rdparty.dir}/IzPack" />
+        <condition property="have.3rdparty">
+            <and>
+                <available file="${izpack.dir}/izpack-standalone-compiler.jar" />
+                <available file="${launch4j.dir}/launch4j.jar" />
+            </and>
+        </condition>
+        <property name="izpack.compile" value="${izpack.dir}/izpack-standalone-compiler.jar" />
+
+        <!-- define custom tasks -->
+        <taskdef name="launch4j" classname="net.sf.launch4j.ant.Launch4jTask" onerror="report"
+                 classpath="${launch4j.dir}/launch4j.jar:${launch4j.dir}/lib/xstream.jar" />
+
+        <path id="windows.classpath">
+            <fileset dir="lib/common" includes="*.jar" />
+            <fileset dir="lib/windows" includes="*.jar" />
+        </path>
+
+        <path id="linux.classpath">
+            <fileset dir="lib/common" includes="*.jar" />
+            <fileset dir="lib/linux" includes="*.jar" />
+        </path>
+
+        <path id="test.classpath">
+            <fileset dir="${testclasses.dir}" includes="**/*.jar" />
+        </path>
+
+        <path id="junit_compile.classpath">
+            <path refid="linux.classpath" />
+            <pathelement location="lib/testing/junit.jar" />
+            <pathelement location="lib/testing/hamcrest.jar" />
+        </path>
+
+        <path id="junit_runtime.classpath">
+            <path refid="junit_compile.classpath" />
+            <pathelement location="${build.dir}/linux/lib/${jar.package}" />
+            <path refid="test.classpath" />
+        </path>
+
+        <!-- this set of filters should contain all the substitutions needed -->
+        <filterset id="version.filterset">
+            <filter token="time.year" value="${time.year}" />
+            <filter token="warning.generated-file" value="${warning.generated-file}" />
+            <filter token="name.package" value="${name.package}" />
+            <filter token="name.full" value="${name.full}" />
+            <filter token="tagline" value="${tagline}" />
+            <filter token="description.package" value="${description.package}" />
+            <filter token="name.organization" value="${name.organization}" />
+            <filter token="name.maintainer" value="${name.maintainer}" />
+            <filter token="email.maintainer" value="${email.maintainer}" />
+            <filter token="supporturl" value="${supporturl}" />
+            <filter token="romrevisionurl" value="${romrevisionurl}" />
+            <filter token="ecudefsurl" value="${ecudefsurl}" />
+            <filter token="release_notes" value="${release_notes}" />
+            <filter token="version.major" value="${version.major}" />
+            <filter token="version.minor" value="${version.minor}" />
+            <filter token="version.patch" value="${version.patch}" />
+            <filter token="version.buildnumber" value="${version.buildnumber}" />
+            <filter token="version.extra" value="${version.extra}" />
+            <filter token="version.extra1" value="${version.extra1}" />
+            <filter token="min.logger.def.version" value="${min.logger.def.version}" />
+            <filter token="build.arch" value="${build.arch}" />
+            <filter token="jvm.args.win" value="${jvm.args.win}" />
+            <filter token="jvm.args.linux" value="${jvm.args.linux}" />
+        </filterset>
+    </target>
+
+    <!-- =================================================================== -->
+    <!-- cleans all generated files                                          -->
+    <!-- =================================================================== -->
+    <target name="clean" depends="-init" description="Clean all generated files">
+        <delete dir="${build.dir}" failonerror="false" />
+    </target>
+
+    <!-- =================================================================== -->
+    <!-- pre-build preparation                                               -->
+    <!-- =================================================================== -->
+    <target name="prepare" depends="-init" description="Pre-build preparation">
+        <!-- generate the Version class -->
+        <copy overwrite="true" tofile="${src.java.dir}/com/romraider/Version.java"
+              file="src/main/java/com/romraider/Version.java.template">
+            <filterset refid="version.filterset" />
+        </copy>
+    </target>
+
+    <!-- =================================================================== -->
+    <!-- complete rebuild                                                    -->
+    <!-- =================================================================== -->
+    <target name="rebuild" depends="clean, build" description="Rebuild"/>
+
+    <!-- =================================================================== -->
+    <!-- Compiles the source directory                                       -->
+    <!-- =================================================================== -->
+    <target name="compile-windows" depends="prepare" description="Compile the source directory for Windows">
+        <macro_compile os="${os.windows}" srcdir="${src.java.dir}" destdir="${classes.dir}" classpathref="windows.classpath"/>
+    </target>
+    <target name="compile-linux" depends="prepare" description="Compile the source directory for Linux">
+        <macro_compile os="${os.linux}" srcdir="${src.java.dir}" destdir="${classes.dir}"  classpathref="linux.classpath"/>
+    </target>
+
+    <!-- =================================================================== -->
+    <!-- Build jar files                                                     -->
+    <!-- =================================================================== -->
+    <target name="build-linux" depends="compile-linux" description="Build the Jar file for Linux">
+        <macro_jar os="${os.linux}" basedir="${classes.dir}"/>
+    </target>
+    <target name="build-windows" depends="compile-windows" description="Build the Jar file for Windows">
+        <macro_jar os="${os.windows}" basedir="${classes.dir}"/>
+    </target>
+    <target name="build" depends="build-windows, build-linux" description="Build the Jar files for Linux and Windows"/>
+
+    <!-- =================================================================== -->
+    <!-- Compile and run all unit tests                                      -->
+    <!-- =================================================================== -->
+    <target name="compile-for-unittests" depends="prepare" description="Compile and run Linux unit tests">
+        <mkdir dir="${testclasses.dir}" />
+        <macro_compile os="${os.linux}" srcdir="${src.dir}" destdir="${testclasses.dir}" classpathref="junit_compile.classpath" />
+        <macro_jar os="${os.linux}" basedir="${testclasses.dir}"/>
+    </target>
+    <target name="unittest" depends="compile-for-unittests" description="Perform unit tests">
+        <!-- We execute same coverage on both Windows and Linux-->
+        <junit printsummary="withOutAndErr" showoutput="true" haltonfailure="true">
+            <classpath refid="junit_runtime.classpath" />
+            <batchtest skipNonTests="true">
+                <fileset dir="${testclasses.dir}">
+                    <include name="**/*Test*" />
+                </fileset>
+            </batchtest>
+            <formatter type="brief" usefile="false"/>
+        </junit>
+        <fail message="test failed" if="junit.failure" />
+    </target>
+
+    <!-- ================================================================== -->
+    <!-- generate javadoc                                                   -->
+    <!-- ================================================================== -->
+    <target name="javadoc" depends="-init" description="Generate javadocs">
+        <delete quiet="true" dir="${javadoc.dir}" />
+        <mkdir dir="${javadoc.dir}" />
+        <javadoc windowtitle="${name.package}" header="${javadoc.header}" sourcepath="${src.java.dir}" author="yes"
+                 version="yes" destdir="${javadoc.dir}"
+                 breakiterator="yes" maxmemory="96m">
+            <packageset dir="src">
+                <include name="**" />
+            </packageset>
+            <bottom>${javadoc.footer}</bottom>
+            <classpath refid="${os.windows}.classpath" />
+        </javadoc>
+    </target>
+
+    <!-- =================================================================== -->
+    <!-- create installation                                                 -->
+    <!-- =================================================================== -->
+    <target name="installer" depends="-init" if="have.3rdparty"
+        description="Create installation distribution packages">
+        <delete dir="${dist.dir}" failonerror="false" />
+        <mkdir dir="${dist.dir}/windows" />
+        <mkdir dir="${dist.dir}/linux" />
+        <!-- generate installer scripts from templates -->
+        <copy overwrite="true" tofile="${dist.dir}/install-windows.xml"
+              file="${template.dir}/install-windows.xml.template">
+            <filterset refid="version.filterset" />
+        </copy>
+        <copy overwrite="true" tofile="${dist.dir}/install-linux.xml" file="${template.dir}/install-linux.xml.template">
+            <filterset refid="version.filterset" />
+        </copy>
+        <copy overwrite="true" tofile="${dist.dir}/shortcutSpec-windows.xml"
+              file="${template.dir}/shortcutSpec-windows.xml.template">
+            <filterset refid="version.filterset" />
+        </copy>
+        <copy overwrite="true" tofile="${dist.dir}/shortcutSpec-linux.xml"
+              file="${template.dir}/shortcutSpec-linux.xml.template">
+            <filterset refid="version.filterset" />
+        </copy>
+        <!-- generate the launch4j scripts from templates -->
+        <copy overwrite="true" tofile="${dist.dir}/l4j-installer.xml" file="${template.dir}/l4j-installer.xml.template">
+            <filterset refid="version.filterset" />
+        </copy>
+        <copy overwrite="true" tofile="${dist.dir}/l4j-package.xml" file="${template.dir}/l4j-package.xml.template">
+            <filterset refid="version.filterset" />
+        </copy>
+
+        <macro_generate_executables/>
+    </target>
+
+    <!-- =================================================================== -->
+    <!-- create standalone ZIP                                               -->
+    <!-- =================================================================== -->
+    <target name="standalone" depends="rebuild"
+        description="Create standalone ZIP packages">
+        <macro_standalone os="${os.windows}" />
+        <macro_standalone os="${os.linux}" />
+    </target>
+
+    <!-- =================================================================== -->
+    <!-- all                                                                 -->
+    <!-- =================================================================== -->
+    <target name="all" depends="rebuild, installer, standalone"
+        description="Compile and create distribution packages" />
+
+    <!-- =================================================================== -->
+    <!-- Macros                                                              -->
+    <!-- =================================================================== -->
+    <macrodef name="macro_generate_executables">
+        <sequential>
+            <!-- create the exe launcher of the package for Windows -->
+            <antcall target="-launch4j">
+                <param name="type" value="package" />
+            </antcall>
+
+            <!-- generate the installers -->
+            <macro_izpack_compile os="${os}" target.os="${os.windows}" />
+            <macro_izpack_compile os="${os}" target.os="${os.linux}" />
+
+            <!-- create the exe launcher of the installer for Windows -->
+            <antcall target="-launch4j">
+                <param name="type" value="installer" />
+            </antcall>
+        </sequential>
+    </macrodef>
+
+    <target name="-launch4j" if="is.windows"
+        description="Create the exe launcher of the installer or package for Windows">
+        <launch4j configFile="${dist.dir}/l4j-${type}.xml" />
+    </target>
+
+    <macrodef name="macro_izpack_compile">
+        <attribute name="os" />
+        <attribute name="target.os" />
+        <sequential>
+            <java jar="${izpack.compile}" fork="true">
+                <arg line="${dist.dir}/install-@{target.os}.xml -b . -o ${dist.dir}/@{target.os}/${jar.installer-prefix}-@{target.os}.jar -k standard" />
+            </java>
+        </sequential>
+    </macrodef>
+
+    <macrodef name="macro_jar">
+        <attribute name="os" />
+        <attribute name="basedir" />
+        <sequential>
+            <mkdir dir="${build.dir}/@{os}/lib" />
+            <manifestclasspath property="@{os}.jar.classpath" jarfile="${jar.package}">
+                <classpath>
+                    <fileset dir="lib/common" includes="*.jar" />
+                    <fileset dir="lib/@{os}" includes="*.jar" />
+                </classpath>
+            </manifestclasspath>
+            <manifest file="${build.dir}/@{os}/MANIFEST.MF">
+                <attribute name="Built-By" value="${name.maintainer}" />
+                <attribute name="Main-Class" value="${class.start}" />
+                <attribute name="Class-Path" value="${@{os}.jar.classpath}" />
+            </manifest>
+            <jar basedir="@{basedir}" destfile="${build.dir}/@{os}/lib/${jar.package}"
+                 manifest="${build.dir}/@{os}/MANIFEST.MF">
+                 <fileset dir="${src.res.dir}">
+                    <include name="**/*.*" />
+                </fileset>
+                <!-- Keep external i18n overrides for developers while also
+                     making packaged application images self-contained. -->
+                <zipfileset dir="i18n">
+                    <include name="**/*.properties" />
+                </zipfileset>
+            </jar>
+        </sequential>
+    </macrodef>
+
+    <macrodef name="macro_compile">
+        <attribute name="os" />
+        <attribute name="srcdir" />
+        <attribute name="destdir" />
+        <attribute name="classpathref" />
+        <sequential>
+            <mkdir dir="${classes.dir}" />
+            <javac
+                failonerror="true"
+                srcdir="@{srcdir}"
+                destdir="@{destdir}"
+                release="${javac.release}"
+                includeantruntime="false"
+                debug="${debug}"
+                verbose="${javac.verbose}"
+                deprecation="${deprecation}"
+                encoding="UTF-8" >
+                <compilerarg value="-proc:none" />
+                <classpath refid="@{classpathref}" />
+            </javac>
+        </sequential>
+    </macrodef>
+
+    <macrodef name="macro_standalone">
+        <attribute name="os" />
+        <sequential>
+            <zip destfile="${dist.dir}/@{os}/${name.package}${version.major}.${version.minor}.${version.patch}${version.extra}${version.extra1}-@{os}.zip">
+                <zipfileset file="build/@{os}/lib/${jar.package}" prefix="${name.package}" />
+                <zipfileset file="scripts/run.${ext.@{os}}" prefix="${name.package}" filemode="755" />
+                <zipfileset file="license.txt" prefix="${name.package}" />
+                <zipfileset file="release_notes.txt" prefix="${name.package}" />
+                <zipfileset file="lib/log4j.properties" prefix="${name.package}/lib"/>
+                <zipfileset file="definitions/cars_def.dtd" prefix="${name.package}"/>
+                <zipfileset file="definitions/ecu_defs.dtd" prefix="${name.package}"/>
+                <zipfileset file="definitions/logger.dtd" prefix="${name.package}"/>
+                <zipfileset file="definitions/profile.dtd" prefix="${name.package}"/>
+                <zipfileset dir="plugins" prefix="${name.package}/plugins" />
+                <zipfileset dir="lib/common" prefix="${name.package}/lib/common" />
+                <zipfileset dir="lib/@{os}" prefix="${name.package}/lib/@{os}" />
+                <zipfileset dir="src" prefix="${name.package}/src" excludes="**/*.template" />
+                <zipfileset dir="customize" prefix="${name.package}/customize"/>
+                <zipfileset dir="i18n" prefix="${name.package}/i18n"/>
+            </zip>
+        </sequential>
+    </macrodef>
+</project>

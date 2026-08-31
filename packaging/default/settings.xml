@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<settings>
+    <files>
+        <image_dir path="roms"/>
+        <def_dir path="definitions"/>
+        <repository-dir path="repositories"/>
+    </files>
+    <options>
+        <userlevel value="1"/>
+        <version value="RomRaider2 1.1"/>
+        <defaultscale value="Metric"/>
+        <tableclickcount value="1"/>
+        <tableclickbehavior value="0"/>
+    </options>
+    <platform-selection schema="1" vehicle="SUBARU" module="ENGINE_ECU"/>
+    <display-preferences schema="1" scale="AUTOMATIC" theme="DARK" mode="NORMAL"/>
+    <logger locale="system">
+        <autoConnectOnStartup value="false"/>
+        <serial port="" refresh="true"/>
+        <protocol name="SSM" transport="ISO9141" module="ECU" fastpoll="false" library=""/>
+        <tabs selected="0" showlist="true"/>
+        <filelogging path="logs" switchid="S20" active="false" absolutetimestamp="false"/>
+        <debug level="info"/>
+        <plugins/>
+    </logger>
+</settings>
