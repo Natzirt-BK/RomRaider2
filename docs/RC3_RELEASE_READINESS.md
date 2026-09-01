@@ -28,7 +28,7 @@ The Linux and Windows workflows must:
 - Windows OpenPort discovery, direct/bridged J2534 cases, disconnect, reconnect,
   and clean shutdown with real hardware.
 - Linux OpenPort USB removal, log close, reconnect, and remaining in-car checks.
-- Evo VIII/IX MUT-II vehicle test.
+- Mitsubishi Lancer Evolution MUT-II vehicle test.
 - Windows external serial-sensor test if it is claimed in RC3.
 
 Use `RC3_QUALIFICATION_RECORD.md` for each completed pass. Keep ROMs,

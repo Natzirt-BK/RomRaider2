@@ -5,7 +5,7 @@
 [![License](https://img.shields.io/badge/license-GPL--2.0%2B-blue)](license.txt)
 
 RomRaider2 is a desktop ECU editor, logger, diagnostics, and log-analysis
-application for Subaru and Mitsubishi Lancer Evolution VIII/IX. It carries the
+application for Subaru and Mitsubishi Lancer Evolution. It carries the
 useful RomRaider and DimeMod work forward on Java 21 with a cleaner interface,
 portable Windows and Linux packages, and stricter separation between normal
 logging and unfinished ECU-write research.
@@ -32,7 +32,7 @@ Windows, open `RomRaider2.exe`. On Linux, open `bin/RomRaider2`.
 | Subaru Editor | Available; exact matching definitions are required |
 | Subaru SSM Logger | Linux OpenPort 2.0 identification and sustained logging tested in car |
 | Windows J2534 | Portable build and automatic 32/64-bit routing implemented; connected qualification is still open |
-| Evo VIII/IX MUT-II | Read-only logger foundation implemented; vehicle qualification is still open |
+| Mitsubishi Lancer Evolution MUT-II | Read-only logger foundation implemented; vehicle qualification is still open |
 | DimeMod | Discovery, diagnostics, and Logger parameters retained; RAM writing stays hidden and disabled |
 | ECU flashing | Not available in RomRaider2 1.1.0 |
 

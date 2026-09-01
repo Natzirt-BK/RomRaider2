@@ -20,9 +20,7 @@ public final class RomPlatformResolver {
             return Optional.of(VehiclePlatform.SUBARU);
         }
         boolean mitsubishi = "mitsubishi".equals(make);
-        boolean lancerEvolution = model.contains("lancer evolution")
-                || model.contains("evolution viii")
-                || model.contains("evolution ix");
+        boolean lancerEvolution = model.contains("lancer evolution");
         if (mitsubishi && lancerEvolution) {
             return Optional.of(VehiclePlatform.EVO_8_9);
         }

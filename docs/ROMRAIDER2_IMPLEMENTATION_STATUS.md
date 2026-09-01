@@ -15,7 +15,8 @@ Last updated: 2026-08-31
 - Subaru SSM/ISO9141 through OpenPort 2.0 on Linux, including a sustained in-car
   logging pass.
 - Windows J2534 discovery and automatic direct/cross-bitness routing.
-- Read-only Evo VIII/IX MUT-II protocol and synthetic protocol tests.
+- Read-only Mitsubishi Lancer Evolution MUT-II protocol and synthetic protocol
+  tests.
 - DimeMod discovery, diagnostic codes, runtime Logger parameters, and mapped
   feature display. RAM-tune research remains hidden.
 - Light, dark, system, and high-contrast themes plus scalable desktop and touch
@@ -47,7 +48,8 @@ verification, recovery, and connected test plan are complete.
 2. Run the Windows visual/clean-machine pass when the VM is available again.
 3. Repeat Linux OpenPort USB-removal, reconnect, and shutdown testing in car.
 4. Test simultaneous Subaru logging and the external AEM wideband.
-5. Qualify the Evo MUT-II path on a vehicle before describing it as supported.
+5. Qualify the Mitsubishi Lancer Evolution MUT-II path on a vehicle before
+   describing it as supported.
 6. Continue separating Logger state from Swing before replacing more of the UI.
 7. Prototype the replacement calibration shell without splitting ROM or Logger
    state between two applications.

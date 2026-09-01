@@ -70,7 +70,7 @@ Rejected:
 - Old installer-tool branches are unrelated to the current Java 21 application
   images.
 
-## Evo VIII/IX
+## Mitsubishi Lancer Evolution
 
 The MUT-Raider-II work supplied a small read-only MUT-II protocol path with
 synthetic tests. It does not add ECU reset or write behavior. Vehicle

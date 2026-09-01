@@ -11,7 +11,7 @@ package com.romraider.platform;
 
 public enum VehiclePlatform {
     SUBARU("Subaru"),
-    EVO_8_9("Lancer Evolution VIII / IX");
+    EVO_8_9("Mitsubishi Lancer Evolution");
 
     private final String displayName;
 

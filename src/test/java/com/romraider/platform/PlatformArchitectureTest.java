@@ -94,7 +94,7 @@ public class PlatformArchitectureTest {
 
         RomID evo = new RomID();
         evo.setMake("MITSUBISHI");
-        evo.setModel("Lancer Evolution IX GT-A / Wagon family");
+        evo.setModel("Lancer Evolution GT-A / Wagon family");
         assertEquals(VehiclePlatform.EVO_8_9,
                 RomPlatformResolver.resolve(evo).get());
 

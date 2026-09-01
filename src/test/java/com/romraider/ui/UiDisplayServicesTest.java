@@ -138,7 +138,8 @@ public class UiDisplayServicesTest {
         UiScaleService.getInstance().apply(UiScale.PERCENT_100, DisplayMode.TOUCH);
         JPanel controls = new JPanel();
         JButton button = new JButton("Open");
-        JComboBox combo = new JComboBox(new String[] {"Evo", "Subaru"});
+        JComboBox combo = new JComboBox(new String[] {
+                "Mitsubishi Lancer Evolution", "Subaru"});
         controls.add(button);
         controls.add(combo);
         TouchTargetService.apply(controls, DisplayMode.TOUCH);
@@ -158,7 +159,8 @@ public class UiDisplayServicesTest {
         service.apply(UiScale.PERCENT_100, DisplayMode.NORMAL);
         JPanel controls = new JPanel();
         JButton button = new JButton("Open");
-        JComboBox combo = new JComboBox(new String[] {"Subaru", "Evo"});
+        JComboBox combo = new JComboBox(new String[] {
+                "Subaru", "Mitsubishi Lancer Evolution"});
         controls.add(button);
         controls.add(combo);
         Dimension originalButton = button.getPreferredSize();

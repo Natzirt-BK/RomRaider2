@@ -275,7 +275,8 @@ public class EcuLoggerMenuBar extends JMenuBar
         if (!subaru) {
             boolean engine = context.getModule() == VehicleModule.ENGINE_ECU;
             platformNotice.setText(engine
-                    ? "MUT-II engine logging only — Evo diagnostics pending"
+                    ? "Mitsubishi Lancer Evolution: MUT-II engine logging only; "
+                            + "diagnostics pending"
                     : context.getModule()
                             + " support requires hardware qualification");
             platformNotice.setToolTipText(
