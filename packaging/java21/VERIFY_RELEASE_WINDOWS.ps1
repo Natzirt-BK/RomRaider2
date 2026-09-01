@@ -16,6 +16,8 @@ foreach ($RequiredFile in @(
     "config/user/settings.xml",
     "VERSION.txt",
     "docs/RC3_RELEASE_READINESS.md",
+    "docs/RC3_QUALIFICATION_RECORD.md",
+    "docs/WINDOWS_RELEASE_CHECKLIST.md",
     "customize/j2534Libraries.properties"
     "customize/nameSequences.properties"
     "customize/ncslearning.properties"

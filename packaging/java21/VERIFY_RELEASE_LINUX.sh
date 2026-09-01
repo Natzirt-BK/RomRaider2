@@ -13,6 +13,8 @@ grep -q '^JAVA_VERSION="21\.' lib/runtime/release
 [[ -f config/user/settings.xml ]]
 [[ -f VERSION.txt ]]
 [[ -f docs/RC3_RELEASE_READINESS.md ]]
+[[ -f docs/RC3_QUALIFICATION_RECORD.md ]]
+[[ -f docs/LINUX_IN_CAR_QUALIFICATION.md ]]
 [[ -f customize/j2534Libraries.properties ]]
 [[ -f customize/nameSequences.properties ]]
 [[ -f customize/ncslearning.properties ]]

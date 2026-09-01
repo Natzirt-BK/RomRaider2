@@ -43,6 +43,11 @@ results are recorded against the exact candidate checksums:
 - Mitsubishi MUT-II vehicle qualification and a Windows COM-port external
   sensor check if those paths are claimed for this release.
 
+Copy `RC3_QUALIFICATION_RECORD.md` for each operating-system/hardware pass and
+fill it out without modifying the packaged template. Keep private ROMs,
+definitions, captures, full ECU identifiers, and owner information outside the
+record.
+
 Flashing and ECU memory writing remain unavailable and are outside RC3 scope.
 Failure of a manual check requires a new candidate build and repetition of the
 affected checklist; it must not be waived by relabeling the existing artifact.

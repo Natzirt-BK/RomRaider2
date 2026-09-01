@@ -19,6 +19,8 @@ Changes since RC2
   genuinely narrow widths.
 - Linux and Windows CI now run the shared Java 21 suite and produce verified,
   self-contained candidate ZIPs from the same source revision.
+- Candidate packages include their platform qualification checklist and a
+  privacy-safe result record tied to the archive checksum and source commit.
 
 New in RomRaider2
 -----------------

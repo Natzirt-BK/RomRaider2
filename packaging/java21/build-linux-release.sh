@@ -10,6 +10,25 @@ destination=$output_root/$release_name
 archive=$output_root/$release_name.zip
 archive_name=${archive##*/}
 
+commit=${ROMRAIDER2_SOURCE_REVISION:-}
+if git_root=$(git -C "$repo_root" rev-parse --show-toplevel 2>/dev/null) && \
+        [[ "$git_root" = "$repo_root" ]]; then
+    head_commit=$(git -C "$repo_root" rev-parse HEAD)
+    [[ -z "$(git -C "$repo_root" status --porcelain --untracked-files=normal)" ]] || {
+        echo "Refusing to package a dirty source tree." >&2
+        exit 3
+    }
+    [[ -z "$commit" || "$commit" = "$head_commit" ]] || {
+        echo "ROMRAIDER2_SOURCE_REVISION does not match HEAD: $head_commit" >&2
+        exit 3
+    }
+    commit=$head_commit
+fi
+[[ "$commit" =~ ^[0-9a-f]{40}$ ]] || {
+    echo "Set ROMRAIDER2_SOURCE_REVISION to the extracted source commit." >&2
+    exit 3
+}
+
 [[ -x "$application_image/bin/RomRaider2" && \
    -f "$application_image/lib/runtime/release" ]] || {
     echo "Build the Java 21 application image first: $application_image" >&2
@@ -31,28 +50,12 @@ cp -- "$repo_root/release_notes.txt" "$release/RELEASE_NOTES.txt"
 cp -- "$repo_root/docs/ROMRAIDER2_IMPLEMENTATION_STATUS.md" "$release/docs/"
 cp -- "$repo_root/docs/JAVA_RUNTIME_MODERNIZATION.md" "$release/docs/"
 cp -- "$repo_root/docs/RC3_RELEASE_READINESS.md" "$release/docs/"
+cp -- "$repo_root/docs/RC3_QUALIFICATION_RECORD.md" "$release/docs/"
+cp -- "$repo_root/docs/LINUX_IN_CAR_QUALIFICATION.md" "$release/docs/"
 cp -- "$repo_root/docs/DIAGNOSTIC_PRIVACY.md" "$release/docs/"
 cp -- "$repo_root/packaging/java21/VERIFY_RELEASE_LINUX.sh" "$release/"
 chmod +x "$release/VERIFY_RELEASE_LINUX.sh"
 
-commit=${ROMRAIDER2_SOURCE_REVISION:-}
-if git_root=$(git -C "$repo_root" rev-parse --show-toplevel 2>/dev/null) && \
-        [[ "$git_root" = "$repo_root" ]]; then
-    head_commit=$(git -C "$repo_root" rev-parse HEAD)
-    [[ -z "$(git -C "$repo_root" status --porcelain --untracked-files=normal)" ]] || {
-        echo "Refusing to package a dirty source tree." >&2
-        exit 3
-    }
-    [[ -z "$commit" || "$commit" = "$head_commit" ]] || {
-        echo "ROMRAIDER2_SOURCE_REVISION does not match HEAD: $head_commit" >&2
-        exit 3
-    }
-    commit=$head_commit
-fi
-[[ "$commit" =~ ^[0-9a-f]{40}$ ]] || {
-    echo "Set ROMRAIDER2_SOURCE_REVISION to the extracted source commit." >&2
-    exit 3
-}
 {
     printf 'RomRaider2 ECU Studio 1.1.0 %s\n' "$release_label"
     printf 'Source commit: %s\n' "$commit"
