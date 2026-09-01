@@ -12,26 +12,32 @@ logging and unfinished ECU-write research.
 
 ## Downloads
 
-The latest public build is **RomRaider2 1.1.0 RC3**. RC3 is a prerelease while
-the remaining connected Windows and vehicle checks are completed.
+The latest public desktop build is **RomRaider2 1.1.0 RC4**. It is a development
+prerelease while the remaining Windows visual, Mac hardware, and vehicle checks
+are completed.
 
 | Platform | Package |
 | --- | --- |
-| Windows 10/11 x64 | [Download the portable Windows ZIP](https://github.com/Natzirt-BK/RomRaider2/releases/download/romraider2-1.1.0-rc3/RomRaider2_ECU_Studio_1.1.0_Windows_x64.zip) |
-| Linux x64 | [Download the portable Linux ZIP](https://github.com/Natzirt-BK/RomRaider2/releases/download/romraider2-1.1.0-rc3/RomRaider2_ECU_Studio_1.1.0_Linux_x64.zip) |
+| Windows 10/11 x64 | [Download the portable Windows ZIP](https://github.com/Natzirt-BK/RomRaider2/releases/download/romraider2-1.1.0-rc4/RomRaider2_ECU_Studio_1.1.0_Windows_x64.zip) |
+| Linux x64 | [Download the portable Linux ZIP](https://github.com/Natzirt-BK/RomRaider2/releases/download/romraider2-1.1.0-rc4/RomRaider2_ECU_Studio_1.1.0_Linux_x64.zip) |
+| SteamOS Desktop Mode x64 | [Download the SteamOS ZIP](https://github.com/Natzirt-BK/RomRaider2/releases/download/romraider2-1.1.0-rc4/RomRaider2_SteamOS_1.1.0_RC4_x64.zip) |
+| macOS Apple silicon | [Download the unsigned ARM64 preview](https://github.com/Natzirt-BK/RomRaider2/releases/download/romraider2-1.1.0-rc4/RomRaider2_1.1.0_RC4_macOS_arm64.zip) |
+| macOS Intel | [Download the unsigned x64 preview](https://github.com/Natzirt-BK/RomRaider2/releases/download/romraider2-1.1.0-rc4/RomRaider2_1.1.0_RC4_macOS_x64.zip) |
 
-Java 21 is included in both packages. Extract the ZIP before running it. On
-Windows, open `RomRaider2.exe`. On Linux, open `bin/RomRaider2`.
+Java 21 is included in every desktop package. Extract the ZIP before running
+it. On Windows, open `RomRaider2.exe`. On Linux, open `bin/RomRaider2`. The Mac
+previews are unsigned and have not completed physical Mac testing.
 
-[Release notes, checksums, and every RC3 download](https://github.com/Natzirt-BK/RomRaider2/releases/tag/romraider2-1.1.0-rc3)
+[Release notes, checksums, and every RC4 desktop download](https://github.com/Natzirt-BK/RomRaider2/releases/tag/romraider2-1.1.0-rc4)
 
 ### Experimental Android preview
 
 Android 8.0 and newer users can also
-[download RC4 Android Preview 1](https://github.com/Natzirt-BK/RomRaider2/releases/download/romraider2-1.1.0-rc4-android-preview1/RomRaider2_1.1.0_RC4_Android_preview1-debug.apk).
+[download RC4 Android Preview 2](https://github.com/Natzirt-BK/RomRaider2/releases/download/romraider2-1.1.0-rc4-android-preview2/RomRaider2_1.1.0_RC4_Android_preview2-debug.apk).
 This is an early, debug-signed test build rather than the desktop RC4 release.
-It supports offline ROM byte editing, RomRaider CSV review, Logger definition
-and profile import, simulated logging, and early OpenPort 2.0 preparation. The
+It supports exact definition-backed calibration table editing, advanced ROM
+byte editing, RomRaider CSV review, Logger definition and profile import,
+simulated logging, and early OpenPort 2.0 preparation. The
 read-only Subaru SSM K-Line Logger still awaits RC5 vehicle qualification. ECU
 writing and flashing are not present.
 

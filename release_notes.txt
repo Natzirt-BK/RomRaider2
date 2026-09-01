@@ -1,8 +1,8 @@
 RomRaider2 ECU Studio 1.1.0 RC4
 ================================
 
-RC4 is in development. These notes describe the current candidate work and do
-not announce a public release.
+RC4 is published as a development prerelease for early desktop and portable
+platform feedback. The remaining hardware checks are listed below.
 
 Changes since RC3
 -----------------
@@ -52,6 +52,10 @@ Runtime and packages
   identification through profile resolution, bounded address reads, converted
   live values, and CSV recording. It rejects transmission-only parameters,
   exposes no ECU writes, and remains labeled for RC5 connected qualification.
+- Added exact ROM-size and internal-ID matching for RomRaider ECU definitions
+  on Android, with searchable named numeric tables, scaled cell values, and
+  bounded offline edits. Android does not correct checksums and clearly marks
+  saved files as review copies that must not be flashed.
 - Fixed packaged settings precedence so an unrelated `settings.xml` beside the
   launch directory cannot replace the package-owned configuration.
 - Updated candidate labels, verification scripts, and workflow artifacts for
@@ -67,11 +71,15 @@ Checks completed
   under a clean virtual display.
 - Overview, Data, Graph, Dashboard, Dark, and narrow layouts have passed the
   current Linux visual review.
+- The Android shared core passes definition inheritance, exact-match,
+  conversion, editing, and mismatch tests. The APK builds, passes lint, and has
+  passed a Waydroid launch and layout smoke check.
 
 Known limits
 ------------
 
-- RC4 is not published yet.
+- RC4 desktop packages are public development previews rather than a stable
+  release.
 - The replacement Logger does not yet cover every specialized legacy
   workspace.
 - The Windows package and visual pass wait until the Windows VM is available.

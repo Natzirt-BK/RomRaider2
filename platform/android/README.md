@@ -6,6 +6,10 @@ ships no ECU writing path.
 Implemented:
 
 - open a ROM through Android's document picker;
+- match a standard or standalone RomRaider ECU definition against the exact
+  ROM size and internal ID;
+- search named numeric calibration tables, inspect scaled values, edit a
+  selected cell, and save a separate review copy;
 - inspect the first 256 bytes, apply bounded hexadecimal edits, reset edits,
   and save a separate copy;
 - open and summarize traditional RomRaider wide-column and RomRaider2
@@ -32,18 +36,20 @@ Implemented:
 
 Current preview limits:
 
-- definition-backed table editing;
 - calculated logger-parameter dependency evaluation;
 - qualify the wired read-only OpenPort logger on a supported car during RC5;
 - responsive large-screen and landscape layouts;
 - release signing, Play Store packaging, and broader physical-device checks.
 
-The debug APK has launched successfully on a Galaxy S25, and the traditional
+The first debug APK launched successfully on a Galaxy S25, and the traditional
 logger CSV that exposed the original header gap now opens correctly. The newer
 definition/profile import and offline logger preview still need a phone rerun.
 The OpenPort preparation and live logger paths still need connected-device
 checks. The live button is labeled as awaiting RC5 qualification, stops when
 the app leaves the foreground, and keeps ECU writing absent.
+
+Android does not correct ROM checksums. Definition-backed and hexadecimal
+edits are offline review features; Android-edited files must not be flashed.
 
 See [Android preview testing](../../docs/ANDROID_PREVIEW_TESTING.md) before
 sideloading the APK or reporting a result.

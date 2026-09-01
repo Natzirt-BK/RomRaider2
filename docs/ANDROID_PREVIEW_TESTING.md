@@ -9,8 +9,11 @@ builds, an update may require uninstalling an older preview first.
 
 ## What is ready to try
 
-- Open a ROM, inspect bytes, make a bounded hexadecimal edit, reset it, and save
-  a separate copy.
+- Open a ROM and a matching RomRaider ECU definition, search named numeric
+  tables, inspect scaled values, edit one cell, reset it, and save a separate
+  copy.
+- Inspect bytes and make a bounded hexadecimal edit when validating a
+  definition.
 - Open traditional RomRaider wide-column CSV logs and RomRaider2 portable CSV
   logs.
 - Import a RomRaider v370 Logger definition and an existing Logger profile.
@@ -20,7 +23,8 @@ builds, an update may require uninstalling an older preview first.
 
 The application contains no ECU flash or memory-write command. ROM editing only
 changes an in-memory document and saves a new file through Android's document
-picker.
+picker. Android does not correct ROM checksums, so saved files are for review
+and desktop validation and must not be flashed.
 
 ## Connected Logger warning
 

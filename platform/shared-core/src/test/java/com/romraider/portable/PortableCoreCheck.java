@@ -2,12 +2,16 @@
 package com.romraider.portable;
 
 import java.io.ByteArrayOutputStream;
+import java.io.ByteArrayInputStream;
 import java.io.StringReader;
 import java.io.StringWriter;
 import java.util.Arrays;
 
 import com.romraider.portable.openport.OpenPortWireProtocol;
 import com.romraider.portable.openport.OpenPortKLineFrameDecoder;
+import com.romraider.portable.editor.PortableEcuDefinition;
+import com.romraider.portable.editor.PortableEcuDefinitionReader;
+import com.romraider.portable.editor.PortableRomTable;
 import com.romraider.portable.logger.PortableExpression;
 import com.romraider.portable.logger.PortableLoggerCycle;
 import com.romraider.portable.logger.PortableLoggerQueryBatch;
@@ -36,6 +40,54 @@ public final class PortableCoreCheck {
         rom.write(binary);
         require(Arrays.equals(new byte[] {1, 8, 9, 4},
                 binary.toByteArray()), "ROM output is wrong");
+
+        byte[] calibrationBytes = new byte[] {'T', 'E', 'S', 'T',
+                0, 100, 0, (byte) 200, 1, 44, 1, (byte) 144,
+                0, 0, 0, 0};
+        PortableRomDocument calibration = new PortableRomDocument(
+                "calibration.bin", calibrationBytes);
+        String ecuDefinitions = "<roms>"
+                + "<rom><romid><xmlid>BASE</xmlid><filesize>16</filesize>"
+                + "</romid><table type=\"3D\" name=\"Fuel Map\""
+                + " category=\"Fuel\" storagetype=\"uint16\" endian=\"big\""
+                + " sizex=\"2\" sizey=\"2\"><scaling name=\"Standard\""
+                + " units=\"ms\" expression=\"x/10\" to_byte=\"x*10\""
+                + " format=\"0.0\"/><description>Fixture table</description>"
+                + "</table></rom>"
+                + "<rom base=\"BASE\"><romid><xmlid>TEST</xmlid>"
+                + "<internalidaddress>0</internalidaddress>"
+                + "<internalidstring>TEST</internalidstring>"
+                + "<filesize>16</filesize><make>Subaru</make>"
+                + "<model>Fixture</model></romid>"
+                + "<table name=\"Fuel Map\" storageaddress=\"0x4\"/>"
+                + "</rom></roms>";
+        PortableEcuDefinition ecuDefinition = PortableEcuDefinitionReader.read(
+                new ByteArrayInputStream(ecuDefinitions.getBytes(
+                        java.nio.charset.StandardCharsets.UTF_8)), calibration);
+        require("TEST".equals(ecuDefinition.getXmlId())
+                        && ecuDefinition.getTables().size() == 1,
+                "Exact portable ECU definition did not match");
+        PortableRomTable fuelMap = ecuDefinition.getTables().get(0);
+        require(fuelMap.getRows() == 2 && fuelMap.getColumns() == 2,
+                "Inherited table dimensions were not retained");
+        require(fuelMap.valueAt(calibration, 0, 1) == 20.0,
+                "Definition-backed table value decoded incorrectly");
+        fuelMap.replaceValue(calibration, 1, 0, 45.5);
+        require((calibration.byteAt(8) & 0xFF) == 1
+                        && (calibration.byteAt(9) & 0xFF) == 199,
+                "Definition-backed table edit encoded incorrectly");
+        require("45.5".equals(fuelMap.formattedValueAt(calibration, 1, 0)),
+                "Definition-backed table display did not refresh");
+        try {
+            PortableEcuDefinitionReader.read(new ByteArrayInputStream(
+                    ecuDefinitions.replace("TEST</internalidstring>",
+                            "MISS</internalidstring>").getBytes(
+                            java.nio.charset.StandardCharsets.UTF_8)), calibration);
+            throw new AssertionError("Mismatched ECU definition was accepted");
+        } catch (java.io.IOException expected) {
+            require(expected.getMessage().contains("No exact ECU definition"),
+                    "ECU definition mismatch was unclear");
+        }
 
         PortableLogSession log = new PortableLogSession();
         log.append(new PortableLogSample(100, "P8", "Engine Speed",

@@ -42,7 +42,7 @@ and the DM20 parser.
 RC3 is published as a prerelease. Connected qualification against the exact
 release checksums remains open before stable promotion.
 
-## RC4 milestone in development
+## RC4 public development milestone
 
 RC4 now has its first user-visible step away from Swing. The replacement Logger
 workspace is loaded into the existing application through a small provider
@@ -53,9 +53,9 @@ The OpenPort reconnect path also has an explicit Reconnecting state, quieter
 retry logging, and a capped 1/2/4/5-second retry schedule. The Java and Compose
 tests pass, and the Logger workspace has passed clean Linux visual checks for
 Overview, Data, Graph, Dashboard, dark mode, and a 600-pixel-wide layout. RC4
-is not yet published. A fresh Linux Java 21 application image builds and starts
-with the replacement workspace packaged. The packaged Windows visual pass
-remains open.
+is published as a development prerelease. A fresh Linux Java 21 application
+image builds and starts with the replacement workspace packaged. The packaged
+Windows visual pass remains open and is disclosed on the release.
 
 The Editor can now project changed bytes from real selected tables into an
 offline live-tuning plan. Preflight evaluates the ECU family, ECU role, DimeMod
@@ -70,7 +70,9 @@ The SteamOS Desktop Mode bundle builds and passes a Linux launch smoke test.
 Native macOS package definitions now cover Apple silicon and Intel separately;
 the actual application bundles still need to run on both Mac architectures.
 An Android debug APK now builds and passes lint with no errors. It can
-open/edit/save-copy ROM files, review traditional or portable CSV logs, and
+open ROM files, match exact RomRaider ECU definitions, search and edit named
+scaled numeric tables, make advanced byte edits, review traditional or
+portable CSV logs, and
 prepare an OpenPort 2.0 through Android USB by reading adapter firmware and
 vehicle voltage. It can securely import the actual v370 logger definition and
 an existing profile, resolve direct parameters, run their real conversions in
@@ -80,8 +82,9 @@ deduplicating 64-address query planner. The Android application now wires those
 pieces into a foreground-only, engine-targeted OpenPort K-Line logger that can
 identify an ECU, display converted values, and record CSV. The path is clearly
 marked as awaiting RC5 in-car qualification and exposes no ECU write command.
-Android Preview 1 is published separately for early device and workflow
-feedback; it does not promote the unfinished desktop RC4 candidate.
+Android Preview 2 is published separately for early device and workflow
+feedback. Android does not correct ROM checksums, so its saved ROM copies are
+for review and desktop validation and must not be flashed.
 
 ## Safety boundary
 
@@ -92,11 +95,11 @@ verification, recovery, and connected test plans are complete.
 
 ## Next work
 
-1. Begin the replacement calibration shell on the neutral ROM/table boundary.
-2. Run the native macOS ARM64 and Intel package workflows and inspect both
-   application bundles on real Macs.
-3. Rerun logger definition/profile import and the offline logger preview on the
-   Galaxy S25; keep the wired live logger for RC5 connected qualification.
+1. Extend the replacement calibration shell on the neutral ROM/table boundary.
+2. Inspect the native macOS ARM64 and Intel application bundles on real Macs.
+3. Rerun ECU definition table editing, logger definition/profile import, and
+   the offline logger preview on the Galaxy S25; keep the wired live logger for
+   RC5 connected qualification.
 4. Run the RC4 Windows package and visual pass when the VM is available again.
 5. Resume OpenPort and external-sensor in-car qualification during RC5 work.
 6. Qualify the Mitsubishi Lancer Evolution MUT-II path on a vehicle before

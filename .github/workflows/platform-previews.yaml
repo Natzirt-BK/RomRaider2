@@ -75,17 +75,58 @@ jobs:
             :shared-core:check :app:assembleDebug :app:lintDebug
           mkdir -p build/platform-previews
           cp platform/android/app/build/outputs/apk/debug/app-debug.apk \
-            build/platform-previews/RomRaider2_1.1.0_RC4_Android_preview1-debug.apk
+            build/platform-previews/RomRaider2_1.1.0_RC4_Android_preview2-debug.apk
           sha256sum \
-            build/platform-previews/RomRaider2_1.1.0_RC4_Android_preview1-debug.apk \
-            >build/platform-previews/RomRaider2_1.1.0_RC4_Android_preview1-debug.apk.sha256
+            build/platform-previews/RomRaider2_1.1.0_RC4_Android_preview2-debug.apk \
+            >build/platform-previews/RomRaider2_1.1.0_RC4_Android_preview2-debug.apk.sha256
       - name: Check whitespace
         run: git diff --check
       - name: Upload Android debug preview
         uses: actions/upload-artifact@v4
         with:
-          name: RomRaider2-1.1.0-RC4-Android-preview1-debug
+          name: RomRaider2-1.1.0-RC4-Android-preview2-debug
           path: |
-            build/platform-previews/RomRaider2_1.1.0_RC4_Android_preview1-debug.apk
-            build/platform-previews/RomRaider2_1.1.0_RC4_Android_preview1-debug.apk.sha256
+            build/platform-previews/RomRaider2_1.1.0_RC4_Android_preview2-debug.apk
+            build/platform-previews/RomRaider2_1.1.0_RC4_Android_preview2-debug.apk.sha256
+          if-no-files-found: error
+
+  steamos-package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+          architecture: x64
+      - uses: gradle/actions/setup-gradle@v5
+        with:
+          gradle-version: "9.5.0"
+      - name: Install package tools
+        run: sudo apt-get update && sudo apt-get install -y ant zip
+      - name: Build SteamOS Desktop Mode preview
+        run: |
+          cp packaging/default/settings.xml settings.xml
+          ant clean unittest
+          ant clean build-linux
+          gradle --no-daemon :platform:shared-core:check :ui:compose-logger:test :ui:compose-logger:stageLoggerWorkspace
+          packaging/java21/build-linux-app-image.sh build/java21
+          packaging/steamos/build-steamos-bundle.sh
+          cd build/steamos
+          zip -qr ../RomRaider2_SteamOS_1.1.0_RC4_x64.zip \
+            RomRaider2_SteamOS_1.1.0_RC4_x64
+          cd ..
+          sha256sum RomRaider2_SteamOS_1.1.0_RC4_x64.zip \
+            >RomRaider2_SteamOS_1.1.0_RC4_x64.zip.sha256
+      - name: Check whitespace
+        run: git diff --check
+      - name: Upload SteamOS Desktop Mode preview
+        uses: actions/upload-artifact@v4
+        with:
+          name: RomRaider2-1.1.0-RC4-SteamOS-x64
+          path: |
+            build/RomRaider2_SteamOS_1.1.0_RC4_x64.zip
+            build/RomRaider2_SteamOS_1.1.0_RC4_x64.zip.sha256
           if-no-files-found: error

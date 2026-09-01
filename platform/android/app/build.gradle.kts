@@ -23,8 +23,8 @@ android {
         applicationId = "com.romraider.mobile"
         minSdk = 26
         targetSdk = 36
-        versionCode = 110401
-        versionName = "1.1.0-rc4-preview1"
+        versionCode = 110402
+        versionName = "1.1.0-rc4-preview2"
     }
 
     buildTypes {

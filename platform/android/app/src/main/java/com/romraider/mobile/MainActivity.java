@@ -20,6 +20,9 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
 import android.provider.OpenableColumns;
+import android.text.Editable;
+import android.text.InputType;
+import android.text.TextWatcher;
 import android.view.Gravity;
 import android.view.ViewGroup;
 import android.view.WindowManager;
@@ -35,6 +38,9 @@ import com.romraider.portable.PortableLogCsvReader;
 import com.romraider.portable.PortableLogSample;
 import com.romraider.portable.PortableLogSession;
 import com.romraider.portable.PortableRomDocument;
+import com.romraider.portable.editor.PortableEcuDefinition;
+import com.romraider.portable.editor.PortableEcuDefinitionReader;
+import com.romraider.portable.editor.PortableRomTable;
 import com.romraider.mobile.usb.OpenPortUsbTransport;
 import com.romraider.mobile.logger.ReadOnlyLoggerSession;
 import com.romraider.portable.logger.definition.PortableLoggerDefinition;
@@ -73,6 +79,7 @@ public final class MainActivity extends Activity {
     private static final int OPEN_LOGGER_PROFILE = 14;
     private static final int SAVE_PREVIEW_LOG = 15;
     private static final int SAVE_LIVE_LOG = 16;
+    private static final int OPEN_ECU_DEFINITION = 17;
     private static final String ACTION_USB_PERMISSION =
             "com.romraider.mobile.USB_PERMISSION";
     private static final int INK = Color.rgb(229, 239, 246);
@@ -88,6 +95,18 @@ public final class MainActivity extends Activity {
     private TextView hexPreview;
     private EditText offsetInput;
     private EditText bytesInput;
+    private volatile PortableEcuDefinition ecuDefinition;
+    private String ecuDefinitionName = "";
+    private volatile String ecuDefinitionState =
+            "Open a ROM, then load a RomRaider ECU definition.";
+    private PortableRomTable selectedTable;
+    private TextView ecuDefinitionSummary;
+    private EditText tableSearch;
+    private LinearLayout tableList;
+    private LinearLayout tableDetail;
+    private EditText tableRowInput;
+    private EditText tableColumnInput;
+    private EditText tableValueInput;
     private TextView loggerSetupView;
     private TextView loggerPreviewView;
     private Button loggerPreviewButton;
@@ -462,13 +481,41 @@ public final class MainActivity extends Activity {
         selectTab(editorTab, loggerTab);
         content.removeAllViews();
         content.addView(sectionTitle("ROM EDITOR"));
-        content.addView(text("Open a ROM, make a bounded hexadecimal change, and save a separate copy.", 14, INK));
+        content.addView(text("Open a ROM and its RomRaider ECU definition to browse and edit named calibration tables.", 14, INK));
         Button open = button("OPEN ROM");
         open.setOnClickListener(view -> openRom());
-        content.addView(open, matchWrap(dp(12)));
+        content.addView(open, matchWrap(dp(6)));
+        Button definition = button("OPEN ECU DEFINITION");
+        definition.setOnClickListener(view -> openEcuDefinition());
+        content.addView(definition, matchWrap(dp(8)));
 
         romSummary = text("No ROM open", 14, MUTED);
         content.addView(romSummary, matchWrap(dp(8)));
+        ecuDefinitionSummary = text(ecuDefinitionState, 13, MUTED);
+        ecuDefinitionSummary.setTypeface(Typeface.MONOSPACE);
+        ecuDefinitionSummary.setBackgroundColor(PANEL);
+        ecuDefinitionSummary.setPadding(dp(14), dp(14), dp(14), dp(14));
+        content.addView(ecuDefinitionSummary, matchWrap(dp(12)));
+
+        content.addView(sectionTitle("CALIBRATION TABLES"));
+        tableSearch = input("Search table or category");
+        tableSearch.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence text, int start,
+                    int count, int after) { }
+            @Override public void onTextChanged(CharSequence text, int start,
+                    int before, int count) { renderTableList(); }
+            @Override public void afterTextChanged(Editable text) { }
+        });
+        content.addView(tableSearch, matchWrap(dp(8)));
+        tableList = column();
+        content.addView(tableList, matchWrap(dp(8)));
+        tableDetail = column();
+        content.addView(tableDetail, matchWrap(dp(12)));
+        renderTableList();
+        renderSelectedTable();
+
+        content.addView(sectionTitle("ADVANCED HEX EDITOR"));
+        content.addView(text("Direct byte editing remains available for definition work and comparison.", 14, INK));
         hexPreview = text("", 12, INK);
         hexPreview.setTypeface(Typeface.MONOSPACE);
         HorizontalScrollView horizontal = new HorizontalScrollView(this);
@@ -491,6 +538,12 @@ public final class MainActivity extends Activity {
         actions.addView(reset, weighted());
         actions.addView(save, weighted());
         content.addView(actions, matchWrap(dp(12)));
+        TextView warning = text("CHECKSUM WARNING  /  Android does not correct ROM checksums. Save copies only for review and desktop validation. Do not flash Android-edited files.", 12, Color.rgb(255, 190, 92));
+        warning.setBackgroundColor(PANEL);
+        warning.setPadding(dp(14), dp(14), dp(14), dp(14));
+        content.addView(warning, matchWrap(dp(12)));
+
+        refreshRom();
     }
 
     private void openRom() {
@@ -498,6 +551,14 @@ public final class MainActivity extends Activity {
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         intent.setType("application/octet-stream");
         startActivityForResult(intent, OPEN_ROM);
+    }
+
+    private void openEcuDefinition() {
+        if (rom == null) {
+            notice("Open a ROM first so its internal ID can be matched safely.");
+            return;
+        }
+        openXmlDocument(OPEN_ECU_DEFINITION);
     }
 
     private void saveRom() {
@@ -546,8 +607,11 @@ public final class MainActivity extends Activity {
                 try (InputStream input = getContentResolver().openInputStream(uri)) {
                     rom = PortableRomDocument.read(displayName(uri), input);
                 }
+                ecuDefinition = null;
+                ecuDefinitionName = "";
+                selectedTable = null;
+                ecuDefinitionState = "ROM opened. Load a matching RomRaider ECU definition.";
                 showEditor();
-                refreshRom();
             } else if (requestCode == SAVE_ROM && rom != null) {
                 try (OutputStream output = getContentResolver().openOutputStream(uri, "w")) {
                     rom.write(output);
@@ -567,6 +631,8 @@ public final class MainActivity extends Activity {
                 loadLoggerDefinition(uri, displayName(uri));
             } else if (requestCode == OPEN_LOGGER_PROFILE) {
                 loadLoggerProfile(uri, displayName(uri));
+            } else if (requestCode == OPEN_ECU_DEFINITION) {
+                loadEcuDefinition(uri, displayName(uri));
             } else if (requestCode == SAVE_PREVIEW_LOG
                     && previewSession != null) {
                 try (OutputStream output = getContentResolver()
@@ -587,6 +653,207 @@ public final class MainActivity extends Activity {
             }
         } catch (Exception ex) {
             notice(ex.getMessage() == null ? "The file could not be opened." : ex.getMessage());
+        }
+    }
+
+    private void loadEcuDefinition(Uri uri, String name) {
+        PortableRomDocument targetRom = rom;
+        if (targetRom == null) {
+            notice("Open a ROM first.");
+            return;
+        }
+        ecuDefinitionState = "Reading ECU definition and matching the ROM...";
+        refreshEcuDefinitionStatus();
+        workerExecutor.execute(() -> {
+            try (InputStream input = getContentResolver().openInputStream(uri)) {
+                PortableEcuDefinition parsed = PortableEcuDefinitionReader.read(
+                        input, targetRom);
+                if (rom == targetRom) {
+                    ecuDefinition = parsed;
+                    ecuDefinitionName = name;
+                    selectedTable = null;
+                    ecuDefinitionState = "Exact ROM match. Definition-backed editing is ready.";
+                }
+            } catch (Exception ex) {
+                if (rom == targetRom) {
+                    ecuDefinition = null;
+                    ecuDefinitionName = "";
+                    selectedTable = null;
+                    ecuDefinitionState = ex.getMessage() == null
+                            ? "The ECU definition could not be opened."
+                            : ex.getMessage();
+                }
+            }
+            runOnUiThread(() -> {
+                if (rom == targetRom) showEditor();
+            });
+        });
+    }
+
+    private void refreshEcuDefinitionStatus() {
+        if (ecuDefinitionSummary == null) return;
+        PortableEcuDefinition definition = ecuDefinition;
+        StringBuilder summary = new StringBuilder(ecuDefinitionState);
+        if (definition != null) {
+            summary.append("\nDefinition: ").append(ecuDefinitionName)
+                    .append("\nECU: ").append(definition.getXmlId())
+                    .append("  /  ").append(definition.vehicleName())
+                    .append("\nEditable numeric tables: ")
+                    .append(definition.getTables().size());
+        }
+        ecuDefinitionSummary.setText(summary.toString());
+    }
+
+    private void renderTableList() {
+        if (tableList == null) return;
+        tableList.removeAllViews();
+        PortableEcuDefinition definition = ecuDefinition;
+        if (definition == null) {
+            tableList.addView(text("No matched ECU definition loaded.", 13, MUTED),
+                    matchWrap(dp(6)));
+            return;
+        }
+        String query = tableSearch == null ? "" : tableSearch.getText()
+                .toString().trim().toLowerCase(Locale.ROOT);
+        int matches = 0;
+        int shown = 0;
+        for (PortableRomTable table : definition.getTables()) {
+            String searchable = (table.getName() + " " + table.getCategory())
+                    .toLowerCase(Locale.ROOT);
+            if (!query.isEmpty() && !searchable.contains(query)) continue;
+            matches++;
+            if (shown >= 24) continue;
+            Button item = button(table.getName() + "\n" + table.getCategory()
+                    + "  /  " + table.getRows() + " × " + table.getColumns());
+            item.setAllCaps(false);
+            item.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+            item.setTextColor(table == selectedTable ? Color.WHITE : ACCENT);
+            item.setOnClickListener(view -> {
+                selectedTable = table;
+                renderTableList();
+                renderSelectedTable();
+            });
+            tableList.addView(item, matchWrap(dp(4)));
+            shown++;
+        }
+        String result = matches == 0 ? "No tables match this search."
+                : matches > shown ? "Showing " + shown + " of " + matches
+                        + " matches. Refine the search to narrow the list."
+                : matches + (matches == 1 ? " table" : " tables");
+        tableList.addView(text(result, 12, MUTED), matchWrap(dp(6)));
+    }
+
+    private void renderSelectedTable() {
+        if (tableDetail == null) return;
+        tableDetail.removeAllViews();
+        PortableRomTable table = selectedTable;
+        if (table == null || rom == null) {
+            tableDetail.addView(text("Choose a table to inspect its current values.",
+                    13, MUTED), matchWrap(dp(6)));
+            return;
+        }
+        TextView title = text(table.getName(), 20, ACCENT);
+        title.setTypeface(Typeface.DEFAULT_BOLD);
+        tableDetail.addView(title, matchWrap(dp(4)));
+        tableDetail.addView(text(table.getCategory() + "  /  "
+                + table.getRows() + " × " + table.getColumns() + "  /  "
+                + table.getUnits() + "  /  ROM 0x"
+                + String.format(Locale.ROOT, "%X", table.getAddress()),
+                12, MUTED), matchWrap(dp(6)));
+        if (table.getDescription() != null
+                && !table.getDescription().trim().isEmpty()) {
+            tableDetail.addView(text(table.getDescription().trim(), 13, INK),
+                    matchWrap(dp(8)));
+        }
+
+        TextView values = text(tablePreview(table), 12, INK);
+        values.setTypeface(Typeface.MONOSPACE);
+        values.setBackgroundColor(PANEL);
+        values.setPadding(dp(14), dp(14), dp(14), dp(14));
+        HorizontalScrollView horizontal = new HorizontalScrollView(this);
+        horizontal.addView(values);
+        tableDetail.addView(horizontal, matchWrap(dp(8)));
+
+        tableRowInput = input("Row (1 to " + table.getRows() + ")");
+        tableColumnInput = input("Column (1 to " + table.getColumns() + ")");
+        tableValueInput = input("New value in " + table.getUnits());
+        tableRowInput.setInputType(InputType.TYPE_CLASS_NUMBER);
+        tableColumnInput.setInputType(InputType.TYPE_CLASS_NUMBER);
+        tableValueInput.setInputType(InputType.TYPE_CLASS_NUMBER
+                | InputType.TYPE_NUMBER_FLAG_DECIMAL
+                | InputType.TYPE_NUMBER_FLAG_SIGNED);
+        tableRowInput.setText("1");
+        tableColumnInput.setText("1");
+        tableValueInput.setText(table.formattedValueAt(rom, 0, 0));
+        tableDetail.addView(tableRowInput, matchWrap(dp(5)));
+        tableDetail.addView(tableColumnInput, matchWrap(dp(5)));
+        tableDetail.addView(tableValueInput, matchWrap(dp(6)));
+        LinearLayout actions = new LinearLayout(this);
+        Button load = button("LOAD CELL");
+        Button apply = button("APPLY VALUE");
+        load.setOnClickListener(view -> loadTableCell());
+        apply.setOnClickListener(view -> applyTableValue());
+        actions.addView(load, weighted());
+        actions.addView(apply, weighted());
+        tableDetail.addView(actions, matchWrap(dp(8)));
+    }
+
+    private String tablePreview(PortableRomTable table) {
+        int rows = Math.min(table.getRows(), 12);
+        int columns = Math.min(table.getColumns(), 8);
+        StringBuilder preview = new StringBuilder();
+        preview.append("CURRENT VALUES  [").append(table.getUnits()).append("]\n");
+        for (int row = 0; row < rows; row++) {
+            preview.append(String.format(Locale.ROOT, "R%-3d", row + 1));
+            for (int column = 0; column < columns; column++) {
+                preview.append(String.format(Locale.ROOT, "%12s",
+                        table.formattedValueAt(rom, row, column)));
+            }
+            preview.append('\n');
+        }
+        if (rows < table.getRows() || columns < table.getColumns()) {
+            preview.append("Preview limited to ").append(rows).append(" rows × ")
+                    .append(columns).append(" columns. Any cell can be edited below.\n");
+        }
+        return preview.toString().trim();
+    }
+
+    private int selectedCell(EditText input, int maximum, String label) {
+        int value = Integer.parseInt(input.getText().toString().trim());
+        if (value < 1 || value > maximum) {
+            throw new IllegalArgumentException(label + " must be from 1 to " + maximum);
+        }
+        return value - 1;
+    }
+
+    private void loadTableCell() {
+        PortableRomTable table = selectedTable;
+        if (table == null || rom == null) return;
+        try {
+            int row = selectedCell(tableRowInput, table.getRows(), "Row");
+            int column = selectedCell(tableColumnInput, table.getColumns(), "Column");
+            tableValueInput.setText(table.formattedValueAt(rom, row, column));
+        } catch (RuntimeException ex) {
+            notice(ex.getMessage() == null ? "That table cell is not valid."
+                    : ex.getMessage());
+        }
+    }
+
+    private void applyTableValue() {
+        PortableRomTable table = selectedTable;
+        if (table == null || rom == null) return;
+        try {
+            int row = selectedCell(tableRowInput, table.getRows(), "Row");
+            int column = selectedCell(tableColumnInput, table.getColumns(), "Column");
+            double value = Double.parseDouble(
+                    tableValueInput.getText().toString().trim());
+            table.replaceValue(rom, row, column, value);
+            refreshRom();
+            renderSelectedTable();
+            notice("Table value applied to the working copy.");
+        } catch (RuntimeException ex) {
+            notice(ex.getMessage() == null ? "That table value is not valid."
+                    : ex.getMessage());
         }
     }
 
@@ -921,6 +1188,7 @@ public final class MainActivity extends Activity {
             }
             rom.replace(offset, replacement);
             refreshRom();
+            renderSelectedTable();
         } catch (RuntimeException ex) {
             notice(ex.getMessage() == null ? "That edit is not valid." : ex.getMessage());
         }
@@ -930,6 +1198,7 @@ public final class MainActivity extends Activity {
         if (rom != null) {
             rom.reset();
             refreshRom();
+            renderSelectedTable();
         }
     }
 

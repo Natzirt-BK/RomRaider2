@@ -1,6 +1,6 @@
 # RomRaider2 1.1.0 RC4 release readiness
 
-Status: in development. RC4 is not published yet.
+Status: public development prerelease. Final qualification is incomplete.
 
 RC4 is the first release candidate with the replacement Logger workspace. It
 also carries the reconnect work and the offline live-tuning foundation. Normal
@@ -46,5 +46,7 @@ resume during RC5 work.
 ## Release rule
 
 A failed package or desktop check is fixed in source and tested in a newly
-built candidate. Do not relabel an older artifact. Flashing and production ECU
+built candidate. Do not relabel an older artifact. An unfinished platform may
+be published only as a clearly marked preview with its missing checks stated;
+it cannot be described as qualified or stable. Flashing and production ECU
 memory writing remain outside RC4.
