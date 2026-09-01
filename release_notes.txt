@@ -1,9 +1,24 @@
-RomRaider2 ECU Studio 1.1.0 RC2
+RomRaider2 ECU Studio 1.1.0 RC3 Candidate
 ================================
 
 RomRaider2 is a modernized RomRaider-based ECU editor, logger, diagnostics,
 and log analysis application for Subaru and Mitsubishi Lancer Evolution
 VIII/IX. This release candidate is distributed through Ecu Tools by NatZirt.
+
+Changes since RC2
+-----------------
+
+- A fresh Editor with no ROM definitions now offers **Add Definitions...** or
+  **Not now** and opens Definition File Manager directly from the primary
+  action. The separate **Get Definitions...** menu action remains available.
+- Map identity and action controls now occupy separate responsive header
+  regions, preventing raw table metadata from painting underneath Favorite and
+  Search controls on Windows.
+- Calibration tables now follow the available workspace width when the
+  Inspector opens or closes while retaining their own horizontal scrolling at
+  genuinely narrow widths.
+- Linux and Windows CI now run the shared Java 21 suite and produce verified,
+  self-contained candidate ZIPs from the same source revision.
 
 New in RomRaider2
 -----------------
@@ -149,12 +164,12 @@ Validation and known limits
 
 - Linux OpenPort 2.0 Subaru ECU identification and sustained SSM/ISO9141
   logging have passed an in-car test.
-- RC2 includes an automated fix for unexpected interface disconnect recovery;
-  its connected USB-removal retest is deferred to RC3.
+- RC3 includes automated unexpected-interface-disconnect recovery coverage;
+  its connected USB-removal test remains a required candidate sign-off.
 - Mitsubishi MUT-II vehicle logging still requires connected qualification.
 - The Windows portable package passes automated build and startup checks;
   connected-hardware validation remains pending.
-- ECU memory writing and flashing are not enabled in RomRaider2 RC2.
+- ECU memory writing and flashing are not enabled in RomRaider2 1.1.0.
 - Vehicle ROMs, definitions, logger profiles, and captured logs are distributed
   separately and are not included in application or source packages.
 

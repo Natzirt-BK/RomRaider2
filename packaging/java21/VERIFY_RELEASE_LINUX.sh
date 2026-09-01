@@ -11,6 +11,8 @@ grep -q '^JAVA_VERSION="21\.' lib/runtime/release
 [[ -f lib/app/lib/linux/64/j2534.so ]]
 [[ -f config/settings.default.xml ]]
 [[ -f config/user/settings.xml ]]
+[[ -f VERSION.txt ]]
+[[ -f docs/RC3_RELEASE_READINESS.md ]]
 [[ -f customize/j2534Libraries.properties ]]
 [[ -f customize/nameSequences.properties ]]
 [[ -f customize/ncslearning.properties ]]
@@ -25,6 +27,8 @@ cmp -s config/settings.default.xml config/user/settings.xml
 grep -Eq '<display-preferences[^>]+theme="LIGHT"' \
     config/settings.default.xml
 grep -Fq 'linux=j2534.so' customize/j2534Libraries.properties
+grep -Fxq 'RomRaider2 ECU Studio 1.1.0 Release Candidate 3' VERSION.txt
+grep -Eq '^Source commit: [0-9a-f]{40}$' VERSION.txt
 
 grep -Fq 'romraider2.settings.dir=$APPDIR/../../config/user' \
     lib/app/RomRaider2.cfg

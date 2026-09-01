@@ -14,6 +14,8 @@ foreach ($RequiredFile in @(
     "app/licenses/j2534-bridge-MIT.txt",
     "config/settings.default.xml",
     "config/user/settings.xml",
+    "VERSION.txt",
+    "docs/RC3_RELEASE_READINESS.md",
     "customize/j2534Libraries.properties"
     "customize/nameSequences.properties"
     "customize/ncslearning.properties"
@@ -23,6 +25,14 @@ foreach ($RequiredFile in @(
     if (-not (Test-Path -LiteralPath (Join-Path $ReleaseRoot $RequiredFile) -PathType Leaf)) {
         throw "Required release file is missing: $RequiredFile"
     }
+}
+
+$VersionText = Get-Content -LiteralPath (Join-Path $ReleaseRoot "VERSION.txt") -Raw
+if ($VersionText -notmatch '(?m)^RomRaider2 ECU Studio 1\.1\.0 Release Candidate 3\r?$') {
+    throw "The package is not labeled as the RomRaider2 1.1.0 RC3 candidate."
+}
+if ($VersionText -notmatch '(?m)^Source commit: [0-9a-f]{40}\r?$') {
+    throw "The package does not identify an exact source commit."
 }
 
 if ((Get-Content -LiteralPath (Join-Path $ReleaseRoot "runtime/release") -Raw) -notmatch 'JAVA_VERSION="21\.') {

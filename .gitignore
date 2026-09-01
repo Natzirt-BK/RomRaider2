@@ -4,3 +4,4 @@ src/main/java/com/romraider/Version.java
 build/
 target/
 tmp/
+/settings.xml

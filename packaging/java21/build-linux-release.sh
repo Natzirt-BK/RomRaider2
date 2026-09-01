@@ -5,6 +5,7 @@ repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
 application_image=${ROMRAIDER2_APP_IMAGE:-$repo_root/build/release-candidate-1.1.0/RomRaider2}
 output_root=${1:-$repo_root/build/releases}
 release_name=${ROMRAIDER2_RELEASE_NAME:-RomRaider2_ECU_Studio_1.1.0_Linux_x64}
+release_label=${ROMRAIDER2_RELEASE_LABEL:-Release Candidate 3}
 destination=$output_root/$release_name
 archive=$output_root/$release_name.zip
 archive_name=${archive##*/}
@@ -29,13 +30,31 @@ cp -- "$repo_root/README.md" "$release/README.md"
 cp -- "$repo_root/release_notes.txt" "$release/RELEASE_NOTES.txt"
 cp -- "$repo_root/docs/ROMRAIDER2_IMPLEMENTATION_STATUS.md" "$release/docs/"
 cp -- "$repo_root/docs/JAVA_RUNTIME_MODERNIZATION.md" "$release/docs/"
+cp -- "$repo_root/docs/RC3_RELEASE_READINESS.md" "$release/docs/"
 cp -- "$repo_root/docs/DIAGNOSTIC_PRIVACY.md" "$release/docs/"
 cp -- "$repo_root/packaging/java21/VERIFY_RELEASE_LINUX.sh" "$release/"
 chmod +x "$release/VERIFY_RELEASE_LINUX.sh"
 
-commit=$(git -C "$repo_root" rev-parse HEAD)
+commit=${ROMRAIDER2_SOURCE_REVISION:-}
+if git_root=$(git -C "$repo_root" rev-parse --show-toplevel 2>/dev/null) && \
+        [[ "$git_root" = "$repo_root" ]]; then
+    head_commit=$(git -C "$repo_root" rev-parse HEAD)
+    [[ -z "$(git -C "$repo_root" status --porcelain --untracked-files=normal)" ]] || {
+        echo "Refusing to package a dirty source tree." >&2
+        exit 3
+    }
+    [[ -z "$commit" || "$commit" = "$head_commit" ]] || {
+        echo "ROMRAIDER2_SOURCE_REVISION does not match HEAD: $head_commit" >&2
+        exit 3
+    }
+    commit=$head_commit
+fi
+[[ "$commit" =~ ^[0-9a-f]{40}$ ]] || {
+    echo "Set ROMRAIDER2_SOURCE_REVISION to the extracted source commit." >&2
+    exit 3
+}
 {
-    printf 'RomRaider2 ECU Studio 1.1.0 Release Candidate 2\n'
+    printf 'RomRaider2 ECU Studio 1.1.0 %s\n' "$release_label"
     printf 'Source commit: %s\n' "$commit"
     printf 'Built: %s\n' "$(date --iso-8601=seconds)"
     printf 'Runtime: Java 21 x64 application image\n'

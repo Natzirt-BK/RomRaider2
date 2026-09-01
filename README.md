@@ -83,9 +83,9 @@ The Linux OpenPort 2.0 Subaru SSM/ISO9141 path has completed ECU identification
 and sustained in-car logging. Windows packages now include automatic 32/64-bit
 J2534 user-mode bridging, but its clean-machine and connected OpenPort tests are
 still qualification items. Mitsubishi MUT-II vehicle logging is also unverified
-on a vehicle. The RC2 unexpected USB-disconnect fix has automated coverage; its
-connected retest is deferred to RC3. ECU memory writing and flashing are not
-enabled in RomRaider2 RC2.
+on a vehicle. The current RC3 candidate has automated unexpected-USB-disconnect
+recovery coverage; its connected retest remains a manual sign-off. ECU memory
+writing and flashing are not enabled in RomRaider2 1.1.0.
 
 Release archives contain software only. Vehicle ROMs, definitions, logger
 profiles, captured logs, and owner-specific tuning material are not included.

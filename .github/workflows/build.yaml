@@ -29,8 +29,18 @@ jobs:
           timeout 10m xvfb-run -a ant clean unittest
           ant clean build-linux
           packaging/java21/audit-runtime-modules.sh build/linux/lib/RomRaider2.jar
+          packaging/java21/build-linux-app-image.sh build/release-candidate-1.1.0
+          packaging/java21/build-linux-release.sh
       - name: Check whitespace
         run: git diff --check
+      - name: Upload Linux x64 candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: RomRaider2-1.1.0-RC3-Linux-x64
+          path: |
+            build/releases/RomRaider2_ECU_Studio_1.1.0_Linux_x64.zip
+            build/releases/RomRaider2_ECU_Studio_1.1.0_Linux_x64.zip.sha256
+          if-no-files-found: error
 
   windows-x64-package:
     runs-on: windows-latest
@@ -52,14 +62,16 @@ jobs:
       - name: Build Windows application
         shell: pwsh
         run: |
+          Copy-Item packaging/default/settings.xml settings.xml
+          ant clean unittest
           ant clean build-windows
           ./packaging/java21/build-j2534-bridges.ps1
           ./packaging/java21/build-windows-app-image.ps1
           ./packaging/java21/build-windows-release.ps1
-      - name: Upload Windows x64 preview
+      - name: Upload Windows x64 candidate
         uses: actions/upload-artifact@v4
         with:
-          name: RomRaider2-Windows-x64
+          name: RomRaider2-1.1.0-RC3-Windows-x64
           path: |
             build/releases-windows/RomRaider2_ECU_Studio_1.1.0_Windows_x64.zip
             build/releases-windows/RomRaider2_ECU_Studio_1.1.0_Windows_x64.zip.sha256
