@@ -50,6 +50,13 @@ kotlin {
 
 dependencyLocking {
     lockAllConfigurations()
+    // Compose selects one checksum-audited native runtime per host.
+    // Keeping every host runtime in a single strict lock configuration makes
+    // the other operating-system entries appear missing on macOS and Windows.
+    ignoredDependencies.add(
+        "org.jetbrains.compose.desktop:desktop-jvm-*")
+    ignoredDependencies.add(
+        "org.jetbrains.skiko:skiko-awt-runtime-*")
 }
 
 tasks.test {
