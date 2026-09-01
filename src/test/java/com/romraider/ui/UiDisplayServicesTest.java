@@ -8,6 +8,7 @@ package com.romraider.ui;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import java.awt.Color;
@@ -209,7 +210,7 @@ public class UiDisplayServicesTest {
     }
 
     @Test
-    public void mainWindowControlsAreIntegratedIntoTheMenuBar() {
+    public void mainWindowUsesPlatformAppropriateChrome() {
         AbstractFrame frame = new AbstractFrame() { };
         try {
             frame.setTitle("RomRaider2 Test");
@@ -217,6 +218,23 @@ public class UiDisplayServicesTest {
             menuBar.add(new JMenu("File"));
             frame.setJMenuBar(menuBar);
             frame.setTitle("RomRaider2 Updated");
+
+            boolean macOs = System.getProperty("os.name", "")
+                    .toLowerCase(java.util.Locale.ROOT).contains("mac");
+            if (macOs) {
+                assertFalse(frame.isUndecorated());
+                assertEquals(JRootPane.NONE,
+                        frame.getRootPane().getWindowDecorationStyle());
+                assertNull(findNamed(menuBar, JButton.class,
+                        "WINDOW MINIMIZE"));
+                assertNull(findNamed(menuBar, JButton.class,
+                        "WINDOW MAXIMIZE"));
+                assertNull(findNamed(menuBar, JButton.class,
+                        "WINDOW CLOSE"));
+                assertNull(findNamed(menuBar, JLabel.class,
+                        "INTEGRATED WINDOW TITLE"));
+                return;
+            }
 
             assertTrue(frame.isUndecorated());
             assertEquals(JRootPane.NONE,

@@ -69,6 +69,8 @@ jobs:
       - name: Build Windows application
         shell: pwsh
         run: |
+          $ErrorActionPreference = "Stop"
+          $PSNativeCommandUseErrorActionPreference = $true
           Copy-Item packaging/default/settings.xml settings.xml
           ant clean unittest
           ant clean build-windows

@@ -39,8 +39,10 @@ public class IntegratedFileChooserTest {
 
     @Test
     public void kdeDialogCommandPreservesPlacesStartFilterAndMultipleMode() {
+        File temporaryDirectory = new File(System.getProperty(
+                "java.io.tmpdir"));
         IntegratedFileChooser chooser = new IntegratedFileChooser(
-                new File("/tmp"));
+                temporaryDirectory);
         chooser.setDialogTitle("Open ROM");
         chooser.setMultiSelectionEnabled(true);
         chooser.setFileFilter(new FileNameExtensionFilter(
@@ -51,7 +53,7 @@ public class IntegratedFileChooserTest {
 
         assertEquals("/usr/bin/kdialog", command.get(0));
         assertTrue(command.contains("--getopenfilename"));
-        assertTrue(command.contains(new File("/tmp").getAbsolutePath()));
+        assertTrue(command.contains(temporaryDirectory.getAbsolutePath()));
         assertTrue(command.contains("*.bin *.hex|ROM images"));
         assertTrue(command.contains("--multiple"));
         assertTrue(command.contains("--separate-output"));
