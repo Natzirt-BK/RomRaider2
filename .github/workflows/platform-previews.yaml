@@ -44,9 +44,12 @@ jobs:
           ditto -c -k --sequesterRsrc --keepParent \
             "build/macos-${{ matrix.package_arch }}/RomRaider2.app" \
             "build/RomRaider2_1.1.0_RC4_macOS_${{ matrix.package_arch }}.zip"
-          shasum -a 256 \
-            "build/RomRaider2_1.1.0_RC4_macOS_${{ matrix.package_arch }}.zip" \
-            >"build/RomRaider2_1.1.0_RC4_macOS_${{ matrix.package_arch }}.zip.sha256"
+          (
+            cd build
+            shasum -a 256 \
+              "RomRaider2_1.1.0_RC4_macOS_${{ matrix.package_arch }}.zip" \
+              >"RomRaider2_1.1.0_RC4_macOS_${{ matrix.package_arch }}.zip.sha256"
+          )
       - name: Check whitespace
         run: git diff --check
       - name: Upload unsigned macOS preview
@@ -76,9 +79,11 @@ jobs:
           mkdir -p build/platform-previews
           cp platform/android/app/build/outputs/apk/debug/app-debug.apk \
             build/platform-previews/RomRaider2_1.1.0_RC4_Android_preview2-debug.apk
-          sha256sum \
-            build/platform-previews/RomRaider2_1.1.0_RC4_Android_preview2-debug.apk \
-            >build/platform-previews/RomRaider2_1.1.0_RC4_Android_preview2-debug.apk.sha256
+          (
+            cd build/platform-previews
+            sha256sum RomRaider2_1.1.0_RC4_Android_preview2-debug.apk \
+              >RomRaider2_1.1.0_RC4_Android_preview2-debug.apk.sha256
+          )
       - name: Check whitespace
         run: git diff --check
       - name: Upload Android debug preview
