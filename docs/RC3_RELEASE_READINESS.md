@@ -1,11 +1,11 @@
 # RomRaider2 1.1.0 RC3 release readiness
 
-Status: development milestone complete; the next RC3 package has not been
-published.
+Status: RC3 prerelease. Stable promotion remains blocked on the connected
+checks below.
 
-RC3 can be published as a prerelease after one source commit produces both
-candidate ZIPs and the required checks are recorded against those exact files.
-RC2 remains the public download until then.
+The RC3 Windows and Linux ZIPs must come from the same source commit. Manual
+results are recorded against those exact files so a later stable promotion does
+not substitute a different build.
 
 ## Automated checks
 
@@ -35,7 +35,7 @@ Use `RC3_QUALIFICATION_RECORD.md` for each completed pass. Keep ROMs,
 definitions, full ECU identifiers, captures, and owner information out of the
 record.
 
-## Release rule
+## Stable promotion rule
 
 A failed hardware or package check means the problem is fixed and a new
 candidate is built. Do not relabel an older artifact. Flashing and ECU memory

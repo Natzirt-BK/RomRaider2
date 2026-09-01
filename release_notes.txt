@@ -1,8 +1,8 @@
 RomRaider2 ECU Studio 1.1.0 RC3
 ================================
 
-RC3 is still in development. The public download remains RC2 until the new
-Windows and Linux packages pass their release checks.
+RC3 is published as a prerelease. The Windows and Linux packages are built from
+the same source revision and include their own Java 21 runtime.
 
 Changes since RC2
 -----------------
@@ -58,8 +58,8 @@ Runtime and packages
 - Updated JNA, jSerialComm, and Log4j dependencies replace the old Java-era
   runtime pieces.
 
-Known limits before RC3 can ship
---------------------------------
+Known limits
+------------
 
 - The new Logger layout has passed automated tests and a Linux desktop visual
   check. A Windows visual pass is still required.

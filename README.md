@@ -12,17 +12,18 @@ logging and unfinished ECU-write research.
 
 ## Downloads
 
-The latest public build is **RomRaider2 1.1.0 RC2**.
+The latest public build is **RomRaider2 1.1.0 RC3**. RC3 is a prerelease while
+the remaining connected Windows and vehicle checks are completed.
 
 | Platform | Package |
 | --- | --- |
-| Windows 10/11 x64 | [Download the portable Windows ZIP](https://github.com/Natzirt-BK/RomRaider2/releases/download/romraider2-1.1.0-rc2/RomRaider2_ECU_Studio_1.1.0_Windows_x64.zip) |
-| Linux x64 | [Download the portable Linux ZIP](https://github.com/Natzirt-BK/RomRaider2/releases/download/romraider2-1.1.0-rc2/RomRaider2_ECU_Studio_1.1.0_Linux_x64.zip) |
+| Windows 10/11 x64 | [Download the portable Windows ZIP](https://github.com/Natzirt-BK/RomRaider2/releases/download/romraider2-1.1.0-rc3/RomRaider2_ECU_Studio_1.1.0_Windows_x64.zip) |
+| Linux x64 | [Download the portable Linux ZIP](https://github.com/Natzirt-BK/RomRaider2/releases/download/romraider2-1.1.0-rc3/RomRaider2_ECU_Studio_1.1.0_Linux_x64.zip) |
 
 Java 21 is included in both packages. Extract the ZIP before running it. On
 Windows, open `RomRaider2.exe`. On Linux, open `bin/RomRaider2`.
 
-[Release notes, checksums, and every RC2 download](https://github.com/Natzirt-BK/RomRaider2/releases/tag/romraider2-1.1.0-rc2)
+[Release notes, checksums, and every RC3 download](https://github.com/Natzirt-BK/RomRaider2/releases/tag/romraider2-1.1.0-rc3)
 
 ## Where it stands
 

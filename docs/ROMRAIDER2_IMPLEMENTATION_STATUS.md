@@ -31,8 +31,8 @@ same structure, theme, empty-state behavior, and navigation on Windows and
 Linux. Automated coverage protects the new layout, workspace shortcuts, charts,
 and the DM20 parser.
 
-RC3 is not ready to publish yet. It still needs final packages and connected
-qualification against the exact candidate checksums.
+RC3 is published as a prerelease. Connected qualification against the exact
+release checksums remains open before stable promotion.
 
 ## Safety boundary
 
