@@ -882,4 +882,16 @@ public class DmInit {
     public int getBuildNum() {
         return buildNum;
     }
+
+    public boolean isRamTuneEnabled() {
+        return isRamTuneEnabled;
+    }
+
+    public int getRamTuneSignatureAddress() {
+        return ramTuneSignatureAddress;
+    }
+
+    public int getRamTuneLutSize() {
+        return ramTuneLutSize;
+    }
 }

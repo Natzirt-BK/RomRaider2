@@ -92,3 +92,24 @@ The connected USB-removal retest is deferred to RC3. RC2 is qualified for the
 normal connection, capture, stop, disconnect, and reconnect workflow. Its new
 unexpected-disconnect recovery has automated coverage but is not claimed as a
 completed connected-vehicle qualification.
+
+## RC3 findings
+
+The August 31, 2026 parked test used the published 1.1.0 RC3 Linux image
+(`5f204ea527d6b0a648925ccb99d2667f944605642a359835c5e16569fa655356`), a
+2005 Forester XT, OpenPort 2.0, SSM/ISO9141, and a v370 Logger definition. The
+ECU ID matched the definition; only a redacted match is recorded here.
+
+ECU identification and live values passed with engine speed, battery voltage,
+coolant temperature, and throttle opening angle selected. The first capture
+ran for 133.557 seconds and recorded 1,601 samples. A normal disconnect and
+reconnect required no application restart, and the second capture ran for
+44.702 seconds with 536 samples. Both files closed cleanly.
+
+Removing the OpenPort USB connection during a third capture closed that file
+cleanly after 18.279 seconds and 220 samples. Reconnecting USB restored live
+polling without restarting the application or computer. While USB was absent,
+however, the status remained at Connecting, retries ran once per second, full
+initialization errors were repeatedly written to the system log, and an empty
+serial-port fallback was attempted. Those recovery-state problems keep the
+full checkpoint open. Engine-running and Analysis checks remain deferred.

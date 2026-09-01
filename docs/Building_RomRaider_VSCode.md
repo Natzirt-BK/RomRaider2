@@ -6,19 +6,22 @@ release images include their own runtime.
 
 ## Development setup
 
-1. Install Git, a 64-bit Java 21 JDK, Apache Ant 1.10.x, and Visual Studio
-   Code with the Java Extension Pack.
+1. Install Git, a 64-bit Java 21 JDK, Apache Ant 1.10.x, Gradle 9.5.0, and
+   Visual Studio Code with the Java Extension Pack.
 2. Set `JAVA_HOME` to the Java 21 JDK and add Ant's `bin` directory to `PATH`.
    `JRE_DIR` is no longer needed.
 3. Clone the repository and open its root folder in Visual Studio Code.
-4. Run `ant unittest` for the complete build and regression suite, or
-   `ant build` for application JARs only. Use `ant clean build` for release
-   artifacts so Ant cannot reuse stale class files.
-5. Run `packaging/java21/build-linux-app-image.sh` after a successful build to
-   create the self-contained Linux application image. Native packages must be
-   built on their target operating system. Packaging verifies the hashes in
-   `packaging/java21/audited-dependencies.sha256` before staging audited runtime
-   dependencies.
+4. Run `ant clean unittest` for the main build and regression suite.
+5. Build the application JAR for the current platform with
+   `ant clean build-linux` or `ant clean build-windows`.
+6. Run Gradle with `--no-daemon` for the `:ui:compose-logger:test` and
+   `:ui:compose-logger:stageLoggerWorkspace` tasks. This tests and stages the
+   matching Compose Desktop Logger runtime.
+7. Run `packaging/java21/build-linux-app-image.sh` or
+   `packaging/java21/build-windows-app-image.ps1` to create the self-contained
+   application image. Native packages must be built on their target operating
+   system. Packaging verifies the checked-in dependency hashes, platform
+   renderer, and license set before accepting the image.
 
 The main classes for IDE launch configurations remain:
 

@@ -27,8 +27,8 @@ import com.romraider.logger.ecu.comms.manager.QueryManager;
 import com.romraider.logger.ecu.comms.manager.QueryManagerImpl;
 import com.romraider.logger.ecu.comms.query.EcuInitCallback;
 import com.romraider.logger.ecu.definition.LoggerData;
+import com.romraider.logger.api.LoggerStatusListener;
 import com.romraider.logger.ecu.ui.MessageListener;
-import com.romraider.logger.ecu.ui.StatusChangeListener;
 import com.romraider.logger.ecu.ui.handler.DataUpdateHandler;
 import com.romraider.logger.ecu.ui.handler.file.FileLoggerControllerSwitchMonitor;
 
@@ -49,7 +49,7 @@ public final class LoggerControllerImpl implements LoggerController {
     }
 
     @Override
-    public synchronized void addListener(StatusChangeListener listener) {
+    public synchronized void addListener(LoggerStatusListener listener) {
         checkNotNull(listener, "listener");
         queryManager.addListener(listener);
     }

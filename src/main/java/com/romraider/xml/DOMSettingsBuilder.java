@@ -444,6 +444,11 @@ public final class DOMSettingsBuilder {
         IIOMetadataNode tabs = new IIOMetadataNode("tabs");
         tabs.setAttribute("selected", String.valueOf(settings.getLoggerSelectedTabIndex()));
         tabs.setAttribute("showlist", String.valueOf(settings.getLoggerParameterListState()));
+        tabs.setAttribute("workspace", settings.getLoggerWorkspaceView().name());
+        if (settings.getLoggerWorkspaceDarkTheme() != null) {
+            tabs.setAttribute("workspace-dark", String.valueOf(
+                    settings.getLoggerWorkspaceDarkTheme()));
+        }
         loggerSettings.appendChild(tabs);
 
         // definition path

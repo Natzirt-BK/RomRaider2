@@ -18,7 +18,7 @@
         <autoConnectOnStartup value="false"/>
         <serial port="" refresh="true"/>
         <protocol name="SSM" transport="ISO9141" module="ECU" fastpoll="false" library=""/>
-        <tabs selected="0" showlist="true"/>
+        <tabs selected="0" showlist="true" workspace="OVERVIEW"/>
         <filelogging path="logs" switchid="S20" active="false" absolutetimestamp="false"/>
         <debug level="info"/>
         <plugins/>

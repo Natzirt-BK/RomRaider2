@@ -212,14 +212,19 @@ by `jdeps`; its output remains an audit input rather than permission to remove
 modules before plugin and hardware validation.
 
 `packaging/java21/build-linux-app-image.sh` now builds a reproducible Linux
-`jpackage --type app-image` using a Java 21 JDK. It verifies the expected module
-audit, stages the application and common libraries, includes only Linux 64-bit
-native libraries and external-plugin descriptors, and writes launcher-controlled
-J2534, native-library, and plugin paths.
+`jpackage --type app-image` using a Java 21 JDK. The Compose Logger must first
+be tested and staged with Gradle 9.5.0. The packager verifies the expected
+module audit, stages the application and common libraries plus the Linux x64
+Compose renderer, includes only Linux 64-bit native libraries and
+external-plugin descriptors, and writes launcher-controlled J2534,
+native-library, and plugin paths. The Windows path follows the same steps with
+the Windows x64 renderer.
 Before staging, the packager verifies the checked-in SHA-256 lock for the
-audited JNA, jSerialComm, and Log4j artifacts. A missing, replaced, or stale
-runtime dependency therefore fails the release build instead of silently
-producing a package that differs from the tested and licensed set.
+audited JNA, jSerialComm, and Log4j artifacts. Compose dependencies are locked
+by Gradle and checked against SHA-256 verification metadata; both platform
+packages also require the Compose, Apache, and Skia notices. A missing,
+replaced, or stale runtime dependency therefore fails the release build instead
+of silently producing a package that differs from the tested and licensed set.
 The application JAR embeds its localization bundles while retaining the
 existing external `i18n` directory as a development override, so the packaged
 application does not depend on the repository working directory.

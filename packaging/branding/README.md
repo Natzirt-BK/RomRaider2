@@ -18,8 +18,6 @@ The application name is **RomRaider2**.
   - Master transparent `.ROM` file association icon.
 - `01_master_assets/romraider2_splash_master.png`
   - Master splash/about/installer artwork.
-- `01_master_assets/romraider2_ui_mockup_reference.png`
-  - UI design reference. It is not intended to be rendered as the program background.
 
 ## Ready-to-use output
 
@@ -45,10 +43,9 @@ The application name is **RomRaider2**.
 3. Give Java/Swing several icon sizes through `Window#setIconImages(...)` so the OS can select an appropriate resolution.
 4. Use the `.ROM` icon only for ROM file associations and ROM-oriented file views.
 5. Use the splash artwork for startup, installer, about screen, release pages, or marketing material. Do not leave the splash visible during slow ECU operations.
-6. Treat the UI mockup as a layout and styling target, not a literal texture or screenshot layer.
-7. Keep toolbar/navigation icons as clean vector SVGs where possible. These branding images are raster PNG masters and should not be mistaken for editable vectors.
-8. Do not add extra glow, chrome shine, racing flames, or unrelated automotive imagery. The approved finish is restrained satin/matte graphite with red accents.
-9. Verify the `RomRaider2` project name and any upstream naming/trademark obligations before public distribution.
+6. Keep toolbar/navigation icons as clean vector SVGs where possible. These branding images are raster PNG masters and should not be mistaken for editable vectors.
+7. Do not add extra glow, chrome shine, racing flames, or unrelated automotive imagery. The approved finish is restrained satin/matte graphite with red accents.
+8. Verify the `RomRaider2` project name and any upstream naming/trademark obligations before public distribution.
 
 ## Suggested Java icon loading
 

@@ -76,10 +76,16 @@
         <property name="ext.windows" value="bat" />
         <property name="os.linux" value="linux" />
         <property name="ext.linux" value="sh" />
+        <property name="os.macos" value="macos" />
+        <property name="ext.macos" value="sh" />
 
-        <condition property="os" value="${os.windows}" else="${os.linux}">
+        <condition property="os" value="${os.windows}">
             <os family="windows" />
         </condition>
+        <condition property="os" value="${os.macos}">
+            <os family="mac" />
+        </condition>
+        <property name="os" value="${os.linux}" />
 
         <condition property="is.windows">
             <equals arg1="${os}" arg2="${os.windows}" />
@@ -141,6 +147,12 @@
         <path id="linux.classpath">
             <fileset dir="lib/common" includes="*.jar" />
             <fileset dir="lib/linux" includes="*.jar" />
+        </path>
+
+        <path id="macos.classpath">
+            <fileset dir="lib/common" includes="*.jar" />
+            <fileset dir="lib/macos" includes="*.jar"
+                     erroronmissingdir="false" />
         </path>
 
         <path id="test.classpath">
@@ -219,6 +231,9 @@
     <target name="compile-linux" depends="prepare" description="Compile the source directory for Linux">
         <macro_compile os="${os.linux}" srcdir="${src.java.dir}" destdir="${classes.dir}"  classpathref="linux.classpath"/>
     </target>
+    <target name="compile-macos" depends="prepare" description="Compile the source directory for macOS">
+        <macro_compile os="${os.macos}" srcdir="${src.java.dir}" destdir="${classes.dir}" classpathref="macos.classpath"/>
+    </target>
 
     <!-- =================================================================== -->
     <!-- Build jar files                                                     -->
@@ -228,6 +243,9 @@
     </target>
     <target name="build-windows" depends="compile-windows" description="Build the Jar file for Windows">
         <macro_jar os="${os.windows}" basedir="${classes.dir}"/>
+    </target>
+    <target name="build-macos" depends="compile-macos" description="Build the Jar file for macOS">
+        <macro_jar os="${os.macos}" basedir="${classes.dir}"/>
     </target>
     <target name="build" depends="build-windows, build-linux" description="Build the Jar files for Linux and Windows"/>
 
@@ -364,7 +382,8 @@
             <manifestclasspath property="@{os}.jar.classpath" jarfile="${jar.package}">
                 <classpath>
                     <fileset dir="lib/common" includes="*.jar" />
-                    <fileset dir="lib/@{os}" includes="*.jar" />
+                    <fileset dir="lib/@{os}" includes="*.jar"
+                             erroronmissingdir="false" />
                 </classpath>
             </manifestclasspath>
             <manifest file="${build.dir}/@{os}/MANIFEST.MF">

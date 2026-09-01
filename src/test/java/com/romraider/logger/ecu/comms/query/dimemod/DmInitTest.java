@@ -26,6 +26,9 @@ public class DmInitTest {
         assertEquals(0x1000, discovery.getCurrentErrorCodesAddress());
         assertEquals(0x1010, discovery.getMemorizedErrorCodesAddress());
         assertEquals(0x1030, discovery.getActiveInputsAddress());
+        assertFalse(discovery.isRamTuneEnabled());
+        assertEquals(0, discovery.getRamTuneSignatureAddress());
+        assertEquals(0, discovery.getRamTuneLutSize());
 
         assertTrue(discovery.updateRuntimeData(0, 0x01,
                 new int[] {0x00010001}, new int[] {0x80000000}));

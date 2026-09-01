@@ -4,6 +4,7 @@ set -euo pipefail
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
 jdk_root=${JAVA_HOME:?Set JAVA_HOME to a Java 21 JDK}
 application_jar=${ROMRAIDER2_JAR:-$repo_root/build/linux/lib/RomRaider2.jar}
+compose_root=$repo_root/build/compose/linux
 output_root=${1:-$repo_root/build/java21}
 image_name=RomRaider2
 destination=$output_root/$image_name
@@ -22,6 +23,10 @@ done
 }
 [[ -f "$application_jar" ]] || {
     echo "Build RomRaider2 first; jar not found: $application_jar" >&2
+    exit 1
+}
+[[ -f "$compose_root/romraider2-compose-logger-1.1.0-rc4.jar" ]] || {
+    echo "Build the Compose Logger workspace before packaging." >&2
     exit 1
 }
 class_version=$(
@@ -66,6 +71,7 @@ input=$stage/input
 mkdir -p "$input/lib/common" "$input/lib/linux/64" "$input/lib" \
     "$input/plugins" "$input/licenses"
 cp -- "$application_jar" "$input/RomRaider2.jar"
+cp -- "$compose_root"/*.jar "$input/"
 for dependency in "$repo_root"/lib/common/*.jar; do
     case "${dependency##*/}" in
         Graph3d.jar|j3dcore.jar|j3dutils.jar|vecmath.jar) continue ;;
@@ -183,6 +189,13 @@ for customization in nameSequences.properties ncslearning.properties \
         ssmlearning.properties warningSound.wav; do
     [[ -f "$destination/customize/$customization" ]] || {
         echo "Required customization asset is missing: $customization" >&2
+        exit 5
+    }
+done
+for compose_notice in Compose-Desktop-1.12.0.txt Apache-2.0.txt \
+        Skia-BSD-3-Clause.txt; do
+    [[ -f "$destination/lib/app/licenses/$compose_notice" ]] || {
+        echo "Required Compose license file is missing: $compose_notice" >&2
         exit 5
     }
 done

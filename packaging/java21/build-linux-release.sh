@@ -5,7 +5,7 @@ repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
 application_image=${ROMRAIDER2_APP_IMAGE:-$repo_root/build/release-candidate-1.1.0/RomRaider2}
 output_root=${1:-$repo_root/build/releases}
 release_name=${ROMRAIDER2_RELEASE_NAME:-RomRaider2_ECU_Studio_1.1.0_Linux_x64}
-release_label=${ROMRAIDER2_RELEASE_LABEL:-Release Candidate 3}
+release_label=${ROMRAIDER2_RELEASE_LABEL:-Release Candidate 4}
 destination=$output_root/$release_name
 archive=$output_root/$release_name.zip
 archive_name=${archive##*/}
@@ -49,8 +49,8 @@ cp -- "$repo_root/README.md" "$release/README.md"
 cp -- "$repo_root/release_notes.txt" "$release/RELEASE_NOTES.txt"
 cp -- "$repo_root/docs/ROMRAIDER2_IMPLEMENTATION_STATUS.md" "$release/docs/"
 cp -- "$repo_root/docs/JAVA_RUNTIME_MODERNIZATION.md" "$release/docs/"
-cp -- "$repo_root/docs/RC3_RELEASE_READINESS.md" "$release/docs/"
-cp -- "$repo_root/docs/RC3_QUALIFICATION_RECORD.md" "$release/docs/"
+cp -- "$repo_root/docs/RC4_RELEASE_READINESS.md" "$release/docs/"
+cp -- "$repo_root/docs/RC4_QUALIFICATION_RECORD.md" "$release/docs/"
 cp -- "$repo_root/docs/LINUX_IN_CAR_QUALIFICATION.md" "$release/docs/"
 cp -- "$repo_root/docs/DIAGNOSTIC_PRIVACY.md" "$release/docs/"
 cp -- "$repo_root/packaging/java21/VERIFY_RELEASE_LINUX.sh" "$release/"

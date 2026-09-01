@@ -25,6 +25,19 @@ Windows, open `RomRaider2.exe`. On Linux, open `bin/RomRaider2`.
 
 [Release notes, checksums, and every RC3 download](https://github.com/Natzirt-BK/RomRaider2/releases/tag/romraider2-1.1.0-rc3)
 
+### Experimental Android preview
+
+Android 8.0 and newer users can also
+[download RC4 Android Preview 1](https://github.com/Natzirt-BK/RomRaider2/releases/download/romraider2-1.1.0-rc4-android-preview1/RomRaider2_1.1.0_RC4_Android_preview1-debug.apk).
+This is an early, debug-signed test build rather than the desktop RC4 release.
+It supports offline ROM byte editing, RomRaider CSV review, Logger definition
+and profile import, simulated logging, and early OpenPort 2.0 preparation. The
+read-only Subaru SSM K-Line Logger still awaits RC5 vehicle qualification. ECU
+writing and flashing are not present.
+
+Read the [Android preview test guide](docs/ANDROID_PREVIEW_TESTING.md) before
+sideloading it or connecting an adapter.
+
 ## Where it stands
 
 | Area | Current status |
@@ -33,6 +46,7 @@ Windows, open `RomRaider2.exe`. On Linux, open `bin/RomRaider2`.
 | Subaru SSM Logger | Linux OpenPort 2.0 identification and sustained logging tested in car |
 | Windows J2534 | Portable build and automatic 32/64-bit routing implemented; connected qualification is still open |
 | Mitsubishi Lancer Evolution MUT-II | Read-only logger foundation implemented; vehicle qualification is still open |
+| Android | Experimental editing and Logger preview available; connected SSM qualification is still open |
 | DimeMod | Discovery, diagnostics, and Logger parameters retained; RAM writing stays hidden and disabled |
 | ECU flashing | Not available in RomRaider2 1.1.0 |
 

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">RomRaider2 Preview</string>
+    <string name="rom_summary">%1$s  /  %2$s  /  %3$s</string>
+    <plurals name="rom_bytes">
+        <item quantity="one">%d byte</item>
+        <item quantity="other">%d bytes</item>
+    </plurals>
+    <string name="rom_unchanged">unchanged</string>
+    <string name="logger_preview_start">START OFFLINE PREVIEW</string>
+    <string name="logger_preview_stop">STOP OFFLINE PREVIEW</string>
+    <string name="logger_live_start">START READ-ONLY LOGGER</string>
+    <string name="logger_live_stop">STOP LIVE LOGGER</string>
+    <string name="logger_live_identified">READ-ONLY LOGGER\nECU %1$s\nReady: %2$d  /  unavailable: %3$d\nWaiting for the first values…</string>
+    <string name="logger_live_stopped">%1$s\n%2$s</string>
+    <plurals name="logger_live_recorded">
+        <item quantity="one">%d channel value recorded.</item>
+        <item quantity="other">%d channel values recorded.</item>
+    </plurals>
+    <plurals name="rom_changed_ranges">
+        <item quantity="one">%d changed range</item>
+        <item quantity="other">%d changed ranges</item>
+    </plurals>
+</resources>

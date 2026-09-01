@@ -1,83 +1,83 @@
-RomRaider2 ECU Studio 1.1.0 RC3
+RomRaider2 ECU Studio 1.1.0 RC4
 ================================
 
-RC3 is published as a prerelease. The Windows and Linux packages are built from
-the same source revision and include their own Java 21 runtime.
+RC4 is in development. These notes describe the current candidate work and do
+not announce a public release.
 
-Changes since RC2
+Changes since RC3
 -----------------
 
 Logger
 
-- Rebuilt the main Logger layout around Data, Graph, Dashboard, MAF, Injector,
-  Dyno, and Analysis workspaces.
-- Added one searchable channel rail for parameters, switches, and external
-  sensors, with a live selected-channel count.
-- Added useful no-data screens to Data, Graph, Dashboard, MAF, Injector, and
-  Dyno instead of leaving large blank panels.
-- Added clear Graph controls for pause/resume, combined graphs, and reset.
-- Moved Dashboard gauge style and min/max reset into the Dashboard where they
-  belong.
-- Added Ctrl+1 through Ctrl+7 shortcuts for fast workspace switching. The last
-  selected workspace is still restored at startup.
-- Cleaned up the Logger connection bar, recording controls, status display,
-  table spacing, chart colours, and Light/Dark theme handling.
-- Changed the missing-definition prompt to **Add definitions** and **Not now**.
-  The Add action opens the real managed definition installer.
-- Added parser tests around DM20 discovery data, runtime channels, and DimeMod
-  diagnostic codes.
+- Added the first replacement Logger workspace using Compose Desktop while
+  keeping one ECU session and one selected-channel list.
+- Added Overview, Data, Graph, and Dashboard views with responsive normal and
+  narrow layouts.
+- Added Light and Dark themes, clearer channel colours, live telemetry status,
+  recording controls, search, and Ctrl+1 through Ctrl+4 navigation.
+- Persisted the selected replacement view and theme.
+- Connected the replacement views to the real session, recording, channel, and
+  live-sample services.
+- Added an explicit Reconnecting state with a capped 1/2/4/5-second retry
+  schedule and clearer disconnected feedback.
 
-Editor
+Editor and live tuning
 
-- A fresh install with no ROM definitions now offers **Add Definitions...** or
-  **Not now** and opens Definition File Manager from the main action.
-- Fixed map headers painting under Favorite and Search controls on Windows.
-- Calibration tables now resize with the workspace while keeping horizontal
-  scrolling when the window is genuinely narrow.
-- Improved tab interaction, Favorites, recent/changed maps, ROM comparison,
-  grouped undo/redo, notes, recovery, and integrated live data.
-
-Definitions and files
-
-- Logger definitions can be validated, installed, backed up, activated, and
-  reloaded without using the old forum updater.
-- Failed definition activation restores the previous file and settings.
-- The Logger can close and reopen without an optional cars_def.xml file.
-- Vehicle ROMs, definitions, profiles, and logs are not included in application
-  or source packages.
+- Added a UI-neutral live-tuning plan with bounded changes, overlap checks,
+  stale-value protection, identity checks, and readback verification.
+- Added projection of real changed Editor table bytes into an offline plan.
+- Added a read-only Tune inspector with selected/all-changed scope, byte ranges,
+  before/after values, and visible safety gates.
+- Covered 3D table row gaps and X/Y axis changes in the offline projection.
+- Added preflight checks for Subaru, the engine ECU, DimeMod state, mapped
+  definitions, runtime RAM Tune discovery, and an exact ECU identity match.
+- Kept execution restricted to the mock ECU transport. Production ECU memory
+  writing and flashing remain unavailable.
+- Improved the DimeMod panel and Editor inspector so mapped support and runtime
+  RAM Tune discovery are reported separately.
 
 Runtime and packages
 
-- Linux and Windows use the same Java 21 source and regression suite.
-- Both release ZIPs include a private runtime; a separate Java install is not
-  needed.
-- Windows checks both J2534 registry views and routes matching drivers directly
-  or through the bundled x86/x64 bridge.
-- Linux and Windows packages keep rolling diagnostics inside their own data
-  location and never upload them automatically.
-- Updated JNA, jSerialComm, and Log4j dependencies replace the old Java-era
-  runtime pieces.
+- Added the Compose Logger and its platform renderer to the self-contained
+  Linux and Windows package checks.
+- Added the required Compose and Skia license notices.
+- Added early native macOS packaging for both Apple silicon and Intel, plus a
+  SteamOS Desktop Mode bundle. These remain development previews. The Android
+  foundation is available separately as an explicitly experimental test APK,
+  not as a desktop RC4 package.
+- Expanded the Android foundation with traditional RomRaider CSV review and a
+  read-only OpenPort preparation path for USB permission, firmware, and vehicle
+  voltage checks.
+- Wired an Android foreground-only Subaru SSM K-Line logger from exact ECU
+  identification through profile resolution, bounded address reads, converted
+  live values, and CSV recording. It rejects transmission-only parameters,
+  exposes no ECU writes, and remains labeled for RC5 connected qualification.
+- Fixed packaged settings precedence so an unrelated `settings.xml` beside the
+  launch directory cannot replace the package-owned configuration.
+- Updated candidate labels, verification scripts, and workflow artifacts for
+  RC4 while leaving RC3 as the latest public download.
+
+Checks completed
+----------------
+
+- The shared Java 21 suite passes with the live-tuning and settings-precedence
+  regression tests.
+- Compose tests pass and the replacement workspace stages successfully.
+- The Linux Java 21 application image builds and its packaged launcher starts
+  under a clean virtual display.
+- Overview, Data, Graph, Dashboard, Dark, and narrow layouts have passed the
+  current Linux visual review.
 
 Known limits
 ------------
 
-- The new Logger layout has passed automated tests and a Linux desktop visual
-  check. A Windows visual pass is still required.
-- Windows OpenPort/J2534 needs connected clean-machine testing.
-- Linux needs the connected USB-removal/reconnect test repeated against the
-  final candidate.
-- Mitsubishi MUT-II logging still needs a vehicle test.
-- ECU flashing and normal-user ECU memory writing are not available in 1.1.0.
-
-What has already passed
------------------------
-
-- Linux OpenPort 2.0 ECU identification and sustained Subaru SSM/ISO9141
-  logging passed in car.
-- The Java 21 unit suite passes with the Logger workspace and DimeMod parser
-  coverage.
-- Windows and Linux package workflows build from the same source revision and
-  verify their bundled files and checksums.
+- RC4 is not published yet.
+- The replacement Logger does not yet cover every specialized legacy
+  workspace.
+- The Windows package and visual pass wait until the Windows VM is available.
+- No new in-car qualification is planned until RC5.
+- Mitsubishi Lancer Evolution MUT-II still needs vehicle qualification.
+- ECU flashing and production ECU memory writing are not available.
 
 License and upstream work
 -------------------------

@@ -13,7 +13,7 @@ import org.junit.Test;
 
 import com.romraider.logger.ecu.comms.manager.QueryManager;
 import com.romraider.logger.ecu.definition.LoggerData;
-import com.romraider.logger.ecu.ui.StatusChangeListener;
+import com.romraider.logger.api.LoggerStatusListener;
 import com.romraider.logger.ecu.ui.handler.file.FileLoggerControllerSwitchMonitor;
 
 public class LoggerControllerImplTest {
@@ -93,7 +93,7 @@ public class LoggerControllerImplTest {
         @Override public void stop() { }
         @Override public boolean isRunning() { return false; }
         @Override public Thread getThread() { return null; }
-        @Override public void addListener(StatusChangeListener listener) { }
+        @Override public void addListener(LoggerStatusListener listener) { }
         @Override public void addQuery(String callerId, LoggerData loggerData) { }
         @Override public void removeQuery(String callerId, LoggerData loggerData) { }
         @Override public void setFileLoggerSwitchMonitor(
@@ -144,7 +144,7 @@ public class LoggerControllerImplTest {
 
         @Override public boolean isRunning() { return stopSignal.getCount() > 0; }
         @Override public Thread getThread() { return null; }
-        @Override public void addListener(StatusChangeListener listener) { }
+        @Override public void addListener(LoggerStatusListener listener) { }
         @Override public void addQuery(String callerId, LoggerData loggerData) { }
         @Override public void removeQuery(String callerId, LoggerData loggerData) { }
         @Override public void setFileLoggerSwitchMonitor(

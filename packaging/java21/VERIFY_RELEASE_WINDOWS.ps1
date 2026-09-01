@@ -7,6 +7,11 @@ foreach ($RequiredFile in @(
     "RomRaider2 Logger.exe",
     "runtime/release",
     "app/RomRaider2.jar",
+    "app/romraider2-compose-logger-1.1.0-rc4.jar",
+    "app/org-jetbrains-skiko-skiko-awt-runtime-windows-x64-0.150.1.jar",
+    "app/licenses/Compose-Desktop-1.12.0.txt",
+    "app/licenses/Apache-2.0.txt",
+    "app/licenses/Skia-BSD-3-Clause.txt",
     "app/lib/windows/64/phidget21.dll",
     "app/lib/windows/j2534/j2534-bridge-32.exe",
     "app/lib/windows/j2534/j2534-bridge-64.exe",
@@ -15,8 +20,8 @@ foreach ($RequiredFile in @(
     "config/settings.default.xml",
     "config/user/settings.xml",
     "VERSION.txt",
-    "docs/RC3_RELEASE_READINESS.md",
-    "docs/RC3_QUALIFICATION_RECORD.md",
+    "docs/RC4_RELEASE_READINESS.md",
+    "docs/RC4_QUALIFICATION_RECORD.md",
     "docs/WINDOWS_RELEASE_CHECKLIST.md",
     "customize/j2534Libraries.properties"
     "customize/nameSequences.properties"
@@ -28,10 +33,13 @@ foreach ($RequiredFile in @(
         throw "Required release file is missing: $RequiredFile"
     }
 }
+if (Test-Path -LiteralPath (Join-Path $ReleaseRoot "app/org-jetbrains-skiko-skiko-awt-runtime-linux-x64-0.150.1.jar")) {
+    throw "The Windows package contains the Linux Compose renderer."
+}
 
 $VersionText = Get-Content -LiteralPath (Join-Path $ReleaseRoot "VERSION.txt") -Raw
-if ($VersionText -notmatch '(?m)^RomRaider2 ECU Studio 1\.1\.0 Release Candidate 3\r?$') {
-    throw "The package is not labeled as the RomRaider2 1.1.0 RC3 candidate."
+if ($VersionText -notmatch '(?m)^RomRaider2 ECU Studio 1\.1\.0 Release Candidate 4\r?$') {
+    throw "The package is not labeled as the RomRaider2 1.1.0 RC4 candidate."
 }
 if ($VersionText -notmatch '(?m)^Source commit: [0-9a-f]{40}\r?$') {
     throw "The package does not identify an exact source commit."

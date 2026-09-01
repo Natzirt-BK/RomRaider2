@@ -34,16 +34,16 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
+import com.romraider.logger.api.LoggerStatusListener;
 import com.romraider.logger.ecu.comms.query.Response;
 import com.romraider.logger.ecu.definition.ConvertorUpdateListener;
 import com.romraider.logger.ecu.definition.LoggerData;
 import com.romraider.logger.ecu.ui.EcuRelatedMessageListener;
 import com.romraider.logger.ecu.ui.MessageListener;
-import com.romraider.logger.ecu.ui.StatusChangeListener;
 
 public final class FileUpdateHandlerImpl implements FileUpdateHandler, ConvertorUpdateListener {
     private final Map<LoggerData, Integer> loggerDatas = synchronizedMap(new LinkedHashMap<LoggerData, Integer>());
-    private final List<StatusChangeListener> listeners = synchronizedList(new ArrayList<StatusChangeListener>());
+    private final List<LoggerStatusListener> listeners = synchronizedList(new ArrayList<LoggerStatusListener>());
     private final FileLogger fileLogger;
     private final Set<String> locales = new HashSet<String>(
             Arrays.asList(new String[] {
@@ -70,7 +70,7 @@ public final class FileUpdateHandlerImpl implements FileUpdateHandler, Convertor
     }
 
     @Override
-    public synchronized void addListener(StatusChangeListener listener) {
+    public synchronized void addListener(LoggerStatusListener listener) {
         checkNotNull(listener, "listener");
         listeners.add(listener);
     }
@@ -155,7 +155,7 @@ public final class FileUpdateHandlerImpl implements FileUpdateHandler, Convertor
     }
 
     private void notifyListeners(boolean loggingToFile) {
-        for (StatusChangeListener listener : listeners) {
+        for (LoggerStatusListener listener : listeners) {
             if (loggingToFile) {
                 listener.loggingData();
             } else {

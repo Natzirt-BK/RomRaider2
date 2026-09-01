@@ -35,6 +35,8 @@ public class LoggerLiveDataBusTest {
         try {
             FakeLoggerData data = new FakeLoggerData();
             bus.connecting();
+            bus.reconnecting();
+            assertEquals(LoggerSessionState.RECONNECTING, state.get());
             bus.readingData();
             for (int index = 0; index < 260; index++) {
                 bus.publish(data, 10.0 + index / 10.0);

@@ -5,6 +5,7 @@ package com.romraider.logger.api;
 public enum LoggerSessionState {
     STOPPED("ECU OFFLINE"),
     CONNECTING("CONNECTING"),
+    RECONNECTING("RECONNECTING"),
     LIVE_ECU("ECU LIVE"),
     LIVE_EXTERNAL("EXTERNAL DATA LIVE"),
     RECORDING("RECORDING");

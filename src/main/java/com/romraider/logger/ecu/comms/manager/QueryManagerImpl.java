@@ -59,8 +59,8 @@ import com.romraider.logger.ecu.definition.EcuData;
 import com.romraider.logger.ecu.definition.ExternalData;
 import com.romraider.logger.ecu.definition.LoggerData;
 import com.romraider.logger.ecu.definition.Module;
+import com.romraider.logger.api.LoggerStatusListener;
 import com.romraider.logger.ecu.ui.MessageListener;
-import com.romraider.logger.ecu.ui.StatusChangeListener;
 import com.romraider.logger.ecu.ui.handler.DataUpdateHandler;
 import com.romraider.logger.ecu.ui.handler.file.FileLoggerControllerSwitchMonitor;
 import com.romraider.util.ResourceUtil;
@@ -70,8 +70,8 @@ public final class QueryManagerImpl implements QueryManager {
     private static final Logger LOGGER = Logger.getLogger(QueryManagerImpl.class);
     private static final ResourceBundle rb = new ResourceUtil().getBundle(
             QueryManagerImpl.class.getName());
-    private final List<StatusChangeListener> listeners =
-            synchronizedList(new ArrayList<StatusChangeListener>());
+    private final List<LoggerStatusListener> listeners =
+            synchronizedList(new ArrayList<LoggerStatusListener>());
     private final Map<String, Query> queryMap =
             synchronizedMap(new HashMap<String, Query>());
     private final Map<String, Query> addList = new HashMap<String, Query>();
@@ -79,6 +79,8 @@ public final class QueryManagerImpl implements QueryManager {
     private static final PollingState pollState = new PollingStateImpl();
     private static final Settings settings = SettingsManager.getSettings();
     private static final String EXT = "Externals";
+    private static final long INITIAL_RETRY_DELAY_MS = 1000L;
+    private static final long MAXIMUM_RETRY_DELAY_MS = 5000L;
     private final EcuInitCallback ecuInitCallback;
     private final DmInitCallback dmInitCallback;
     private final MessageListener messageListener;
@@ -91,6 +93,7 @@ public final class QueryManagerImpl implements QueryManager {
     private DataUpdateHandler[] updateHandlers;
     private int queryCounter;
     private long queryStart;
+    private boolean initFailureReported;
 
     public QueryManagerImpl(EcuInitCallback ecuInitCallback,
             DmInitCallback dmInitCallback,
@@ -107,7 +110,7 @@ public final class QueryManagerImpl implements QueryManager {
     }
 
     @Override
-    public synchronized void addListener(StatusChangeListener listener) {
+    public synchronized void addListener(LoggerStatusListener listener) {
         checkNotNull(listener, "listener");
         listeners.add(listener);
     }
@@ -173,19 +176,30 @@ public final class QueryManagerImpl implements QueryManager {
 
         try {
             stop = false;
+            initFailureReported = false;
+            boolean reconnecting = false;
+            long retryDelay = INITIAL_RETRY_DELAY_MS;
 
             while (!stop) {
-                notifyConnecting();
+                if (reconnecting) notifyReconnecting();
+                else notifyConnecting();
                 Module target = settings.getDestinationTarget();
 
                 if (!settings.isLogExternalsOnly() &&  doEcuInit(target)) {
+                    initFailureReported = false;
+                    retryDelay = INITIAL_RETRY_DELAY_MS;
                     notifyReading();
                     runLogger(target);
+                    if (!stop) reconnecting = true;
                 } else if (settings.isLogExternalsOnly()) {
                     notifyReading();
                     runLogger(null);
                 } else {
-                    sleep(1000L);
+                    reconnecting = true;
+                    notifyReconnecting();
+                    messageListener.reportMessage(rb.getString("RECONNECTING"));
+                    sleep(retryDelay);
+                    retryDelay = nextRetryDelay(retryDelay);
                 }
             }
         } catch (Exception e) {
@@ -212,7 +226,8 @@ public final class QueryManagerImpl implements QueryManager {
         if (isNullOrEmpty(settings.getJ2534Device())) {
             // No previous J2534 library selected in settings
             for (J2534Library dll : libraries) {
-                LOGGER.info(String.format("Trying new J2534/%s connection: %s",
+                logConnectionAttempt(String.format(
+                        "Trying new J2534/%s connection: %s",
                         settings.getTransportProtocol(),
                         dll.getVendor()));
 
@@ -224,7 +239,7 @@ public final class QueryManagerImpl implements QueryManager {
         }
         else {
             // Try previous J2534 library from settings
-            LOGGER.info(String.format(
+            logConnectionAttempt(String.format(
                     "Trying previous J2534/%s connection: %s",
                     settings.getTransportProtocol(),
                     settings.getJ2534Device()));
@@ -234,7 +249,8 @@ public final class QueryManagerImpl implements QueryManager {
         }
         settings.setJ2534Device("");
         // Finally try Serial
-        if (initConnection(module, settings.getLoggerPort())) {
+        if (shouldTrySerialConnection(settings.getLoggerPort())
+                && initConnection(module, settings.getLoggerPort())) {
             return true;
         }
         return false;
@@ -271,12 +287,36 @@ public final class QueryManagerImpl implements QueryManager {
         } catch (Exception e) {
             messageListener.reportMessage(MessageFormat.format(
                     rb.getString("INITFAIL"), module.getName()));
-            LOGGER.error("Error sending init: ", e);
+            if (!initFailureReported) {
+                LOGGER.error("Error sending init: ", e);
+                initFailureReported = true;
+            } else if (LOGGER.isDebugEnabled()) {
+                LOGGER.debug("ECU init still unavailable: " + e.getMessage());
+            }
         }
         finally {
             if (connection != null) connection.close();
         }
         return rv;
+    }
+
+    static boolean shouldTrySerialConnection(String portName) {
+        return !isNullOrEmpty(portName);
+    }
+
+    static long nextRetryDelay(long currentDelay) {
+        if (currentDelay < INITIAL_RETRY_DELAY_MS) {
+            return INITIAL_RETRY_DELAY_MS;
+        }
+        return Math.min(MAXIMUM_RETRY_DELAY_MS, currentDelay * 2L);
+    }
+
+    private void logConnectionAttempt(String message) {
+        if (initFailureReported) {
+            if (LOGGER.isDebugEnabled()) LOGGER.debug(message);
+        } else {
+            LOGGER.info(message);
+        }
     }
 
     private void runLogger(Module module) {
@@ -381,6 +421,7 @@ public final class QueryManagerImpl implements QueryManager {
             }
         } catch (Exception e) {
             connectionFailed = true;
+            initFailureReported = true;
             messageListener.reportError(e);
             notifyStopped();
             sleep(500L);
@@ -521,7 +562,7 @@ public final class QueryManagerImpl implements QueryManager {
         SwingUtilities.invokeLater(new Runnable() {
             @Override
             public void run() {
-                for (StatusChangeListener listener : listeners) {
+                for (LoggerStatusListener listener : listeners) {
                     listener.connecting();
                 }
             }
@@ -532,7 +573,7 @@ public final class QueryManagerImpl implements QueryManager {
         SwingUtilities.invokeLater(new Runnable() {
             @Override
             public void run() {
-                for (StatusChangeListener listener : listeners) {
+                for (LoggerStatusListener listener : listeners) {
                     if(settings.isLogExternalsOnly()) listener.readingDataExternal();
                     else {
                         listener.readingData();
@@ -542,11 +583,22 @@ public final class QueryManagerImpl implements QueryManager {
         });
     }
 
+    private void notifyReconnecting() {
+        SwingUtilities.invokeLater(new Runnable() {
+            @Override
+            public void run() {
+                for (LoggerStatusListener listener : listeners) {
+                    listener.reconnecting();
+                }
+            }
+        });
+    }
+
     private void notifyStopped() {
         SwingUtilities.invokeLater(new Runnable() {
             @Override
             public void run() {
-                for (StatusChangeListener listener : listeners) {
+                for (LoggerStatusListener listener : listeners) {
                     listener.stopped();
                 }
             }

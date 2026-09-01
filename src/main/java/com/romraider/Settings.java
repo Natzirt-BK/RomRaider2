@@ -39,6 +39,7 @@ import com.romraider.editor.workspace.EditorWorkspacePreferences;
 import com.romraider.io.connection.ConnectionProperties;
 import com.romraider.logger.ecu.definition.EcuDefinition;
 import com.romraider.logger.ecu.definition.Module;
+import com.romraider.logger.api.LoggerWorkspaceView;
 import com.romraider.logger.external.phidget.interfacekit.io.IntfKitSensor;
 import com.romraider.platform.VehicleModule;
 import com.romraider.platform.VehiclePlatform;
@@ -242,6 +243,9 @@ public class Settings implements Serializable {
     private Point loggerWindowLocation = new Point();
     private boolean loggerWindowMaximized;
     private int loggerSelectedTabIndex;
+    private LoggerWorkspaceView loggerWorkspaceView =
+            LoggerWorkspaceView.OVERVIEW;
+    private Boolean loggerWorkspaceDarkTheme;
     private int loggerSelectedGaugeIndex = 0;
     private boolean loggerParameterListState = true;
     private ConnectionProperties loggerConnectionProperties;
@@ -716,6 +720,26 @@ public class Settings implements Serializable {
 
     public int getLoggerSelectedTabIndex() {
         return loggerSelectedTabIndex;
+    }
+
+    public LoggerWorkspaceView getLoggerWorkspaceView() {
+        return loggerWorkspaceView;
+    }
+
+    public void setLoggerWorkspaceView(LoggerWorkspaceView loggerWorkspaceView) {
+        if (loggerWorkspaceView == null) {
+            throw new IllegalArgumentException("Logger workspace view is required");
+        }
+        this.loggerWorkspaceView = loggerWorkspaceView;
+    }
+
+    /** Null means the replacement workspace should follow the application theme. */
+    public Boolean getLoggerWorkspaceDarkTheme() {
+        return loggerWorkspaceDarkTheme;
+    }
+
+    public void setLoggerWorkspaceDarkTheme(Boolean darkTheme) {
+        loggerWorkspaceDarkTheme = darkTheme;
     }
 
     public void setLoggerSelectedGaugeIndex(int loggerSelectGaugeIndex) {

@@ -25,6 +25,7 @@ public final class PlatformContext {
     private VehiclePlatform platform = VehiclePlatform.SUBARU;
     private VehicleModule module = VehicleModule.ENGINE_ECU;
     private DimeModState dimeModState = DimeModState.UNKNOWN;
+    private boolean ramTuneRuntimeAvailable;
 
     private PlatformContext() {
     }
@@ -43,6 +44,10 @@ public final class PlatformContext {
 
     public synchronized DimeModState getDimeModState() {
         return dimeModState;
+    }
+
+    public synchronized boolean isRamTuneRuntimeAvailable() {
+        return ramTuneRuntimeAvailable;
     }
 
     public void setPlatform(VehiclePlatform platform) {
@@ -76,12 +81,23 @@ public final class PlatformContext {
     }
 
     public void setDimeModState(DimeModState state) {
+        setDimeModRuntime(state, false);
+    }
+
+    public void setDimeModRuntime(DimeModState state,
+            boolean ramTuneAvailable) {
         if (state == null) {
             throw new IllegalArgumentException("DimeMod state is required");
         }
+        if (ramTuneAvailable && state != DimeModState.ACTIVE) {
+            throw new IllegalArgumentException(
+                    "RAM Tune requires an active DimeMod runtime");
+        }
         synchronized (this) {
-            if (dimeModState == state) return;
+            if (dimeModState == state
+                    && ramTuneRuntimeAvailable == ramTuneAvailable) return;
             dimeModState = state;
+            ramTuneRuntimeAvailable = ramTuneAvailable;
         }
         notifyListeners();
     }

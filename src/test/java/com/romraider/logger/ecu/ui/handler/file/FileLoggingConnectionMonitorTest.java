@@ -7,9 +7,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.Test;
 
+import com.romraider.logger.api.LoggerStatusListener;
 import com.romraider.logger.ecu.comms.query.Response;
 import com.romraider.logger.ecu.definition.LoggerData;
-import com.romraider.logger.ecu.ui.StatusChangeListener;
 
 public class FileLoggingConnectionMonitorTest {
     @Test
@@ -36,7 +36,7 @@ public class FileLoggingConnectionMonitorTest {
 
         @Override public void stop() { stopCount++; }
         @Override public void start() { }
-        @Override public void addListener(StatusChangeListener listener) { }
+        @Override public void addListener(LoggerStatusListener listener) { }
         @Override public void registerData(LoggerData loggerData) { }
         @Override public void handleDataUpdate(Response response) { }
         @Override public void deregisterData(LoggerData loggerData) { }

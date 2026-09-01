@@ -19,15 +19,8 @@
 
 package com.romraider.logger.ecu.ui;
 
-public interface StatusChangeListener {
+import com.romraider.logger.api.LoggerStatusListener;
 
-    void connecting();
-
-    void readingData();
-    
-    void readingDataExternal();
-
-    void loggingData();
-
-    void stopped();
+/** Swing compatibility name for the toolkit-neutral Logger status contract. */
+public interface StatusChangeListener extends LoggerStatusListener {
 }

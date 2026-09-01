@@ -98,35 +98,38 @@ gate, but new product behavior must not deepen the dependency on Swing.
 The current dependency inventory and ordered extraction gates are recorded in
 `SWING_MIGRATION_BOUNDARY_AUDIT.md`.
 
-Compose Multiplatform for Desktop is the first replacement candidate because
-the calibration workbench needs responsive layout, scalable custom drawing,
-modern theming, and gradual desktop interoperability. Its adoption is gated by
-a small packaged Windows/Linux prototype; JavaFX is the fallback if the spike
-cannot meet startup, packaging, accessibility, input, or rendering gates. This
-decision does not authorize a whole-application rewrite.
+Compose Multiplatform for Desktop is the selected replacement toolkit. The
+Logger checkpoint proved gradual Swing interoperability, responsive layout,
+custom drawing, shared state, and native Linux packaging. Windows x64 is part
+of the same locked build and package path, with its visual run still required
+when the VM is available. JavaFX remains the fallback if later accessibility,
+input, scaling, or packaging gates fail. This is still an incremental
+migration, not a whole-application rewrite.
 
-The RC3 Logger pass is the last large Swing visual milestone before more state
-is extracted. It gives the current release a coherent Logger on Windows and
-Linux without changing the planned replacement sequence below.
+The RC3 Logger pass remains available as the compatibility UI. For RC4, the
+first replacement Logger workspace sits beside it and uses the same real
+session, channel selection, recording state, and received samples. This makes
+the toolkit migration visible without removing the proven fallback screens.
 
 ### Delivery sequence
 
-1. **Boundary and prototype.** Inventory Swing-owned state and add tests that
-   keep ROM editing, logger sessions, search, navigation, activity, and flash
-   preflight usable without Swing. Build a packaged replacement shell prototype
-   using real application state, keyboard navigation, UI scaling, and one
-   read-only calibration table.
-2. **Calibration workspace.** Replace the main shell, table tabs, responsive
+1. **Neutral boundaries.** Keep ROM editing, logger sessions, search,
+   navigation, activity, and flash preflight usable without Swing. Logger
+   session and channel control are complete; Editor ownership extraction
+   continues.
+2. **Logger workspace.** The first Compose checkpoint replaces parameter
+   selection, live values, graphs, dashboard cards, and recording controls
+   while retaining the Swing workspaces as a compatibility path.
+3. **Calibration workspace.** Replace the main shell, table tabs, responsive
    table/visualization layout, search, and Inspector. Editing continues through
    the existing tested ROM/table commands; the replacement view never writes
-   ROM bytes directly. This is the first user-visible migration checkpoint.
-3. **Logger workspace.** Replace parameter selection, live values, graphs,
-   recording state, and offline analysis after logger session/control state is
-   independent of `EcuLogger` and Swing table models.
-4. **Secondary tools.** Move diagnostics, settings, definition management,
+   ROM bytes directly. This is the next major user-visible migration checkpoint.
+4. **Logger depth.** Move offline analysis, markers, advanced graph controls,
+   and specialized tools after the live workspace passes both platform gates.
+5. **Secondary tools.** Move diagnostics, settings, definition management,
    compare, learning views, and plugin configuration in capability-sized
    increments. A temporary Swing host may remain for an unmigrated tool.
-5. **Removal.** Delete the compatibility host and Swing-only theme/layout code
+6. **Removal.** Delete the compatibility host and Swing-only theme/layout code
    only after Editor and Logger parity, Windows/Linux package tests, keyboard
    and touch checks, and connected-device regression runs pass.
 

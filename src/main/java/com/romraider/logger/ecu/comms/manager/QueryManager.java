@@ -20,7 +20,7 @@
 package com.romraider.logger.ecu.comms.manager;
 
 import com.romraider.logger.ecu.definition.LoggerData;
-import com.romraider.logger.ecu.ui.StatusChangeListener;
+import com.romraider.logger.api.LoggerStatusListener;
 import com.romraider.logger.ecu.ui.handler.file.FileLoggerControllerSwitchMonitor;
 
 public interface QueryManager extends Runnable {
@@ -35,7 +35,7 @@ public interface QueryManager extends Runnable {
 
     void stop();
 
-    void addListener(StatusChangeListener listener);
+    void addListener(LoggerStatusListener listener);
 
     Thread getThread();
 }

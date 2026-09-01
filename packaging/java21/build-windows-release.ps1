@@ -3,7 +3,7 @@ param(
     [string]$ApplicationImage,
     [string]$OutputRoot,
     [string]$ReleaseName = "RomRaider2_ECU_Studio_1.1.0_Windows_x64",
-    [string]$ReleaseLabel = "Release Candidate 3",
+    [string]$ReleaseLabel = "Release Candidate 4",
     [string]$SourceRevision
 )
 
@@ -77,8 +77,8 @@ try {
     Copy-Item -LiteralPath (Join-Path $RepoRoot "release_notes.txt") -Destination (Join-Path $Release "RELEASE_NOTES.txt")
     Copy-Item -LiteralPath (Join-Path $RepoRoot "docs/ROMRAIDER2_IMPLEMENTATION_STATUS.md") -Destination (Join-Path $Release "docs")
     Copy-Item -LiteralPath (Join-Path $RepoRoot "docs/JAVA_RUNTIME_MODERNIZATION.md") -Destination (Join-Path $Release "docs")
-    Copy-Item -LiteralPath (Join-Path $RepoRoot "docs/RC3_RELEASE_READINESS.md") -Destination (Join-Path $Release "docs")
-    Copy-Item -LiteralPath (Join-Path $RepoRoot "docs/RC3_QUALIFICATION_RECORD.md") -Destination (Join-Path $Release "docs")
+    Copy-Item -LiteralPath (Join-Path $RepoRoot "docs/RC4_RELEASE_READINESS.md") -Destination (Join-Path $Release "docs")
+    Copy-Item -LiteralPath (Join-Path $RepoRoot "docs/RC4_QUALIFICATION_RECORD.md") -Destination (Join-Path $Release "docs")
     Copy-Item -LiteralPath (Join-Path $RepoRoot "docs/WINDOWS_RELEASE_CHECKLIST.md") -Destination (Join-Path $Release "docs")
     Copy-Item -LiteralPath (Join-Path $RepoRoot "docs/DIAGNOSTIC_PRIVACY.md") -Destination (Join-Path $Release "docs")
     Copy-Item -LiteralPath (Join-Path $RepoRoot "packaging/java21/VERIFY_RELEASE_WINDOWS.ps1") -Destination $Release

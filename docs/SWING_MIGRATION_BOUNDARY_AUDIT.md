@@ -16,10 +16,12 @@ The source inventory below counts Java files with direct `java.awt`,
 | --- | ---: | ---: | --- |
 | `editor/compare` | 4 | 0 | Neutral after the first extraction slice |
 | `editor/recovery` | 3 | 0 | Ready for another UI toolkit |
-| `logger/api` | 6 | 0 | Read-only live data and session-state seam exists |
+| `logger/api` | 13 | 0 | Live data, channel selection, session commands, preferences, and state are neutral |
 | `flash` | 19 | 0 | Backend, capability, preflight, and progress contracts are neutral |
+| `livetune` | 12 | 0 | Drafts, staging, preflight, session state, and mock verification are neutral |
 | `activity` | 4 | 0 | Application activity state is neutral |
-| `editor/workspace` | 8 | 1 | Only the presentation panel imports Swing/AWT after the first extraction slice |
+| `editor/calibration` | 3 | 0 | Immutable 1D/2D/3D grid snapshots are ready for a replacement view |
+| `editor/workspace` | 9 | 1 | Only the presentation panel imports Swing/AWT after the first extraction slice |
 | `editor/search` | 4 | 1 | Service/model are neutral; panel is Swing |
 | `maps` | 43 | 9 | Domain and presentation are still coupled |
 
@@ -54,13 +56,14 @@ API rather than `TableTreeNode`. `Rom` now stores the neutral catalog and keeps
 the old Swing tree nodes as a synchronized compatibility mirror. Moving that
 mirror into a Swing adapter is the remaining ownership inversion.
 
-### Logger control is still concentrated in the frame
+### Logger control now has a neutral boundary
 
-`logger/api` exposes neutral live samples and observed session state, but
-`EcuLogger` still combines window construction, controller lifecycle, selected
-parameters, connect/disconnect commands, recording controls, and dialogs. A
-new UI can display live data now; it cannot safely control a complete logger
-session until those commands move behind a neutral controller facade.
+`LoggerSessionService` owns connect, disconnect, recording commands, explicit
+session state, failure handling, and listener disposal. `LoggerChannelService`
+owns the UI-neutral channel catalog and selection. `EcuLogger` remains the
+compatibility host and adapts the existing parameter, switch, and external
+source models into these services, but the replacement workspace no longer
+drives Swing buttons or tables.
 
 ### Legacy plug-ins expose Swing actions
 
@@ -125,36 +128,55 @@ legacy external-source actions at the Swing edge.
 Gate: controller tests cover connect/cancel/disconnect, start/stop recording,
 device failure, and listener disposal without a `JFrame` or Swing table model.
 
-### 6. Replacement shell spike
+Status: complete for the first Logger replacement checkpoint. The existing
+Swing workspaces and the Compose workspace share the same controller, channel
+selection, received samples, and recording state.
 
-After steps 1 through 4 establish one shared state, build the Compose Desktop
-spike described in `ROMRAIDER2_UI_DIRECTION.md`. It should use a real ROM and
-the neutral commands, not mock calibration data. Keep JavaFX as the recorded
-fallback until Windows and Linux packaging, accessibility, keyboard, scaling,
-and rendering gates pass.
+### 6. Replacement workspace checkpoint
 
-## First implementation slice
+The first Compose Desktop checkpoint is now the Logger workspace described in
+`ROMRAIDER2_UI_DIRECTION.md`. It uses the real channel, session, recording, and
+live-data services. The visual fixture is test-only and is excluded from the
+runtime jar. Compose and its matching native renderer are staged for both
+Windows x64 and Linux x64 packages.
 
-The first slice converted workspace indexing and ROM comparison to the neutral
+The Editor Tune inspector now consumes the same neutral draft projection and
+shows changed ranges without adding a production write command. The projection
+handles 3D row gaps and stages X/Y axis edits under the parent table instead of
+silently omitting them. The portable
+shared core also proves bounded ROM byte editing and logger CSV round-trips
+without desktop or Android framework imports.
+
+The full replacement shell and definition-backed calibration workspace remain
+next. They must use a real ROM and neutral edit commands, not a copied
+calibration model.
+JavaFX remains the recorded fallback until the packaged Windows pass and the
+broader accessibility, keyboard, scaling, and rendering gates are complete.
+
+## Progress through the extraction plan
+
+The first Editor slice converted workspace indexing and ROM comparison to the neutral
 catalog and separated that catalog's storage from Swing nodes. It removes real
 Swing dependencies from services and prepares search, compare, and the
 replacement left rail without changing ROM bytes, logger behavior, or current
 windows.
 
-The next slice should move the tree-node mirror out of `Rom`, followed by a
-Swing-only table-view registry. These have more lifecycle risk and remain
-separate review and test checkpoints.
+The Logger slice completed the neutral session and channel boundaries and added
+the first packaged Compose workspace. The next Editor slice should move the
+tree-node mirror out of `Rom`, followed by a Swing-only table-view registry.
+These have more lifecycle risk and remain separate review and test checkpoints.
 
 ## Enforcement
 
 - Add an architecture test that fails when `editor/compare`,
-  `editor/recovery`, `logger/api`, `flash`, or `activity` gains a direct Swing
-  or AWT import.
+  `editor/recovery`, `logger/api`, `flash`, `livetune`, or `activity` gains a
+  direct Swing or AWT import.
 - New domain and controller packages must not import from `com.romraider.swing`
   or any `*.ui` package.
 - Replacement views may depend on neutral services; neutral services must not
   depend on replacement or Swing views.
 - Each extraction keeps the current application compiling and packageable on
-  Java 21 for Windows x64 and Linux.
+  Java 21 for Windows x64 and Linux, with native macOS ARM64 and Intel builds
+  checked separately.
 - Connected-device and checksum behavior remains unchanged unless a separately
   reviewed safety change explicitly requires it.

@@ -1,0 +1,30 @@
+Compose Desktop dependency notice
+=================================
+
+RomRaider2 distributes the following unmodified runtime components for its
+Compose Desktop Logger workspace:
+
+- Compose Multiplatform 1.12.0
+  https://github.com/JetBrains/compose-multiplatform
+- Kotlin standard library 2.4.10
+  https://github.com/JetBrains/kotlin
+- kotlinx.coroutines 1.9.0, kotlinx.serialization 1.7.3, and atomicfu 0.28.0
+  https://github.com/Kotlin
+- Skiko 0.150.1
+  https://github.com/JetBrains/skiko
+- AndroidX and JetBrains AndroidX runtime components selected by Compose
+  https://github.com/androidx/androidx
+- JetBrains Runtime API 1.9.0, JetBrains annotations 23.0.0, and JSpecify 1.0.0
+
+These JVM components are licensed under the Apache License 2.0. The complete
+license is shipped as Apache-2.0.txt. License files embedded by upstream remain
+in the runtime jars where supplied.
+
+The platform-specific Skiko runtime includes Skia. Skia is licensed under the
+BSD 3-Clause license, shipped as Skia-BSD-3-Clause.txt.
+
+RomRaider2 does not modify these upstream runtime artifacts. Exact artifact
+versions are locked in ui/compose-logger/gradle.lockfile. SHA-256 verification
+records are kept in gradle/verification-metadata.xml. Windows packages contain
+only the Windows x64 renderer and Linux packages contain only the Linux x64
+renderer.

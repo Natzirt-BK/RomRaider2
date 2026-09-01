@@ -114,6 +114,9 @@ public class LoggerWorkspaceComponentsTest {
         indicator.connecting();
         flushEvents();
         assertEquals("CONNECTING", indicator.getStatusText());
+        indicator.reconnecting();
+        flushEvents();
+        assertEquals("RECONNECTING", indicator.getStatusText());
         indicator.loggingData();
         flushEvents();
         assertEquals("LOGGING TO FILE", indicator.getStatusText());

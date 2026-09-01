@@ -58,6 +58,7 @@ import com.romraider.logger.api.LiveDataSample;
 import com.romraider.logger.api.LoggerLiveDataBus;
 import com.romraider.logger.api.LoggerLiveDataListener;
 import com.romraider.logger.api.LoggerSessionState;
+import com.romraider.platform.DimeModState;
 import com.romraider.platform.PlatformContext;
 import com.romraider.platform.PlatformContextListener;
 import com.romraider.ui.ThemeToken;
@@ -137,6 +138,8 @@ public final class EditorInspectorPanel extends JPanel implements PlatformContex
     private LoggerSessionState liveSessionState = LoggerSessionState.STOPPED;
     private int liveValuePage;
     private final JTabbedPane inspectorTabs = new JTabbedPane();
+    private final LiveTunePreviewPanel liveTunePreview =
+            new LiveTunePreviewPanel();
     private final JLabel changeTotal = new JLabel("No unsaved cell changes");
     private final DefaultTableModel changeModel = new DefaultTableModel(
             new Object[] {"Cells", "Table"}, 0) {
@@ -157,6 +160,7 @@ public final class EditorInspectorPanel extends JPanel implements PlatformContex
             ModernIconFactory.icon(Action.REDO));
     private final RomEditHistory editHistory = RomEditHistory.getInstance();
     private Rom currentRom;
+    private Table currentTable;
     private final EditHistoryListener editHistoryListener = rom -> {
         if (rom == currentRom) onEventThread(() -> refreshChanges());
     };
@@ -201,14 +205,20 @@ public final class EditorInspectorPanel extends JPanel implements PlatformContex
         inspectorTabs.addTab("LIVE", buildLiveDataPanel());
         inspectorTabs.addTab("NOTES", buildNotesPanel());
         inspectorTabs.addTab("CHANGES", buildChangesPanel());
+        inspectorTabs.addTab("TUNE", liveTunePreview);
         inspectorTabs.setToolTipTextAt(0, "Map information");
         inspectorTabs.setToolTipTextAt(1, "Live data");
         inspectorTabs.setToolTipTextAt(2, "Map notes");
         inspectorTabs.setToolTipTextAt(3, "ROM changes");
+        inspectorTabs.setToolTipTextAt(4, "Offline live-tuning plan preview");
         inspectorTabs.getAccessibleContext().setAccessibleDescription(
-                "Map information, live data, notes, and ROM changes");
+                "Map information, live data, notes, ROM changes, and an "
+                + "offline live-tuning preview");
         inspectorTabs.addChangeListener(event -> {
             if (inspectorTabs.getSelectedIndex() == 3) refreshChanges();
+            if (inspectorTabs.getSelectedComponent() == liveTunePreview) {
+                liveTunePreview.refreshPreview();
+            }
         });
         add(inspectorTabs, BorderLayout.CENTER);
         clear();
@@ -259,6 +269,7 @@ public final class EditorInspectorPanel extends JPanel implements PlatformContex
     }
 
     public void showSelection(Rom rom, Table table) {
+        currentTable = table;
         showRom(rom);
         if (table == null) return;
         selectionTitle.setText(safe(table.getName(), "Selected table"));
@@ -280,10 +291,15 @@ public final class EditorInspectorPanel extends JPanel implements PlatformContex
         scale.setToolTipText(scale.getText());
         description.setToolTipText(description.getText());
         loadNote(rom, table);
+        liveTunePreview.showSelection(rom, table);
     }
 
     public void showRom(Rom rom) {
         currentRom = rom;
+        if (currentTable != null && currentTable.getRom() != rom) {
+            currentTable = null;
+        }
+        liveTunePreview.showSelection(rom, currentTable);
         PlatformContext context = PlatformContext.getInstance();
         updatePlatform(context);
         if (rom == null) {
@@ -311,6 +327,8 @@ public final class EditorInspectorPanel extends JPanel implements PlatformContex
     }
 
     public void clearTableSelection() {
+        currentTable = null;
+        liveTunePreview.showSelection(currentRom, null);
         noteRom = null;
         noteTable = null;
         loadingNote = true;
@@ -564,7 +582,14 @@ public final class EditorInspectorPanel extends JPanel implements PlatformContex
     private void updatePlatform(PlatformContext context) {
         platform.setText(String.valueOf(context.getPlatform()));
         module.setText(String.valueOf(context.getModule()));
-        realtime.setText("DimeMod: " + context.getDimeModState().getDisplayName());
+        String ramTune = context.getDimeModState() == DimeModState.ACTIVE
+                ? context.isRamTuneRuntimeAvailable()
+                        ? " · RAM Tune detected"
+                        : " · RAM Tune unavailable"
+                : "";
+        realtime.setText("DimeMod: "
+                + context.getDimeModState().getDisplayName() + ramTune);
+        liveTunePreview.platformContextChanged();
     }
 
     private JPanel buildTablePanel() {
@@ -868,8 +893,11 @@ public final class EditorInspectorPanel extends JPanel implements PlatformContex
     }
 
     private String emptyLiveDataMessage() {
-        if (liveSessionState == LoggerSessionState.CONNECTING) {
-            return "<html><div style='text-align:center'><b>Connecting to ECU</b>"
+        if (liveSessionState == LoggerSessionState.CONNECTING
+                || liveSessionState == LoggerSessionState.RECONNECTING) {
+            String action = liveSessionState == LoggerSessionState.RECONNECTING
+                    ? "Reconnecting to ECU" : "Connecting to ECU";
+            return "<html><div style='text-align:center'><b>" + action + "</b>"
                     + "<br>Live values will appear here.</div></html>";
         }
         if (liveSessionState.isLive()) {

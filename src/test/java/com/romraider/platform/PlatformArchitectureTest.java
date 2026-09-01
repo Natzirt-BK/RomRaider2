@@ -41,6 +41,21 @@ public class PlatformArchitectureTest {
         context.setDimeModState(DimeModState.NOT_PRESENT);
         assertEquals(VehiclePlatform.SUBARU, context.getPlatform());
         assertEquals(DimeModState.NOT_PRESENT, context.getDimeModState());
+        assertFalse(context.isRamTuneRuntimeAvailable());
+    }
+
+    @Test
+    public void ramTuneAvailabilityRequiresAnActiveRuntime() {
+        context.setDimeModRuntime(DimeModState.ACTIVE, true);
+        assertTrue(context.isRamTuneRuntimeAvailable());
+
+        context.setDimeModState(DimeModState.UNKNOWN);
+        assertFalse(context.isRamTuneRuntimeAvailable());
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void rejectsRamTuneAvailabilityWithoutActiveDimeMod() {
+        context.setDimeModRuntime(DimeModState.PRESENT, true);
     }
 
     @Test

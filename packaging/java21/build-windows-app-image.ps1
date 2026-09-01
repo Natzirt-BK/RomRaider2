@@ -9,6 +9,7 @@ $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "../..")).Path
+$ComposeRoot = Join-Path $RepoRoot "build/compose/windows"
 if (-not $OutputRoot) {
     $OutputRoot = Join-Path $RepoRoot "build/java21-windows"
 }
@@ -43,6 +44,9 @@ if ($JavaSettings -notmatch "os\.arch\s*=\s*(amd64|x86_64)(?:\s|$)") {
 }
 if (-not (Test-Path -LiteralPath $ApplicationJar -PathType Leaf)) {
     throw "Build RomRaider2 for Windows first; jar not found: $ApplicationJar"
+}
+if (-not (Test-Path -LiteralPath (Join-Path $ComposeRoot "romraider2-compose-logger-1.1.0-rc4.jar") -PathType Leaf)) {
+    throw "Build the Compose Logger workspace before packaging."
 }
 foreach ($BridgeFile in @(
     "j2534-bridge-32.exe", "j2534-bridge-64.exe",
@@ -124,6 +128,7 @@ try {
     }
 
     Copy-Item -LiteralPath $ApplicationJar -Destination (Join-Path $InputRoot "RomRaider2.jar")
+    Copy-Item -Path (Join-Path $ComposeRoot "*.jar") -Destination $InputRoot
     Get-ChildItem -LiteralPath (Join-Path $RepoRoot "lib/common") -Filter "*.jar" -File |
         Where-Object { $_.Name -notin @("Graph3d.jar", "j3dcore.jar", "j3dutils.jar", "vecmath.jar") } |
         Copy-Item -Destination (Join-Path $InputRoot "lib/common")
@@ -257,6 +262,13 @@ foreach ($Customization in @(
 )) {
     if (-not (Test-Path -LiteralPath (Join-Path $Destination "customize/$Customization") -PathType Leaf)) {
         throw "Required customization asset is missing: $Customization"
+    }
+}
+foreach ($ComposeNotice in @(
+    "Compose-Desktop-1.12.0.txt", "Apache-2.0.txt", "Skia-BSD-3-Clause.txt"
+)) {
+    if (-not (Test-Path -LiteralPath (Join-Path $Destination "app/licenses/$ComposeNotice") -PathType Leaf)) {
+        throw "Required Compose license file is missing: $ComposeNotice"
     }
 }
 foreach ($RetiredDependency in @(

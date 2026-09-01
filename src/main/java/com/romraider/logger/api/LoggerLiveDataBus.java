@@ -16,10 +16,9 @@ import org.apache.log4j.Logger;
 
 import com.romraider.logger.ecu.definition.EcuDataConvertor;
 import com.romraider.logger.ecu.definition.LoggerData;
-import com.romraider.logger.ecu.ui.StatusChangeListener;
 
 /** Thread-safe bridge between the existing logger backend and integrated views. */
-public final class LoggerLiveDataBus implements StatusChangeListener {
+public final class LoggerLiveDataBus implements LoggerStatusListener {
     private static final Logger LOGGER = getLogger(LoggerLiveDataBus.class);
     private static final int MAX_HISTORY_SAMPLES = 240;
     private static final LoggerLiveDataBus INSTANCE = new LoggerLiveDataBus();
@@ -82,6 +81,12 @@ public final class LoggerLiveDataBus implements StatusChangeListener {
         }
         LiveDataSample sample = new LiveDataSample(data.getId(), data.getName(),
                 rawValue, displayValue, units, System.currentTimeMillis());
+        publish(sample);
+    }
+
+    /** Publishes a converted sample from playback, tests, or another backend. */
+    public void publish(LiveDataSample sample) {
+        if (sample == null) return;
         synchronized (this) {
             latest.put(sample.getParameterId(), sample);
             LinkedList<LiveDataSample> samples = history.get(
@@ -125,6 +130,7 @@ public final class LoggerLiveDataBus implements StatusChangeListener {
     }
 
     public void connecting() { setState(LoggerSessionState.CONNECTING); }
+    public void reconnecting() { setState(LoggerSessionState.RECONNECTING); }
     public void readingData() { setState(LoggerSessionState.LIVE_ECU); }
     public void readingDataExternal() { setState(LoggerSessionState.LIVE_EXTERNAL); }
     public void loggingData() { setState(LoggerSessionState.RECORDING); }

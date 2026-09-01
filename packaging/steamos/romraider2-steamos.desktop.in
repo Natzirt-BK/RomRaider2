@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=RomRaider2 ECU Studio
+GenericName=ECU Tools
+Comment=Edit ROMs, log ECU data, and review logs
+Exec="@LAUNCHER@"
+Icon=@ICON@
+Terminal=false
+Categories=Utility;Engineering;
+StartupNotify=true
+StartupWMClass=RomRaider2

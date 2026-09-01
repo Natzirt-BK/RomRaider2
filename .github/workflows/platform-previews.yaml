@@ -1,0 +1,91 @@
+name: Platform previews
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  macos-package:
+    name: macOS ${{ matrix.package_arch }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            java_arch: arm64
+            package_arch: arm64
+          - runner: macos-15-intel
+            java_arch: x64
+            package_arch: x64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+          architecture: ${{ matrix.java_arch }}
+      - uses: gradle/actions/setup-gradle@v5
+        with:
+          gradle-version: "9.5.0"
+      - name: Install Ant
+        run: command -v ant >/dev/null || brew install ant
+      - name: Test and build native application
+        run: |
+          cp packaging/default/settings.xml settings.xml
+          ant clean unittest
+          ant clean build-macos
+          gradle --no-daemon :platform:shared-core:check :ui:compose-logger:test :ui:compose-logger:stageLoggerWorkspace
+          packaging/java21/build-macos-app-image.sh "build/macos-${{ matrix.package_arch }}"
+          ditto -c -k --sequesterRsrc --keepParent \
+            "build/macos-${{ matrix.package_arch }}/RomRaider2.app" \
+            "build/RomRaider2_1.1.0_RC4_macOS_${{ matrix.package_arch }}.zip"
+          shasum -a 256 \
+            "build/RomRaider2_1.1.0_RC4_macOS_${{ matrix.package_arch }}.zip" \
+            >"build/RomRaider2_1.1.0_RC4_macOS_${{ matrix.package_arch }}.zip.sha256"
+      - name: Check whitespace
+        run: git diff --check
+      - name: Upload unsigned macOS preview
+        uses: actions/upload-artifact@v4
+        with:
+          name: RomRaider2-1.1.0-RC4-macOS-${{ matrix.package_arch }}-unsigned
+          path: |
+            build/RomRaider2_1.1.0_RC4_macOS_${{ matrix.package_arch }}.zip
+            build/RomRaider2_1.1.0_RC4_macOS_${{ matrix.package_arch }}.zip.sha256
+          if-no-files-found: error
+
+  android-debug:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@v5
+        with:
+          gradle-version: "9.5.0"
+      - name: Check portable core and build Android preview
+        run: |
+          gradle --no-daemon -p platform/android \
+            :shared-core:check :app:assembleDebug :app:lintDebug
+          mkdir -p build/platform-previews
+          cp platform/android/app/build/outputs/apk/debug/app-debug.apk \
+            build/platform-previews/RomRaider2_1.1.0_RC4_Android_preview1-debug.apk
+          sha256sum \
+            build/platform-previews/RomRaider2_1.1.0_RC4_Android_preview1-debug.apk \
+            >build/platform-previews/RomRaider2_1.1.0_RC4_Android_preview1-debug.apk.sha256
+      - name: Check whitespace
+        run: git diff --check
+      - name: Upload Android debug preview
+        uses: actions/upload-artifact@v4
+        with:
+          name: RomRaider2-1.1.0-RC4-Android-preview1-debug
+          path: |
+            build/platform-previews/RomRaider2_1.1.0_RC4_Android_preview1-debug.apk
+            build/platform-previews/RomRaider2_1.1.0_RC4_Android_preview1-debug.apk.sha256
+          if-no-files-found: error

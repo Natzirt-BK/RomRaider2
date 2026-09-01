@@ -57,6 +57,12 @@ public final class RomChangeService {
                 || !Arrays.equals(savedBinary.get(rom), rom.getBinary());
     }
 
+    /** Returns a defensive copy of the last loaded or explicitly saved state. */
+    public static synchronized byte[] snapshotSavedBinary(Rom rom) {
+        byte[] binary = savedBinary.get(rom);
+        return binary == null ? null : binary.clone();
+    }
+
     public static synchronized void forget(Rom rom) {
         if (rom != null) {
             savedBinary.remove(rom);

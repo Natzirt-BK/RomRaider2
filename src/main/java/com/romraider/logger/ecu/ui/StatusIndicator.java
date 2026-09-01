@@ -43,6 +43,7 @@ public final class StatusIndicator extends JPanel implements StatusChangeListene
     private final JLabel statusLabel = new JLabel();
     private ThemeToken statusColorToken = ThemeToken.SECONDARY_TEXT;
     private static final String TEXT_CONNECTING = rb.getString("CONNECTING");
+    private static final String TEXT_RECONNECTING = rb.getString("RECONNECTING");
     private static final String TEXT_READING = rb.getString("READING");
     private static final String TEXT_READING_EXTERNAL = rb.getString("READING_EXTERNAL");
     private static final String TEXT_LOGGING = rb.getString("LOGGING");
@@ -72,6 +73,12 @@ public final class StatusIndicator extends JPanel implements StatusChangeListene
     @Override
     public void connecting() {
         updateStatusLabel(TEXT_CONNECTING, ICON_CONNECTING,
+                ThemeToken.ACCENT);
+    }
+
+    @Override
+    public void reconnecting() {
+        updateStatusLabel(TEXT_RECONNECTING, ICON_CONNECTING,
                 ThemeToken.ACCENT);
     }
 

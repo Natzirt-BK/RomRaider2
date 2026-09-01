@@ -57,7 +57,8 @@ public final class DimeModFeaturePanel extends JPanel {
         for (DimeModFeature feature : DimeModFeature.values()) {
             model.addRow(new Object[] {feature.getDisplayName(), status(feature,
                     detected.get(feature).booleanValue(), state,
-                    context.getPlatform())});
+                    context.getPlatform(),
+                    context.isRamTuneRuntimeAvailable())});
         }
         JTable table = new JTable(model);
         table.setName("DIMEMOD FEATURES");
@@ -79,11 +80,17 @@ public final class DimeModFeaturePanel extends JPanel {
     }
 
     static String status(DimeModFeature feature, boolean detected,
-            DimeModState state, VehiclePlatform platform) {
+            DimeModState state, VehiclePlatform platform,
+            boolean ramTuneRuntimeAvailable) {
         if (platform != VehiclePlatform.SUBARU) return "Not applicable";
         if (feature == DimeModFeature.RAM_TUNE) {
-            return detected ? "Mapped — research only; writes disabled"
-                    : "Research only; writes disabled";
+            if (!detected) return "Not mapped in loaded definition";
+            if (state != DimeModState.ACTIVE) {
+                return "Mapped — runtime not verified";
+            }
+            return ramTuneRuntimeAvailable
+                    ? "Mapped and runtime verified — writes disabled"
+                    : "Mapped — runtime feature unavailable";
         }
         if (detected) return "Mapped in loaded definition";
         if (state == DimeModState.NOT_PRESENT) return "Unavailable";

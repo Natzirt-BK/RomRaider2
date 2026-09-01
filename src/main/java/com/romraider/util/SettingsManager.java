@@ -26,7 +26,11 @@ import static javax.swing.JOptionPane.showMessageDialog;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.util.Locale;
 import java.util.ResourceBundle;
 
 import javax.xml.parsers.DocumentBuilder;
@@ -49,9 +53,13 @@ public class SettingsManager {
     private static final String SETTINGS_FILE = "/settings.xml";
     private static final String SETTINGS_DIR_PROPERTY =
             "romraider2.settings.dir";
+    private static final String DEFAULT_SETTINGS_FILE_PROPERTY =
+            "romraider2.default.settings.file";
+    private static final String CONFIGURED_SETTINGS_DIR =
+            System.getProperty(SETTINGS_DIR_PROPERTY);
     private static final String DEFAULT_SETTINGS_DIR = resolveSettingsDirectory(
-            System.getProperty(SETTINGS_DIR_PROPERTY),
-            System.getProperty("user.home"));
+            CONFIGURED_SETTINGS_DIR,
+            System.getProperty("user.home"), System.getProperty("os.name"));
     private static final String START_DIR = System.getProperty("user.dir");
     private static String settingsDir = DEFAULT_SETTINGS_DIR;
 
@@ -80,23 +88,54 @@ public class SettingsManager {
 
     static String resolveSettingsDirectory(String configuredDirectory,
             String userHome) {
+        return resolveSettingsDirectory(configuredDirectory, userHome, "");
+    }
+
+    static String resolveSettingsDirectory(String configuredDirectory,
+            String userHome, String osName) {
         if (configuredDirectory != null
                 && !configuredDirectory.trim().isEmpty()) {
             return configuredDirectory.trim();
         }
+        String platform = osName == null ? ""
+                : osName.toLowerCase(Locale.ENGLISH);
+        if (platform.contains("mac")) {
+            return userHome + "/Library/Application Support/RomRaider2";
+        }
         return userHome + "/.RomRaider";
+    }
+
+    static String resolveLoadSettingsDirectory(String configuredDirectory,
+            String userHome, String startDirectory,
+            boolean workingSettingsExists) {
+        return resolveLoadSettingsDirectory(configuredDirectory, userHome,
+                startDirectory, workingSettingsExists, "");
+    }
+
+    static String resolveLoadSettingsDirectory(String configuredDirectory,
+            String userHome, String startDirectory,
+            boolean workingSettingsExists, String osName) {
+        if (configuredDirectory != null
+                && !configuredDirectory.trim().isEmpty()) {
+            return resolveSettingsDirectory(configuredDirectory, userHome,
+                    osName);
+        }
+        return workingSettingsExists
+                ? startDirectory
+                : resolveSettingsDirectory(null, userHome, osName);
     }
     
     private static Settings load() {
         Settings loadedSettings;
         try {
-            File sf = new File(START_DIR + SETTINGS_FILE);
-            if (sf.exists()) {
-                settingsDir = START_DIR;
-            }
-            else {
-                sf = new File(DEFAULT_SETTINGS_DIR + SETTINGS_FILE);
-            }
+            final File workingSettings = new File(START_DIR + SETTINGS_FILE);
+            settingsDir = resolveLoadSettingsDirectory(
+                    CONFIGURED_SETTINGS_DIR,
+                    System.getProperty("user.home"), START_DIR,
+                    workingSettings.exists(), System.getProperty("os.name"));
+            final File sf = new File(settingsDir + SETTINGS_FILE);
+            installPackagedDefaults(sf,
+                    System.getProperty(DEFAULT_SETTINGS_FILE_PROPERTY));
             LOGGER.info("Loaded settings from file: " + settingsDir.replace("\\", "/") + SETTINGS_FILE);
 
             if (sf.length() > 0) {
@@ -123,6 +162,19 @@ public class SettingsManager {
             throw new RuntimeException(e);
         }
         return loadedSettings;
+    }
+
+    static void installPackagedDefaults(File settingsFile,
+            String packagedDefaultPath) throws IOException {
+        if (settingsFile == null || settingsFile.length() > 0
+                || packagedDefaultPath == null
+                || packagedDefaultPath.trim().isEmpty()) return;
+        File packagedDefault = new File(packagedDefaultPath.trim());
+        if (!packagedDefault.isFile() || packagedDefault.length() == 0) return;
+        File parent = settingsFile.getParentFile();
+        if (parent != null) Files.createDirectories(parent.toPath());
+        Files.copy(packagedDefault.toPath(), settingsFile.toPath(),
+                StandardCopyOption.REPLACE_EXISTING);
     }
 
     public static void save(Settings newSettings) {

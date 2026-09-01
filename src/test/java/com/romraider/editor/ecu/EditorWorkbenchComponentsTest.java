@@ -51,6 +51,7 @@ import com.romraider.maps.Table3D;
 import com.romraider.flash.FlashBackendRegistry;
 import com.romraider.editor.search.UnifiedSearchPanel;
 import com.romraider.editor.recovery.RecoveryState;
+import com.romraider.editor.workspace.RomChangeService;
 import com.romraider.logger.api.LiveDataSample;
 import com.romraider.logger.api.LoggerSessionState;
 import com.romraider.search.SearchEntry;
@@ -105,13 +106,16 @@ public class EditorWorkbenchComponentsTest {
         assertEquals(1, count(inspector, JTabbedPane.class));
         JTabbedPane tabs = findNamed(inspector, JTabbedPane.class,
                 "INSPECTOR TABS");
-        assertEquals(4, tabs.getTabCount());
+        assertEquals(5, tabs.getTabCount());
         assertEquals("INFO", tabs.getTitleAt(0));
         assertEquals("LIVE", tabs.getTitleAt(1));
         assertEquals("NOTES", tabs.getTitleAt(2));
         assertEquals("CHANGES", tabs.getTitleAt(3));
+        assertEquals("TUNE", tabs.getTitleAt(4));
         assertEquals("Map information", tabs.getToolTipTextAt(0));
         assertEquals("ROM changes", tabs.getToolTipTextAt(3));
+        assertEquals("Offline live-tuning plan preview",
+                tabs.getToolTipTextAt(4));
         assertNotNull(findNamed(inspector, JTextArea.class,
                 "MAP NOTES EDITOR"));
         assertNotNull(findNamed(inspector, JTable.class,
@@ -124,6 +128,10 @@ public class EditorWorkbenchComponentsTest {
                 "REDO ROM HISTORY"));
         assertNotNull(findNamed(inspector, JButton.class,
                 "OPEN CHANGED TABLE"));
+        assertNotNull(findNamed(inspector, JTable.class,
+                "LIVE TUNE CHANGE TABLE"));
+        assertNotNull(findNamed(inspector, JTextArea.class,
+                "LIVE TUNE SAFETY SUMMARY"));
         assertEquals("No unsaved cell changes",
                 findNamed(inspector, JLabel.class, "ROM CHANGE TOTAL").getText());
         assertNotNull(findNamed(inspector, JPanel.class, "TABLE DETAILS"));
@@ -244,8 +252,8 @@ public class EditorWorkbenchComponentsTest {
         assertTrue(recovery.isVisible());
         assertEquals("○ RECOVERY QUEUED", recovery.getText());
 
-        rom.setFileName("Tristan_05FXT_BCP500R_TMIC_40EWG_"
-                + "ID1300s_built_CobbSF_omni4R.bin");
+        rom.setFileName(
+                "long_descriptive_calibration_name_for_layout_test.bin");
         bar.showRom(rom);
         bar.setSize(1166, 30);
         bar.doLayout();
@@ -294,6 +302,40 @@ public class EditorWorkbenchComponentsTest {
         assertTrue(open.isEnabled());
         open.doClick();
         assertSame(table, opened[0]);
+    }
+
+    @Test
+    public void liveTuneTabPreviewsBytesWithoutOfferingAWriteAction() {
+        EditorInspectorPanel inspector = new EditorInspectorPanel();
+        Rom rom = new Rom(new com.romraider.maps.RomID());
+        rom.setFileName("preview.bin");
+        rom.populateTables(new byte[] {0, 10, 20, 30, 0},
+                new com.romraider.swing.JProgressPane());
+        Table1D table = new Table1D();
+        table.setName("Fuel Target");
+        table.setStorageAddress(1);
+        table.setStorageType(1);
+        table.setDataSize(3);
+        rom.addTableByName(table);
+        RomChangeService.rememberSavedBinary(rom);
+        try {
+            rom.getBinary()[2] = 25;
+            inspector.showSelection(rom, table);
+            findNamed(inspector, JTabbedPane.class, "INSPECTOR TABS")
+                    .setSelectedIndex(4);
+
+            JTable preview = findNamed(inspector, JTable.class,
+                    "LIVE TUNE CHANGE TABLE");
+            assertEquals(1, preview.getRowCount());
+            assertEquals("Fuel Target", preview.getValueAt(0, 0));
+            assertEquals("0x000002", preview.getValueAt(0, 1));
+            assertEquals("READY TO REVIEW", findNamed(inspector, JLabel.class,
+                    "LIVE TUNE PREVIEW STATUS").getText());
+            assertNull(findButton(inspector, "Write"));
+            assertNull(findButton(inspector, "Apply"));
+        } finally {
+            RomChangeService.forget(rom);
+        }
     }
 
     @Test

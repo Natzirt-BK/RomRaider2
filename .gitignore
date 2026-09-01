@@ -2,6 +2,9 @@ src/main/java/com/romraider/Version.java
 3rdparty/IzPack/
 3rdparty/launch4j/
 build/
+.gradle/
+**/.gradle/
+**/build/
 target/
 tmp/
 /settings.xml

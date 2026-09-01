@@ -26,17 +26,25 @@ import com.romraider.platform.PlatformContext;
 import com.romraider.platform.VehicleModule;
 import com.romraider.platform.VehiclePlatform;
 import com.romraider.platform.ui.PlatformSelectorPanel;
+import com.romraider.logger.api.LoggerChannel;
+import com.romraider.logger.api.LoggerChannelKind;
+import com.romraider.logger.api.LoggerChannelService;
 import com.romraider.logger.api.LoggerLiveDataBus;
 import com.romraider.logger.api.LoggerParameterFocusService;
+import com.romraider.logger.api.LoggerSessionService;
 import com.romraider.logger.api.LoggerSearchCatalog;
+import com.romraider.logger.api.LoggerWorkspacePreferences;
 import com.romraider.logger.analysis.ui.LogAnalysisPanel;
 import com.romraider.ui.TouchTargetService;
 import com.romraider.ui.BrandImages;
 import com.romraider.ui.ThemeToken;
+import com.romraider.ui.ThemeMode;
 import com.romraider.ui.UiThemeService;
 import com.romraider.swing.IntegratedOptionDialog;
 import com.romraider.logger.ecu.ui.*;
 import com.romraider.logger.ecu.ui.handler.file.FileLoggingConnectionMonitor;
+import com.romraider.logger.ecu.ui.spi.LoggerWorkspaceContext;
+import com.romraider.logger.ecu.ui.spi.LoggerWorkspaceLoader;
 import com.romraider.logger.ecu.ui.swing.menubar.action.InstallLoggerDefinitionAction;
 import static com.romraider.Version.PRODUCT_NAME;
 import static com.romraider.Version.VERSION;
@@ -116,6 +124,7 @@ import javax.swing.JTable;
 import javax.swing.JTextField;
 import javax.swing.JToggleButton;
 import javax.swing.JWindow;
+import javax.swing.SwingUtilities;
 import javax.swing.table.TableColumn;
 
 import org.apache.log4j.Logger;
@@ -284,6 +293,9 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
     private DynoUpdateHandler dynoUpdateHandler;
     private DataUpdateHandlerManager dynoHandlerManager;
     private DataRegistrationBroker dynoTabBroker;
+    private LoggerChannelService channelService;
+    private LoggerWorkspacePreferences workspacePreferences;
+    private boolean channelRefreshPending;
 
     public EcuInit getEcuInit() {
         return ecuInit;
@@ -299,6 +311,7 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
     private final JLabel startText = new JLabel(rb.getString("INITIALIZELOGGER"));
     private final String HOME = System.getProperty("user.home");
     private StatusIndicator statusIndicator;
+    private LoggerSessionService sessionService;
     private List<EcuSwitch> dtcodes = new ArrayList<EcuSwitch>();
     private Map<String, Map<Transport, Collection<Module>>> protocolList =
             new HashMap<String, Map<Transport, Collection<Module>>>();
@@ -421,7 +434,8 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
                     ecuInit = newEcuInit;
                     dmInit = null;
                     dmLabel.setText("");
-                    PlatformContext.getInstance().setDimeModState(DimeModState.UNKNOWN);
+                    PlatformContext.getInstance().setDimeModRuntime(
+                            DimeModState.UNKNOWN, false);
                     invokeLater(new Runnable() {
                         @Override
                         public void run() {
@@ -456,8 +470,10 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
         DmInitCallback dmInitCallback = new DmInitCallback() {
             @Override
             public void callback(DmInit dmInit, boolean forceUpdate) {
-                PlatformContext.getInstance().setDimeModState(
-                        dmInit == null ? DimeModState.NOT_PRESENT : DimeModState.ACTIVE);
+                PlatformContext.getInstance().setDimeModRuntime(
+                        dmInit == null ? DimeModState.NOT_PRESENT
+                                : DimeModState.ACTIVE,
+                        dmInit != null && dmInit.isRamTuneEnabled());
                 if (dmInit != EcuLogger.this.dmInit || (dmInit != null && forceUpdate)) {
                     invokeLater(() -> {
                         EcuLogger.this.dmInit = dmInit;
@@ -501,6 +517,15 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
                         resetFileLoggingButton();
                     }
                 }));
+        LoggerLiveDataBus liveDataBus = LoggerLiveDataBus.getInstance();
+        fileUpdateHandler.addListener(liveDataBus);
+        sessionService = new LoggerSessionService(liveDataBus,
+                this::startLogging,
+                this::stopLogging,
+                this::startFileLogging,
+                this::stopFileLogging,
+                failure -> reportError(
+                        "Logger session command failed", failure));
 
         mafHandlerManager = new DataUpdateHandlerManagerImpl();
         mafTabBroker = new DataRegistrationBrokerImpl(controller, mafHandlerManager);
@@ -543,12 +568,109 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
         dashboardTabParamListTableModel = new ParameterListTableModel(dashboardTabBroker, HEADING_PARAMETERS);
         dashboardTabSwitchListTableModel = new ParameterListTableModel(dashboardTabBroker, HEADING_SWITCHES);
         dashboardTabExternalListTableModel = new ParameterListTableModel(dashboardTabBroker, HEADING_EXTERNAL);
+        channelService = new LoggerChannelService(this::setChannelSelected,
+                failure -> reportError(
+                        "Logger channel selection failed", failure));
+        Boolean storedWorkspaceTheme = getSettings()
+                .getLoggerWorkspaceDarkTheme();
+        ThemeMode applicationTheme = UiThemeService.getInstance()
+                .getCurrentMode();
+        boolean darkWorkspace = storedWorkspaceTheme != null
+                ? storedWorkspaceTheme.booleanValue()
+                : applicationTheme == ThemeMode.DARK
+                        || applicationTheme == ThemeMode.HIGH_CONTRAST;
+        workspacePreferences = new LoggerWorkspacePreferences(
+                getSettings().getLoggerWorkspaceView(), darkWorkspace,
+                (view, dark) -> {
+                    getSettings().setLoggerWorkspaceView(view);
+                    getSettings().setLoggerWorkspaceDarkTheme(dark);
+                });
+        installChannelCatalogListeners();
     }
 
     public void loadLoggerParams() {
         loadLoggerConfig();
         loadFromExternalDataSources();
+        refreshChannelCatalog();
         LoggerParameterFocusService.getInstance().retryPending();
+    }
+
+    private void installChannelCatalogListeners() {
+        for (ParameterListTableModel model : allChannelModels()) {
+            model.addTableModelListener(event -> scheduleChannelCatalogRefresh());
+        }
+    }
+
+    private void scheduleChannelCatalogRefresh() {
+        if (channelRefreshPending) return;
+        channelRefreshPending = true;
+        invokeLater(new Runnable() {
+            public void run() {
+                channelRefreshPending = false;
+                refreshChannelCatalog();
+            }
+        });
+    }
+
+    private void refreshChannelCatalog() {
+        if (channelService == null) return;
+        List<LoggerChannel> channels = new ArrayList<LoggerChannel>();
+        addChannelGroup(channels, dataTabParamListTableModel,
+                LoggerChannelKind.PARAMETER);
+        addChannelGroup(channels, dataTabSwitchListTableModel,
+                LoggerChannelKind.SWITCH);
+        addChannelGroup(channels, dataTabExternalListTableModel,
+                LoggerChannelKind.EXTERNAL);
+        channelService.replaceChannels(channels);
+    }
+
+    private void addChannelGroup(List<LoggerChannel> channels,
+            ParameterListTableModel source, LoggerChannelKind kind) {
+        for (ParameterRow row : source.getParameterRows()) {
+            LoggerData data = row.getLoggerData();
+            String units = data.getSelectedConvertor() == null ? ""
+                    : data.getSelectedConvertor().getUnits();
+            channels.add(new LoggerChannel(data.getId(), data.getName(), units,
+                    kind, isSelectedInAnyWorkspace(data.getId())));
+        }
+    }
+
+    private boolean isSelectedInAnyWorkspace(String parameterId) {
+        for (ParameterListTableModel model : allChannelModels()) {
+            int row = model.findRowById(parameterId);
+            if (row >= 0 && Boolean.TRUE.equals(model.getValueAt(row, 0))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void setChannelSelected(final String parameterId,
+            final Boolean selected) {
+        Runnable selection = new Runnable() {
+            public void run() {
+                for (ParameterListTableModel model : allChannelModels()) {
+                    int row = model.findRowById(parameterId);
+                    if (row >= 0 && !selected.equals(model.getValueAt(row, 0))) {
+                        model.setValueAt(selected, row, 0);
+                    }
+                }
+                refreshChannelCatalog();
+            }
+        };
+        if (SwingUtilities.isEventDispatchThread()) selection.run();
+        else invokeLater(selection);
+    }
+
+    private ParameterListTableModel[] allChannelModels() {
+        return new ParameterListTableModel[] {
+                dataTabParamListTableModel, dataTabSwitchListTableModel,
+                dataTabExternalListTableModel,
+                graphTabParamListTableModel, graphTabSwitchListTableModel,
+                graphTabExternalListTableModel,
+                dashboardTabParamListTableModel,
+                dashboardTabSwitchListTableModel,
+                dashboardTabExternalListTableModel};
     }
 
     private void initControllerListeners() {
@@ -1045,6 +1167,13 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
     }
 
     private JComponent buildTabbedPane() {
+        JComponent replacementWorkspace = LoggerWorkspaceLoader.create(
+                new LoggerWorkspaceContext(LoggerLiveDataBus.getInstance(),
+                        sessionService, channelService,
+                        workspacePreferences));
+        if (replacementWorkspace != null) {
+            tabbedPane.add("Workspace", replacementWorkspace);
+        }
         if (touchEnabled == false)
         {
             addSplitPaneTab(
@@ -1493,16 +1622,10 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
                 @Override
                 public void actionPerformed(ActionEvent actionEvent) {
                     if (logToFileButton.isSelected() && controller.isStarted()) {
-                        fileUpdateHandler.start();
-                        styleFileLoggingButton(true);
-                        logToFileButton.setText(LOG_TO_FILE_STOP);
+                        startFileLogging();
                     }
                     else {
-                        fileUpdateHandler.stop();
-                        if (!controller.isStarted()) statusIndicator.stopped();
-                        styleFileLoggingButton(false);
-                        logToFileButton.setSelected(false);
-                        logToFileButton.setText(LOG_TO_FILE_START);
+                        stopFileLogging();
                     }
                 }
             }
@@ -1524,6 +1647,33 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
                 styleFileLoggingButton(false);
                 button.setSelected(false);
                 button.setText(LOG_TO_FILE_START);
+            }
+        });
+    }
+
+    private void startFileLogging() {
+        if (!controller.isStarted()) return;
+        fileUpdateHandler.start();
+        updateFileLoggingButton(true);
+    }
+
+    private void stopFileLogging() {
+        fileUpdateHandler.stop();
+        if (!controller.isStarted() && statusIndicator != null) {
+            statusIndicator.stopped();
+        }
+        updateFileLoggingButton(false);
+    }
+
+    private void updateFileLoggingButton(final boolean recording) {
+        final JToggleButton button = logToFileButton;
+        if (button == null) return;
+        invokeLater(new Runnable() {
+            public void run() {
+                styleFileLoggingButton(recording);
+                button.setSelected(recording);
+                button.setText(recording
+                        ? LOG_TO_FILE_STOP : LOG_TO_FILE_START);
             }
         });
     }
@@ -1956,6 +2106,14 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
         controller.stop();
     }
 
+    public LoggerSessionService getSessionService() {
+        return sessionService;
+    }
+
+    public LoggerChannelService getChannelService() {
+        return channelService;
+    }
+
     private void stopPlugins() {
         for (ExternalDataSource dataSource : externalDataSources) {
             try {
@@ -2037,6 +2195,7 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
         } catch (Exception e) {
             LOGGER.warn("Error stopping logger:", e);
         } finally {
+            if (sessionService != null) sessionService.close();
             LoggerParameterFocusService.getInstance().removeListener(
                     parameterFocusListener);
             saveSettings();

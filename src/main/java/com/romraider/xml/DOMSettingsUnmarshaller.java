@@ -37,6 +37,7 @@ import org.w3c.dom.NodeList;
 import com.romraider.Settings;
 import com.romraider.editor.workspace.EditorWorkspacePreferences;
 import com.romraider.editor.workspace.TableLocation;
+import com.romraider.logger.api.LoggerWorkspaceView;
 import com.romraider.logger.external.phidget.interfacekit.io.IntfKitSensor;
 import com.romraider.platform.PlatformRegistry;
 import com.romraider.platform.VehicleModule;
@@ -432,6 +433,14 @@ public final class DOMSettingsUnmarshaller {
             } else if (n.getNodeType() == ELEMENT_NODE && n.getNodeName().equalsIgnoreCase("tabs")) {
                 settings.setLoggerSelectedTabIndex(unmarshallAttribute(n, "selected", 0));
                 settings.setLoggerParameterListState(unmarshallAttribute(n, "showlist", true));
+                settings.setLoggerWorkspaceView(LoggerWorkspaceView.fromName(
+                        unmarshallAttribute(n, "workspace", "OVERVIEW")));
+                String workspaceDark = unmarshallAttribute(n,
+                        "workspace-dark", (String) null);
+                if (workspaceDark != null) {
+                    settings.setLoggerWorkspaceDarkTheme(Boolean.valueOf(
+                            Boolean.parseBoolean(workspaceDark)));
+                }
 
             } else if (n.getNodeType() == ELEMENT_NODE && n.getNodeName().equalsIgnoreCase("definition")) {
                 settings.setLoggerDefinitionFilePath(unmarshallAttribute(n, "path", settings.getLoggerDefinitionFilePath()));
