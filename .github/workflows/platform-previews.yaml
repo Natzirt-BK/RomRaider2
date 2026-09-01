@@ -105,11 +105,11 @@ jobs:
         with:
           gradle-version: "9.5.0"
       - name: Install package tools
-        run: sudo apt-get update && sudo apt-get install -y ant zip
+        run: sudo apt-get update && sudo apt-get install -y ant xvfb zip
       - name: Build SteamOS Desktop Mode preview
         run: |
           cp packaging/default/settings.xml settings.xml
-          ant clean unittest
+          timeout 10m xvfb-run -a ant clean unittest
           ant clean build-linux
           gradle --no-daemon :platform:shared-core:check :ui:compose-logger:test :ui:compose-logger:stageLoggerWorkspace
           packaging/java21/build-linux-app-image.sh build/java21
