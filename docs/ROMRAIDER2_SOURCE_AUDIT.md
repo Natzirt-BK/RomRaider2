@@ -1,76 +1,79 @@
 # RomRaider2 source audit
 
-Audit date: 2026-08-27
+Last reviewed: 2026-08-31
 
-## Pinned inputs
+This file records what was checked in the old forks and branches so useful work
+does not get forgotten or merged blindly later.
+
+## Source points checked
 
 - DimeSPb/RomRaider `0389d6c969aabb698caffcd9a4c75528fe15c4f1`
 - RomRaider/RomRaider `dafe0c36c1a68efadbeedb2825f3855463fdbc35`
 - blicraft/RomRaider `a0ad916dae533cecd4ef7ec1e496796e13624531`
-- NatZirt MUT-Raider-II source `e070002b5c4cd479f363d297f4b0daa00af9cb75`
-- NatZirt installer `df6a496d04a02f7c07800ec36fefc0e9f3db1733`
+- NatZirt MUT-Raider-II `e070002b5c4cd479f363d297f4b0daa00af9cb75`
+- DimeSPb historical branches, including `alpha`, `dev_road_dyno`,
+  `dev_olmaf`, `dev_gui_def_overhaul`, and `thegris`
 
-## DimeSPb baseline
+## DimeMod
 
-The pinned DimeSPb commit merges official RomRaider release commit
-`88d9fbd4` and retains 29 DimeMod-side commits. Relative to the official
-release, the DimeMod delta changes 38 files with 1,816 insertions and 211
-deletions.
+The DimeSPb baseline retains the useful DimeMod discovery and Logger work:
 
-The primary DimeMod surface includes:
+- DM2.x structure and feature discovery;
+- DimeMod-specific SSM queries and address planning;
+- diagnostic-code parsing;
+- extra Logger parameter and address types;
+- DM2.3.100 tip-in and cranking multiplier channels.
 
-- `DmInit` capability and runtime structure discovery;
-- DimeMod-specific SSM query handling and optimized address planning;
-- DimeMod diagnostic-code parsing and display;
-- extended logger parameter/address types;
-- RAM-tune research/test changes.
+The installed DM20 package and archived branch have the same public `DmInit`
+surface as the current code. Synthetic tests now cover DM20 version/address
+parsing, runtime channel creation, known error bits, bad structure signatures,
+and unsupported major versions. Private ROMs, definitions, profiles, and logs
+were not copied into the repository.
 
-The unmodified pinned baseline compiled successfully on the target Linux host
-with Java 8. Its non-GUI unit tests passed. The legacy
-`XDFConversionLayerTest` requires a real graphical display and fails in a
-headless test process; this behavior was present before RomRaider2 changes.
+## blicraft review
 
-## Official forward port
+Recovered or already covered:
 
-Only one official commit was newer than the DimeSPb merge base:
+- Offline analysis and linked custom graphs were reimplemented around the
+  current Logger data model.
+- Logger workspace selection was already saved and restored.
+- Ctrl+1 through Ctrl+7 Logger workspace shortcuts were recovered with a new
+  focused test.
+- Runtime theme changes are handled by the current theme service.
+- Diagnostic logging is always available locally, its level can be changed,
+  and its folder can be opened from the Logger. A separate on/off file toggle
+  would make support logs less reliable, so it was not carried over.
 
-- `dafe0c36` fixes the duplicate minus-key mapping and adds bracket keys for
-  fine cell decrement/increment.
+Deferred:
 
-It was cherry-picked without conflict as RomRaider2 commit `d72eecb7`.
+- The ELM327 PID-bitmask and variable-address changes need their own protocol
+  tests and real ELM/vehicle checks. They are not required for the Subaru RC3
+  path and were not merged as an unverified side change.
 
-## blicraft disposition
+Rejected:
 
-Worthwhile later references:
+- ISO15765 memory writes, ECU reset additions, and automatic tuning
+  recommendations. They do not meet RomRaider2's write-safety boundary.
 
-- analysis and custom-graph tabs;
-- logger tab shortcuts and preference persistence;
-- debug file logging toggle;
-- centralized runtime look-and-feel updates;
-- improved ELM327 parsing and associated tests.
+## Historical branch review
 
-Not accepted into the foundation:
+- `dev_road_dyno`: its OpenPort 2.0 lowercase `time` CSV fix is already in the
+  current Dyno loader.
+- `dev_olmaf`: this is an unfinished 2010 open-loop MAF experiment. It contains
+  commented-out controls, assumes specific parameter IDs, and has no tests. It
+  needs a fresh design and wideband validation rather than a direct merge.
+- `dev_gui_def_overhaul` and `dev_xmlmerge`: incomplete metadata experiments
+  that are superseded by the current definition loader and manager.
+- `thegris`: an unfinished gauge-warning/profile experiment. Warning behavior
+  should be rebuilt as tested, tab-specific Logger settings instead of taking
+  the old branch wholesale.
+- Old installer-tool branches are unrelated to the current Java 21 application
+  images.
 
-- ISO15765 memory writes;
-- ECU reset additions;
-- unattended or directly applied tuning recommendations.
+## Evo VIII/IX
 
-Those features require the handoff's capability gates, typed realtime service,
-identity validation, whitelists, and readback verification before integration.
-
-## Evo VIII / IX MUT-II disposition
-
-The NatZirt MUT-II implementation is a compact protocol addition with seven
-dedicated tests. It adds an ISO9141 15,625-baud read-only logger path,
-generic definition-parser coverage, and connection initialization. It does not
-add ECU write/reset capability. Vehicle definitions and profiles are maintained
-outside the software repository.
-
-## Migration safety boundary
-
-RomRaider2 is developed on branch `feature/romraider2-foundation`. The
-legacy MUT-Raider-II fork remains listed
-above solely as a pinned, audited source input; its separate package and
-installer path are retired. DimeMod remains an external Subaru validation
-fallback. Historical EvoScan behavior may be used as a comparison reference,
-but RomRaider2 does not depend on or package EvoScan.
+The MUT-Raider-II work supplied a small read-only MUT-II protocol path with
+synthetic tests. It does not add ECU reset or write behavior. Vehicle
+definitions and profiles stay outside this software repository. The protocol
+still needs an in-car qualification pass before the README can call it fully
+supported.

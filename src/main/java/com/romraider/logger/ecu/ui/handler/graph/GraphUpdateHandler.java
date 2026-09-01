@@ -23,13 +23,13 @@ import com.romraider.logger.ecu.comms.query.Response;
 import com.romraider.logger.ecu.definition.ConvertorUpdateListener;
 import com.romraider.logger.ecu.definition.LoggerData;
 import com.romraider.logger.ecu.ui.handler.DataUpdateHandler;
+import com.romraider.ui.ThemeToken;
+import com.romraider.ui.UiThemeService;
 import com.romraider.util.ResourceUtil;
 
 import static com.romraider.logger.ecu.ui.handler.graph.SpringUtilities.makeCompactGrid;
 import static java.awt.BorderLayout.CENTER;
 import static java.awt.BorderLayout.NORTH;
-import static java.awt.Color.BLACK;
-import static java.awt.Color.WHITE;
 import static java.util.Collections.synchronizedMap;
 import static javax.swing.JComponent.WHEN_IN_FOCUSED_WINDOW;
 import static javax.swing.KeyStroke.getKeyStroke;
@@ -44,13 +44,25 @@ import org.jfree.data.xy.XYDataset;
 import org.jfree.data.xy.XYSeries;
 import org.jfree.data.xy.XYSeriesCollection;
 import javax.swing.AbstractAction;
+import javax.swing.BorderFactory;
+import javax.swing.JButton;
 import javax.swing.JCheckBox;
+import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.JScrollPane;
 import javax.swing.JToggleButton;
+import javax.swing.ScrollPaneConstants;
 import javax.swing.SpringLayout;
 import javax.swing.SwingUtilities;
+import java.awt.BorderLayout;
+import java.awt.CardLayout;
 import java.awt.Color;
 import java.awt.Dimension;
+import java.awt.FlowLayout;
+import java.awt.Font;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
+import java.awt.Insets;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.util.HashMap;
@@ -60,12 +72,15 @@ import java.util.ResourceBundle;
 public final class GraphUpdateHandler implements DataUpdateHandler, ConvertorUpdateListener {
     private static final ResourceBundle rb = new ResourceUtil().getBundle(
             GraphUpdateHandler.class.getName());
-    private static final Color DARK_GREY = new Color(80, 80, 80);
-    private static final Color LIGHT_GREY = new Color(110, 110, 110);
+    private static final String EMPTY = "empty";
+    private static final String CHARTS = "charts";
     private final Map<LoggerData, ChartPanel> chartMap = synchronizedMap(new HashMap<LoggerData, ChartPanel>());
     private final Map<LoggerData, XYSeries> seriesMap = synchronizedMap(new HashMap<LoggerData, XYSeries>());
     private final Map<LoggerData, Integer> datasetIndexes = synchronizedMap(new HashMap<LoggerData, Integer>());
     private final JPanel graphPanel;
+    private final CardLayout cards = new CardLayout();
+    private final JPanel content = new JPanel(cards);
+    private final JLabel selectionSummary = new JLabel("No channels selected");
     private long startTime = System.currentTimeMillis();
     private boolean combinedChart = false;
     private boolean paused = false;
@@ -76,13 +91,16 @@ public final class GraphUpdateHandler implements DataUpdateHandler, ConvertorUpd
 
     public GraphUpdateHandler(final JPanel panel) {
         this.graphPanel = new JPanel(new SpringLayout());
+        panel.setName("LOGGER GRAPH WORKSPACE");
+        panel.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
         final JCheckBox combinedCheckbox = new JCheckBox(
-                rb.getString("COMBINE"), combinedChart);
+                "Combined graph", combinedChart);
         combinedCheckbox.addActionListener(new CombinedActionListener(combinedCheckbox));
         JToggleButton playPauseButton = new JToggleButton(rb.getString("PAUSE"));
         playPauseButton.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent actionEvent) {
                 paused = !paused;
+                playPauseButton.setText(paused ? "Resume" : rb.getString("PAUSE"));
                 if (paused) {
                     pauseStartTime = System.currentTimeMillis();
                 } else {
@@ -98,11 +116,56 @@ public final class GraphUpdateHandler implements DataUpdateHandler, ConvertorUpd
                 combinedCheckbox.doClick();
             }
         });
-        JPanel controlPanel = new JPanel();
-        controlPanel.add(combinedCheckbox);
-        controlPanel.add(playPauseButton);
+        JButton resetButton = new JButton("Reset Graph");
+        resetButton.setName("RESET LOGGER GRAPH");
+        resetButton.addActionListener(event -> reset());
+
+        JLabel title = new JLabel("GRAPH");
+        title.setFont(title.getFont().deriveFont(Font.BOLD));
+        selectionSummary.setForeground(UiThemeService.getInstance().color(
+                ThemeToken.SECONDARY_TEXT));
+        JPanel titles = new JPanel(new BorderLayout(0, 2));
+        titles.add(title, BorderLayout.NORTH);
+        titles.add(selectionSummary, BorderLayout.SOUTH);
+
+        JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
+        actions.add(combinedCheckbox);
+        actions.add(playPauseButton);
+        actions.add(resetButton);
+        JPanel controlPanel = new JPanel(new BorderLayout(12, 0));
+        controlPanel.setBorder(BorderFactory.createEmptyBorder(0, 0, 8, 0));
+        controlPanel.add(titles, BorderLayout.WEST);
+        controlPanel.add(actions, BorderLayout.EAST);
         panel.add(controlPanel, NORTH);
-        panel.add(this.graphPanel, CENTER);
+
+        JScrollPane scroll = new JScrollPane(this.graphPanel,
+                ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED,
+                ScrollPaneConstants.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+        scroll.getVerticalScrollBar().setUnitIncrement(40);
+        content.add(scroll, CHARTS);
+        content.add(buildEmptyState(), EMPTY);
+        panel.add(content, CENTER);
+        updateWorkspaceState();
+    }
+
+    private JPanel buildEmptyState() {
+        JPanel empty = new JPanel(new GridBagLayout());
+        empty.setName("LOGGER GRAPH EMPTY STATE");
+        GridBagConstraints constraints = new GridBagConstraints();
+        constraints.gridx = 0;
+        constraints.insets = new Insets(4, 20, 4, 20);
+        JLabel title = new JLabel("Choose channels to graph");
+        title.setFont(title.getFont().deriveFont(Font.BOLD,
+                title.getFont().getSize2D() + 3.0f));
+        constraints.gridy = 0;
+        empty.add(title, constraints);
+        JLabel detail = new JLabel(
+                "Select channels on the left to build a live time plot.");
+        detail.setForeground(UiThemeService.getInstance().color(
+                ThemeToken.SECONDARY_TEXT));
+        constraints.gridy = 1;
+        empty.add(detail, constraints);
+        return empty;
     }
 
     public synchronized void registerData(LoggerData loggerData) {
@@ -115,7 +178,7 @@ public final class GraphUpdateHandler implements DataUpdateHandler, ConvertorUpd
             addToPanel(loggerData);
             layoutForPanel();
         }
-        graphPanel.updateUI();
+        refreshWorkspace();
     }
 
     private synchronized void addToPanel(LoggerData loggerData) {
@@ -136,7 +199,10 @@ public final class GraphUpdateHandler implements DataUpdateHandler, ConvertorUpd
         if (combinedChartPanel == null) {
             combinedChartPanel = new ChartPanel(createXYLineChart(loggerData, null, true), false, true, true, true, true);
             LegendTitle legendTitle = new LegendTitle(combinedChartPanel.getChart().getXYPlot());
-            legendTitle.setItemPaint(WHITE);
+            legendTitle.setItemPaint(UiThemeService.getInstance().color(
+                    ThemeToken.PRIMARY_TEXT));
+            legendTitle.setBackgroundPaint(UiThemeService.getInstance().color(
+                    ThemeToken.SURFACE));
             combinedChartPanel.getChart().addLegend(legendTitle);
             combinedChartPanel.setMinimumSize(new Dimension(500, 400));
             combinedChartPanel.setPreferredSize(new Dimension(500, 400));
@@ -175,7 +241,7 @@ public final class GraphUpdateHandler implements DataUpdateHandler, ConvertorUpd
             removeFromPanel(loggerData);
             layoutForPanel();
         }
-        graphPanel.updateUI();
+        refreshWorkspace();
     }
 
     private void removeFromCombined(LoggerData loggerData) {
@@ -207,6 +273,26 @@ public final class GraphUpdateHandler implements DataUpdateHandler, ConvertorUpd
         }
     }
 
+    private void refreshWorkspace() {
+        Runnable refresh = new Runnable() {
+            public void run() {
+                updateWorkspaceState();
+                graphPanel.revalidate();
+                graphPanel.repaint();
+            }
+        };
+        if (SwingUtilities.isEventDispatchThread()) refresh.run();
+        else SwingUtilities.invokeLater(refresh);
+    }
+
+    private void updateWorkspaceState() {
+        int count = seriesMap.size();
+        selectionSummary.setText(count == 0 ? "No channels selected"
+                : count + (count == 1 ? " channel selected"
+                        : " channels selected"));
+        cards.show(content, count == 0 ? EMPTY : CHARTS);
+    }
+
     public synchronized void notifyConvertorUpdate(LoggerData updatedLoggerData) {
         if (chartMap.containsKey(updatedLoggerData)) {
             seriesMap.get(updatedLoggerData).clear();
@@ -227,17 +313,27 @@ public final class GraphUpdateHandler implements DataUpdateHandler, ConvertorUpd
         JFreeChart chart = ChartFactory.createXYLineChart(title,
                 rb.getString("LBLXAXIS"), rangeAxisTitle,
                 dataset, VERTICAL, false, true, false);
-        chart.setBackgroundPaint(BLACK);
-        chart.getTitle().setPaint(WHITE);
+        Color background = UiThemeService.getInstance().color(
+                ThemeToken.BACKGROUND);
+        Color surface = UiThemeService.getInstance().color(
+                ThemeToken.SURFACE);
+        Color text = UiThemeService.getInstance().color(
+                ThemeToken.PRIMARY_TEXT);
+        Color secondary = UiThemeService.getInstance().color(
+                ThemeToken.SECONDARY_TEXT);
+        Color grid = UiThemeService.getInstance().color(
+                ThemeToken.RAISED_SURFACE);
+        chart.setBackgroundPaint(surface);
+        chart.getTitle().setPaint(text);
         XYPlot plot = chart.getXYPlot();
-        plot.setBackgroundPaint(BLACK);
-        plot.getDomainAxis().setLabelPaint(WHITE);
-        plot.getRangeAxis().setLabelPaint(WHITE);
-        plot.getDomainAxis().setTickLabelPaint(LIGHT_GREY);
-        plot.getRangeAxis().setTickLabelPaint(LIGHT_GREY);
-        plot.setDomainGridlinePaint(DARK_GREY);
-        plot.setRangeGridlinePaint(DARK_GREY);
-        plot.setOutlinePaint(DARK_GREY);
+        plot.setBackgroundPaint(background);
+        plot.getDomainAxis().setLabelPaint(text);
+        plot.getRangeAxis().setLabelPaint(text);
+        plot.getDomainAxis().setTickLabelPaint(secondary);
+        plot.getRangeAxis().setTickLabelPaint(secondary);
+        plot.setDomainGridlinePaint(grid);
+        plot.setRangeGridlinePaint(grid);
+        plot.setOutlinePaint(grid);
         return chart;
     }
 
@@ -264,7 +360,7 @@ public final class GraphUpdateHandler implements DataUpdateHandler, ConvertorUpd
                 addAllToPanel();
                 layoutForPanel();
             }
-            graphPanel.updateUI();
+            refreshWorkspace();
         }
 
         private void addAllToCombined() {

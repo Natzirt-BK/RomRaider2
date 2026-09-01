@@ -24,16 +24,16 @@ import static com.romraider.Settings.COMMA;
 import com.romraider.logger.ecu.ui.handler.graph.SpringUtilities;
 import com.romraider.logger.ecu.ui.tab.CircleDrawer;
 import com.romraider.logger.ecu.ui.tab.XYTrendline;
+import com.romraider.ui.ThemeToken;
+import com.romraider.ui.UiThemeService;
 import com.romraider.util.ResourceUtil;
 
 import static com.romraider.Settings.SEMICOLON;
 import static com.romraider.util.ParamChecker.checkNotNull;
 import jamlab.Polyfit;
-import static java.awt.Color.BLACK;
 import static java.awt.Color.BLUE;
 import static java.awt.Color.GREEN;
 import static java.awt.Color.RED;
-import static java.awt.Color.WHITE;
 import static java.awt.Color.YELLOW;
 import static org.jfree.chart.ChartFactory.createScatterPlot;
 import org.jfree.chart.ChartPanel;
@@ -64,8 +64,6 @@ public final class DynoChartPanel extends JPanel {
     private static final long serialVersionUID = -6577979878171615665L;
     private static final ResourceBundle rb = new ResourceUtil().getBundle(
             DynoChartPanel.class.getName());
-    private static final Color DARK_GREY = new Color(80, 80, 80);
-    private static final Color LIGHT_GREY = new Color(110, 110, 110);
     private static final String START_PROMPT = rb.getString("STARTPROMPT");
     private static final String ET_PROMPT_I = rb.getString("ETPROMPTI");
     private static final String ET_PROMPT_M = rb.getString("ETPROMPTM");
@@ -374,7 +372,8 @@ public final class DynoChartPanel extends JPanel {
 
     private JFreeChart createChart() {
         JFreeChart chart = createScatterPlot(null, labelX, labelY1, null, VERTICAL, false, true, false);
-        chart.setBackgroundPaint(BLACK);
+        chart.setBackgroundPaint(UiThemeService.getInstance().color(
+                ThemeToken.SURFACE));
         configurePlot(chart);
         addSeries1(chart, 0, data, BLUE);
         addSeries2(chart, 1, data1, YELLOW);
@@ -384,18 +383,22 @@ public final class DynoChartPanel extends JPanel {
     }
 
     private void configurePlot(JFreeChart chart) {
+        UiThemeService theme = UiThemeService.getInstance();
+        Color text = theme.color(ThemeToken.PRIMARY_TEXT);
+        Color secondary = theme.color(ThemeToken.SECONDARY_TEXT);
+        Color grid = theme.color(ThemeToken.RAISED_SURFACE);
         plot = chart.getXYPlot();
-        plot.setOutlinePaint(DARK_GREY);
-        plot.setBackgroundPaint(BLACK);
+        plot.setOutlinePaint(grid);
+        plot.setBackgroundPaint(theme.color(ThemeToken.BACKGROUND));
         // X axis settings
         plot.setDomainAxisLocation(AxisLocation.BOTTOM_OR_RIGHT);
-        plot.getDomainAxis().setLabelPaint(WHITE);
-        plot.getDomainAxis().setTickLabelPaint(LIGHT_GREY);
-        plot.setDomainGridlinePaint(DARK_GREY);
+        plot.getDomainAxis().setLabelPaint(text);
+        plot.getDomainAxis().setTickLabelPaint(secondary);
+        plot.setDomainGridlinePaint(grid);
         // Y1 axis (left) settings
         hpAxis.setLabel(labelY1);
         hpAxis.setLabelPaint(BLUE);
-        hpAxis.setTickLabelPaint(LIGHT_GREY);
+        hpAxis.setTickLabelPaint(secondary);
         hpAxis.setAutoRangeIncludesZero(false);
         hpAxis.setAutoRange(true);
         plot.setRangeAxis(0, hpAxis);
@@ -405,15 +408,17 @@ public final class DynoChartPanel extends JPanel {
         // Y2 axis (right) settings
         tqAxis.setLabel(labelY2);
         tqAxis.setLabelPaint(YELLOW);
-        tqAxis.setTickLabelPaint(LIGHT_GREY);
+        tqAxis.setTickLabelPaint(secondary);
         tqAxis.setAutoRangeIncludesZero(false);
         tqAxis.setAutoRange(true);
         plot.setRangeAxis(1, tqAxis);
         plot.setRangeAxisLocation(1, AxisLocation.BOTTOM_OR_RIGHT);
         plot.mapDatasetToRangeAxis(1, 1);
         plot.mapDatasetToRangeAxis(3, 1);
-        plot.setRangeGridlinePaint(DARK_GREY);
-        refStat.setPaint(WHITE);
+        plot.setRangeGridlinePaint(grid);
+        plot.setNoDataMessage("Record or load data to populate this graph");
+        plot.setNoDataMessagePaint(secondary);
+        refStat.setPaint(text);
         refStat.setTextAnchor(TextAnchor.TOP_LEFT);
         refStat.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
 

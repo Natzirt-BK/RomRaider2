@@ -21,14 +21,19 @@ package com.romraider.logger.ecu.ui;
 
 import static java.awt.BorderLayout.WEST;
 import static java.awt.Font.BOLD;
+import javax.swing.BorderFactory;
 import javax.swing.ImageIcon;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.SwingUtilities;
 
+import com.romraider.ui.ThemeToken;
+import com.romraider.ui.UiThemeService;
 import com.romraider.util.ResourceUtil;
 
 import java.awt.BorderLayout;
+import java.awt.Color;
+import java.util.Locale;
 import java.util.ResourceBundle;
 
 public final class StatusIndicator extends JPanel implements StatusChangeListener {
@@ -36,6 +41,7 @@ public final class StatusIndicator extends JPanel implements StatusChangeListene
     private static final ResourceBundle rb = new ResourceUtil().getBundle(
             StatusIndicator.class.getName());
     private final JLabel statusLabel = new JLabel();
+    private ThemeToken statusColorToken = ThemeToken.SECONDARY_TEXT;
     private static final String TEXT_CONNECTING = rb.getString("CONNECTING");
     private static final String TEXT_READING = rb.getString("READING");
     private static final String TEXT_READING_EXTERNAL = rb.getString("READING_EXTERNAL");
@@ -48,6 +54,16 @@ public final class StatusIndicator extends JPanel implements StatusChangeListene
 
     public StatusIndicator() {
         setLayout(new BorderLayout());
+        setName("LOGGER CONNECTION STATUS");
+        setOpaque(true);
+        setBackground(UiThemeService.getInstance().color(
+                ThemeToken.RAISED_SURFACE));
+        setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(
+                        UiThemeService.getInstance().color(
+                                ThemeToken.RAISED_SURFACE)),
+                BorderFactory.createEmptyBorder(6, 10, 6, 10)));
+        statusLabel.setName("LOGGER CONNECTION STATUS TEXT");
         statusLabel.setFont(getFont().deriveFont(BOLD));
         add(statusLabel, WEST);
         stopped();
@@ -55,36 +71,68 @@ public final class StatusIndicator extends JPanel implements StatusChangeListene
 
     @Override
     public void connecting() {
-        updateStatusLabel(TEXT_CONNECTING, ICON_CONNECTING);
+        updateStatusLabel(TEXT_CONNECTING, ICON_CONNECTING,
+                ThemeToken.ACCENT);
     }
 
     @Override
     public void readingData() {
-        updateStatusLabel(TEXT_READING, ICON_READING);
+        updateStatusLabel(TEXT_READING, ICON_READING,
+                ThemeToken.SUCCESS);
     }
 
     @Override
     public void readingDataExternal() {
-        updateStatusLabel(TEXT_READING_EXTERNAL, ICON_READING);
+        updateStatusLabel(TEXT_READING_EXTERNAL, ICON_READING,
+                ThemeToken.SUCCESS);
     }
 
     @Override
     public void loggingData() {
-        updateStatusLabel(TEXT_LOGGING, ICON_LOGGING);
+        updateStatusLabel(TEXT_LOGGING, ICON_LOGGING,
+                ThemeToken.DANGER);
     }
 
     @Override
     public void stopped() {
-        updateStatusLabel(TEXT_STOPPED, ICON_STOPPED);
+        updateStatusLabel(TEXT_STOPPED, ICON_STOPPED,
+                ThemeToken.SECONDARY_TEXT);
     }
 
-    private void updateStatusLabel(final String text, final ImageIcon icon) {
+    private void updateStatusLabel(final String text, final ImageIcon icon,
+            final ThemeToken colorToken) {
+        final String displayText = text.trim();
+        statusColorToken = colorToken;
         SwingUtilities.invokeLater(new Runnable() {
             @Override
             public void run() {
-                statusLabel.setText(text);
+                statusLabel.setText(displayText.toUpperCase(Locale.ROOT));
                 statusLabel.setIcon(icon);
+                Color color = UiThemeService.getInstance().color(colorToken);
+                statusLabel.setForeground(color);
+                statusLabel.setToolTipText(displayText);
+                statusLabel.getAccessibleContext().setAccessibleName(
+                        displayText);
             }
         });
+    }
+
+    public String getStatusText() {
+        return statusLabel.getText();
+    }
+
+    @Override
+    public void updateUI() {
+        super.updateUI();
+        if (statusLabel == null || statusColorToken == null) return;
+        setBackground(UiThemeService.getInstance().color(
+                ThemeToken.RAISED_SURFACE));
+        setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(
+                        UiThemeService.getInstance().color(
+                                ThemeToken.RAISED_SURFACE)),
+                BorderFactory.createEmptyBorder(6, 10, 6, 10)));
+        statusLabel.setForeground(UiThemeService.getInstance().color(
+                statusColorToken));
     }
 }

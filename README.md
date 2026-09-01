@@ -1,109 +1,99 @@
 # RomRaider2 ECU Studio
 
-RomRaider2 is a modernization of RomRaider for Subaru and
-Mitsubishi Lancer Evolution ECU editing, logging, diagnostics, and log
-analysis. It preserves useful work from the DimeMod fork while adding a new
-interface, current runtime, safer diagnostics, and improved logging.
+[![Build](https://github.com/Natzirt-BK/RomRaider2/actions/workflows/build.yaml/badge.svg)](https://github.com/Natzirt-BK/RomRaider2/actions/workflows/build.yaml)
+[![Latest release](https://img.shields.io/github/v/release/Natzirt-BK/RomRaider2?include_prereleases)](https://github.com/Natzirt-BK/RomRaider2/releases)
+[![License](https://img.shields.io/badge/license-GPL--2.0%2B-blue)](license.txt)
 
-RomRaider2 is part of **Ecu Tools by NatZirt**, a project that makes established
-Subaru and Lancer Evolution tuning software practical to install and use on
-Linux. Windows users can download a self-contained portable RomRaider2 package.
+RomRaider2 is a desktop ECU editor, logger, diagnostics, and log-analysis
+application for Subaru and Mitsubishi Lancer Evolution VIII/IX. It carries the
+useful RomRaider and DimeMod work forward on Java 21 with a cleaner interface,
+portable Windows and Linux packages, and stricter separation between normal
+logging and unfinished ECU-write research.
 
-## Download RomRaider2
+## Downloads
 
-| Platform | Download | What to do |
-| --- | --- | --- |
-| **Windows 10/11 x64** | **[Download Windows ZIP](https://github.com/Natzirt-BK/RomRaider2/releases/download/romraider2-1.1.0-rc2/RomRaider2_ECU_Studio_1.1.0_Windows_x64.zip)** | Extract the ZIP and open `RomRaider2.exe`. Java 21 is included. |
-| **Linux x64** | **[Download Linux ZIP](https://github.com/Natzirt-BK/RomRaider2/releases/download/romraider2-1.1.0-rc2/RomRaider2_ECU_Studio_1.1.0_Linux_x64.zip)** | Extract the ZIP and open `bin/RomRaider2`. Java 21 is included. |
+The latest public build is **RomRaider2 1.1.0 RC2**.
 
-[Release notes, checksums, and all downloads](https://github.com/Natzirt-BK/RomRaider2/releases/tag/romraider2-1.1.0-rc2)
+| Platform | Package |
+| --- | --- |
+| Windows 10/11 x64 | [Download the portable Windows ZIP](https://github.com/Natzirt-BK/RomRaider2/releases/download/romraider2-1.1.0-rc2/RomRaider2_ECU_Studio_1.1.0_Windows_x64.zip) |
+| Linux x64 | [Download the portable Linux ZIP](https://github.com/Natzirt-BK/RomRaider2/releases/download/romraider2-1.1.0-rc2/RomRaider2_ECU_Studio_1.1.0_Linux_x64.zip) |
 
-The Windows package does not require a separate Java installation. Do not
-disable Windows driver-signing protection: install the normal signed driver for
-your interface, and RomRaider2 will select its direct or bundled J2534 bridge
-path automatically.
+Java 21 is included in both packages. Extract the ZIP before running it. On
+Windows, open `RomRaider2.exe`. On Linux, open `bin/RomRaider2`.
 
-## What RomRaider2 adds
+[Release notes, checksums, and every RC2 download](https://github.com/Natzirt-BK/RomRaider2/releases/tag/romraider2-1.1.0-rc2)
 
-- A modern tabbed calibration workspace with favorites, recent and changed-map
-  navigation, persistent tab order, and recently closed map recovery.
-- Fast table filtering and unified search across maps, logger parameters, DTCs,
-  settings, and commands.
-- ROM comparison, grouped undo/redo, selected-cell revert, change summaries,
-  notes, and integrity-checked crash recovery with safe startup restore review.
-- An optional interactive 3D map surface integrated with the active table.
-- Integrated live-data cards, traces, and a datalog workspace driven by actual
-  logger samples.
-- Offline RomRaider CSV analysis with linked tables, graphs, statistics, range
-  selection, 0.25x–8x playback, persistent typed markers, latest-capture replay,
-  and configurable linked X/Y plotting.
-- Dark, light, system, and high-contrast themes; 75%–300% scaling; and Compact,
-  Touch, Garage, Dyno, and In-Car display modes.
-- Integrated application window controls and responsive resizing.
-- Symmetric lower-left and lower-right resize grips for frameless windows.
-- A shared Subaru and Lancer Evolution VIII/IX platform model, including a
-  read-only Mitsubishi MUT-II logging foundation.
-- A definition-aware DimeMod feature inventory that separates mapped support
-  from verified runtime state and leaves RAM writing disabled.
-- Versioned, isolated settings and privacy-safe local diagnostic reports.
-- Self-contained 64-bit Java 21 application images for Linux and Windows.
+## Where it stands
 
-## What is fixed from the inherited build
+| Area | Current status |
+| --- | --- |
+| Subaru Editor | Available; exact matching definitions are required |
+| Subaru SSM Logger | Linux OpenPort 2.0 identification and sustained logging tested in car |
+| Windows J2534 | Portable build and automatic 32/64-bit routing implemented; connected qualification is still open |
+| Evo VIII/IX MUT-II | Read-only logger foundation implemented; vehicle qualification is still open |
+| DimeMod | Discovery, diagnostics, and Logger parameters retained; RAM writing stays hidden and disabled |
+| ECU flashing | Not available in RomRaider2 1.1.0 |
 
-- Calibration tabs respond across the complete tab header.
-- The 3D view stays closed until requested and follows the pointer correctly on
-  both drag axes.
-- Window resizing includes the edges and bottom corner, and status-bar text uses
-  a consistent baseline without clipping.
-- Windows menus, tabs, lists, tables, combo boxes, and file choosers keep
-  readable contrast under the application themes.
-- The narrow Favorites header keeps its action separate from the section label.
-- OpenPort/J2534 receive handling waits for complete messages and resynchronizes
-  when Subaru SSM queries change, eliminating the observed logging gaps.
-- J2534 logging no longer presents an irrelevant serial COM-port selector.
-- Windows J2534 discovery checks both 32-bit and 64-bit registry views. A vendor
-  DLL matching RomRaider2 loads directly; a mismatched DLL uses the bundled
-  architecture bridge automatically, without changing the vendor driver or
-  disabling Windows driver-signing protection.
-- External serial sensors validate configuration and reconnect when their port
-  changes; Windows-only plugins are hidden on unsupported systems.
-- Logger definitions can be validated and installed into managed user data,
-  activated, saved, and reloaded directly from the Logger; the old false
-  updater no longer redirects to an obsolete forum page.
-- Missing Logger definitions use one application-styled prompt with clear
-  install-file and external-sensors-only choices.
-- Raw exception details are no longer exposed in error dialogs or uploaded
-  automatically.
-- End-of-life Java and logging dependencies were replaced with audited Java 21,
-  JNA, jSerialComm, and Log4j components.
+Do not disable Windows driver-signing protection. Install the normal signed
+driver for the interface. RomRaider2 chooses the direct or bundled J2534 bridge
+path without changing the vendor driver.
 
-## Current validation and limits
+## Highlights
 
-The Linux OpenPort 2.0 Subaru SSM/ISO9141 path has completed ECU identification
-and sustained in-car logging. Windows packages now include automatic 32/64-bit
-J2534 user-mode bridging, but its clean-machine and connected OpenPort tests are
-still qualification items. Mitsubishi MUT-II vehicle logging is also unverified
-on a vehicle. The current RC3 candidate has automated unexpected-USB-disconnect
-recovery coverage; its connected retest remains a manual sign-off. ECU memory
-writing and flashing are not enabled in RomRaider2 1.1.0.
+- Tabbed calibration workspace with favorites, recent and changed maps, ROM
+  comparison, grouped undo/redo, notes, and crash recovery.
+- Search across maps, Logger channels, DTCs, settings, and commands.
+- Light, dark, system, and high-contrast themes with 75%–300% scaling and
+  desktop, touch, garage, dyno, and in-car layouts.
+- A rebuilt Logger workspace with searchable channels, live data, graphs,
+  dashboard gauges, MAF, injector, dyno, and offline analysis views.
+- RomRaider CSV analysis with linked tables and graphs, statistics, sample
+  ranges, playback, markers, and configurable X/Y plotting.
+- Managed Logger-definition install and reload instead of the old forum
+  redirect.
+- Portable Java 21 application images with local rolling diagnostics and no
+  automatic upload.
 
-Release archives contain software only. Vehicle ROMs, definitions, logger
-profiles, captured logs, and owner-specific tuning material are not included.
-Always match definitions by exact ROM ID and begin with a supervised read-only
-connection test.
+## Definitions and vehicle files
 
-## Linux installer and development
+Definitions are distributed separately from the application. Match the ROM ID
+exactly and keep a known-good original ROM before editing anything. Application
+releases and this repository do not include ROMs, owner logs, Logger profiles,
+or private tuning files.
 
-Supported Linux installation commands are also available from the
-[Ecu Tools by NatZirt installer release](https://github.com/Natzirt-BK/subaru-ecu-tools-linux/releases/tag/romraider2-1.1.0-rc2).
+Start with a supervised, read-only connection test. A definition mismatch or a
+bad calibration can damage an ECU or engine. If you are not sure what a table
+or operation does, stop and verify it first.
 
-See `docs/Building_RomRaider_VSCode.md` for the current Java 21 development
-setup. `docs/Building_RomRaider.txt` is retained for historical build context.
+## Building
 
-## License and attribution
+RomRaider2 uses a 64-bit Java 21 JDK and Apache Ant:
 
-RomRaider2 retains RomRaider's GPL notices and upstream attribution:
+```sh
+ant unittest
+ant build
+```
 
-- https://github.com/RomRaider/RomRaider
-- https://github.com/DimeSPb/RomRaider
-- https://www.romraider.com/
+See [the Java 21 build guide](docs/Building_RomRaider_VSCode.md) for the full
+setup and platform packaging notes.
+
+## Contributing
+
+Bug reports and focused fixes are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md)
+before opening an issue or pull request. Connected hardware reports are most
+useful when they include the RomRaider2 version, operating system, interface,
+protocol, exact steps, and a diagnostic log with personal and vehicle data
+removed.
+
+## History and license
+
+RomRaider2 remains GPL-licensed and retains the original project notices and
+authorship. Its main upstream sources are:
+
+- [RomRaider/RomRaider](https://github.com/RomRaider/RomRaider)
+- [DimeSPb/RomRaider](https://github.com/DimeSPb/RomRaider)
+- [RomRaider.com](https://www.romraider.com/)
+
+See [OPEN_SOURCE_PROVENANCE.md](docs/OPEN_SOURCE_PROVENANCE.md) and
+[license.txt](license.txt) for details.

@@ -26,6 +26,7 @@ import com.romraider.logger.ecu.definition.ExternalData;
 import static com.romraider.util.ParamChecker.isNullOrEmpty;
 
 import javax.swing.JTable;
+import javax.swing.RowFilter;
 import javax.swing.table.TableCellEditor;
 import javax.swing.table.TableCellRenderer;
 import javax.swing.table.TableRowSorter;
@@ -33,6 +34,7 @@ import javax.swing.table.TableRowSorter;
 import java.awt.Font;
 import java.awt.event.MouseEvent;
 import java.util.List;
+import java.util.regex.Pattern;
 
 public final class ParameterListTable extends JTable {
     private static final long serialVersionUID = -8489190548281346227L;
@@ -44,15 +46,15 @@ public final class ParameterListTable extends JTable {
         super(tableModel);
         this.tableModel = tableModel;
         this.getTableHeader().setReorderingAllowed(false);
-        for (int column = 0; column < tableModel.getColumnCount(); column++) {
-            if (tableModel.getColumnName(2).equalsIgnoreCase(
-                    ParameterListTableModel.rb.getString("LBLCOL3"))) {
-                setColumnSortable(column, false);
-            }
-            else {
-                setColumnSortable(column, true);
-            }
-        }
+        TableRowSorter<ParameterListTableModel> sorter =
+                new TableRowSorter<ParameterListTableModel>(tableModel);
+        sorter.setSortable(0, false);
+        sorter.setSortable(1, true);
+        sorter.setSortable(2, false);
+        setRowSorter(sorter);
+        setFillsViewportHeight(true);
+        setShowVerticalLines(false);
+        setRowHeight(Math.max(getRowHeight(), 26));
         if (EcuLogger.isTouchEnabled() == true)
         {
             this.setRowHeight(40);
@@ -72,10 +74,13 @@ public final class ParameterListTable extends JTable {
 
     public String getToolTipText(MouseEvent mouseEvent) {
         List<ParameterRow> parameterRows = tableModel.getParameterRows();
-        if (!isNullOrEmpty(parameterRows)) {
-            ParameterRow parameterRow = parameterRows.get(
-                    convertRowIndexToModel(
-                            rowAtPoint(mouseEvent.getPoint())));
+        int viewRow = rowAtPoint(mouseEvent.getPoint());
+        if (!isNullOrEmpty(parameterRows) && viewRow >= 0) {
+            int modelRow = convertRowIndexToModel(viewRow);
+            if (modelRow < 0 || modelRow >= parameterRows.size()) {
+                return super.getToolTipText(mouseEvent);
+            }
+            ParameterRow parameterRow = parameterRows.get(modelRow);
             if (parameterRow != null) {
                 String description = parameterRow.getLoggerData().getDescription();
                 if (!isNullOrEmpty(description)) {
@@ -101,10 +106,12 @@ public final class ParameterListTable extends JTable {
         return false;
     }
 
-    private void setColumnSortable(int column, boolean state) {
+    public void setFilterText(String filterText) {
+        @SuppressWarnings("unchecked")
         TableRowSorter<ParameterListTableModel> sorter =
-            new TableRowSorter<ParameterListTableModel>(tableModel);
-        sorter.setSortable(column, state);
-        setRowSorter(sorter);
+                (TableRowSorter<ParameterListTableModel>) getRowSorter();
+        String query = filterText == null ? "" : filterText.trim();
+        sorter.setRowFilter(query.isEmpty() ? null
+                : RowFilter.regexFilter("(?i)" + Pattern.quote(query), 1, 2));
     }
 }

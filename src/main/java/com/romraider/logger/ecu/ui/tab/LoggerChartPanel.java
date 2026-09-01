@@ -20,13 +20,10 @@
 package com.romraider.logger.ecu.ui.tab;
 
 import com.romraider.logger.ecu.ui.handler.graph.SpringUtilities;
+import com.romraider.ui.ThemeToken;
+import com.romraider.ui.UiThemeService;
 import static com.romraider.util.ParamChecker.checkNotNull;
 import jamlab.Polyfit;
-import static java.awt.Color.BLACK;
-import static java.awt.Color.BLUE;
-import static java.awt.Color.GREEN;
-import static java.awt.Color.RED;
-import static java.awt.Color.WHITE;
 import static org.jfree.chart.ChartFactory.createScatterPlot;
 import org.jfree.chart.ChartPanel;
 import org.jfree.chart.JFreeChart;
@@ -45,8 +42,6 @@ import java.awt.Dimension;
 
 public final class LoggerChartPanel extends JPanel {
     private static final long serialVersionUID = -6579979878171615665L;
-    private static final Color DARK_GREY = new Color(80, 80, 80);
-    private static final Color LIGHT_GREY = new Color(110, 110, 110);
     private final XYSeries data = new XYSeries("Data");
     private final XYTrendline trendline = new XYTrendline(data);
     private final XYSeries hilite = new XYSeries("Hilite");
@@ -98,25 +93,34 @@ public final class LoggerChartPanel extends JPanel {
 
     private JFreeChart createChart() {
         JFreeChart chart = createScatterPlot(null, labelX, labelY, null, VERTICAL, false, true, false);
-        chart.setBackgroundPaint(BLACK);
+        UiThemeService theme = UiThemeService.getInstance();
+        chart.setBackgroundPaint(theme.color(ThemeToken.SURFACE));
         configurePlot(chart);
-        addSeries(chart, 0, hilite, 4, GREEN);
-        addTrendLine(chart, 1, trendline, BLUE);
-        addSeries(chart, 2, data, 2, RED);
+        addSeries(chart, 0, hilite, 4, theme.color(ThemeToken.SUCCESS));
+        addTrendLine(chart, 1, trendline,
+                theme.color(ThemeToken.ACCENT));
+        addSeries(chart, 2, data, 2, theme.color(ThemeToken.DANGER));
         return chart;
     }
 
     private void configurePlot(JFreeChart chart) {
+        UiThemeService theme = UiThemeService.getInstance();
+        Color text = theme.color(ThemeToken.PRIMARY_TEXT);
+        Color secondary = theme.color(ThemeToken.SECONDARY_TEXT);
+        Color grid = theme.color(ThemeToken.RAISED_SURFACE);
         XYPlot plot = chart.getXYPlot();
-        plot.setBackgroundPaint(BLACK);
-        plot.getDomainAxis().setLabelPaint(WHITE);
-        plot.getRangeAxis().setLabelPaint(WHITE);
-        plot.getDomainAxis().setTickLabelPaint(LIGHT_GREY);
-        plot.getRangeAxis().setTickLabelPaint(LIGHT_GREY);
-        plot.setDomainGridlinePaint(DARK_GREY);
-        plot.setRangeGridlinePaint(DARK_GREY);
-        plot.setOutlinePaint(DARK_GREY);
-        plot.setRenderer(buildScatterRenderer(2, RED));
+        plot.setBackgroundPaint(theme.color(ThemeToken.BACKGROUND));
+        plot.getDomainAxis().setLabelPaint(text);
+        plot.getRangeAxis().setLabelPaint(text);
+        plot.getDomainAxis().setTickLabelPaint(secondary);
+        plot.getRangeAxis().setTickLabelPaint(secondary);
+        plot.setDomainGridlinePaint(grid);
+        plot.setRangeGridlinePaint(grid);
+        plot.setOutlinePaint(grid);
+        plot.setNoDataMessage("Record data to populate this graph");
+        plot.setNoDataMessagePaint(secondary);
+        plot.setRenderer(buildScatterRenderer(2,
+                theme.color(ThemeToken.DANGER)));
     }
 
     private XYDotRenderer buildScatterRenderer(int size, Color color) {

@@ -48,6 +48,8 @@ import com.romraider.logger.analysis.LogStatisticsService;
 import com.romraider.logger.analysis.PlaybackState;
 import com.romraider.logger.analysis.RomRaiderCsvLogParser;
 import com.romraider.logger.analysis.RecentLogCaptureService;
+import com.romraider.ui.ThemeToken;
+import com.romraider.ui.UiThemeService;
 import com.romraider.swing.IntegratedFileChooser;
 
 /** Read-only CSV statistics workspace kept independent from live ECU state. */
@@ -103,13 +105,18 @@ public final class LogAnalysisPanel extends JPanel {
 
     public LogAnalysisPanel() {
         super(new BorderLayout(8, 8));
-        setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        setName("LOGGER ANALYSIS WORKSPACE");
+        setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
 
-        JLabel title = new JLabel("Log Analysis");
+        JLabel title = new JLabel("ANALYSIS");
         title.setFont(title.getFont().deriveFont(Font.BOLD,
                 title.getFont().getSize2D() + 2.0f));
         JLabel boundary = new JLabel(
-                "Offline, read-only statistics, playback, and graphs");
+                "Offline playback, markers, graphs, and channel statistics");
+        boundary.setForeground(UiThemeService.getInstance().color(
+                ThemeToken.SECONDARY_TEXT));
+        sourceLabel.setForeground(UiThemeService.getInstance().color(
+                ThemeToken.SECONDARY_TEXT));
 
         JPanel identity = new JPanel(new BorderLayout(8, 2));
         identity.add(title, BorderLayout.NORTH);
@@ -138,6 +145,10 @@ public final class LogAnalysisPanel extends JPanel {
         statisticsTable.setAutoCreateRowSorter(true);
         statisticsTable.setFillsViewportHeight(true);
         statisticsTable.setName("LOG ANALYSIS STATISTICS");
+        statisticsTable.setShowVerticalLines(false);
+        statisticsTable.setRowHeight(Math.max(statisticsTable.getRowHeight(),
+                26));
+        statisticsTable.getTableHeader().setReorderingAllowed(false);
         statisticsTable.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
         statisticsTable.getColumnModel().getColumn(0).setMinWidth(180);
         statisticsTable.getColumnModel().getColumn(0).setPreferredWidth(310);
@@ -158,6 +169,14 @@ public final class LogAnalysisPanel extends JPanel {
         analysisWorkspace.add(buildPlaybackControls(), BorderLayout.NORTH);
         analysisWorkspace.add(analysisSplit, BorderLayout.CENTER);
         add(analysisWorkspace, BorderLayout.CENTER);
+        statusLabel.setName("LOG ANALYSIS STATUS");
+        statusLabel.setForeground(UiThemeService.getInstance().color(
+                ThemeToken.SECONDARY_TEXT));
+        statusLabel.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(1, 0, 0, 0,
+                        UiThemeService.getInstance().color(
+                                ThemeToken.RAISED_SURFACE)),
+                BorderFactory.createEmptyBorder(5, 2, 0, 2)));
         add(statusLabel, BorderLayout.SOUTH);
 
         applyRangeButton.setEnabled(false);
@@ -204,9 +223,9 @@ public final class LogAnalysisPanel extends JPanel {
     }
 
     private JPanel buildPlaybackControls() {
-        JButton startButton = new JButton("Start");
-        JButton previousButton = new JButton("Previous");
-        JButton nextButton = new JButton("Next");
+        JButton startButton = new JButton("First Sample");
+        JButton previousButton = new JButton("Previous Sample");
+        JButton nextButton = new JButton("Next Sample");
         startButton.setName("LOG PLAYBACK START");
         previousButton.setName("LOG PLAYBACK PREVIOUS");
         playPauseButton.setName("LOG PLAYBACK PLAY PAUSE");

@@ -1,32 +1,36 @@
 ---
-name: Issue report
-about: Create a report to help us improve
-title: "[Logger][Editor]"
-labels: ''
+name: Bug report
+about: Report a repeatable RomRaider2 problem
+title: "[Editor/Logger] "
+labels: bug
 assignees: ''
-
 ---
 
-**Describe the bug**
-A clear and concise description of what the bug is.
+## What happened?
 
-**To Reproduce**
-Steps to reproduce the behavior:
-1. Go to '...'
-2. Click on '....'
-3. Scroll down to '....'
-4. See error
+Describe the problem and what you expected instead.
 
-**Expected behavior**
-A clear and concise description of what you expected to happen.
+## Steps to reproduce
 
-**Screenshots**
-If applicable, add screenshots to help explain your problem.
+1.
+2.
+3.
 
-**Desktop (please complete the following information):**
- - OS version: [e.g. Windows 10, Linux (dist), etc]
- - Java version: [From RomRaider - Help - About, e.g. Sun Microsystems Inc. 1.6.0_45]
- - RomRaider version: [or Github commit if not the latest official release] 
+## System
 
-**Additional context**
-Add any other context about the problem here.
+- RomRaider2 version or commit:
+- Operating system and version:
+- ECU interface and driver version:
+- Logger protocol, if applicable:
+- Editor or Logger definition version, if applicable:
+
+## Evidence
+
+Attach a screenshot or the smallest useful diagnostic-log section. Remove
+usernames, full ECU identifiers, ROMs, definitions, vehicle logs, and private
+calibration data before posting.
+
+## Hardware safety
+
+Was the problem reproduced parked and read-only? If not, describe the test
+conditions and any connection or vehicle behavior that changed.

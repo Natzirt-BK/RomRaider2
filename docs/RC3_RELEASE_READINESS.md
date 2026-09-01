@@ -1,61 +1,42 @@
 # RomRaider2 1.1.0 RC3 release readiness
 
-Status: code-complete candidate; not yet published as a GitHub Release.
+Status: development milestone complete; the next RC3 package has not been
+published.
 
-RC3 is ready for manual qualification only when the GitHub Actions run for its
-exact source commit passes both jobs and provides both candidate ZIP artifacts.
-A tag, GitHub Release, or stable-release claim must not be created from a
-different commit.
+RC3 can be published as a prerelease after one source commit produces both
+candidate ZIPs and the required checks are recorded against those exact files.
+RC2 remains the public download until then.
 
-## Automated candidate gates
+## Automated checks
 
-The repository CI enforces the following gates on Linux and Windows:
+The Linux and Windows workflows must:
 
-- compile application classes and bytecode with Java 21;
-- run the shared regression suite on both hosted operating systems;
-- verify the locked JNA, jSerialComm, Log4j, and source dependencies;
-- build each application image natively on its target operating system;
-- reject dirty source checkouts and mismatched source revisions;
-- reject stale RC2 package metadata and record the exact source revision;
-- verify bundled runtime, launchers, settings, customization assets, licenses,
-  J2534 bridge files, and platform-native libraries;
-- reject retired Java3D/Graph3d files, vehicle definitions, profiles, ROMs,
-  captures, and other owner-specific content;
-- verify every packaged file through the internal SHA-256 manifest and publish
-  a separate checksum for each candidate ZIP.
+- compile and run the shared Java 21 test suite;
+- verify locked source and runtime dependencies;
+- build the native application image for that operating system;
+- include the launchers, runtime, settings, customization files, licenses, and
+  required native libraries;
+- reject ROMs, definitions, profiles, logs, private vehicle data, and retired
+  Java3D/Graph3d files;
+- record the source revision and verify every packaged file by SHA-256;
+- publish the candidate ZIP and its checksum as workflow artifacts.
 
-The Linux and Windows artifacts use the same `1.1.0` application version and
-`Release Candidate 3` package label. They may differ only where the platform
-requires different launchers, runtimes, native libraries, or qualification
-documentation.
+## Manual checks still open
 
-## Manual sign-offs still required
+- Windows 10/11 x64 clean-machine and visual pass, including the rebuilt
+  Logger at normal, narrow, Dark, Light, and 150/200% scale.
+- Windows OpenPort discovery, direct/bridged J2534 cases, disconnect, reconnect,
+  and clean shutdown with real hardware.
+- Linux OpenPort USB removal, log close, reconnect, and remaining in-car checks.
+- Evo VIII/IX MUT-II vehicle test.
+- Windows external serial-sensor test if it is claimed in RC3.
 
-These checks cannot be truthfully replaced by CI and remain open until their
-results are recorded against the exact candidate checksums:
-
-- Windows 10/11 x64 clean-machine visual and functional pass from
-  `WINDOWS_RELEASE_CHECKLIST.md`;
-- Windows OpenPort discovery, direct/bridged J2534 architecture cases,
-  unexpected disconnect, reconnect, and shutdown with real hardware;
-- Linux connected OpenPort USB-removal recovery and the remaining items in
-  `LINUX_IN_CAR_QUALIFICATION.md`;
-- Mitsubishi MUT-II vehicle qualification and a Windows COM-port external
-  sensor check if those paths are claimed for this release.
-
-Copy `RC3_QUALIFICATION_RECORD.md` for each operating-system/hardware pass and
-fill it out without modifying the packaged template. Keep private ROMs,
-definitions, captures, full ECU identifiers, and owner information outside the
+Use `RC3_QUALIFICATION_RECORD.md` for each completed pass. Keep ROMs,
+definitions, full ECU identifiers, captures, and owner information out of the
 record.
 
-Flashing and ECU memory writing remain unavailable and are outside RC3 scope.
-Failure of a manual check requires a new candidate build and repetition of the
-affected checklist; it must not be waived by relabeling the existing artifact.
+## Release rule
 
-## Publication rule
-
-RC3 may be published as a prerelease only after the intended commit, CI run,
-artifact checksums, and completed manual results are reviewed together. The
-existing RC2 download links remain the public links until that publication.
-Stable promotion requires the stricter promotion rules in the platform
-qualification checklists.
+A failed hardware or package check means the problem is fixed and a new
+candidate is built. Do not relabel an older artifact. Flashing and ECU memory
+writing remain outside the 1.1.0 release.

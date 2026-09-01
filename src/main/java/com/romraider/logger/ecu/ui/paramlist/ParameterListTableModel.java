@@ -91,7 +91,10 @@ public final class ParameterListTableModel extends AbstractTableModel {
     }
 
     public Class<?> getColumnClass(int col) {
-        return getValueAt(0, col).getClass();
+        if (col == 0) return Boolean.class;
+        if (getRowCount() == 0) return Object.class;
+        Object value = getValueAt(0, col);
+        return value == null ? Object.class : value.getClass();
     }
 
     public synchronized void addParam(LoggerData loggerData, boolean selected) {
@@ -125,6 +128,14 @@ public final class ParameterListTableModel extends AbstractTableModel {
 
     public List<ParameterRow> getParameterRows() {
         return new ArrayList<ParameterRow>(paramRowMap.values());
+    }
+
+    public synchronized int getSelectedCount() {
+        int selected = 0;
+        for (ParameterRow row : paramRowMap.values()) {
+            if (row.isSelected()) selected++;
+        }
+        return selected;
     }
 
     public synchronized int findRowById(String parameterId) {

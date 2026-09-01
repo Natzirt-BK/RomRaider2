@@ -2,15 +2,15 @@
 
 ## Visual target
 
-RomRaider2 is moving toward a modern, dark-first ECU workbench rather than a
-reskinned legacy window. The two August 2026 reference mockups establish the
-desired information architecture without being treated as pixel-exact designs.
+RomRaider2 is moving toward a modern ECU workbench instead of repeatedly
+reskinning the inherited window. The Editor uses three clear areas: navigation
+on the left, calibration and analysis in the center, and live/contextual data
+on the right. The Logger follows the same idea with a channel rail, one active
+workspace, and controls that belong to that workspace.
 
-The structural reference is the three-column tuning workbench: persistent
-navigation and favorites on the left, calibration and analysis in the center,
-and contextual live data on the right. The visual hierarchy reference is the
-cleaner panel-based concept with a persistent ROM status bar and an obvious,
-well-separated Save ROM action.
+Dark and Light themes are equal targets. Status and primary actions stay easy
+to find, while destructive or future ECU-write actions remain separated from
+ordinary navigation.
 
 ## RomRaider2 interpretation
 
@@ -55,7 +55,7 @@ Write ECU launches preflight and never begins programming directly. See
 - Notes, real-sample live-value cards, searchable parameters, and change history
 - Live traces use only received sample history; no guessed sensor ranges or fake
   progress is presented as ECU data
-- Later: user-configurable live-card sets and tuning assistant
+- Later: user-configurable live-card sets
 
 ### Persistent status and action bar
 
@@ -104,6 +104,10 @@ modern theming, and gradual desktop interoperability. Its adoption is gated by
 a small packaged Windows/Linux prototype; JavaFX is the fallback if the spike
 cannot meet startup, packaging, accessibility, input, or rendering gates. This
 decision does not authorize a whole-application rewrite.
+
+The RC3 Logger pass is the last large Swing visual milestone before more state
+is extracted. It gives the current release a coherent Logger on Windows and
+Linux without changing the planned replacement sequence below.
 
 ### Delivery sequence
 

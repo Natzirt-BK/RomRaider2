@@ -25,15 +25,19 @@ import com.romraider.logger.ecu.definition.EcuSwitch;
 import com.romraider.logger.ecu.definition.ExternalData;
 import com.romraider.logger.ecu.ui.DataRegistrationBroker;
 import com.romraider.logger.ecu.ui.tab.LoggerChartPanel;
+import com.romraider.logger.ecu.ui.tab.LoggerTabHeader;
 import com.romraider.util.ResourceUtil;
 
 import static java.awt.BorderLayout.CENTER;
+import static java.awt.BorderLayout.NORTH;
 import static java.awt.BorderLayout.WEST;
 import static javax.swing.ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER;
 import static javax.swing.ScrollPaneConstants.VERTICAL_SCROLLBAR_ALWAYS;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
+import javax.swing.BorderFactory;
 import java.awt.BorderLayout;
+import java.awt.Dimension;
 import java.util.List;
 import java.util.ResourceBundle;
 
@@ -46,10 +50,17 @@ public final class MafTabImpl extends JPanel implements MafTab {
     private final MafControlPanel controlPanel;
 
     public MafTabImpl(DataRegistrationBroker broker, ECUEditor ecuEditor) {
-        super(new BorderLayout(2, 2));
+        super(new BorderLayout(8, 8));
+        setName("LOGGER MAF WORKSPACE");
+        setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
+        add(new LoggerTabHeader("MAF",
+                "Record, filter, and interpolate mass-airflow correction data"),
+                NORTH);
         controlPanel = new MafControlPanel(this, broker, ecuEditor, chartPanel);
         JScrollPane scrollPane = new JScrollPane(controlPanel,
                 VERTICAL_SCROLLBAR_ALWAYS, HORIZONTAL_SCROLLBAR_NEVER);
+        scrollPane.setPreferredSize(new Dimension(280, 0));
+        scrollPane.getVerticalScrollBar().setUnitIncrement(24);
         add(scrollPane, WEST);
         add(chartPanel, CENTER);
     }
