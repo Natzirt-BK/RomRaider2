@@ -1,7 +1,7 @@
 # RomRaider2 ECU Studio
 
-RomRaider2 is a much-needed modernization of RomRaider for Subaru and
-Mitsubishi Lancer Evolution VIII/IX ECU editing, logging, diagnostics, and log
+RomRaider2 is a modernization of RomRaider for Subaru and
+Mitsubishi Lancer Evolution ECU editing, logging, diagnostics, and log
 analysis. It preserves useful work from the DimeMod fork while adding a new
 interface, current runtime, safer diagnostics, and improved logging.
 
