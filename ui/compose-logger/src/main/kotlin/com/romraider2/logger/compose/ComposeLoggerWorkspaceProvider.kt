@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -57,6 +58,7 @@ import androidx.compose.ui.awt.ComposePanel
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
@@ -83,27 +85,46 @@ import com.romraider.logger.api.LoggerSessionState
 import com.romraider.logger.api.LoggerWorkspaceView
 import com.romraider.logger.ecu.ui.spi.LoggerWorkspaceContext
 import com.romraider.logger.ecu.ui.spi.LoggerWorkspaceProvider
+import java.awt.Dimension
 import java.util.function.Consumer
 import javax.swing.JComponent
 import javax.swing.SwingUtilities
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.sin
 import kotlin.math.sqrt
 
 class ComposeLoggerWorkspaceProvider : LoggerWorkspaceProvider {
     override fun getName(): String = "Compose Desktop Logger"
 
-    override fun createWorkspace(context: LoggerWorkspaceContext): JComponent =
+    override fun createWorkspace(context: LoggerWorkspaceContext): JComponent {
+        if (SwingUtilities.isEventDispatchThread()) {
+            return composePanel(context)
+        }
+        var workspace: JComponent? = null
+        SwingUtilities.invokeAndWait {
+            workspace = composePanel(context)
+        }
+        return checkNotNull(workspace)
+    }
+
+    private fun composePanel(context: LoggerWorkspaceContext): JComponent =
         ComposePanel().apply {
+            preferredSize = Dimension(1000, 650)
+            minimumSize = Dimension(640, 500)
             setContent { LoggerWorkspace(context) }
         }
 }
 
-private val graphite = Color(0xFF202934)
-private val steel = Color(0xFF5F7185)
+private val graphite = Color(0xFF17212B)
+private val steel = Color(0xFF50667C)
+private val brandRed = Color(0xFFD92632)
 private val recordGreen = Color(0xFF24784B)
 private val faultRed = Color(0xFFD71920)
 private val graphColors = listOf(
-    Color(0xFF3E8ED0), Color(0xFFF0A63A), Color(0xFF42A66C),
-    Color(0xFFB56BD5), Color(0xFFE05B65), Color(0xFF42B8B2)
+    Color(0xFF3D91E8), Color(0xFFF39A2B), Color(0xFF42B876),
+    Color(0xFFB66BE3), Color(0xFFEF5967), Color(0xFF35BFC0),
+    Color(0xFFE958A0), Color(0xFFF0C744)
 )
 
 @Composable
@@ -211,30 +232,43 @@ private fun LoggerWorkspace(context: LoggerWorkspaceContext) {
             color = colors.background
         ) {
             Column(Modifier.fillMaxSize()) {
-                SessionBar(
-                    state = sessionState,
-                    selectedCount = channels.count { it.isSelected },
-                    darkTheme = darkTheme,
-                    onToggleTheme = {
-                        darkTheme = !darkTheme
-                        context.preferences.setDarkTheme(darkTheme)
-                    },
-                    onConnect = { context.session.connect() },
-                    onDisconnect = { context.session.disconnect() },
-                    onStartRecording = { context.session.startRecording() },
-                    onStopRecording = { context.session.stopRecording() }
+                if (!context.hasHostSessionControls()) {
+                    SessionBar(
+                        state = sessionState,
+                        selectedCount = channels.count { it.isSelected },
+                        darkTheme = darkTheme,
+                        onToggleTheme = {
+                            darkTheme = !darkTheme
+                            context.preferences.setDarkTheme(darkTheme)
+                        },
+                        onConnect = { context.session.connect() },
+                        onDisconnect = { context.session.disconnect() },
+                        onStartRecording = { context.session.startRecording() },
+                        onStopRecording = { context.session.stopRecording() }
+                    )
+                    Divider(color = colors.onSurface.copy(alpha = .14f))
+                }
+                SessionTelemetry(
+                    channels, samples, history,
+                    themeLabel = if (context.hasHostSessionControls()) {
+                        if (darkTheme) "Light workspace" else "Dark workspace"
+                    } else null,
+                    onToggleTheme = if (context.hasHostSessionControls()) {
+                        {
+                            darkTheme = !darkTheme
+                            context.preferences.setDarkTheme(darkTheme)
+                        }
+                    } else null
                 )
-                Divider(color = colors.onSurface.copy(alpha = .14f))
-                SessionTelemetry(channels, samples, history)
                 Divider(color = colors.onSurface.copy(alpha = .14f))
                 BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
                     if (maxWidth < 820.dp) {
                         Column(Modifier.fillMaxSize()) {
                             ChannelRail(
-                                channels, filter, { filter = it },
+                                channels, samples, filter, { filter = it },
                                 context, searchFocus,
                                 Modifier.fillMaxWidth().heightIn(
-                                    min = 170.dp, max = 205.dp)
+                                    min = 190.dp, max = 240.dp)
                             )
                             Divider(color = colors.onSurface.copy(alpha = .14f))
                             WorkspaceBody(
@@ -255,7 +289,7 @@ private fun LoggerWorkspace(context: LoggerWorkspaceContext) {
                     } else {
                         Row(Modifier.fillMaxSize()) {
                             ChannelRail(
-                                channels, filter, { filter = it }, context,
+                                channels, samples, filter, { filter = it }, context,
                                 searchFocus,
                                 Modifier.width(286.dp).fillMaxHeight())
                             Divider(
@@ -292,7 +326,9 @@ private fun LoggerWorkspace(context: LoggerWorkspaceContext) {
 private fun SessionTelemetry(
     channels: List<LoggerChannel>,
     samples: Map<String, LiveDataSample>,
-    history: Map<String, List<LiveDataSample>>
+    history: Map<String, List<LiveDataSample>>,
+    themeLabel: String?,
+    onToggleTheme: (() -> Unit)?
 ) {
     val metrics = sessionMetrics(channels, samples, history)
     val scroll = rememberScrollState()
@@ -307,6 +343,11 @@ private fun SessionTelemetry(
         MetricText("Live", metrics.liveChannels.toString())
         MetricText("Received", "${metrics.receivedPoints} points")
         MetricText("Window", metrics.windowLabel)
+        if (themeLabel != null && onToggleTheme != null) {
+            TextButton(onClick = onToggleTheme, Modifier.height(34.dp)) {
+                Text(themeLabel, fontSize = 11.sp)
+            }
+        }
     }
 }
 
@@ -339,18 +380,30 @@ private fun SessionBar(
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         val compact = maxWidth < 700.dp
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 9.dp),
+            Modifier.fillMaxWidth()
+                .background(MaterialTheme.colors.surface)
+                .padding(horizontal = 14.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(if (compact) 7.dp else 9.dp)
         ) {
-            Column(Modifier.weight(1f)) {
-                Text(if (compact) "LOGGER" else "LOGGER WORKSPACE",
-                    fontWeight = FontWeight.Bold, fontSize = 15.sp,
-                    maxLines = 1)
-                if (!compact) {
-                    Text("$selectedCount channels selected",
-                        color = MaterialTheme.colors.onSurface.copy(alpha = .66f),
-                        fontSize = 12.sp)
+            Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier.background(brandRed, RoundedCornerShape(7.dp))
+                        .padding(horizontal = 8.dp, vertical = 6.dp)
+                ) {
+                    Text("RR2", color = Color.White, fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp)
+                }
+                Spacer(Modifier.width(9.dp))
+                Column {
+                    Text(if (compact) "LOGGER" else "ROMRAIDER2 LOGGER",
+                        fontWeight = FontWeight.Bold, fontSize = 15.sp,
+                        maxLines = 1)
+                    if (!compact) {
+                        Text("$selectedCount channels selected",
+                            color = MaterialTheme.colors.onSurface.copy(alpha = .58f),
+                            fontSize = 11.sp)
+                    }
                 }
             }
             StatusPill(state, compact)
@@ -358,6 +411,7 @@ private fun SessionBar(
                 onClick = if (connected || busy) onDisconnect else onConnect,
                 enabled = state != LoggerSessionState.RECORDING,
                 modifier = Modifier.height(48.dp),
+                shape = RoundedCornerShape(7.dp),
                 colors = ButtonDefaults.buttonColors(backgroundColor = steel)
             ) {
                 Text(if (connected || busy) "Disconnect" else "Connect")
@@ -367,6 +421,7 @@ private fun SessionBar(
                     onStopRecording else onStartRecording,
                 enabled = connected,
                 modifier = Modifier.height(48.dp),
+                shape = RoundedCornerShape(7.dp),
                 colors = ButtonDefaults.buttonColors(backgroundColor = recordGreen)
             ) {
                 Text(
@@ -378,7 +433,8 @@ private fun SessionBar(
                 )
             }
             TextButton(onClick = onToggleTheme, Modifier.height(48.dp)) {
-                Text(if (darkTheme) "Light" else "Dark")
+                Text(if (darkTheme) "Light mode" else "Dark mode",
+                    maxLines = 1)
             }
         }
     }
@@ -411,6 +467,7 @@ private fun StatusPill(state: LoggerSessionState, compact: Boolean = false) {
 @Composable
 private fun ChannelRail(
     channels: List<LoggerChannel>,
+    samples: Map<String, LiveDataSample>,
     filter: String,
     onFilterChanged: (String) -> Unit,
     context: LoggerWorkspaceContext,
@@ -454,20 +511,13 @@ private fun ChannelRail(
                     val group = visible.filter { it.kind == kind }
                     if (group.isNotEmpty()) {
                         item(key = "heading-${kind.name}") {
-                            Text(
-                                kind.displayName.uppercase(),
-                                Modifier.fillMaxWidth()
-                                    .background(MaterialTheme.colors.background)
-                                    .padding(horizontal = 14.dp, vertical = 7.dp),
-                                color = MaterialTheme.colors.onSurface.copy(.62f),
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold
-                            )
+                            ChannelGroupHeader(kind.displayName, group.size)
                         }
                         items(group, key = { it.parameterId }) { channel ->
                             val colorIndex = selected.indexOf(channel)
                             ChannelRow(
                                 channel,
+                                samples[channel.parameterId],
                                 colorIndex.takeIf { it >= 0 }?.let {
                                     graphColors[it % graphColors.size]
                                 }
@@ -486,6 +536,7 @@ private fun ChannelRail(
 @Composable
 private fun ChannelRow(
     channel: LoggerChannel,
+    sample: LiveDataSample?,
     accentColor: Color?,
     onSelected: (Boolean) -> Unit
 ) {
@@ -513,7 +564,9 @@ private fun ChannelRow(
         Spacer(Modifier.width(8.dp))
         Column(Modifier.weight(1f).padding(end = 6.dp)) {
             Text(channel.name, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                fontSize = 13.sp)
+                fontSize = 13.sp, fontWeight = if (channel.isSelected)
+                    FontWeight.SemiBold else FontWeight.Normal,
+                color = accentColor ?: MaterialTheme.colors.onSurface)
             Text(
                 listOf(channel.parameterId, channel.units)
                     .filter { it.isNotBlank() }.joinToString("  •  "),
@@ -523,6 +576,37 @@ private fun ChannelRow(
                 overflow = TextOverflow.Ellipsis
             )
         }
+        if (sample != null) {
+            Text(
+                sample.displayValue,
+                color = accentColor ?: MaterialTheme.colors.onSurface,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                modifier = Modifier.widthIn(max = 64.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun ChannelGroupHeader(name: String, count: Int) {
+    Row(
+        Modifier.fillMaxWidth()
+            .background(MaterialTheme.colors.background)
+            .padding(horizontal = 14.dp, vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(name.uppercase(), Modifier.weight(1f),
+            color = MaterialTheme.colors.onSurface.copy(.62f),
+            fontSize = 11.sp, fontWeight = FontWeight.Bold)
+        Text(count.toString(),
+            Modifier.background(
+                MaterialTheme.colors.onSurface.copy(.08f),
+                RoundedCornerShape(10.dp)
+            ).padding(horizontal = 7.dp, vertical = 2.dp),
+            color = MaterialTheme.colors.onSurface.copy(.62f),
+            fontSize = 10.sp, fontWeight = FontWeight.Bold)
     }
 }
 
@@ -548,6 +632,8 @@ private fun WorkspaceBody(
             LoggerWorkspaceView.GRAPH -> GraphWorkspace(
                 selected, graphHistory, graphPaused, onToggleGraphPause)
             LoggerWorkspaceView.DASHBOARD -> DashboardWorkspace(
+                selected, samples, history)
+            LoggerWorkspaceView.ANALYSIS -> AnalysisWorkspace(
                 selected, samples, history)
         }
     }
@@ -617,14 +703,17 @@ private fun DataWorkspace(
     Column(Modifier.fillMaxSize()) {
         SectionTitle("Live data", "Statistics use received samples only")
         Box(Modifier.weight(1f).fillMaxWidth()) {
-            Column(Modifier.horizontalScroll(scroll).requiredWidth(1050.dp)) {
+            Column(Modifier.horizontalScroll(scroll).requiredWidth(1270.dp)) {
                 DataHeader()
                 LazyColumn(Modifier.weight(1f)) {
                     items(selected, key = { it.parameterId }) { channel ->
+                        val index = selected.indexOf(channel)
                         DataRow(
                             channel,
                             samples[channel.parameterId],
-                            statistics(history[channel.parameterId].orEmpty())
+                            statistics(history[channel.parameterId].orEmpty()),
+                            graphColors[index % graphColors.size],
+                            index % 2 == 1
                         )
                     }
                 }
@@ -651,6 +740,8 @@ private fun DataHeader() {
         TableCell("Average", 110.dp, Color.White, FontWeight.Bold)
         TableCell("Median", 110.dp, Color.White, FontWeight.Bold)
         TableCell("Std dev", 110.dp, Color.White, FontWeight.Bold)
+        TableCell("P05", 110.dp, Color.White, FontWeight.Bold)
+        TableCell("P95", 110.dp, Color.White, FontWeight.Bold)
         TableCell("Samples", 90.dp, Color.White, FontWeight.Bold)
     }
 }
@@ -659,27 +750,41 @@ private fun DataHeader() {
 private fun DataRow(
     channel: LoggerChannel,
     latest: LiveDataSample?,
-    stats: SampleStatistics?
+    stats: SampleStatistics?,
+    accentColor: Color,
+    alternate: Boolean
 ) {
     Row(
         Modifier.fillMaxWidth()
+            .background(if (alternate)
+                MaterialTheme.colors.onSurface.copy(.025f)
+                else Color.Transparent)
             .border(0.5.dp, MaterialTheme.colors.onSurface.copy(.12f))
             .padding(horizontal = 8.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(Modifier.width(230.dp)) {
-            Text(channel.name, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-            Text(channel.units,
-                color = MaterialTheme.colors.onSurface.copy(.55f),
-                fontSize = 11.sp)
+        Row(Modifier.width(230.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.width(4.dp).height(32.dp)
+                .background(accentColor, RoundedCornerShape(3.dp)))
+            Spacer(Modifier.width(9.dp))
+            Column {
+                Text(channel.name, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    fontWeight = FontWeight.SemiBold, fontSize = 13.sp,
+                    color = accentColor)
+                Text(channel.units,
+                    color = MaterialTheme.colors.onSurface.copy(.55f),
+                    fontSize = 11.sp)
+            }
         }
-        TableCell(latest?.displayValue ?: "—", 110.dp)
+        TableCell(latest?.displayValue ?: "—", 110.dp, accentColor,
+            FontWeight.Bold)
         TableCell(stats?.minimum?.formatValue() ?: "—", 110.dp)
         TableCell(stats?.maximum?.formatValue() ?: "—", 110.dp)
         TableCell(stats?.average?.formatValue() ?: "—", 110.dp)
         TableCell(stats?.median?.formatValue() ?: "—", 110.dp)
         TableCell(stats?.standardDeviation?.formatValue() ?: "—", 110.dp)
+        TableCell(stats?.percentile05?.formatValue() ?: "—", 110.dp)
+        TableCell(stats?.percentile95?.formatValue() ?: "—", 110.dp)
         TableCell(stats?.count?.toString() ?: "0", 90.dp)
     }
 }
@@ -726,15 +831,36 @@ private fun GraphWorkspace(
             )
         }
         LazyRow(Modifier.fillMaxWidth().padding(vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             items(displayed, key = { it.parameterId }) { channel ->
                 val index = displayed.indexOf(channel)
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                val last = history[channel.parameterId].orEmpty().lastOrNull()
+                Row(
+                    Modifier.background(
+                        graphColors[index].copy(alpha = .10f),
+                        RoundedCornerShape(7.dp)
+                    ).border(1.dp, graphColors[index].copy(alpha = .28f),
+                        RoundedCornerShape(7.dp))
+                        .padding(horizontal = 8.dp, vertical = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Box(Modifier.size(10.dp).background(
                         graphColors[index], RoundedCornerShape(2.dp)))
                     Spacer(Modifier.width(5.dp))
                     Text(channel.name, fontSize = 11.sp,
                         maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    if (last != null) {
+                        Spacer(Modifier.width(7.dp))
+                        Text(last.displayValue,
+                            color = graphColors[index],
+                            fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        if (channel.units.isNotBlank()) {
+                            Spacer(Modifier.width(3.dp))
+                            Text(channel.units,
+                                color = MaterialTheme.colors.onSurface.copy(.52f),
+                                fontSize = 10.sp)
+                        }
+                    }
                 }
             }
         }
@@ -775,8 +901,18 @@ private fun GraphWorkspace(
                     else path.lineTo(x, y)
                 }
                 drawPath(path, graphColors[index], style = Stroke(
-                    width = 2.5f, cap = StrokeCap.Round))
+                    width = 2.7f, cap = StrokeCap.Round))
             }
+        }
+        Row(Modifier.fillMaxWidth().padding(top = 6.dp),
+            horizontalArrangement = Arrangement.SpaceBetween) {
+            Text("Oldest", color = MaterialTheme.colors.onSurface.copy(.46f),
+                fontSize = 10.sp)
+            Text("SESSION TIME",
+                color = MaterialTheme.colors.onSurface.copy(.46f),
+                fontSize = 10.sp, fontWeight = FontWeight.Bold)
+            Text("Latest", color = MaterialTheme.colors.onSurface.copy(.46f),
+                fontSize = 10.sp)
         }
     }
 }
@@ -825,22 +961,172 @@ private fun DashboardWorkspace(
     Column(Modifier.fillMaxSize()) {
         SectionTitle("Dashboard", "Current values and measured session peaks")
         LazyVerticalGrid(
-            columns = GridCells.Adaptive(220.dp),
+            columns = GridCells.Adaptive(238.dp),
             Modifier.fillMaxSize(),
-            horizontalArrangement = Arrangement.spacedBy(9.dp),
-            verticalArrangement = Arrangement.spacedBy(9.dp)
+            horizontalArrangement = Arrangement.spacedBy(11.dp),
+            verticalArrangement = Arrangement.spacedBy(11.dp)
         ) {
             gridItems(selected, key = { it.parameterId }) { channel ->
-                LiveValueCard(
+                LiveGaugeCard(
                     channel,
                     samples[channel.parameterId],
                     history[channel.parameterId].orEmpty(),
                     graphColors[selected.indexOf(channel) % graphColors.size],
-                    Modifier.fillMaxWidth().height(154.dp)
+                    Modifier.fillMaxWidth().height(218.dp)
                 )
             }
         }
     }
+}
+
+@Composable
+private fun AnalysisWorkspace(
+    selected: List<LoggerChannel>,
+    samples: Map<String, LiveDataSample>,
+    history: Map<String, List<LiveDataSample>>
+) {
+    if (selected.isEmpty()) {
+        EmptyState(
+            "No session to analyze",
+            "Choose channels and collect samples to build a session summary."
+        )
+        return
+    }
+    val summary = analysisSummary(selected, history)
+    Column(Modifier.fillMaxSize()) {
+        SectionTitle("Session analysis",
+            "A read-only summary calculated from received samples")
+        LazyRow(Modifier.fillMaxWidth().height(86.dp),
+            horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+            item { AnalysisMetricCard("Channels", summary.channels.toString(),
+                "with received data", graphColors[0]) }
+            item { AnalysisMetricCard("Samples", summary.samples.toString(),
+                "channel values", graphColors[1]) }
+            item { AnalysisMetricCard("Duration", summary.durationLabel,
+                "captured window", graphColors[2]) }
+            item { AnalysisMetricCard("Coverage", summary.coverageLabel,
+                "selected channels", graphColors[3]) }
+        }
+        Spacer(Modifier.height(11.dp))
+        DataWorkspace(selected, samples, history)
+    }
+}
+
+@Composable
+private fun AnalysisMetricCard(
+    label: String,
+    value: String,
+    detail: String,
+    accent: Color
+) {
+    Column(
+        Modifier.width(190.dp).fillMaxHeight()
+            .background(MaterialTheme.colors.surface, RoundedCornerShape(9.dp))
+            .border(1.dp, accent.copy(.28f), RoundedCornerShape(9.dp))
+            .padding(horizontal = 13.dp, vertical = 10.dp)
+    ) {
+        Text(label.uppercase(), color = accent, fontSize = 10.sp,
+            fontWeight = FontWeight.Bold)
+        Text(value, fontSize = 20.sp, fontWeight = FontWeight.Bold,
+            maxLines = 1)
+        Text(detail, color = MaterialTheme.colors.onSurface.copy(.52f),
+            fontSize = 10.sp, maxLines = 1)
+    }
+}
+
+@Composable
+private fun LiveGaugeCard(
+    channel: LoggerChannel,
+    sample: LiveDataSample?,
+    samples: List<LiveDataSample>,
+    accentColor: Color,
+    modifier: Modifier
+) {
+    val stats = statistics(samples)
+    val progress = measuredProgress(sample?.rawValue, stats)
+    Column(
+        modifier.background(MaterialTheme.colors.surface, RoundedCornerShape(10.dp))
+            .border(1.dp, MaterialTheme.colors.onSurface.copy(.14f),
+                RoundedCornerShape(10.dp))
+            .semantics(mergeDescendants = true) {
+                contentDescription = liveValueAccessibilityLabel(
+                    channel, sample, stats)
+            }
+            .padding(horizontal = 14.dp, vertical = 12.dp)
+    ) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(9.dp).background(accentColor,
+                RoundedCornerShape(3.dp)))
+            Spacer(Modifier.width(7.dp))
+            Text(channel.name, Modifier.weight(1f),
+                color = accentColor, fontWeight = FontWeight.SemiBold,
+                fontSize = 13.sp, maxLines = 1,
+                overflow = TextOverflow.Ellipsis)
+        }
+        Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+            GaugeFace(progress, accentColor)
+            Column(horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier
+                    .background(
+                        MaterialTheme.colors.surface.copy(alpha = .94f),
+                        RoundedCornerShape(7.dp)
+                    )
+                    .padding(horizontal = 8.dp, vertical = 3.dp)) {
+                Text(sample?.displayValue ?: "—", color = accentColor,
+                    fontSize = 28.sp, fontWeight = FontWeight.Bold,
+                    maxLines = 1)
+                Text(channel.units.ifBlank { "CURRENT" },
+                    color = MaterialTheme.colors.onSurface.copy(.55f),
+                    fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+            }
+        }
+        Row(Modifier.fillMaxWidth()) {
+            Text("MIN  ${stats?.minimum?.formatValue() ?: "—"}",
+                Modifier.weight(1f),
+                color = MaterialTheme.colors.onSurface.copy(.52f),
+                fontSize = 10.sp)
+            Text("MAX  ${stats?.maximum?.formatValue() ?: "—"}",
+                color = MaterialTheme.colors.onSurface.copy(.52f),
+                fontSize = 10.sp)
+        }
+    }
+}
+
+@Composable
+private fun GaugeFace(progress: Float?, accentColor: Color) {
+    val trackColor = MaterialTheme.colors.onSurface.copy(alpha = .10f)
+    val surfaceColor = MaterialTheme.colors.surface
+    Canvas(Modifier.fillMaxSize().padding(horizontal = 9.dp, vertical = 5.dp)) {
+        val radius = minOf(size.width * .38f, size.height * .62f)
+        val center = Offset(size.width / 2f, size.height * .74f)
+        val topLeft = Offset(center.x - radius, center.y - radius)
+        val arcSize = Size(radius * 2f, radius * 2f)
+        val start = 145f
+        val sweep = 250f
+        drawArc(trackColor, start, sweep, false, topLeft, arcSize,
+            style = Stroke(width = 9f, cap = StrokeCap.Round))
+        if (progress != null) {
+            drawArc(accentColor, start, sweep * progress, false,
+                topLeft, arcSize,
+                style = Stroke(width = 9f, cap = StrokeCap.Round))
+            val angle = (start + sweep * progress) * PI / 180.0
+            val tip = Offset(
+                center.x + cos(angle).toFloat() * radius * .78f,
+                center.y + sin(angle).toFloat() * radius * .78f
+            )
+            drawLine(accentColor, center, tip, strokeWidth = 4f,
+                cap = StrokeCap.Round)
+            drawCircle(surfaceColor, 7f, center)
+            drawCircle(accentColor, 4f, center)
+        }
+    }
+}
+
+internal fun measuredProgress(current: Double?, stats: SampleStatistics?): Float? {
+    if (current == null || stats == null) return null
+    val span = stats.maximum - stats.minimum
+    return if (span == 0.0) 1f else
+        ((current - stats.minimum) / span).coerceIn(0.0, 1.0).toFloat()
 }
 
 @Composable
@@ -884,7 +1170,7 @@ private fun LiveValueCard(
             }
         }
         Spacer(Modifier.height(7.dp))
-        MeasuredRangeBar(sample?.rawValue, stats)
+        MeasuredRangeBar(sample?.rawValue, stats, accentColor)
         Spacer(Modifier.height(6.dp))
         Row(Modifier.fillMaxWidth()) {
             Text("MIN  ${stats?.minimum?.formatValue() ?: "—"}",
@@ -899,9 +1185,13 @@ private fun LiveValueCard(
 }
 
 @Composable
-private fun MeasuredRangeBar(current: Double?, stats: SampleStatistics?) {
+private fun MeasuredRangeBar(
+    current: Double?,
+    stats: SampleStatistics?,
+    accentColor: Color
+) {
     val track = MaterialTheme.colors.onSurface.copy(alpha = .10f)
-    val fill = MaterialTheme.colors.primary
+    val fill = accentColor
     Canvas(
         Modifier.fillMaxWidth().height(7.dp)
             .semantics { contentDescription = "Position in measured range" }
@@ -962,21 +1252,30 @@ private fun WorkspaceNavigation(
             Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 7.dp),
             horizontalArrangement = Arrangement.Center
         ) {
-            LoggerWorkspaceView.values().forEachIndexed { index, view ->
-                TextButton(
-                    onClick = { onSelect(view) },
-                    modifier = Modifier.height(48.dp).padding(horizontal = 5.dp),
-                    colors = ButtonDefaults.textButtonColors(
-                        contentColor = if (view == active) steel
-                        else MaterialTheme.colors.onSurface.copy(.72f))
-                ) {
-                    Text(
-                        if (showShortcuts) {
-                            "${view.displayName}  Ctrl+${index + 1}"
-                        } else view.displayName,
-                        fontWeight = if (view == active) FontWeight.Bold
-                        else FontWeight.Normal
-                    )
+            LoggerWorkspaceView.entries.forEachIndexed { index, view ->
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    TextButton(
+                        onClick = { onSelect(view) },
+                        modifier = Modifier.height(43.dp).padding(horizontal = 4.dp),
+                        shape = RoundedCornerShape(7.dp),
+                        colors = ButtonDefaults.textButtonColors(
+                            backgroundColor = if (view == active)
+                                brandRed.copy(alpha = .09f) else Color.Transparent,
+                            contentColor = if (view == active) brandRed
+                            else MaterialTheme.colors.onSurface.copy(.68f))
+                    ) {
+                        Text(
+                            if (showShortcuts) {
+                                "${view.displayName}  Ctrl+${index + 1}"
+                            } else view.displayName,
+                            fontWeight = if (view == active) FontWeight.Bold
+                            else FontWeight.Normal
+                        )
+                    }
+                    Box(Modifier.width(34.dp).height(3.dp).background(
+                        if (view == active) brandRed else Color.Transparent,
+                        RoundedCornerShape(topStart = 3.dp, topEnd = 3.dp)
+                    ))
                 }
             }
         }
@@ -988,6 +1287,7 @@ internal fun workspaceForShortcut(key: Key): LoggerWorkspaceView? = when (key) {
     Key.Two -> LoggerWorkspaceView.DATA
     Key.Three -> LoggerWorkspaceView.GRAPH
     Key.Four -> LoggerWorkspaceView.DASHBOARD
+    Key.Five -> LoggerWorkspaceView.ANALYSIS
     else -> null
 }
 
@@ -1004,6 +1304,8 @@ internal data class SampleStatistics(
     val average: Double,
     val median: Double,
     val standardDeviation: Double,
+    val percentile05: Double,
+    val percentile95: Double,
     val count: Int
 )
 
@@ -1013,6 +1315,32 @@ internal data class SessionMetrics(
     val receivedPoints: Int,
     val windowLabel: String
 )
+
+internal data class AnalysisSummary(
+    val channels: Int,
+    val samples: Int,
+    val durationLabel: String,
+    val coverageLabel: String
+)
+
+internal fun analysisSummary(
+    selected: List<LoggerChannel>,
+    history: Map<String, List<LiveDataSample>>
+): AnalysisSummary {
+    val received = selected.mapNotNull { channel ->
+        history[channel.parameterId]?.takeIf { it.isNotEmpty() }
+    }
+    val timestamps = received.flatten().map { it.timestampMillis }
+    val duration = if (timestamps.size < 2) null
+        else (timestamps.maxOrNull()!! - timestamps.minOrNull()!!) / 1000.0
+    return AnalysisSummary(
+        received.size,
+        received.sumOf { it.size },
+        duration?.let { "%.1f s".format(it) } ?: "—",
+        if (selected.isEmpty()) "—" else
+            "${received.size} / ${selected.size}"
+    )
+}
 
 internal fun sessionMetrics(
     channels: List<LoggerChannel>,
@@ -1056,8 +1384,19 @@ internal fun statistics(samples: List<LiveDataSample>): SampleStatistics? {
         values.size
     return SampleStatistics(
         values.first(), values.last(), average, median, sqrt(variance),
-        values.size
+        percentile(values, .05), percentile(values, .95), values.size
     )
+}
+
+internal fun percentile(sortedValues: List<Double>, percentile: Double): Double {
+    require(sortedValues.isNotEmpty())
+    val position = (sortedValues.lastIndex * percentile.coerceIn(0.0, 1.0))
+    val lower = position.toInt()
+    val upper = kotlin.math.ceil(position).toInt()
+    if (lower == upper) return sortedValues[lower]
+    val fraction = position - lower
+    return sortedValues[lower] +
+        (sortedValues[upper] - sortedValues[lower]) * fraction
 }
 
 private fun Double.formatValue(): String {
@@ -1080,7 +1419,7 @@ private fun stateLabel(state: LoggerSessionState): String = when (state) {
 
 private fun workspaceColors(dark: Boolean): Colors = if (dark) {
     darkColors(
-        primary = steel,
+        primary = brandRed,
         primaryVariant = graphite,
         secondary = recordGreen,
         background = Color(0xFF10151B),
@@ -1094,7 +1433,7 @@ private fun workspaceColors(dark: Boolean): Colors = if (dark) {
     )
 } else {
     lightColors(
-        primary = graphite,
+        primary = brandRed,
         primaryVariant = steel,
         secondary = recordGreen,
         background = Color(0xFFF4F6F8),

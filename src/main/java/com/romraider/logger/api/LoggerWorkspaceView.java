@@ -6,7 +6,8 @@ public enum LoggerWorkspaceView {
     OVERVIEW("Overview"),
     DATA("Data"),
     GRAPH("Graph"),
-    DASHBOARD("Dashboard");
+    DASHBOARD("Dashboard"),
+    ANALYSIS("Analysis");
 
     private final String displayName;
 

@@ -19,7 +19,15 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 /** Manual screenshot fixture. It is never included in release packages. */
-fun main() {
+fun main(args: Array<String>) {
+    val requestedView = args.firstOrNull()
+        ?.let(LoggerWorkspaceView::fromName) ?: LoggerWorkspaceView.OVERVIEW
+    val darkTheme = args.drop(1).firstOrNull()
+        ?.equals("dark", ignoreCase = true) == true
+    val windowWidth = args.getOrNull(2)?.toIntOrNull()?.coerceAtLeast(640)
+        ?: 1320
+    val windowHeight = args.getOrNull(3)?.toIntOrNull()?.coerceAtLeast(560)
+        ?: 860
     val bus = LoggerLiveDataBus.getInstance()
     bus.clearSamples()
     val channels = listOf(
@@ -74,11 +82,11 @@ fun main() {
                 LoggerWorkspaceContext(
                     bus, session, channelService,
                     LoggerWorkspacePreferences(
-                        LoggerWorkspaceView.OVERVIEW, false
+                        requestedView, darkTheme
                     ) { _, _ -> }
                 )),
                 BorderLayout.CENTER)
-            setSize(1320, 860)
+            setSize(windowWidth, windowHeight)
             setLocation(40, 40)
             isVisible = true
         }

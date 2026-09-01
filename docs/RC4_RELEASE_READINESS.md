@@ -29,12 +29,14 @@ The Linux and Windows workflows must:
 ## Desktop checks before publishing
 
 - Linux clean-package launch, first-run definition prompt, Editor load/edit/
-  save/reopen, and Logger Overview/Data/Graph/Dashboard checks.
+  save/reopen, and Logger Overview/Data/Graph/Dashboard/Analysis checks.
 - Linux Logger checks at normal and narrow sizes in Light and Dark themes.
 - Windows clean-package and visual pass when the Windows VM is available.
 - Confirm that launching either package beside an unrelated `settings.xml`
   still loads the package-owned settings.
 - Confirm the About screens and startup log identify the build as RC4.
+- Obtain explicit user visual approval for the Linux, Windows, and Android
+  candidates before replacing any public RC4 download.
 
 ## Connected testing
 

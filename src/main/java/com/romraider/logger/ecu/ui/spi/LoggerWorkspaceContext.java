@@ -14,19 +14,29 @@ public final class LoggerWorkspaceContext {
     private final LoggerSessionService session;
     private final LoggerChannelService channels;
     private final LoggerWorkspacePreferences preferences;
+    private final boolean hostSessionControls;
 
     public LoggerWorkspaceContext(LoggerLiveDataBus liveData,
             LoggerSessionService session, LoggerChannelService channels,
             LoggerWorkspacePreferences preferences) {
+        this(liveData, session, channels, preferences, false);
+    }
+
+    public LoggerWorkspaceContext(LoggerLiveDataBus liveData,
+            LoggerSessionService session, LoggerChannelService channels,
+            LoggerWorkspacePreferences preferences,
+            boolean hostSessionControls) {
         checkNotNull(liveData, session, channels, preferences);
         this.liveData = liveData;
         this.session = session;
         this.channels = channels;
         this.preferences = preferences;
+        this.hostSessionControls = hostSessionControls;
     }
 
     public LoggerLiveDataBus getLiveData() { return liveData; }
     public LoggerSessionService getSession() { return session; }
     public LoggerChannelService getChannels() { return channels; }
     public LoggerWorkspacePreferences getPreferences() { return preferences; }
+    public boolean hasHostSessionControls() { return hostSessionControls; }
 }

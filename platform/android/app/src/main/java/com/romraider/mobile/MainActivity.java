@@ -11,6 +11,7 @@ import android.content.IntentFilter;
 import android.database.Cursor;
 import android.graphics.Color;
 import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
 import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbManager;
 import android.net.Uri;
@@ -82,10 +83,14 @@ public final class MainActivity extends Activity {
     private static final int OPEN_ECU_DEFINITION = 17;
     private static final String ACTION_USB_PERMISSION =
             "com.romraider.mobile.USB_PERMISSION";
-    private static final int INK = Color.rgb(229, 239, 246);
-    private static final int MUTED = Color.rgb(147, 169, 184);
-    private static final int PANEL = Color.rgb(18, 39, 54);
-    private static final int ACCENT = Color.rgb(0, 167, 196);
+    private static final int BACKGROUND = Color.rgb(15, 21, 27);
+    private static final int INK = Color.rgb(228, 232, 237);
+    private static final int MUTED = Color.rgb(145, 160, 174);
+    private static final int PANEL = Color.rgb(24, 33, 41);
+    private static final int PANEL_RAISED = Color.rgb(31, 43, 53);
+    private static final int BORDER = Color.rgb(52, 67, 80);
+    private static final int ACCENT = Color.rgb(217, 38, 50);
+    private static final int POSITIVE = Color.rgb(36, 120, 75);
 
     private LinearLayout content;
     private Button loggerTab;
@@ -217,20 +222,37 @@ public final class MainActivity extends Activity {
     private void showWorkspace() {
         LinearLayout page = column();
         page.setPadding(dp(20), dp(18), dp(20), dp(12));
-        page.setBackgroundColor(Color.rgb(10, 22, 33));
+        page.setBackgroundColor(BACKGROUND);
 
-        TextView eyebrow = text("ROMRAIDER2  /  "
-                + BuildConfig.VERSION_NAME.toUpperCase(Locale.ROOT), 12, ACCENT);
-        eyebrow.setTypeface(Typeface.DEFAULT_BOLD);
-        page.addView(eyebrow);
-        TextView title = text("ECU Studio", 28, INK);
+        LinearLayout brand = new LinearLayout(this);
+        brand.setOrientation(LinearLayout.HORIZONTAL);
+        brand.setGravity(Gravity.CENTER_VERTICAL);
+        TextView mark = text("RR2", 14, Color.WHITE);
+        mark.setTypeface(Typeface.DEFAULT_BOLD);
+        mark.setGravity(Gravity.CENTER);
+        mark.setPadding(dp(10), dp(7), dp(10), dp(7));
+        mark.setBackground(rounded(ACCENT, ACCENT, 7));
+        brand.addView(mark);
+        LinearLayout brandText = column();
+        brandText.setPadding(dp(10), 0, 0, 0);
+        TextView title = text("ROMRAIDER2", 17, INK);
         title.setTypeface(Typeface.DEFAULT_BOLD);
-        page.addView(title, matchWrap());
-        page.addView(text("Editing, log review, and USB checks for Android", 14, MUTED), matchWrap());
+        brandText.addView(title);
+        brandText.addView(text("ANDROID  /  "
+                + BuildConfig.VERSION_NAME.toUpperCase(Locale.ROOT), 10, MUTED));
+        brand.addView(brandText, new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        TextView safety = text("READ ONLY", 10, Color.rgb(101, 211, 151));
+        safety.setTypeface(Typeface.DEFAULT_BOLD);
+        safety.setPadding(dp(9), dp(6), dp(9), dp(6));
+        safety.setBackground(rounded(Color.rgb(18, 57, 42),
+                Color.rgb(35, 108, 73), 20));
+        brand.addView(safety);
+        page.addView(brand, matchWrap(dp(14)));
 
         LinearLayout tabs = new LinearLayout(this);
         tabs.setOrientation(LinearLayout.HORIZONTAL);
-        tabs.setPadding(0, dp(18), 0, dp(12));
+        tabs.setPadding(0, 0, 0, dp(12));
         loggerTab = button("LOGGER");
         editorTab = button("EDITOR");
         loggerTab.setOnClickListener(view -> showLogger());
@@ -244,7 +266,11 @@ public final class MainActivity extends Activity {
         scroll.addView(content, matchWrap());
         page.addView(scroll, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
-        page.addView(text("ECU writing is unavailable in this preview.", 12, MUTED), matchWrap());
+        TextView footer = text("ECU writing is unavailable in this preview.",
+                11, MUTED);
+        footer.setGravity(Gravity.CENTER);
+        footer.setPadding(0, dp(9), 0, 0);
+        page.addView(footer, matchWrap());
         setContentView(page);
     }
 
@@ -260,59 +286,77 @@ public final class MainActivity extends Activity {
         liveLoggerButton = null;
         selectTab(loggerTab, editorTab);
         content.removeAllViews();
-        content.addView(sectionTitle("LOG REVIEW"));
-        content.addView(text("Open a RomRaider or RomRaider2 CSV and review the latest value for each channel.", 14, INK));
+
+        TextView heading = text("Logger", 24, INK);
+        heading.setTypeface(Typeface.DEFAULT_BOLD);
+        content.addView(heading);
+        content.addView(text("Review logs, prepare a session, and verify the "
+                + "OpenPort from one workspace.", 13, MUTED), matchWrap(dp(14)));
+
+        LinearLayout reviewCard = sectionCard("LOG REVIEW",
+                "Open a RomRaider or RomRaider2 CSV and review the latest "
+                        + "value for each channel.");
         Button open = button("OPEN CSV LOG");
         open.setOnClickListener(view -> openLog());
-        content.addView(open, matchWrap(dp(12)));
+        reviewCard.addView(open, matchWrap());
+        content.addView(reviewCard, cardParams(dp(10)));
 
-        content.addView(sectionTitle("LOGGER SETUP"));
-        content.addView(text("Use your existing RomRaider logger definition and profile. Extended addresses stay unavailable until the ECU ID matches.", 14, INK));
+        LinearLayout setupCard = sectionCard("LOGGER SETUP",
+                "Use an existing logger definition and profile. Extended "
+                        + "addresses remain unavailable until the ECU ID matches.");
         Button definition = button("OPEN LOGGER DEFINITION");
         definition.setOnClickListener(view -> openLoggerDefinition());
-        content.addView(definition, matchWrap(dp(6)));
         Button profile = button("OPEN LOGGER PROFILE");
         profile.setOnClickListener(view -> openLoggerProfile());
-        content.addView(profile, matchWrap(dp(8)));
-        showLoggerSetupStatus();
+        setupCard.addView(actionRow(definition, profile), matchWrap(dp(9)));
+        loggerSetupView = statusText(loggerSetupSummary());
+        setupCard.addView(loggerSetupView, matchWrap());
+        content.addView(setupCard, cardParams(dp(10)));
 
-        content.addView(sectionTitle("OFFLINE LOGGER PREVIEW"));
-        content.addView(text("Exercise the selected parameters, conversions, live display, and CSV recording with simulated data. No ECU connection is used.", 14, INK));
+        LinearLayout previewCard = sectionCard("OFFLINE PREVIEW",
+                "Exercise selected parameters, conversions, display, and CSV "
+                        + "recording with simulated data. No ECU is used.");
         loggerPreviewButton = button(getString(R.string.logger_preview_start));
+        styleButton(loggerPreviewButton, POSITIVE, POSITIVE);
         loggerPreviewButton.setOnClickListener(view -> toggleLoggerPreview());
-        content.addView(loggerPreviewButton, matchWrap(dp(6)));
         Button savePreview = button("SAVE PREVIEW CSV");
         savePreview.setOnClickListener(view -> savePreviewLog());
-        content.addView(savePreview, matchWrap(dp(8)));
-        loggerPreviewView = text("Load a definition and profile to run the offline logger preview.", 13, MUTED);
-        loggerPreviewView.setTypeface(Typeface.MONOSPACE);
-        loggerPreviewView.setBackgroundColor(PANEL);
-        loggerPreviewView.setPadding(dp(14), dp(14), dp(14), dp(14));
-        content.addView(loggerPreviewView, matchWrap(dp(12)));
+        previewCard.addView(actionRow(loggerPreviewButton, savePreview),
+                matchWrap(dp(9)));
+        loggerPreviewView = statusText(
+                "Load a definition and profile to run the offline preview.");
+        previewCard.addView(loggerPreviewView, matchWrap());
+        content.addView(previewCard, cardParams(dp(10)));
 
-        content.addView(sectionTitle("USB DEVICES"));
-        content.addView(text("Prepare an OpenPort 2.0 through Android USB. This checks the adapter and vehicle voltage without querying the ECU.", 14, INK));
+        LinearLayout usbCard = sectionCard("OPENPORT USB",
+                "Prepare an OpenPort 2.0 and check adapter access and vehicle "
+                        + "voltage without querying the ECU.");
         Button prepare = button("PREPARE OPENPORT");
+        styleButton(prepare, PANEL_RAISED, ACCENT);
         prepare.setOnClickListener(view -> prepareOpenPort());
-        content.addView(prepare, matchWrap(dp(6)));
         Button scan = button("SCAN USB");
         scan.setOnClickListener(view -> showUsbDevices());
-        content.addView(scan, matchWrap(dp(12)));
-        showUsbDevices();
+        usbCard.addView(actionRow(prepare, scan), matchWrap(dp(9)));
+        usbStatusView = statusText(usbSummary());
+        usbCard.addView(usbStatusView, matchWrap());
+        content.addView(usbCard, cardParams(dp(10)));
 
-        content.addView(sectionTitle("READ-ONLY LIVE LOGGER"));
-        content.addView(text("The live OpenPort K-Line path is wired end to end, but in-car qualification is deferred to RC5. It can identify the ECU, resolve exact profile addresses, display values, and record CSV. It cannot write to the ECU.", 14, INK));
+        LinearLayout liveCard = sectionCard("READ-ONLY LIVE LOGGER",
+                "Identify the ECU, resolve profile addresses, display values, "
+                        + "and record CSV. Connected qualification remains "
+                        + "scheduled for RC5.");
         liveLoggerButton = button(getString(R.string.logger_live_start));
+        styleButton(liveLoggerButton, POSITIVE, POSITIVE);
         liveLoggerButton.setOnClickListener(view -> toggleLiveLogger());
-        content.addView(liveLoggerButton, matchWrap(dp(6)));
         Button saveLive = button("SAVE LIVE CSV");
         saveLive.setOnClickListener(view -> saveLiveLog());
-        content.addView(saveLive, matchWrap(dp(8)));
-        liveLoggerView = text("RC5 QUALIFICATION PENDING\nPrepare the OpenPort and load a definition and profile before a future connected test.", 13, MUTED);
-        liveLoggerView.setTypeface(Typeface.MONOSPACE);
-        liveLoggerView.setBackgroundColor(PANEL);
-        liveLoggerView.setPadding(dp(14), dp(14), dp(14), dp(14));
-        content.addView(liveLoggerView, matchWrap(dp(12)));
+        liveCard.addView(actionRow(liveLoggerButton, saveLive),
+                matchWrap(dp(9)));
+        liveLoggerView = statusText("RC5 QUALIFICATION PENDING\nPrepare the "
+                + "OpenPort and load a definition and profile before a future "
+                + "connected test.");
+        liveCard.addView(liveLoggerView, matchWrap());
+        content.addView(liveCard, cardParams(dp(12)));
     }
 
     private void showUsbDevices() {
@@ -480,24 +524,30 @@ public final class MainActivity extends Activity {
         liveLoggerButton = null;
         selectTab(editorTab, loggerTab);
         content.removeAllViews();
-        content.addView(sectionTitle("ROM EDITOR"));
-        content.addView(text("Open a ROM and its RomRaider ECU definition to browse and edit named calibration tables.", 14, INK));
+        TextView heading = text("ROM Editor", 24, INK);
+        heading.setTypeface(Typeface.DEFAULT_BOLD);
+        content.addView(heading);
+        content.addView(text("Browse and edit named calibration tables while "
+                + "keeping the original ROM untouched.", 13, MUTED),
+                matchWrap(dp(14)));
+
+        LinearLayout romCard = sectionCard("ROM AND DEFINITION",
+                "Open a ROM and its matching RomRaider ECU definition.");
         Button open = button("OPEN ROM");
         open.setOnClickListener(view -> openRom());
-        content.addView(open, matchWrap(dp(6)));
         Button definition = button("OPEN ECU DEFINITION");
         definition.setOnClickListener(view -> openEcuDefinition());
-        content.addView(definition, matchWrap(dp(8)));
+        romCard.addView(actionRow(open, definition), matchWrap(dp(9)));
 
-        romSummary = text("No ROM open", 14, MUTED);
-        content.addView(romSummary, matchWrap(dp(8)));
-        ecuDefinitionSummary = text(ecuDefinitionState, 13, MUTED);
-        ecuDefinitionSummary.setTypeface(Typeface.MONOSPACE);
-        ecuDefinitionSummary.setBackgroundColor(PANEL);
-        ecuDefinitionSummary.setPadding(dp(14), dp(14), dp(14), dp(14));
-        content.addView(ecuDefinitionSummary, matchWrap(dp(12)));
+        romSummary = statusText("No ROM open");
+        romCard.addView(romSummary, matchWrap(dp(7)));
+        ecuDefinitionSummary = statusText(ecuDefinitionState);
+        romCard.addView(ecuDefinitionSummary, matchWrap());
+        content.addView(romCard, cardParams(dp(10)));
 
-        content.addView(sectionTitle("CALIBRATION TABLES"));
+        LinearLayout tablesCard = sectionCard("CALIBRATION TABLES",
+                "Search by table name or category, then select a table to "
+                        + "inspect and edit its scaled values.");
         tableSearch = input("Search table or category");
         tableSearch.addTextChangedListener(new TextWatcher() {
             @Override public void beforeTextChanged(CharSequence text, int start,
@@ -506,42 +556,47 @@ public final class MainActivity extends Activity {
                     int before, int count) { renderTableList(); }
             @Override public void afterTextChanged(Editable text) { }
         });
-        content.addView(tableSearch, matchWrap(dp(8)));
+        tablesCard.addView(tableSearch, matchWrap(dp(8)));
         tableList = column();
-        content.addView(tableList, matchWrap(dp(8)));
+        tablesCard.addView(tableList, matchWrap(dp(8)));
         tableDetail = column();
-        content.addView(tableDetail, matchWrap(dp(12)));
+        tablesCard.addView(tableDetail, matchWrap());
+        content.addView(tablesCard, cardParams(dp(10)));
         renderTableList();
         renderSelectedTable();
 
-        content.addView(sectionTitle("ADVANCED HEX EDITOR"));
-        content.addView(text("Direct byte editing remains available for definition work and comparison.", 14, INK));
-        hexPreview = text("", 12, INK);
-        hexPreview.setTypeface(Typeface.MONOSPACE);
+        LinearLayout hexCard = sectionCard("ADVANCED HEX EDITOR",
+                "Direct byte editing remains available for definition work "
+                        + "and comparison.");
+        hexPreview = statusText("");
         HorizontalScrollView horizontal = new HorizontalScrollView(this);
         horizontal.addView(hexPreview);
-        content.addView(horizontal, matchWrap(dp(8)));
+        hexCard.addView(horizontal, matchWrap(dp(8)));
 
         offsetInput = input("Offset, for example 1A20");
         bytesInput = input("Hex bytes, for example FF 00 7A");
-        content.addView(offsetInput, matchWrap(dp(6)));
-        content.addView(bytesInput, matchWrap(dp(6)));
+        hexCard.addView(offsetInput, matchWrap(dp(6)));
+        hexCard.addView(bytesInput, matchWrap(dp(8)));
 
         LinearLayout actions = new LinearLayout(this);
         Button apply = button("APPLY EDIT");
+        styleButton(apply, ACCENT, ACCENT);
         Button reset = button("RESET");
         Button save = button("SAVE COPY");
+        styleButton(save, POSITIVE, POSITIVE);
         apply.setOnClickListener(view -> applyEdit());
         reset.setOnClickListener(view -> resetEdits());
         save.setOnClickListener(view -> saveRom());
         actions.addView(apply, weighted());
         actions.addView(reset, weighted());
         actions.addView(save, weighted());
-        content.addView(actions, matchWrap(dp(12)));
+        hexCard.addView(actions, matchWrap(dp(10)));
         TextView warning = text("CHECKSUM WARNING  /  Android does not correct ROM checksums. Save copies only for review and desktop validation. Do not flash Android-edited files.", 12, Color.rgb(255, 190, 92));
-        warning.setBackgroundColor(PANEL);
-        warning.setPadding(dp(14), dp(14), dp(14), dp(14));
-        content.addView(warning, matchWrap(dp(12)));
+        warning.setBackground(rounded(Color.rgb(52, 39, 22),
+                Color.rgb(116, 83, 34), 7));
+        warning.setPadding(dp(12), dp(11), dp(12), dp(11));
+        hexCard.addView(warning, matchWrap());
+        content.addView(hexCard, cardParams(dp(12)));
 
         refreshRom();
     }
@@ -728,6 +783,9 @@ public final class MainActivity extends Activity {
             item.setAllCaps(false);
             item.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
             item.setTextColor(table == selectedTable ? Color.WHITE : ACCENT);
+            item.setBackground(rounded(
+                    table == selectedTable ? ACCENT : PANEL_RAISED,
+                    table == selectedTable ? ACCENT : BORDER, 8));
             item.setOnClickListener(view -> {
                 selectedTable = table;
                 renderTableList();
@@ -768,7 +826,7 @@ public final class MainActivity extends Activity {
 
         TextView values = text(tablePreview(table), 12, INK);
         values.setTypeface(Typeface.MONOSPACE);
-        values.setBackgroundColor(PANEL);
+        values.setBackground(rounded(BACKGROUND, BORDER, 7));
         values.setPadding(dp(14), dp(14), dp(14), dp(14));
         HorizontalScrollView horizontal = new HorizontalScrollView(this);
         horizontal.addView(values);
@@ -791,6 +849,7 @@ public final class MainActivity extends Activity {
         LinearLayout actions = new LinearLayout(this);
         Button load = button("LOAD CELL");
         Button apply = button("APPLY VALUE");
+        styleButton(apply, ACCENT, ACCENT);
         load.setOnClickListener(view -> loadTableCell());
         apply.setOnClickListener(view -> applyTableValue());
         actions.addView(load, weighted());
@@ -907,10 +966,12 @@ public final class MainActivity extends Activity {
                     .append(sample.getValue()).append(' ')
                     .append(sample.getUnits()).append('\n');
         }
-        TextView card = text(summary.toString().trim(), 14, INK);
-        card.setBackgroundColor(PANEL);
-        card.setPadding(dp(14), dp(14), dp(14), dp(14));
-        content.addView(card, 3, matchWrap(dp(12)));
+        LinearLayout card = sectionCard("OPEN LOG", name + "  /  "
+                + session.size() + " values  /  " + latest.size()
+                + " channels");
+        TextView values = statusText(summary.toString().trim());
+        card.addView(values, matchWrap());
+        content.addView(card, 3, cardParams(dp(10)));
     }
 
     private void toggleLoggerPreview() {
@@ -1241,22 +1302,15 @@ public final class MainActivity extends Activity {
 
     private void selectTab(Button selected, Button other) {
         selected.setTextColor(Color.WHITE);
-        selected.setBackgroundColor(ACCENT);
+        selected.setBackground(rounded(ACCENT, ACCENT, 8));
         other.setTextColor(MUTED);
-        other.setBackgroundColor(PANEL);
+        other.setBackground(rounded(PANEL, BORDER, 8));
     }
 
     private LinearLayout column() {
         LinearLayout layout = new LinearLayout(this);
         layout.setOrientation(LinearLayout.VERTICAL);
         return layout;
-    }
-
-    private TextView sectionTitle(String value) {
-        TextView title = text(value, 12, ACCENT);
-        title.setTypeface(Typeface.DEFAULT_BOLD);
-        title.setPadding(0, dp(16), 0, dp(8));
-        return title;
     }
 
     private TextView text(String value, int sp, int color) {
@@ -1273,7 +1327,9 @@ public final class MainActivity extends Activity {
         button.setText(value);
         button.setTextSize(12);
         button.setTextColor(INK);
-        button.setBackgroundColor(PANEL);
+        button.setAllCaps(false);
+        button.setTypeface(Typeface.DEFAULT_BOLD);
+        button.setBackground(rounded(PANEL_RAISED, BORDER, 8));
         button.setMinHeight(dp(48));
         return button;
     }
@@ -1285,8 +1341,48 @@ public final class MainActivity extends Activity {
         input.setTextColor(INK);
         input.setSingleLine(true);
         input.setPadding(dp(12), dp(8), dp(12), dp(8));
-        input.setBackgroundColor(PANEL);
+        input.setBackground(rounded(PANEL_RAISED, BORDER, 8));
         return input;
+    }
+
+    private LinearLayout sectionCard(String title, String detail) {
+        LinearLayout card = column();
+        card.setPadding(dp(14), dp(13), dp(14), dp(14));
+        card.setBackground(rounded(PANEL, BORDER, 10));
+        TextView heading = text(title, 12, ACCENT);
+        heading.setTypeface(Typeface.DEFAULT_BOLD);
+        card.addView(heading, matchWrap(dp(5)));
+        card.addView(text(detail, 13, INK), matchWrap(dp(11)));
+        return card;
+    }
+
+    private TextView statusText(String value) {
+        TextView status = text(value, 12, MUTED);
+        status.setTypeface(Typeface.MONOSPACE);
+        status.setPadding(dp(12), dp(11), dp(12), dp(11));
+        status.setBackground(rounded(BACKGROUND, BORDER, 7));
+        return status;
+    }
+
+    private LinearLayout actionRow(Button first, Button second) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.addView(first, weighted());
+        row.addView(second, weighted());
+        return row;
+    }
+
+    private void styleButton(Button button, int fill, int stroke) {
+        button.setTextColor(Color.WHITE);
+        button.setBackground(rounded(fill, stroke, 8));
+    }
+
+    private GradientDrawable rounded(int fill, int stroke, int radius) {
+        GradientDrawable shape = new GradientDrawable();
+        shape.setColor(fill);
+        shape.setCornerRadius(dp(radius));
+        shape.setStroke(dp(1), stroke);
+        return shape;
     }
 
     private LinearLayout.LayoutParams matchWrap() {
@@ -1296,6 +1392,12 @@ public final class MainActivity extends Activity {
     private LinearLayout.LayoutParams matchWrap(int bottom) {
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        params.setMargins(0, 0, 0, bottom);
+        return params;
+    }
+
+    private LinearLayout.LayoutParams cardParams(int bottom) {
+        LinearLayout.LayoutParams params = matchWrap(bottom);
         params.setMargins(0, 0, 0, bottom);
         return params;
     }

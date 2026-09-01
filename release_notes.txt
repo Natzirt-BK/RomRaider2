@@ -11,10 +11,16 @@ Logger
 
 - Added the first replacement Logger workspace using Compose Desktop while
   keeping one ECU session and one selected-channel list.
-- Added Overview, Data, Graph, and Dashboard views with responsive normal and
-  narrow layouts.
-- Added Light and Dark themes, clearer channel colours, live telemetry status,
-  recording controls, search, and Ctrl+1 through Ctrl+4 navigation.
+- Added Overview, Data, Graph, Dashboard, and Analysis views with responsive
+  normal and narrow layouts.
+- Added Light and Dark themes, consistent channel colours, live telemetry
+  status, recording controls, search, and Ctrl+1 through Ctrl+5 navigation.
+- Added a unified RR2 header, current values in the channel browser, grouped
+  channel counts, gauge-style dashboard cards, live-value graph legends,
+  percentile statistics, and a clearer active-view strip.
+- Made the replacement Logger the primary Data, Graph, Dashboard, and live
+  Analysis workspace. The specialized MAF, Injector, Dyno, and saved-log
+  analysis tools remain available without duplicate legacy live tabs.
 - Persisted the selected replacement view and theme.
 - Connected the replacement views to the real session, recording, channel, and
   live-sample services.
@@ -56,10 +62,13 @@ Runtime and packages
   on Android, with searchable named numeric tables, scaled cell values, and
   bounded offline edits. Android does not correct checksums and clearly marks
   saved files as review copies that must not be flashed.
+- Reworked the Android Logger and Editor presentation with the same RR2 colour
+  system, grouped cards, paired actions, clearer status panels, and a visible
+  read-only safety state.
 - Fixed packaged settings precedence so an unrelated `settings.xml` beside the
   launch directory cannot replace the package-owned configuration.
 - Updated candidate labels, verification scripts, and workflow artifacts for
-  RC4 while leaving RC3 as the latest public download.
+  RC4.
 
 Checks completed
 ----------------
@@ -69,8 +78,9 @@ Checks completed
 - Compose tests pass and the replacement workspace stages successfully.
 - The Linux Java 21 application image builds and its packaged launcher starts
   under a clean virtual display.
-- Overview, Data, Graph, Dashboard, Dark, and narrow layouts have passed the
-  current Linux visual review.
+- Overview, Data, Graph, Dashboard, Analysis, Light, Dark, and narrow layouts
+  have passed automated Linux rendering checks. Final user visual approval is
+  still required.
 - The Android shared core passes definition inheritance, exact-match,
   conversion, editing, and mismatch tests. The APK builds, passes lint, and has
   passed a Waydroid launch and layout smoke check.
@@ -80,9 +90,10 @@ Known limits
 
 - RC4 desktop packages are public development previews rather than a stable
   release.
-- The replacement Logger does not yet cover every specialized legacy
-  workspace.
-- The Windows package and visual pass wait until the Windows VM is available.
+- The specialized MAF, Injector, Dyno, and saved-log analysis tools still use
+  their established Swing panels.
+- Refreshed Linux, Windows, and Android candidates require user visual approval
+  before the public RC4 files are replaced.
 - No new in-car qualification is planned until RC5.
 - Mitsubishi Lancer Evolution MUT-II still needs vehicle qualification.
 - ECU flashing and production ECU memory writing are not available.

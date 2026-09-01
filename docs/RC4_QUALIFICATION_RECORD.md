@@ -26,7 +26,7 @@ same candidate.
   `FAIL`, or `NOT RUN`
 - First-run definition prompt: `PASS`, `FAIL`, or `NOT RUN`
 - Editor load/edit/save/reopen: `PASS`, `FAIL`, or `NOT RUN`
-- Logger Overview/Data/Graph/Dashboard: `PASS`, `FAIL`, or `NOT RUN`
+- Logger Overview/Data/Graph/Dashboard/Analysis: `PASS`, `FAIL`, or `NOT RUN`
 - Logger Light/Dark and normal/narrow layouts: `PASS`, `FAIL`, or `NOT RUN`
 - Recording controls and offline log analysis: `PASS`, `FAIL`, or `NOT RUN`
 - RC4 version shown in startup log and About screens: `PASS`, `FAIL`, or

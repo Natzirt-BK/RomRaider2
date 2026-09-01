@@ -1170,13 +1170,14 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
         JComponent replacementWorkspace = LoggerWorkspaceLoader.create(
                 new LoggerWorkspaceContext(LoggerLiveDataBus.getInstance(),
                         sessionService, channelService,
-                        workspacePreferences));
+                        workspacePreferences, true));
         if (replacementWorkspace != null) {
-            tabbedPane.add("Workspace", replacementWorkspace);
+            tabbedPane.add("Logger", replacementWorkspace);
         }
         if (touchEnabled == false)
         {
-            addSplitPaneTab(
+            if (replacementWorkspace == null) {
+                addSplitPaneTab(
                     "Data",
                     buildSplitPane(
                             buildParamListPane(
@@ -1186,7 +1187,7 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
                                     buildDataTab()),
                                     buildUnselectAllButton(),
                                     buildLtvButton());
-            addSplitPaneTab(
+                addSplitPaneTab(
                     "Graph",
                     buildSplitPane(
                             buildParamListPane(
@@ -1196,7 +1197,7 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
                                     buildGraphTab()),
                                     buildUnselectAllButton(),
                                     buildLtvButton());
-            addSplitPaneTab(
+                addSplitPaneTab(
                     "Dashboard",
                     buildSplitPane(
                             buildParamListPane(
@@ -1206,14 +1207,16 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
                                     buildDashboardTab()),
                                     buildUnselectAllButton(),
                                     buildLtvButton());
+            }
             tabbedPane.add("MAF", mafTab.getPanel());
             tabbedPane.add("Injector", injectorTab.getPanel());
             tabbedPane.add("Dyno", dynoTab.getPanel());
-            tabbedPane.add("Analysis", new LogAnalysisPanel());
+            tabbedPane.add("Log analysis", new LogAnalysisPanel());
         }
         else
         {
-            addSplitPaneTab(
+            if (replacementWorkspace == null) {
+                addSplitPaneTab(
                     "<html><body leftmargin=15 topmargin=15 marginwidth=15 marginheight=15>" + "Data" + "</body></html>",
                     buildSplitPane(
                             buildParamListPane(
@@ -1223,7 +1226,7 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
                                     buildDataTab()),
                                     buildUnselectAllButton(),
                                     buildLtvButton());
-            addSplitPaneTab(
+                addSplitPaneTab(
                     "<html><body leftmargin=15 topmargin=15 marginwidth=15 marginheight=15>" + "Graph" + "</body></html>",
                     buildSplitPane(
                             buildParamListPane(
@@ -1233,7 +1236,7 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
                                     buildGraphTab()),
                                     buildUnselectAllButton(),
                                     buildLtvButton());
-            addSplitPaneTab(
+                addSplitPaneTab(
                     "<html><body leftmargin=15 topmargin=15 marginwidth=15 marginheight=15>" + "Dashboard" + "</body></html>",
                     buildSplitPane(
                             buildParamListPane(
@@ -1243,13 +1246,16 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
                                     buildDashboardTab()),
                                     buildUnselectAllButton(),
                                     buildLtvButton());
+            }
             tabbedPane.add("<html><body leftmargin=15 topmargin=15 marginwidth=15 marginheight=15>" + "MAF"+ "</body></html>", mafTab.getPanel());
             tabbedPane.add("<html><body leftmargin=15 topmargin=15 marginwidth=15 marginheight=15>" + "Injector"+ "</body></html>", injectorTab.getPanel());
             tabbedPane.add("<html><body leftmargin=15 topmargin=15 marginwidth=15 marginheight=15>" + "Dyno" + "</body></html>", dynoTab.getPanel());
-            tabbedPane.add("<html><body leftmargin=15 topmargin=15 marginwidth=15 marginheight=15>Analysis</body></html>", new LogAnalysisPanel());
+            tabbedPane.add("<html><body leftmargin=15 topmargin=15 marginwidth=15 marginheight=15>Log analysis</body></html>", new LogAnalysisPanel());
         }
 
-        LoggerWorkspaceShortcuts.install(tabbedPane);
+        if (replacementWorkspace == null) {
+            LoggerWorkspaceShortcuts.install(tabbedPane);
+        }
         return tabbedPane;
     }
 
