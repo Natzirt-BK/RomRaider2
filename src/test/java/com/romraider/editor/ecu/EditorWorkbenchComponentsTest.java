@@ -1047,6 +1047,25 @@ public class EditorWorkbenchComponentsTest {
     }
 
     @Test
+    public void mapHeaderKeepsMetadataOutFromUnderActionButtons() {
+        TableFrame frame = tableFrame("Volumetric Efficiency");
+        MapDocumentHeader header = new MapDocumentHeader(frame.getTable(),
+                frame.getTableMenuBar(), true, visible -> { }, null, null,
+                null);
+        header.setSize(700, 70);
+        header.doLayout();
+
+        JPanel identity = findNamed(header, JPanel.class, "MAP IDENTITY");
+        JPanel actions = findNamed(header, JPanel.class, "MAP ACTIONS");
+        JLabel metadata = findNamed(header, JLabel.class, "MAP METADATA");
+        assertNotNull(identity);
+        assertNotNull(actions);
+        assertTrue(identity.getX() + identity.getWidth() <= actions.getX());
+        assertFalse(metadata.getText().contains("TABLE_"));
+        header.disposeHeader();
+    }
+
+    @Test
     public void mapHeaderExposesDirectFavoriteAndChangeContext() {
         final boolean[] favorite = {false};
         EditorTabbedWorkspace workspace = new EditorTabbedWorkspace(

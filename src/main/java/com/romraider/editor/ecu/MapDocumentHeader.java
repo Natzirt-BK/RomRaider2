@@ -63,6 +63,7 @@ final class MapDocumentHeader extends JPanel {
                 BorderFactory.createEmptyBorder(8, 12, 8, 8)));
 
         JPanel identity = new JPanel(new BorderLayout(0, 3));
+        identity.setName("MAP IDENTITY");
         identity.setOpaque(false);
         JLabel title = new JLabel(table == null ? "Calibration map"
                 : safe(table.getName(), "Calibration map"));
@@ -83,9 +84,10 @@ final class MapDocumentHeader extends JPanel {
         metadataRow.add(changeStatus);
         identity.add(title, BorderLayout.NORTH);
         identity.add(metadataRow, BorderLayout.SOUTH);
-        add(identity, BorderLayout.WEST);
+        add(identity, BorderLayout.CENTER);
 
         JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
+        actions.setName("MAP ACTIONS");
         actions.setOpaque(false);
         favorite.setName("TOGGLE MAP FAVORITE");
         favorite.setFocusable(false);
@@ -224,8 +226,7 @@ final class MapDocumentHeader extends JPanel {
         String unit = current == null ? "Raw" : safe(current.getUnit(), "Raw");
         if ("0x".equals(unit)) unit = "Hex";
         String category = safe(table.getCategory(), "Other");
-        return category + "   •   " + dimensions + "   •   " + unit
-                + "   •   " + table.getType();
+        return category + "   •   " + dimensions + "   •   " + unit;
     }
 
     private static String metadataTooltip(Table table) {

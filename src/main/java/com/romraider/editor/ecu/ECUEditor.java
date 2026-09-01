@@ -19,7 +19,6 @@
 
 package com.romraider.editor.ecu;
 
-import static com.romraider.Version.ECU_DEFS_URL;
 import static com.romraider.Version.PRODUCT_NAME;
 import static com.romraider.Version.VERSION;
 import static javax.swing.JOptionPane.ERROR_MESSAGE;
@@ -127,7 +126,6 @@ import com.romraider.maps.TableView;
 import com.romraider.maps.UserLevelException;
 import com.romraider.maps.history.RomEditHistory;
 import com.romraider.maps.history.EditHistoryListener;
-import com.romraider.net.BrowserControl;
 import com.romraider.net.URL;
 import com.romraider.platform.PlatformContext;
 import com.romraider.platform.RomPlatformResolver;
@@ -135,6 +133,7 @@ import com.romraider.platform.VehicleModule;
 import com.romraider.platform.VehiclePlatform;
 import com.romraider.swing.AbstractFrame;
 import com.romraider.swing.DebugPanel;
+import com.romraider.swing.DefinitionManager;
 import com.romraider.swing.ECUEditorMenuBar;
 import com.romraider.ui.BrandImages;
 import com.romraider.swing.ECUEditorToolBar;
@@ -453,8 +452,7 @@ public class ECUEditor extends AbstractFrame {
     
     public void checkDefinitions() {
         if (settings.getEcuDefinitionFiles().size() <= 0) {
-            // no ECU definitions configured - let user choose to get latest or configure later
-            Object[] options = {rb.getString("OPEN_SUBARUDEFS"),
+            Object[] options = {rb.getString("ADD_DEFINITIONS"),
                     rb.getString("NOT_NOW")};
             int answer = IntegratedOptionDialog.show(this,
                     rb.getString("ECUDEFNOTCFG"),
@@ -463,7 +461,9 @@ public class ECUEditor extends AbstractFrame {
                     options,
                     options[0]);
             if (answer == 0) {
-                BrowserControl.displayURL(ECU_DEFS_URL);
+                DefinitionManager form = new DefinitionManager();
+                form.setLocationRelativeTo(this);
+                form.setVisible(true);
             }
         }
     }
