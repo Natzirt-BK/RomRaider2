@@ -8,6 +8,7 @@ import static org.junit.Assert.assertTrue;
 import java.awt.Component;
 import java.awt.Container;
 import java.io.File;
+import java.util.Arrays;
 import java.util.List;
 
 import javax.swing.JDialog;
@@ -51,13 +52,15 @@ public class IntegratedFileChooserTest {
         List<String> command = chooser.buildKDialogCommand(
                 "/usr/bin/kdialog", false);
 
-        assertEquals("/usr/bin/kdialog", command.get(0));
-        assertTrue(command.contains("--getopenfilename"));
-        assertTrue(command.contains(temporaryDirectory.getAbsolutePath()));
-        assertTrue(command.contains("*.bin *.hex|ROM images"));
-        assertTrue(command.contains("--multiple"));
-        assertTrue(command.contains("--separate-output"));
-        assertTrue(command.contains("Open ROM"));
+        assertEquals(Arrays.asList(
+                "/usr/bin/kdialog",
+                "--getopenfilename",
+                chooser.getCurrentDirectory().getAbsolutePath(),
+                "*.bin *.hex|ROM images",
+                "--multiple",
+                "--separate-output",
+                "--title",
+                "Open ROM"), command);
     }
 
     @Test
