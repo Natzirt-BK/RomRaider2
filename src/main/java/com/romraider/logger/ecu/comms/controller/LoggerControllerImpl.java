@@ -31,6 +31,7 @@ import com.romraider.logger.api.LoggerStatusListener;
 import com.romraider.logger.ecu.ui.MessageListener;
 import com.romraider.logger.ecu.ui.handler.DataUpdateHandler;
 import com.romraider.logger.ecu.ui.handler.file.FileLoggerControllerSwitchMonitor;
+import java.util.function.Consumer;
 
 public final class LoggerControllerImpl implements LoggerController {
     private static final Logger LOGGER = Logger.getLogger(LoggerControllerImpl.class);
@@ -41,6 +42,16 @@ public final class LoggerControllerImpl implements LoggerController {
                                 DataUpdateHandler... dataUpdateHandlers) {
         checkNotNull(ecuInitCallback, messageListener, dataUpdateHandlers);
         queryManager = new QueryManagerImpl(ecuInitCallback, dmInitCallback, messageListener, dataUpdateHandlers);
+    }
+
+    public LoggerControllerImpl(EcuInitCallback ecuInitCallback,
+            DmInitCallback dmInitCallback, MessageListener messageListener,
+            Consumer<Runnable> notificationExecutor,
+            DataUpdateHandler... dataUpdateHandlers) {
+        checkNotNull(ecuInitCallback, messageListener, notificationExecutor,
+                dataUpdateHandlers);
+        queryManager = new QueryManagerImpl(ecuInitCallback, dmInitCallback,
+                messageListener, notificationExecutor, dataUpdateHandlers);
     }
 
     LoggerControllerImpl(QueryManager queryManager) {

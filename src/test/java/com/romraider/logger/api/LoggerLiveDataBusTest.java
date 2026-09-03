@@ -38,16 +38,16 @@ public class LoggerLiveDataBusTest {
             bus.reconnecting();
             assertEquals(LoggerSessionState.RECONNECTING, state.get());
             bus.readingData();
-            for (int index = 0; index < 260; index++) {
+            for (int index = 0; index < 2_060; index++) {
                 bus.publish(data, 10.0 + index / 10.0);
             }
 
             assertEquals(LoggerSessionState.LIVE_ECU, state.get());
             assertEquals("P-BOOST", sample.get().getParameterId());
-            assertEquals("35.9", sample.get().getDisplayValue());
+            assertEquals("215.9", sample.get().getDisplayValue());
             assertEquals("psi", sample.get().getUnits());
             assertEquals(1, bus.getLatestSamples().size());
-            assertEquals(240,
+            assertEquals(2_000,
                     bus.getRecentSamples().get("P-BOOST").size());
             bus.remove(data);
             assertEquals(1, removed.get());

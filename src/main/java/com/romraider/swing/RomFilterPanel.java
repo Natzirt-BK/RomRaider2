@@ -67,12 +67,13 @@ public class RomFilterPanel extends JPanel {
                 final Enumeration<?> children = imageRoot.children();
                 while (children.hasMoreElements()) {
                     Object child = children.nextElement();
-                    if (child instanceof Rom) {
-                        Rom rom = (Rom) child;
-                        List<TreePath> pathsToExpand = rom.refreshDisplayedTables(text);
+                    if (child instanceof SwingRomTreeNode) {
+                        SwingRomTreeNode romNode = (SwingRomTreeNode) child;
+                        List<TreePath> pathsToExpand =
+                                romNode.refreshDisplayedTables(text);
 
                         DefaultTreeModel model = (DefaultTreeModel) imageList.getModel();
-                        model.reload(rom);
+                        model.reload(romNode);
                         
                         for (TreePath path : pathsToExpand) {
                             imageList.expandPath(path);

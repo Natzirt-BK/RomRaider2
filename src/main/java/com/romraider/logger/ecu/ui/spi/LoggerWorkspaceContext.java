@@ -5,6 +5,7 @@ import static com.romraider.util.ParamChecker.checkNotNull;
 
 import com.romraider.logger.api.LoggerChannelService;
 import com.romraider.logger.api.LoggerLiveDataBus;
+import com.romraider.logger.api.LoggerMessageService;
 import com.romraider.logger.api.LoggerSessionService;
 import com.romraider.logger.api.LoggerWorkspacePreferences;
 
@@ -14,6 +15,7 @@ public final class LoggerWorkspaceContext {
     private final LoggerSessionService session;
     private final LoggerChannelService channels;
     private final LoggerWorkspacePreferences preferences;
+    private final LoggerMessageService messages;
     private final boolean hostSessionControls;
 
     public LoggerWorkspaceContext(LoggerLiveDataBus liveData,
@@ -26,11 +28,20 @@ public final class LoggerWorkspaceContext {
             LoggerSessionService session, LoggerChannelService channels,
             LoggerWorkspacePreferences preferences,
             boolean hostSessionControls) {
-        checkNotNull(liveData, session, channels, preferences);
+        this(liveData, session, channels, preferences,
+                new LoggerMessageService(), hostSessionControls);
+    }
+
+    public LoggerWorkspaceContext(LoggerLiveDataBus liveData,
+            LoggerSessionService session, LoggerChannelService channels,
+            LoggerWorkspacePreferences preferences,
+            LoggerMessageService messages, boolean hostSessionControls) {
+        checkNotNull(liveData, session, channels, preferences, messages);
         this.liveData = liveData;
         this.session = session;
         this.channels = channels;
         this.preferences = preferences;
+        this.messages = messages;
         this.hostSessionControls = hostSessionControls;
     }
 
@@ -38,5 +49,6 @@ public final class LoggerWorkspaceContext {
     public LoggerSessionService getSession() { return session; }
     public LoggerChannelService getChannels() { return channels; }
     public LoggerWorkspacePreferences getPreferences() { return preferences; }
+    public LoggerMessageService getMessages() { return messages; }
     public boolean hasHostSessionControls() { return hostSessionControls; }
 }

@@ -4,6 +4,8 @@ package com.romraider.editor.ecu;
 import java.awt.BorderLayout;
 import java.awt.FlowLayout;
 import java.awt.Font;
+import java.awt.event.ComponentAdapter;
+import java.awt.event.ComponentEvent;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
@@ -36,8 +38,12 @@ final class MapDocumentHeader extends JPanel {
     private final Table table;
     private final JButton undo = new JButton(ModernIconFactory.icon(Action.UNDO));
     private final JButton redo = new JButton(ModernIconFactory.icon(Action.REDO));
+    private final JButton search = new JButton(
+            ModernIconFactory.icon(Action.SEARCH));
     private final JToggleButton favorite = new JToggleButton(
             ModernIconFactory.icon(Action.FAVORITE));
+    private final JToggleButton calibrationPreview = new JToggleButton(
+            "Preview", ModernIconFactory.icon(Action.TABLE_2D));
     private final JLabel changeStatus = new JLabel();
     private final BooleanSupplier favoriteState;
     private final RomEditHistory history = RomEditHistory.getInstance();
@@ -100,7 +106,6 @@ final class MapDocumentHeader extends JPanel {
             updateFavoriteState();
         });
         actions.add(favorite);
-        JButton search = new JButton(ModernIconFactory.icon(Action.SEARCH));
         search.setName("SEARCH MAPS");
         search.setToolTipText("Focus calibration search (Ctrl+P)");
         search.getAccessibleContext().setAccessibleName("Search maps");
@@ -143,11 +148,64 @@ final class MapDocumentHeader extends JPanel {
         }
         actions.add(optionsButton(contextMenu));
         add(actions, BorderLayout.EAST);
+        addComponentListener(new ComponentAdapter() {
+            @Override
+            public void componentResized(ComponentEvent event) {
+                applyResponsiveActionLabels();
+            }
+        });
         updateState();
+        applyResponsiveActionLabels();
+    }
+
+    void setCalibrationPreview(boolean available,
+            Consumer<Boolean> visibilityAction) {
+        calibrationPreview.setName("CALIBRATION WORKSPACE TOGGLE");
+        calibrationPreview.setVisible(available);
+        calibrationPreview.setEnabled(available && visibilityAction != null);
+        calibrationPreview.setFocusable(false);
+        calibrationPreview.getAccessibleContext().setAccessibleName(
+                "Toggle replacement calibration grid");
+        calibrationPreview.setText("New Grid");
+        calibrationPreview.setToolTipText(
+                "Open the replacement calibration grid");
+        calibrationPreview.addActionListener(event -> {
+            boolean selected = calibrationPreview.isSelected();
+            calibrationPreview.setText(selected ? "Classic Grid" : "New Grid");
+            calibrationPreview.setToolTipText(selected
+                    ? "Return to the classic calibration grid"
+                    : "Open the replacement calibration grid");
+            if (visibilityAction != null) {
+                visibilityAction.accept(Boolean.valueOf(selected));
+            }
+        });
+        JPanel actions = findActionsPanel();
+        if (actions != null && calibrationPreview.getParent() != actions) {
+            int insertion = Math.max(0, actions.getComponentCount() - 3);
+            actions.add(calibrationPreview, insertion);
+            actions.revalidate();
+            actions.repaint();
+        }
+    }
+
+    private JPanel findActionsPanel() {
+        for (java.awt.Component component : getComponents()) {
+            if (component instanceof JPanel
+                    && "MAP ACTIONS".equals(component.getName())) {
+                return (JPanel) component;
+            }
+        }
+        return null;
     }
 
     void disposeHeader() {
         history.removeListener(historyListener);
+    }
+
+    @Override
+    public void doLayout() {
+        applyResponsiveActionLabels();
+        super.doLayout();
     }
 
     private void applyHistory(boolean redoAction) {
@@ -191,6 +249,13 @@ final class MapDocumentHeader extends JPanel {
                 + " (Ctrl+Z)" : "Nothing to undo");
         redo.setToolTipText(canRedo ? "Redo: " + redoDescription
                 + " (Ctrl+Y)" : "Nothing to redo");
+    }
+
+    private void applyResponsiveActionLabels() {
+        boolean showLabels = getWidth() >= 820;
+        search.setText(showLabels ? "Search" : null);
+        undo.setText(showLabels ? "Undo" : null);
+        redo.setText(showLabels ? "Redo" : null);
     }
 
     private void updateChangeStatus() {
@@ -285,7 +350,7 @@ final class MapDocumentHeader extends JPanel {
         private void refreshStyle() {
             if (isEnabled()) {
                 java.awt.Color accent = UiThemeService.getInstance().color(
-                        ThemeToken.ACCENT);
+                        ThemeToken.LIVE_TRACE);
                 setOpaque(true);
                 setContentAreaFilled(true);
                 setBackground(accent);

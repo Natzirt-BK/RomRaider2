@@ -13,6 +13,7 @@ import static org.apache.log4j.Logger.getLogger;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 import org.apache.log4j.Logger;
 
@@ -26,6 +27,7 @@ public final class PlatformContext {
     private VehicleModule module = VehicleModule.ENGINE_ECU;
     private DimeModState dimeModState = DimeModState.UNKNOWN;
     private boolean ramTuneRuntimeAvailable;
+    private RamTuneRuntimeMetadata ramTuneMetadata;
 
     private PlatformContext() {
     }
@@ -48,6 +50,15 @@ public final class PlatformContext {
 
     public synchronized boolean isRamTuneRuntimeAvailable() {
         return ramTuneRuntimeAvailable;
+    }
+
+    public synchronized Optional<RamTuneRuntimeMetadata>
+            getRamTuneRuntimeMetadata() {
+        return Optional.ofNullable(ramTuneMetadata);
+    }
+
+    public synchronized boolean hasQualifiedRamTuneMetadata() {
+        return ramTuneMetadata != null && ramTuneMetadata.isStructurallyValid();
     }
 
     public void setPlatform(VehiclePlatform platform) {
@@ -86,6 +97,11 @@ public final class PlatformContext {
 
     public void setDimeModRuntime(DimeModState state,
             boolean ramTuneAvailable) {
+        setDimeModRuntime(state, ramTuneAvailable, null);
+    }
+
+    public void setDimeModRuntime(DimeModState state,
+            boolean ramTuneAvailable, RamTuneRuntimeMetadata metadata) {
         if (state == null) {
             throw new IllegalArgumentException("DimeMod state is required");
         }
@@ -93,13 +109,28 @@ public final class PlatformContext {
             throw new IllegalArgumentException(
                     "RAM Tune requires an active DimeMod runtime");
         }
+        if (!ramTuneAvailable && metadata != null) {
+            throw new IllegalArgumentException(
+                    "RAM Tune metadata requires an advertised runtime feature");
+        }
         synchronized (this) {
             if (dimeModState == state
-                    && ramTuneRuntimeAvailable == ramTuneAvailable) return;
+                    && ramTuneRuntimeAvailable == ramTuneAvailable
+                    && sameMetadata(ramTuneMetadata, metadata)) return;
             dimeModState = state;
             ramTuneRuntimeAvailable = ramTuneAvailable;
+            ramTuneMetadata = metadata;
         }
         notifyListeners();
+    }
+
+    private static boolean sameMetadata(RamTuneRuntimeMetadata left,
+            RamTuneRuntimeMetadata right) {
+        if (left == right) return true;
+        if (left == null || right == null) return false;
+        return left.getSignatureAddress() == right.getSignatureAddress()
+                && left.getLookupTableSize() == right.getLookupTableSize()
+                && left.getRuntimeVersion().equals(right.getRuntimeVersion());
     }
 
     public synchronized void addListener(PlatformContextListener listener) {

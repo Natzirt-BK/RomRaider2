@@ -32,7 +32,7 @@ import javax.swing.Action;
 
 import com.romraider.logger.ecu.EcuLogger;
 import com.romraider.logger.external.core.ExternalDataItem;
-import com.romraider.logger.external.core.ExternalDataSource;
+import com.romraider.logger.external.core.SwingExternalDataSource;
 import com.romraider.logger.external.phidget.interfacekit.io.IntfKitManager;
 import com.romraider.logger.external.phidget.interfacekit.io.IntfKitRunner;
 import com.romraider.logger.external.phidget.interfacekit.io.IntfKitSensor;
@@ -46,7 +46,7 @@ import com.romraider.util.ThreadUtil;
  * on the serial number and input number.
  * @see ExternalDataSource
  */
-public final class IntfKitDataSource implements ExternalDataSource {
+public final class IntfKitDataSource implements SwingExternalDataSource {
     private final Map<String, IntfKitDataItem> dataItems =
             new HashMap<String, IntfKitDataItem>();
     private IntfKitRunner runner;

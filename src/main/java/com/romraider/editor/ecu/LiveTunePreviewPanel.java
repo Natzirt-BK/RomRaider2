@@ -34,6 +34,7 @@ import com.romraider.platform.VehicleModule;
 import com.romraider.platform.VehiclePlatform;
 import com.romraider.ui.ModernIconFactory;
 import com.romraider.ui.ModernIconFactory.Action;
+import com.romraider.ui.ModernTableStyle;
 import com.romraider.ui.ThemeToken;
 import com.romraider.ui.UiThemeService;
 
@@ -70,6 +71,10 @@ public final class LiveTunePreviewPanel extends JPanel {
         title.setFont(title.getFont().deriveFont(Font.BOLD));
         status.setName("LIVE TUNE PREVIEW STATUS");
         status.setFont(status.getFont().deriveFont(Font.BOLD));
+        status.setOpaque(true);
+        status.setBorder(BorderFactory.createEmptyBorder(4, 8, 4, 8));
+        status.setBackground(UiThemeService.getInstance().color(
+                ThemeToken.RAISED_SURFACE));
         status.setForeground(UiThemeService.getInstance().color(
                 ThemeToken.SECONDARY_TEXT));
         JPanel titleRow = new JPanel(new BorderLayout(8, 0));
@@ -116,17 +121,15 @@ public final class LiveTunePreviewPanel extends JPanel {
         metrics.add(metricCard(byteMetric));
 
         changes.setName("LIVE TUNE CHANGE TABLE");
-        changes.setFillsViewportHeight(true);
+        ModernTableStyle.apply(changes);
         changes.setRowSelectionAllowed(true);
         changes.setColumnSelectionAllowed(false);
-        changes.setShowVerticalLines(false);
         changes.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
-        changes.getTableHeader().setReorderingAllowed(false);
         changes.getColumnModel().getColumn(0).setPreferredWidth(130);
         changes.getColumnModel().getColumn(1).setPreferredWidth(88);
         changes.getColumnModel().getColumn(2).setPreferredWidth(46);
         changes.getColumnModel().getColumn(3).setPreferredWidth(190);
-        DefaultTableCellRenderer right = new DefaultTableCellRenderer();
+        DefaultTableCellRenderer right = new ModernTableStyle.ZebraRenderer();
         right.setHorizontalAlignment(JLabel.RIGHT);
         changes.getColumnModel().getColumn(2).setCellRenderer(right);
 
@@ -193,9 +196,7 @@ public final class LiveTunePreviewPanel extends JPanel {
         }
 
         if (draft == null) {
-            status.setText("OFFLINE PREVIEW");
-            status.setForeground(UiThemeService.getInstance().color(
-                    ThemeToken.SECONDARY_TEXT));
+            setStatus("OFFLINE PREVIEW", ThemeToken.SECONDARY_TEXT);
             summary.setText(emptyReason == null
                     ? "No staged changes" : emptyReason);
             tableMetric.setText("0");
@@ -210,9 +211,7 @@ public final class LiveTunePreviewPanel extends JPanel {
                     String.format("0x%06X", change.getAddress()),
                     change.getLength(), changeText(change)});
         }
-        status.setText("READY TO REVIEW");
-        status.setForeground(UiThemeService.getInstance().color(
-                ThemeToken.SUCCESS));
+        setStatus("READY TO REVIEW", ThemeToken.SUCCESS);
         summary.setText(draft.getChanges().size() + " byte range"
                 + (draft.getChanges().size() == 1 ? "" : "s")
                 + " staged for offline review");
@@ -243,16 +242,29 @@ public final class LiveTunePreviewPanel extends JPanel {
         boolean engine = context.getModule() == VehicleModule.ENGINE_ECU;
         boolean dimeMod = context.getDimeModState() == DimeModState.ACTIVE;
         boolean runtime = context.isRamTuneRuntimeAvailable();
+        boolean metadata = context.hasQualifiedRamTuneMetadata();
         safety.setText(line(draft != null, "Mapped changed bytes") + "\n"
                 + line(subaru && engine, "Subaru engine ECU selected") + "\n"
                 + line(dimeMod, "DimeMod runtime active") + "\n"
                 + line(runtime, "RAM Tune reported by the runtime") + "\n"
+                + line(metadata, "RAM Tune signature and LUT metadata valid")
+                + context.getRamTuneRuntimeMetadata().map(value -> " — "
+                        + value.getDisplaySummary()).orElse("") + "\n"
                 + "○ Exact ECU identity is required during a future connection");
         safety.setCaretPosition(0);
     }
 
     private static String line(boolean pass, String text) {
         return (pass ? "● " : "○ ") + text;
+    }
+
+    private void setStatus(String text, ThemeToken token) {
+        status.setText(text);
+        status.setForeground(UiThemeService.getInstance().color(token));
+        status.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(UiThemeService.getInstance()
+                        .color(token)),
+                BorderFactory.createEmptyBorder(3, 7, 3, 7)));
     }
 
     private static JPanel metricCard(JLabel value) {

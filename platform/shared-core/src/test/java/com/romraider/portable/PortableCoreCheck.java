@@ -5,6 +5,8 @@ import java.io.ByteArrayOutputStream;
 import java.io.ByteArrayInputStream;
 import java.io.StringReader;
 import java.io.StringWriter;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Arrays;
 
 import com.romraider.portable.openport.OpenPortWireProtocol;
@@ -40,6 +42,11 @@ public final class PortableCoreCheck {
         rom.write(binary);
         require(Arrays.equals(new byte[] {1, 8, 9, 4},
                 binary.toByteArray()), "ROM output is wrong");
+        byte[] written = rom.snapshot();
+        rom.replace(0, new byte[] {7});
+        require(!rom.markSavedIfCurrent(written),
+                "An asynchronous save hid a newer ROM edit");
+        require(rom.hasChanges(), "The newer ROM edit was not left dirty");
 
         byte[] calibrationBytes = new byte[] {'T', 'E', 'S', 'T',
                 0, 100, 0, (byte) 200, 1, 44, 1, (byte) 144,
@@ -98,6 +105,21 @@ public final class PortableCoreCheck {
         log.writeLongFormCsv(csv);
         require(csv.toString().contains("2500.0"),
                 "Logger CSV omitted a sample");
+        Path spool = Files.createTempFile("romraider2-portable-log", ".part");
+        PortableLogSession streaming = PortableLogSession.streaming(
+                spool.toFile(), 2);
+        streaming.append(new PortableLogSample(1, "A", "First", 1, ""));
+        streaming.append(new PortableLogSample(2, "B", "Second", 2, ""));
+        streaming.append(new PortableLogSample(3, "C", "Third", 3, ""));
+        require(streaming.size() == 3 && streaming.snapshot().size() == 2,
+                "Streaming log did not bound only its recent memory");
+        StringWriter streamedCsv = new StringWriter();
+        streaming.writeLongFormCsv(streamedCsv);
+        require(streamedCsv.toString().contains("First")
+                        && streamedCsv.toString().contains("Third"),
+                "Streaming log did not preserve its complete CSV");
+        streaming.discard();
+        require(!Files.exists(spool), "Streaming log spool was not removed");
         require(csv.toString().contains("\"Boost, Manifold\""),
                 "Logger CSV did not quote a channel name");
         PortableLogSession imported = PortableLogCsvReader.read(

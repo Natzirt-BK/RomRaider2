@@ -13,8 +13,7 @@ logging and unfinished ECU-write research.
 ## Downloads
 
 The latest public desktop build is **RomRaider2 1.1.0 RC4**. It is a development
-prerelease while the remaining Windows visual, Mac hardware, and vehicle checks
-are completed.
+prerelease while the remaining Mac hardware and vehicle checks are completed.
 
 | Platform | Package |
 | --- | --- |
@@ -54,6 +53,7 @@ sideloading it or connecting an adapter.
 | Mitsubishi Lancer Evolution MUT-II | Read-only logger foundation implemented; vehicle qualification is still open |
 | Android | Experimental editing and Logger preview available; connected SSM qualification is still open |
 | DimeMod | Discovery, diagnostics, and Logger parameters retained; RAM writing stays hidden and disabled |
+| ROM mod recognition | DimeMod, CarBerry, and MerpMod recognized from explicit loaded-definition evidence |
 | ECU flashing | Not available in RomRaider2 1.1.0 |
 
 Do not disable Windows driver-signing protection. Install the normal signed
@@ -68,7 +68,11 @@ path without changing the vendor driver.
 - Light, dark, system, and high-contrast themes with 75%–300% scaling and
   desktop, touch, garage, dyno, and in-car layouts.
 - A rebuilt Logger workspace with searchable channels, live data, graphs,
-  dashboard gauges, MAF, injector, dyno, and offline analysis views.
+  dashboard gauges, user-set warnings, MAF, injector, dyno, and offline
+  analysis views.
+- Five original gauge styles with fixed scales, measured peaks, optional
+  per-channel limits, saved Gauge/Value/Trend/Alarm dashboard layouts, and a
+  matching Android dashboard preview.
 - RomRaider CSV analysis with linked tables and graphs, statistics, sample
   ranges, playback, markers, and configurable X/Y plotting.
 - Managed Logger-definition install and reload instead of the old forum

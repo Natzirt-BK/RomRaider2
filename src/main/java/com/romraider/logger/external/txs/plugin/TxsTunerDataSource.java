@@ -40,10 +40,10 @@ import javax.swing.Action;
 
 import com.romraider.logger.ecu.EcuLogger;
 import com.romraider.logger.external.core.ExternalDataItem;
-import com.romraider.logger.external.core.ExternalDataSource;
+import com.romraider.logger.external.core.SwingExternalDataSource;
 import com.romraider.logger.external.txs.io.TxsRunner;
 
-public class TxsTunerDataSource implements ExternalDataSource {
+public class TxsTunerDataSource implements SwingExternalDataSource {
     
     private static final String LOGGER = "1";
     private static final String DEVICE = "t";

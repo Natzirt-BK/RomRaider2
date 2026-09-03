@@ -41,16 +41,19 @@ import javax.swing.tree.TreePath;
 import javax.swing.tree.DefaultMutableTreeNode;
 
 import com.romraider.maps.Rom;
+import com.romraider.editor.ecu.spi.EditorNavigationWorkspace;
 import com.romraider.swing.RomFilterPanel;
 import com.romraider.swing.RomTree;
 import com.romraider.swing.TableTreeNode;
+import com.romraider.swing.SwingRomTreeNode;
 import com.romraider.ui.ModernIconFactory;
 import com.romraider.ui.ModernIconFactory.Action;
 import com.romraider.ui.ThemeToken;
 import com.romraider.ui.UiThemeService;
 
 /** Visible editor navigation surface backed by persistent workspace services. */
-public final class EditorWorkspacePanel extends JPanel {
+public final class EditorWorkspacePanel extends JPanel
+        implements EditorNavigationWorkspace {
     public interface LocationOpener {
         void open(TableLocation location);
     }
@@ -91,14 +94,22 @@ public final class EditorWorkspacePanel extends JPanel {
 
     public EditorWorkspacePanel(javax.swing.tree.DefaultMutableTreeNode imageRoot,
             RomTree imageList, JScrollPane tableBrowser, LocationOpener opener) {
-        super(new BorderLayout(0, 6));
+        super(new BorderLayout(0, 8));
         this.imageRoot = imageRoot;
         this.imageList = imageList;
         this.opener = opener;
         this.searchPanel = new RomFilterPanel(imageRoot, imageList);
 
-        JPanel browserHeader = new JPanel(new BorderLayout(0, 5));
-        browserHeader.setBorder(BorderFactory.createEmptyBorder(8, 8, 0, 8));
+        setBackground(UiThemeService.getInstance().color(
+                ThemeToken.BACKGROUND));
+        JPanel browserHeader = new JPanel(new BorderLayout(0, 7));
+        browserHeader.setBackground(UiThemeService.getInstance().color(
+                ThemeToken.SURFACE));
+        browserHeader.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(0, 0, 1, 0,
+                        UiThemeService.getInstance().color(
+                                ThemeToken.RAISED_SURFACE)),
+                BorderFactory.createEmptyBorder(10, 10, 10, 10)));
         JPanel browserTitle = new JPanel(new BorderLayout(6, 0));
         browserTitle.setOpaque(false);
         browserTitle.add(sectionLabel("CALIBRATIONS"), BorderLayout.WEST);
@@ -125,6 +136,8 @@ public final class EditorWorkspacePanel extends JPanel {
         JSplitPane navigation = new JSplitPane(JSplitPane.VERTICAL_SPLIT,
                 tableBrowser, saved);
         navigation.setBorder(BorderFactory.createEmptyBorder());
+        navigation.setBackground(UiThemeService.getInstance().color(
+                ThemeToken.BACKGROUND));
         navigation.setDividerSize(5);
         navigation.setResizeWeight(1.0);
         navigation.setContinuousLayout(true);
@@ -164,11 +177,18 @@ public final class EditorWorkspacePanel extends JPanel {
 
     private static JPanel section(Component header, JList<TableLocation> list) {
         JPanel panel = new JPanel(new BorderLayout(0, 4));
-        panel.setBorder(BorderFactory.createEmptyBorder(0, 8, 0, 8));
+        panel.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(1, 0, 0, 0,
+                        UiThemeService.getInstance().color(
+                                ThemeToken.RAISED_SURFACE)),
+                BorderFactory.createEmptyBorder(7, 10, 4, 10)));
         panel.add(header, BorderLayout.NORTH);
         JScrollPane scroller = new JScrollPane(list,
                 JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
                 JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        scroller.setBorder(BorderFactory.createLineBorder(
+                UiThemeService.getInstance().color(
+                        ThemeToken.RAISED_SURFACE)));
         panel.add(scroller, BorderLayout.CENTER);
         return panel;
     }
@@ -194,6 +214,8 @@ public final class EditorWorkspacePanel extends JPanel {
         addSavedSection(saved, recentSection, 2, 0.42);
         saved.setMinimumSize(new Dimension(180, 240));
         saved.setPreferredSize(new Dimension(240, 300));
+        saved.setBackground(UiThemeService.getInstance().color(
+                ThemeToken.BACKGROUND));
         return saved;
     }
 
@@ -202,6 +224,8 @@ public final class EditorWorkspacePanel extends JPanel {
         label.setName(text);
         label.setFont(label.getFont().deriveFont(Font.BOLD,
                 Math.max(10.0f, label.getFont().getSize2D() - 1.0f)));
+        label.setForeground(UiThemeService.getInstance().color(
+                ThemeToken.ACCENT));
         return label;
     }
 
@@ -216,6 +240,10 @@ public final class EditorWorkspacePanel extends JPanel {
     public void goForward() {
         open(service.navigation().forward());
     }
+
+    public javax.swing.JComponent getComponent() { return this; }
+
+    public void close() { }
 
     public void refresh() {
         replace(favoritesModel, service.preferences().getFavorites());
@@ -256,7 +284,9 @@ public final class EditorWorkspacePanel extends JPanel {
         List<Rom> roms = new ArrayList<Rom>();
         for (int index = 0; index < imageRoot.getChildCount(); index++) {
             Object child = imageRoot.getChildAt(index);
-            if (child instanceof Rom) roms.add((Rom) child);
+            if (child instanceof SwingRomTreeNode) {
+                roms.add(((SwingRomTreeNode) child).getRom());
+            }
         }
         return roms;
     }
@@ -319,7 +349,7 @@ public final class EditorWorkspacePanel extends JPanel {
     private void configureList(final JList<TableLocation> list,
             boolean favoriteList) {
         list.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        list.setFixedCellHeight(30);
+        list.setFixedCellHeight(36);
         list.setCellRenderer(new TableLocationRenderer(favoriteList));
         list.addMouseListener(new MouseAdapter() {
             @Override public void mousePressed(MouseEvent event) {
@@ -411,6 +441,13 @@ public final class EditorWorkspacePanel extends JPanel {
                 label.setToolTipText("ROM: " + location.getRomId());
                 label.setIcon(ModernIconFactory.icon(favoriteList
                         ? Action.FAVORITE : Action.DEFINITION));
+                if (!selected) {
+                    label.setBackground(UiThemeService.getInstance().color(
+                            index % 2 == 0 ? ThemeToken.SURFACE
+                                    : ThemeToken.BACKGROUND));
+                    label.setForeground(UiThemeService.getInstance().color(
+                            ThemeToken.PRIMARY_TEXT));
+                }
                 label.setBorder(BorderFactory.createCompoundBorder(
                         BorderFactory.createMatteBorder(0, selected ? 3 : 0,
                                 0, 0, UiThemeService.getInstance().color(
@@ -439,6 +476,13 @@ public final class EditorWorkspacePanel extends JPanel {
                 label.setText(location.getTableName() + "  •  "
                         + changedCells);
                 label.setIcon(ModernIconFactory.icon(Action.UNDO));
+                if (!selected) {
+                    label.setBackground(UiThemeService.getInstance().color(
+                            index % 2 == 0 ? ThemeToken.SURFACE
+                                    : ThemeToken.BACKGROUND));
+                    label.setForeground(UiThemeService.getInstance().color(
+                            ThemeToken.PRIMARY_TEXT));
+                }
                 label.setToolTipText("ROM: " + location.getRomId() + " • "
                         + changedCells + (changedCells == 1
                                 ? " unsaved cell" : " unsaved cells"));
@@ -459,7 +503,7 @@ public final class EditorWorkspacePanel extends JPanel {
         PlaceholderList(ListModel<E> model, String placeholder) {
             super(model);
             this.placeholder = placeholder;
-            setFixedCellHeight(30);
+            setFixedCellHeight(36);
         }
 
         @Override

@@ -63,10 +63,71 @@ tasks.test {
     useJUnitPlatform()
 }
 
+tasks.withType<JavaExec>().configureEach {
+    if (name.endsWith("VisualFixture", ignoreCase = true)
+        || name == "visualFixture") {
+        systemProperty("romraider2.settings.dir",
+            rootProject.layout.buildDirectory.dir("visual-fixture-settings")
+                .get().asFile.absolutePath)
+        systemProperty("romraider2.default.settings.file",
+            rootProject.layout.projectDirectory.file("settings.xml")
+                .asFile.absolutePath)
+    }
+}
+
 tasks.register<JavaExec>("visualFixture") {
     dependsOn(tasks.testClasses)
     classpath = sourceSets.test.get().runtimeClasspath
     mainClass.set("com.romraider2.logger.compose.LoggerWorkspaceVisualFixtureKt")
+    providers.gradleProperty("visualArgs").orNull?.let {
+        args(it.split(Regex("\\s+")).filter(String::isNotBlank))
+    }
+    providers.gradleProperty("uiProfile").orNull?.let {
+        systemProperty("romraider2.ui.profile", it)
+    }
+}
+
+tasks.register<JavaExec>("calibrationVisualFixture") {
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set(
+        "com.romraider2.logger.compose.CalibrationWorkspaceVisualFixtureKt")
+    providers.gradleProperty("visualArgs").orNull?.let {
+        args(it.split(Regex("\\s+")).filter(String::isNotBlank))
+    }
+    providers.gradleProperty("uiProfile").orNull?.let {
+        systemProperty("romraider2.ui.profile", it)
+    }
+}
+
+tasks.register<JavaExec>("comparisonVisualFixture") {
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set(
+        "com.romraider2.logger.compose.RomComparisonWorkspaceVisualFixtureKt")
+    providers.gradleProperty("visualArgs").orNull?.let {
+        args(it.split(Regex("\\s+")).filter(String::isNotBlank))
+    }
+}
+
+tasks.register<JavaExec>("editorNavigationVisualFixture") {
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set(
+        "com.romraider2.logger.compose.EditorNavigationWorkspaceVisualFixtureKt")
+    providers.gradleProperty("visualArgs").orNull?.let {
+        args(it.split(Regex("\\s+")).filter(String::isNotBlank))
+    }
+}
+
+tasks.register<JavaExec>("desktopShellVisualFixture") {
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set(
+        "com.romraider2.logger.compose.ComposeDesktopShellVisualFixtureKt")
+    providers.gradleProperty("visualArgs").orNull?.let {
+        args(it.split(Regex("\\s+")).filter(String::isNotBlank))
+    }
 }
 
 tasks.register("resolveAuditedDesktopRuntimes") {

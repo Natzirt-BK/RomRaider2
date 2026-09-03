@@ -38,6 +38,12 @@ import com.romraider.Settings;
 import com.romraider.editor.workspace.EditorWorkspacePreferences;
 import com.romraider.editor.workspace.TableLocation;
 import com.romraider.logger.api.LoggerWorkspaceView;
+import com.romraider.logger.api.LoggerGaugeTheme;
+import com.romraider.logger.api.LoggerGaugeConfiguration;
+import com.romraider.logger.api.LoggerGaugeLayout;
+import com.romraider.logger.api.LoggerDashboardTile;
+import com.romraider.logger.api.LoggerDashboardTileRole;
+import com.romraider.logger.api.LoggerDashboardTileSize;
 import com.romraider.logger.external.phidget.interfacekit.io.IntfKitSensor;
 import com.romraider.platform.PlatformRegistry;
 import com.romraider.platform.VehicleModule;
@@ -441,6 +447,65 @@ public final class DOMSettingsUnmarshaller {
                     settings.setLoggerWorkspaceDarkTheme(Boolean.valueOf(
                             Boolean.parseBoolean(workspaceDark)));
                 }
+                settings.setLoggerGaugeTheme(LoggerGaugeTheme.fromName(
+                        unmarshallAttribute(n, "gauge-theme", "RR2_CLASSIC")));
+                settings.setLoggerGaugeLayout(LoggerGaugeLayout.fromName(
+                        unmarshallAttribute(n, "gauge-layout", "STANDARD")));
+
+            } else if (n.getNodeType() == ELEMENT_NODE
+                    && n.getNodeName().equalsIgnoreCase(
+                            "gauge-configurations")) {
+                if (unmarshallAttribute(n, "schema", 0) != 1) continue;
+                NodeList channelNodes = n.getChildNodes();
+                for (int j = 0; j < channelNodes.getLength(); j++) {
+                    Node channel = channelNodes.item(j);
+                    if (channel.getNodeType() != ELEMENT_NODE
+                            || !channel.getNodeName().equalsIgnoreCase(
+                                    "channel")) continue;
+                    String id = unmarshallAttribute(channel, "id",
+                            (String) null);
+                    if (id == null || id.trim().isEmpty()) continue;
+                    try {
+                        settings.setLoggerGaugeConfiguration(id.trim(),
+                                new LoggerGaugeConfiguration(
+                                        optionalDouble(channel, "scale-min"),
+                                        optionalDouble(channel, "scale-max"),
+                                        optionalDouble(channel, "warn-low"),
+                                        optionalDouble(channel, "warn-high"),
+                                        unmarshallAttribute(channel,
+                                                "hysteresis", 0.0)));
+                    } catch (IllegalArgumentException invalid) {
+                        // Ignore one corrupt channel without losing settings.
+                    }
+                }
+
+            } else if (n.getNodeType() == ELEMENT_NODE
+                    && n.getNodeName().equalsIgnoreCase(
+                            "dashboard-layout")) {
+                if (unmarshallAttribute(n, "schema", 0) != 1) continue;
+                NodeList tileNodes = n.getChildNodes();
+                for (int j = 0; j < tileNodes.getLength(); j++) {
+                    Node tile = tileNodes.item(j);
+                    if (tile.getNodeType() != ELEMENT_NODE
+                            || !tile.getNodeName().equalsIgnoreCase(
+                                    "tile")) continue;
+                    String id = unmarshallAttribute(tile, "id",
+                            (String) null);
+                    if (id == null || id.trim().isEmpty()) continue;
+                    try {
+                        settings.setLoggerDashboardTile(id.trim(),
+                                new LoggerDashboardTile(
+                                        LoggerDashboardTileRole.fromName(
+                                                unmarshallAttribute(tile,
+                                                        "role", "GAUGE")),
+                                        LoggerDashboardTileSize.fromName(
+                                                unmarshallAttribute(tile,
+                                                        "size", "STANDARD")),
+                                        unmarshallAttribute(tile, "order", 0)));
+                    } catch (IllegalArgumentException invalid) {
+                        // Ignore one corrupt tile without losing settings.
+                    }
+                }
 
             } else if (n.getNodeType() == ELEMENT_NODE && n.getNodeName().equalsIgnoreCase("definition")) {
                 settings.setLoggerDefinitionFilePath(unmarshallAttribute(n, "path", settings.getLoggerDefinitionFilePath()));
@@ -514,6 +579,12 @@ public final class DOMSettingsUnmarshaller {
             }
         }
         return settings;
+    }
+
+    private static Double optionalDouble(Node node, String name) {
+        String value = unmarshallAttribute(node, name, (String) null);
+        if (value == null || value.trim().isEmpty()) return null;
+        return Double.valueOf(value.trim());
     }
 
     private Color unmarshallColor(Node colorNode) {

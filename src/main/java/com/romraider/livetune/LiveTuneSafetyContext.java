@@ -13,11 +13,13 @@ public final class LiveTuneSafetyContext {
     private final DimeModState dimeModState;
     private final boolean definitionMapped;
     private final boolean runtimeRamTuneAvailable;
+    private final boolean runtimeMetadataQualified;
     private final EcuIdentity connectedIdentity;
 
     public LiveTuneSafetyContext(VehiclePlatform platform,
             VehicleModule module, DimeModState dimeModState,
             boolean definitionMapped, boolean runtimeRamTuneAvailable,
+            boolean runtimeMetadataQualified,
             EcuIdentity connectedIdentity) {
         if (platform == null || module == null || dimeModState == null) {
             throw new IllegalArgumentException(
@@ -28,6 +30,7 @@ public final class LiveTuneSafetyContext {
         this.dimeModState = dimeModState;
         this.definitionMapped = definitionMapped;
         this.runtimeRamTuneAvailable = runtimeRamTuneAvailable;
+        this.runtimeMetadataQualified = runtimeMetadataQualified;
         this.connectedIdentity = connectedIdentity;
     }
 
@@ -49,6 +52,10 @@ public final class LiveTuneSafetyContext {
 
     public boolean isRuntimeRamTuneAvailable() {
         return runtimeRamTuneAvailable;
+    }
+
+    public boolean isRuntimeMetadataQualified() {
+        return runtimeMetadataQualified;
     }
 
     public EcuIdentity getConnectedIdentity() {

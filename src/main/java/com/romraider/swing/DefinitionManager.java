@@ -220,7 +220,8 @@ public class DefinitionManager extends AbstractFrame implements ActionListener {
         root.add(footer, BorderLayout.SOUTH);
         setContentPane(root);
         TouchTargetService.apply(root,
-                SettingsManager.getSettings().getDisplayMode());
+                com.romraider.ui.RuntimeUiProfile.displayMode(
+                        SettingsManager.getSettings().getDisplayMode()));
         setPreferredSize(new Dimension(1040, 650));
         pack();
         setLocationRelativeTo(null);

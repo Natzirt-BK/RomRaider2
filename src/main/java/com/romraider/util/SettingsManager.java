@@ -20,9 +20,6 @@
 package com.romraider.util;
 
 import static com.romraider.Version.VERSION;
-import static javax.swing.JOptionPane.INFORMATION_MESSAGE;
-import static javax.swing.JOptionPane.showMessageDialog;
-
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
@@ -41,7 +38,7 @@ import org.w3c.dom.Document;
 import org.xml.sax.InputSource;
 
 import com.romraider.Settings;
-import com.romraider.swing.JProgressPane;
+import com.romraider.activity.ProgressReporter;
 import com.romraider.xml.DOMSettingsBuilder;
 import com.romraider.xml.DOMSettingsUnmarshaller;
 
@@ -154,9 +151,7 @@ public class SettingsManager {
                 throw new FileNotFoundException("file length is 0");
             }
         } catch (FileNotFoundException e) {
-            showMessageDialog(null,
-                    rb.getString("FNF"),
-                    rb.getString("ERROR"), INFORMATION_MESSAGE);
+            LOGGER.warn(rb.getString("FNF"), e);
             loadedSettings = new Settings();
         } catch (Exception e) {
             throw new RuntimeException(e);
@@ -178,10 +173,10 @@ public class SettingsManager {
     }
 
     public static void save(Settings newSettings) {
-        save(newSettings, new JProgressPane());
+        save(newSettings, (status, percent) -> { });
     }
 
-    public static void save(Settings newSettings, JProgressPane progress) {
+    public static void save(Settings newSettings, ProgressReporter progress) {
     	if(testing) return;
 
         final DOMSettingsBuilder builder = new DOMSettingsBuilder();

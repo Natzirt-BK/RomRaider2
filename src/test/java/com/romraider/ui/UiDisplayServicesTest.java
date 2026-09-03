@@ -32,6 +32,9 @@ import javax.swing.JMenu;
 import javax.swing.JMenuBar;
 import javax.swing.JPanel;
 import javax.swing.JRootPane;
+import javax.swing.JTable;
+import javax.swing.JTextField;
+import javax.swing.border.LineBorder;
 import javax.xml.parsers.DocumentBuilderFactory;
 
 import org.junit.After;
@@ -47,6 +50,7 @@ import com.romraider.xml.DOMSettingsUnmarshaller;
 public class UiDisplayServicesTest {
     @After
     public void restoreNormalMetrics() {
+        System.clearProperty(RuntimeUiProfile.PROPERTY);
         UiScaleService.getInstance().apply(UiScale.PERCENT_100, DisplayMode.NORMAL);
         UiThemeService.getInstance().apply(ThemeMode.SYSTEM);
     }
@@ -59,6 +63,51 @@ public class UiDisplayServicesTest {
                 assertNotNull(mode + " missing " + token, palette.get(token));
             }
         }
+        for (ThemeToken token : ThemeToken.values()) {
+            assertNotNull("handheld missing " + token,
+                    ThemePalettes.handheld().get(token));
+        }
+    }
+
+    @Test
+    public void modernTableStyleKeepsSpacingAndThemeAwareRowContrast() {
+        UiThemeService.getInstance().apply(ThemeMode.DARK);
+        JTable table = new JTable(new Object[][] {{"First"}, {"Second"}},
+                new Object[] {"Name"});
+
+        ModernTableStyle.apply(table);
+
+        assertTrue(table.getFillsViewportHeight());
+        assertTrue(table.getRowHeight() >= 27);
+        assertEquals(30, table.getTableHeader().getPreferredSize().height);
+        assertFalse(table.getTableHeader().getReorderingAllowed());
+        Component odd = table.getCellRenderer(1, 0)
+                .getTableCellRendererComponent(table, "Second", false,
+                        false, 1, 0);
+        assertEquals(UiThemeService.getInstance().color(
+                ThemeToken.RAISED_SURFACE), odd.getBackground());
+
+        ModernTableStyle.TokenRenderer accent =
+                new ModernTableStyle.TokenRenderer(ThemeToken.LIVE_TRACE);
+        Component namedValue = accent.getTableCellRendererComponent(table,
+                "Engine Speed", false, false, 0, 0);
+        assertEquals(UiThemeService.getInstance().color(ThemeToken.LIVE_TRACE),
+                namedValue.getForeground());
+    }
+
+    @Test
+    public void steamOsProfileLocksDarkTouchPresentationAtRuntime() {
+        System.setProperty(RuntimeUiProfile.PROPERTY, "steamos");
+
+        assertTrue(RuntimeUiProfile.isSteamOs());
+        assertEquals(ThemeMode.DARK,
+                RuntimeUiProfile.theme(ThemeMode.LIGHT));
+        assertEquals(DisplayMode.TOUCH,
+                RuntimeUiProfile.displayMode(DisplayMode.NORMAL));
+
+        UiThemeService.getInstance().apply(ThemeMode.LIGHT);
+        assertEquals(ThemePalettes.handheld().get(ThemeToken.ACCENT),
+                UiThemeService.getInstance().color(ThemeToken.ACCENT));
     }
 
     @Test
@@ -74,9 +123,12 @@ public class UiDisplayServicesTest {
         assertEquals("javax.swing.plaf.basic.BasicMenuUI", UIManager.get("MenuUI"));
         assertEquals("javax.swing.plaf.basic.BasicMenuItemUI", UIManager.get("MenuItemUI"));
         assertEquals("javax.swing.plaf.basic.BasicToolBarUI", UIManager.get("ToolBarUI"));
-        assertEquals("javax.swing.plaf.basic.BasicButtonUI", UIManager.get("ButtonUI"));
-        assertEquals("javax.swing.plaf.basic.BasicTabbedPaneUI",
+        assertEquals("com.romraider.ui.swing.RoundedButtonUI",
+                UIManager.get("ButtonUI"));
+        assertEquals("com.romraider.ui.swing.ModernTabbedPaneUI",
                 UIManager.get("TabbedPaneUI"));
+        assertEquals("com.romraider.ui.swing.ModernScrollBarUI",
+                UIManager.get("ScrollBarUI"));
         assertEquals("javax.swing.plaf.basic.BasicComboBoxUI",
                 UIManager.get("ComboBoxUI"));
         assertEquals("javax.swing.plaf.basic.BasicTableHeaderUI",
@@ -99,6 +151,10 @@ public class UiDisplayServicesTest {
                 UIManager.getColor("Desktop.background"));
         assertEquals(ThemePalettes.dark().get(ThemeToken.RAISED_SURFACE),
                 UIManager.getColor("ProgressBar.background"));
+        assertEquals(ThemePalettes.dark().get(ThemeToken.RAISED_SURFACE),
+                UIManager.getColor("SplitPane.background"));
+        assertEquals("javax.swing.plaf.basic.BasicSplitPaneUI",
+                UIManager.get("SplitPaneUI"));
         assertEquals(ThemePalettes.dark().get(ThemeToken.SURFACE),
                 UIManager.getColor("Tree.textBackground"));
         assertEquals(ThemePalettes.dark().get(ThemeToken.PRIMARY_TEXT),
@@ -116,6 +172,50 @@ public class UiDisplayServicesTest {
                 UiThemeService.contrastText(new Color(20, 30, 40)));
         assertEquals(Color.BLACK,
                 UiThemeService.contrastText(new Color(230, 235, 240)));
+    }
+
+    @Test
+    public void liveThemeSwitchRemapsExplicitSwingSemanticColors() {
+        UiThemeService themes = UiThemeService.getInstance();
+        themes.apply(ThemeMode.LIGHT);
+        ThemePalette light = themes.getCurrentPalette();
+        JPanel root = new JPanel();
+        root.setBackground(light.get(ThemeToken.SURFACE));
+        JLabel caption = new JLabel("Calibration");
+        caption.setForeground(light.get(ThemeToken.SECONDARY_TEXT));
+        caption.setBorder(javax.swing.BorderFactory.createLineBorder(
+                light.get(ThemeToken.RAISED_SURFACE)));
+        JTextField field = new JTextField("value");
+        field.setCaretColor(light.get(ThemeToken.PRIMARY_TEXT));
+        root.add(caption);
+        root.add(field);
+
+        themes.apply(ThemeMode.DARK);
+        ThemePalette dark = themes.getCurrentPalette();
+        UiDisplayService.remapSemanticColors(root, light, dark);
+
+        assertEquals(dark.get(ThemeToken.SURFACE), root.getBackground());
+        assertEquals(dark.get(ThemeToken.SECONDARY_TEXT),
+                caption.getForeground());
+        assertEquals(dark.get(ThemeToken.RAISED_SURFACE),
+                ((LineBorder) caption.getBorder()).getLineColor());
+        assertEquals(dark.get(ThemeToken.PRIMARY_TEXT),
+                field.getCaretColor());
+    }
+
+    @Test
+    public void themeListenersKeepReplacementSurfacesInSync() {
+        final ThemeMode[] observed = {null};
+        UiThemeService.Listener listener = (mode, palette) ->
+                observed[0] = mode;
+        UiThemeService themes = UiThemeService.getInstance();
+        themes.addListener(listener);
+        try {
+            themes.apply(ThemeMode.DARK);
+            assertEquals(ThemeMode.DARK, observed[0]);
+        } finally {
+            themes.removeListener(listener);
+        }
     }
 
     @Test
@@ -326,6 +426,23 @@ public class UiDisplayServicesTest {
         assertNotNull(findNamed(panel, JComboBox.class, "DISPLAY SCALE"));
         assertNotNull(findNamed(panel, JComboBox.class, "DISPLAY MODE"));
         assertNotNull(findNamed(panel, JComboBox.class, "DISPLAY THEME"));
+    }
+
+    @Test
+    public void steamOsDisplaySelectorsExposeOnlyTheLockedPresentation() {
+        System.setProperty(RuntimeUiProfile.PROPERTY, "steamos");
+        DisplayPreferencesPanel panel = new DisplayPreferencesPanel();
+        JComboBox<?> mode = findNamed(panel, JComboBox.class, "DISPLAY MODE");
+        JComboBox<?> theme = findNamed(panel, JComboBox.class, "DISPLAY THEME");
+
+        assertNotNull(mode);
+        assertNotNull(theme);
+        assertEquals(1, mode.getItemCount());
+        assertEquals(DisplayMode.TOUCH, mode.getItemAt(0));
+        assertFalse(mode.isEnabled());
+        assertEquals(1, theme.getItemCount());
+        assertEquals(ThemeMode.DARK, theme.getItemAt(0));
+        assertFalse(theme.isEnabled());
     }
 
     @Test

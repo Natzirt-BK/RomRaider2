@@ -185,7 +185,8 @@ public class Table1DView extends TableView {
                 }
             } else if (table.getAxisParent().getType() == Table.TableType.TABLE_2D) {
                 if (data[highlightBeginY].isSelected()) {
-                    table.getAxisParent().getTableView().table.selectCellAtWithoutClear(highlightBeginY);
+                    table.getAxisParent().selectCellAtWithoutClear(
+                            highlightBeginY);
                 }
             }
         } else if (type == Table1DType.X_AXIS && data[highlightBeginY].isSelected()) {

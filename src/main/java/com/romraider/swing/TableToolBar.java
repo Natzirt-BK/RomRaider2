@@ -21,6 +21,7 @@ package com.romraider.swing;
 
 import java.awt.Component;
 import java.awt.Dimension;
+import java.awt.Font;
 import java.awt.FlowLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
@@ -42,6 +43,7 @@ import javax.swing.InputMap;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
+import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
@@ -68,6 +70,7 @@ import com.romraider.maps.TableSelectionSummary;
 import com.romraider.maps.TableView;
 import com.romraider.maps.UserLevelException;
 import com.romraider.ui.ModernIconFactory;
+import com.romraider.ui.swing.ResponsiveFlowLayout;
 import com.romraider.ui.ThemeToken;
 import com.romraider.ui.TouchTargetService;
 import com.romraider.ui.UiThemeService;
@@ -91,6 +94,7 @@ public class TableToolBar extends JToolBar implements MouseListener, ItemListene
             ModernIconFactory.icon(ModernIconFactory.Action.UNDO));
     private final JButton moreActions = new JButton("More ▾");
     private final JPopupMenu moreActionsPopup = new JPopupMenu();
+    private final JLabel commandStripTitle = new JLabel("CELL EDITING");
     private final JLabel selectionStatus = new JLabel("No cells selected");
 
     private final JButton setValue = new JButton("Set");
@@ -122,14 +126,23 @@ public class TableToolBar extends JToolBar implements MouseListener, ItemListene
             public void changedUpdate(DocumentEvent event) { valueTextChanged(); }
         });
         this.setRollover(true);
-        FlowLayout toolBarLayout = new FlowLayout(FlowLayout.LEFT, 6, 4);
+        FlowLayout toolBarLayout = new ResponsiveFlowLayout(
+                FlowLayout.LEFT, 6, 4);
         this.setLayout(toolBarLayout);
-        setBackground(UiThemeService.getInstance().color(ThemeToken.SURFACE));
+        setBackground(UiThemeService.getInstance().color(
+                ThemeToken.BACKGROUND));
 
         setBorder(toolbarBorder);
 
         this.updateIcons();
 
+        commandStripTitle.setName("TABLE TOOLBAR TITLE");
+        commandStripTitle.setFont(commandStripTitle.getFont().deriveFont(
+                Font.BOLD, Math.max(10.0f,
+                        commandStripTitle.getFont().getSize2D() - 1.0f)));
+        commandStripTitle.setForeground(UiThemeService.getInstance().color(
+                ThemeToken.ACCENT));
+        this.add(commandStripTitle);
         selectionStatus.setName("TABLE SELECTION STATUS");
         selectionStatus.setForeground(UiThemeService.getInstance().color(
                 ThemeToken.SECONDARY_TEXT));
@@ -142,8 +155,8 @@ public class TableToolBar extends JToolBar implements MouseListener, ItemListene
                 "Revert selected changed cells");
         revertSelected.addActionListener(this);
         this.add(group(null, selectionStatus, revertSelected));
-        this.add(group("Fine", decrementFine, incrementByFine, incrementFine));
-        this.add(group("Value", setValueText, setValue, multiply));
+        this.add(group("FINE", decrementFine, incrementByFine, incrementFine));
+        this.add(group("VALUE", setValueText, setValue, multiply));
 
         colorCells.setEnabled(false);
         refreshCompare.setEnabled(false);
@@ -243,7 +256,8 @@ public class TableToolBar extends JToolBar implements MouseListener, ItemListene
         // Keep the central calibration canvas resizable beside the inspector.
         // Lower-frequency controls live in an explicit overflow instead of
         // silently clipping beyond the visible toolbar edge.
-        setMinimumSize(new Dimension(0, getPreferredSize().height));
+        // ResponsiveFlowLayout keeps the minimum width at zero while reporting
+        // enough height for every wrapped row at the current workspace width.
         toggleTableToolBar(null);
     }
 
@@ -269,7 +283,8 @@ public class TableToolBar extends JToolBar implements MouseListener, ItemListene
             // Swing's normal theme refresh does not reach these controls.
             refreshTheme();
             TouchTargetService.apply(moreActionsPopup,
-                    SettingsManager.getSettings().getDisplayMode());
+                    com.romraider.ui.RuntimeUiProfile.displayMode(
+                            SettingsManager.getSettings().getDisplayMode()));
             moreActionsPopup.show(moreActions, 0, moreActions.getHeight());
         });
     }
@@ -289,10 +304,18 @@ public class TableToolBar extends JToolBar implements MouseListener, ItemListene
 
     private static JPanel group(String label, Component... controls) {
         JPanel panel = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
-        panel.setOpaque(false);
-        panel.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 4));
+        panel.setOpaque(true);
+        panel.setBackground(UiThemeService.getInstance().color(
+                ThemeToken.SURFACE));
+        panel.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(
+                        UiThemeService.getInstance().color(
+                                ThemeToken.RAISED_SURFACE)),
+                BorderFactory.createEmptyBorder(3, 6, 3, 6)));
         if (label != null) {
             JLabel groupLabel = new JLabel(label);
+            groupLabel.setFont(groupLabel.getFont().deriveFont(Font.BOLD,
+                    Math.max(9.0f, groupLabel.getFont().getSize2D() - 2.0f)));
             groupLabel.setForeground(UiThemeService.getInstance().color(
                     ThemeToken.SECONDARY_TEXT));
             panel.add(groupLabel);
@@ -312,14 +335,35 @@ public class TableToolBar extends JToolBar implements MouseListener, ItemListene
 
     private void refreshTheme() {
         UiThemeService theme = UiThemeService.getInstance();
-        setBackground(theme.color(ThemeToken.SURFACE));
+        setBackground(theme.color(ThemeToken.BACKGROUND));
+        commandStripTitle.setForeground(theme.color(ThemeToken.ACCENT));
         selectionStatus.setForeground(theme.color(ThemeToken.SECONDARY_TEXT));
         overlayLog.setForeground(theme.color(ThemeToken.PRIMARY_TEXT));
         liveDataValue.setForeground(theme.color(ThemeToken.PRIMARY_TEXT));
         refreshGroupLabelColors(this);
         refreshGroupLabelColors(moreActionsPopup);
+        refreshGroupSurfaces(this);
+        refreshGroupSurfaces(moreActionsPopup);
         toolbarBorder = createToolbarBorder();
         setBorder(toolbarBorder);
+    }
+
+    private static void refreshGroupSurfaces(java.awt.Container root) {
+        for (Component component : root.getComponents()) {
+            if (component instanceof JPanel && component.isOpaque()) {
+                JComponent panel = (JComponent) component;
+                panel.setBackground(UiThemeService.getInstance().color(
+                        ThemeToken.SURFACE));
+                panel.setBorder(BorderFactory.createCompoundBorder(
+                        BorderFactory.createLineBorder(UiThemeService
+                                .getInstance().color(
+                                        ThemeToken.RAISED_SURFACE)),
+                        BorderFactory.createEmptyBorder(3, 6, 3, 6)));
+            }
+            if (component instanceof java.awt.Container) {
+                refreshGroupSurfaces((java.awt.Container) component);
+            }
+        }
     }
 
     private static void refreshGroupLabelColors(java.awt.Container root) {
@@ -423,8 +467,9 @@ public class TableToolBar extends JToolBar implements MouseListener, ItemListene
 
         updateToolbarIncrementDecrementValues();
         
-        if(selectedTable.getTableView() != null)
-        	this.overlayLog.setSelected(selectedTable.getTableView().getOverlayLog());
+        TableView selectedView = SwingTableViewRegistry.find(selectedTable);
+        if(selectedView != null)
+            this.overlayLog.setSelected(selectedView.getOverlayLog());
         setScales(selectedTable.getScales());
 
         if(null == selectedTable.getCurrentScale())
@@ -819,7 +864,8 @@ public class TableToolBar extends JToolBar implements MouseListener, ItemListene
             }
         } else if (e.getSource() == overlayLog) {
             // enable/disable log overlay and live data display
-            curTable.getTableView().setOverlayLog(overlayLog.isSelected());
+            TableView view = SwingTableViewRegistry.find(curTable);
+            if (view != null) view.setOverlayLog(overlayLog.isSelected());
         }
     }
 
@@ -833,11 +879,13 @@ public class TableToolBar extends JToolBar implements MouseListener, ItemListene
 
         if (e.getSource() == clearOverlay) {
             // clear log overlay
-            curTable.getTableView().clearLiveDataTrace();
+            TableView view = SwingTableViewRegistry.find(curTable);
+            if (view != null) view.clearLiveDataTrace();
         } else if (e.getSource() == revertSelected) {
             try (EditTransaction edit = RomEditHistory.getInstance().begin(
                     curTable, "Revert selected values")) {
-                curTable.getTableView().undoSelected();
+                TableView view = SwingTableViewRegistry.find(curTable);
+                if (view != null) view.undoSelected();
                 updateSelectionStatus(curTable);
                 toggleTableToolBar(curTable);
             } catch (UserLevelException exception) {

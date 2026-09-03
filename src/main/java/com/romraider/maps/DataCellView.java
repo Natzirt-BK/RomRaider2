@@ -79,7 +79,6 @@ public class DataCellView extends JLabel implements MouseListener, Serializable 
         this.setVisible(true);
         this.addMouseListener(this);
         
-        cell.setDataView(this);
         this.y = cell.getIndexInTable();
         this.setPreferredSize(getSettings().getCellSize());      
     }
@@ -130,7 +129,7 @@ public class DataCellView extends JLabel implements MouseListener, Serializable 
         // the most useful visual information in a multi-cell selection.
         if (highlighted) {
             return blend(backgroundColor, UiThemeService.getInstance().color(
-                    ThemeToken.ACCENT), 0.34);
+                    ThemeToken.LIVE_TRACE), 0.34);
         }
         if (dataCell.isSelected()) {
             return blend(backgroundColor, UiThemeService.getInstance().color(
@@ -255,7 +254,7 @@ public class DataCellView extends JLabel implements MouseListener, Serializable 
         }
         if (highlighted) {
             return createLineBorder(UiThemeService.getInstance().color(
-                    ThemeToken.ACCENT), 2);
+                    ThemeToken.LIVE_TRACE), 2);
         }
         if (dataCell.isSelected()) {
             return createLineBorder(UiThemeService.getInstance().color(

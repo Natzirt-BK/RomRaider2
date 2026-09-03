@@ -18,8 +18,8 @@ public class IntegratedOptionDialogTest {
         IntegratedOptionDialog.DialogParts parts = IntegratedOptionDialog.create(
                 null, "Definitions are not configured.",
                 "Editor Configuration", javax.swing.JOptionPane.WARNING_MESSAGE,
-                new Object[] {"Open SubaruDefs", "Not now"},
-                "Open SubaruDefs");
+                new Object[] {"Add Definitions...", "Not now"},
+                "Add Definitions...");
         JDialog dialog = parts.dialog;
         try {
             assertTrue(dialog.isUndecorated());

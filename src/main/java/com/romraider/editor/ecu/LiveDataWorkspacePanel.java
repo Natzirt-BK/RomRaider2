@@ -43,6 +43,7 @@ import com.romraider.logger.api.LoggerLiveDataListener;
 import com.romraider.logger.api.LoggerSessionState;
 import com.romraider.ui.ModernIconFactory;
 import com.romraider.ui.ModernIconFactory.Action;
+import com.romraider.ui.ModernTableStyle;
 import com.romraider.ui.ThemeToken;
 import com.romraider.ui.UiThemeService;
 import com.romraider.ui.swing.ModernSearchField;
@@ -233,7 +234,7 @@ public final class LiveDataWorkspacePanel extends JPanel {
 
     private void configureTable(final Consumer<String> focusParameterAction) {
         parameters.setName("LIVE WORKSPACE PARAMETERS");
-        parameters.setFillsViewportHeight(true);
+        ModernTableStyle.apply(parameters);
         parameters.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
         parameters.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
         parameters.setRowSorter(sorter);
@@ -253,17 +254,17 @@ public final class LiveDataWorkspacePanel extends JPanel {
                 }
             }
         });
-        parameters.setShowVerticalLines(false);
-        parameters.getTableHeader().setReorderingAllowed(false);
         TableColumnModel columns = parameters.getColumnModel();
         configureColumn(columns, 0, 120, 170);
         configureColumn(columns, 1, 60, 78);
         configureColumn(columns, 2, 48, 58);
         configureColumn(columns, 3, 75, 88);
-        DefaultTableCellRenderer right = new DefaultTableCellRenderer();
+        columns.getColumn(0).setCellRenderer(
+                new ModernTableStyle.TokenRenderer(ThemeToken.LIVE_TRACE));
+        DefaultTableCellRenderer right = new ModernTableStyle.ZebraRenderer();
         right.setHorizontalAlignment(JLabel.RIGHT);
         columns.getColumn(1).setCellRenderer(right);
-        DefaultTableCellRenderer center = new DefaultTableCellRenderer();
+        DefaultTableCellRenderer center = new ModernTableStyle.ZebraRenderer();
         center.setHorizontalAlignment(JLabel.CENTER);
         columns.getColumn(2).setCellRenderer(center);
         columns.getColumn(3).setCellRenderer(center);

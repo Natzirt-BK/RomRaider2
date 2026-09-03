@@ -3,14 +3,17 @@ package com.romraider2.logger.compose
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.HorizontalScrollbar
+import androidx.compose.foundation.VerticalScrollbar
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
@@ -27,17 +30,23 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items as gridItems
+import androidx.compose.foundation.rememberScrollbarAdapter
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.Button
 import androidx.compose.material.ButtonDefaults
+import androidx.compose.material.AlertDialog
 import androidx.compose.material.Checkbox
 import androidx.compose.material.Colors
 import androidx.compose.material.Divider
+import androidx.compose.material.DropdownMenu
+import androidx.compose.material.DropdownMenuItem
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Surface
 import androidx.compose.material.Text
@@ -54,7 +63,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.awt.ComposePanel
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
@@ -69,10 +77,14 @@ import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -80,47 +92,35 @@ import androidx.compose.ui.unit.sp
 import com.romraider.logger.api.LiveDataSample
 import com.romraider.logger.api.LoggerChannel
 import com.romraider.logger.api.LoggerChannelKind
+import com.romraider.logger.api.LoggerGaugeTheme
+import com.romraider.logger.api.LoggerGaugeConfiguration
+import com.romraider.logger.api.LoggerGaugeLayout
+import com.romraider.logger.api.LoggerDashboardTile
+import com.romraider.logger.api.LoggerDashboardTileRole
+import com.romraider.logger.api.LoggerDashboardTileSize
+import com.romraider.logger.api.LoggerWorkspacePreferences
 import com.romraider.logger.api.LoggerLiveDataListener
+import com.romraider.logger.api.LoggerMessageSnapshot
 import com.romraider.logger.api.LoggerSessionState
 import com.romraider.logger.api.LoggerWorkspaceView
 import com.romraider.logger.ecu.ui.spi.LoggerWorkspaceContext
-import com.romraider.logger.ecu.ui.spi.LoggerWorkspaceProvider
-import java.awt.Dimension
+import com.romraider.ui.RuntimeUiProfile
+import java.awt.EventQueue
+import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.function.Consumer
-import javax.swing.JComponent
-import javax.swing.SwingUtilities
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.math.sqrt
-
-class ComposeLoggerWorkspaceProvider : LoggerWorkspaceProvider {
-    override fun getName(): String = "Compose Desktop Logger"
-
-    override fun createWorkspace(context: LoggerWorkspaceContext): JComponent {
-        if (SwingUtilities.isEventDispatchThread()) {
-            return composePanel(context)
-        }
-        var workspace: JComponent? = null
-        SwingUtilities.invokeAndWait {
-            workspace = composePanel(context)
-        }
-        return checkNotNull(workspace)
-    }
-
-    private fun composePanel(context: LoggerWorkspaceContext): JComponent =
-        ComposePanel().apply {
-            preferredSize = Dimension(1000, 650)
-            minimumSize = Dimension(640, 500)
-            setContent { LoggerWorkspace(context) }
-        }
-}
 
 private val graphite = Color(0xFF17212B)
 private val steel = Color(0xFF50667C)
 private val brandRed = Color(0xFFD92632)
 private val recordGreen = Color(0xFF24784B)
 private val faultRed = Color(0xFFD71920)
+private const val RECENT_SAMPLE_LIMIT = 2_000
 private val graphColors = listOf(
     Color(0xFF3D91E8), Color(0xFFF39A2B), Color(0xFF42B876),
     Color(0xFFB66BE3), Color(0xFFEF5967), Color(0xFF35BFC0),
@@ -128,7 +128,8 @@ private val graphColors = listOf(
 )
 
 @Composable
-private fun LoggerWorkspace(context: LoggerWorkspaceContext) {
+internal fun LoggerWorkspace(context: LoggerWorkspaceContext) {
+    val steamOs = remember { RuntimeUiProfile.isSteamOs() }
     var channels by remember { mutableStateOf(context.channels.channels) }
     var samples by remember {
         mutableStateOf(context.liveData.latestSamples.associateBy {
@@ -141,22 +142,59 @@ private fun LoggerWorkspace(context: LoggerWorkspaceContext) {
         })
     }
     var sessionState by remember { mutableStateOf(context.session.state) }
+    var runtimeMessage by remember {
+        mutableStateOf(context.messages.snapshot)
+    }
     var activeView by remember {
         mutableStateOf(context.preferences.view)
     }
     var darkTheme by remember {
-        mutableStateOf(context.preferences.isDarkTheme)
+        mutableStateOf(steamOs || context.preferences.isDarkTheme)
+    }
+    var gaugeTheme by remember {
+        mutableStateOf(if (steamOs) LoggerGaugeTheme.HANDHELD
+            else context.preferences.gaugeTheme)
+    }
+    var gaugeLayout by remember {
+        mutableStateOf(if (steamOs) LoggerGaugeLayout.STANDARD
+            else context.preferences.gaugeLayout)
     }
     var filter by remember { mutableStateOf("") }
+    var channelRailVisible by remember {
+        mutableStateOf(context.preferences.isChannelRailVisible)
+    }
     var graphPaused by remember { mutableStateOf(false) }
     var pausedHistory by remember {
         mutableStateOf<Map<String, List<LiveDataSample>>>(emptyMap())
     }
     val rootFocus = remember { FocusRequester() }
     val searchFocus = remember { FocusRequester() }
+    val pendingSamples = remember(context) {
+        ConcurrentLinkedQueue<LiveDataSample>()
+    }
 
     LaunchedEffect(context) {
         rootFocus.requestFocus()
+        while (isActive) {
+            delay(33)
+            val received = mutableListOf<LiveDataSample>()
+            while (true) {
+                val next = pendingSamples.poll() ?: break
+                received += next
+            }
+            if (received.isNotEmpty()) {
+                val latest = linkedMapOf<String, LiveDataSample>()
+                val nextHistory = history.toMutableMap()
+                received.forEach { sample ->
+                    latest[sample.parameterId] = sample
+                    nextHistory[sample.parameterId] =
+                        (nextHistory[sample.parameterId].orEmpty() + sample)
+                            .takeLast(RECENT_SAMPLE_LIMIT)
+                }
+                samples = samples + latest
+                history = nextHistory
+            }
+        }
     }
 
     DisposableEffect(context) {
@@ -166,24 +204,23 @@ private fun LoggerWorkspace(context: LoggerWorkspaceContext) {
         val stateListener = Consumer<LoggerSessionState> { next ->
             onUiThread { sessionState = next }
         }
+        val messageListener = Consumer<LoggerMessageSnapshot> { next ->
+            onUiThread { runtimeMessage = next }
+        }
         val liveListener = object : LoggerLiveDataListener {
             override fun sessionStateChanged(state: LoggerSessionState) {
                 onUiThread { sessionState = state }
             }
 
             override fun sampleUpdated(sample: LiveDataSample) {
-                onUiThread {
-                    samples = samples + (sample.parameterId to sample)
-                    val next = history.toMutableMap()
-                    next[sample.parameterId] =
-                        (next[sample.parameterId].orEmpty() + sample)
-                            .takeLast(240)
-                    history = next
-                }
+                pendingSamples.add(sample)
             }
 
             override fun parameterRemoved(parameterId: String) {
                 onUiThread {
+                    pendingSamples.removeIf {
+                        it.parameterId == parameterId
+                    }
                     samples = samples - parameterId
                     history = history - parameterId
                 }
@@ -192,14 +229,17 @@ private fun LoggerWorkspace(context: LoggerWorkspaceContext) {
         context.channels.addListener(channelListener)
         context.session.addStateListener(stateListener)
         context.liveData.addListener(liveListener)
+        context.messages.addListener(messageListener)
         onDispose {
+            pendingSamples.clear()
             context.channels.removeListener(channelListener)
             context.session.removeStateListener(stateListener)
             context.liveData.removeListener(liveListener)
+            context.messages.removeListener(messageListener)
         }
     }
 
-    val colors = workspaceColors(darkTheme)
+    val colors = workspaceColors(darkTheme, steamOs)
     MaterialTheme(colors = colors) {
         Surface(
             Modifier.fillMaxSize()
@@ -237,6 +277,7 @@ private fun LoggerWorkspace(context: LoggerWorkspaceContext) {
                         state = sessionState,
                         selectedCount = channels.count { it.isSelected },
                         darkTheme = darkTheme,
+                        allowThemeChange = !steamOs,
                         onToggleTheme = {
                             darkTheme = !darkTheme
                             context.preferences.setDarkTheme(darkTheme)
@@ -250,30 +291,70 @@ private fun LoggerWorkspace(context: LoggerWorkspaceContext) {
                 }
                 SessionTelemetry(
                     channels, samples, history,
-                    themeLabel = if (context.hasHostSessionControls()) {
+                    runtimeMessage,
+                    themeLabel = if (context.hasHostSessionControls() && !steamOs) {
                         if (darkTheme) "Light workspace" else "Dark workspace"
                     } else null,
-                    onToggleTheme = if (context.hasHostSessionControls()) {
+                    onToggleTheme = if (context.hasHostSessionControls() && !steamOs) {
                         {
                             darkTheme = !darkTheme
                             context.preferences.setDarkTheme(darkTheme)
                         }
-                    } else null
+                    } else null,
+                    onResetStatistics = {
+                        pendingSamples.clear()
+                        history = samples.mapValues { listOf(it.value) }
+                        if (graphPaused) {
+                            pausedHistory = history.mapValues {
+                                it.value.toList()
+                            }
+                        }
+                    }
                 )
                 Divider(color = colors.onSurface.copy(alpha = .14f))
                 BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+                    val compactRailHeight = (maxHeight * .50f).coerceIn(
+                        210.dp, 300.dp)
                     if (maxWidth < 820.dp) {
                         Column(Modifier.fillMaxSize()) {
-                            ChannelRail(
-                                channels, samples, filter, { filter = it },
-                                context, searchFocus,
-                                Modifier.fillMaxWidth().heightIn(
-                                    min = 190.dp, max = 240.dp)
-                            )
+                            if (channelRailVisible) {
+                                ChannelRail(
+                                    channels, samples, filter, { filter = it },
+                                    context, searchFocus,
+                                    onHide = {
+                                        channelRailVisible = false
+                                        context.preferences
+                                            .setChannelRailVisible(false)
+                                    },
+                                    Modifier.fillMaxWidth().height(
+                                        compactRailHeight),
+                                    compact = true
+                                )
+                            } else {
+                                ShowChannelsControl(
+                                    compact = true,
+                                    onShow = {
+                                        channelRailVisible = true
+                                        context.preferences
+                                            .setChannelRailVisible(true)
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
                             Divider(color = colors.onSurface.copy(alpha = .14f))
                             WorkspaceBody(
                                 activeView, channels, samples, history,
-                                graphPaused, pausedHistory,
+                                graphPaused, pausedHistory, gaugeTheme,
+                                gaugeLayout,
+                                allowGaugeThemes = !steamOs,
+                                onGaugeTheme = {
+                                    gaugeTheme = it
+                                    context.preferences.setGaugeTheme(it)
+                                },
+                                onGaugeLayout = {
+                                    gaugeLayout = it
+                                    context.preferences.setGaugeLayout(it)
+                                },
                                 onToggleGraphPause = {
                                     if (graphPaused) {
                                         graphPaused = false
@@ -283,22 +364,50 @@ private fun LoggerWorkspace(context: LoggerWorkspaceContext) {
                                         }
                                         graphPaused = true
                                     }
-                                },
+                                }, preferences = context.preferences,
                                 modifier = Modifier.weight(1f).fillMaxWidth())
                         }
                     } else {
                         Row(Modifier.fillMaxSize()) {
-                            ChannelRail(
-                                channels, samples, filter, { filter = it }, context,
-                                searchFocus,
-                                Modifier.width(286.dp).fillMaxHeight())
+                            if (channelRailVisible) {
+                                ChannelRail(
+                                    channels, samples, filter, { filter = it },
+                                    context, searchFocus,
+                                    onHide = {
+                                        channelRailVisible = false
+                                        context.preferences
+                                            .setChannelRailVisible(false)
+                                    },
+                                    Modifier.width(304.dp).fillMaxHeight())
+                            } else {
+                                ShowChannelsControl(
+                                    compact = false,
+                                    onShow = {
+                                        channelRailVisible = true
+                                        context.preferences
+                                            .setChannelRailVisible(true)
+                                    },
+                                    modifier = Modifier.width(68.dp)
+                                        .fillMaxHeight()
+                                )
+                            }
                             Divider(
                                 Modifier.fillMaxHeight().width(1.dp),
                                 color = colors.onSurface.copy(alpha = .14f)
                             )
                             WorkspaceBody(
                                 activeView, channels, samples, history,
-                                graphPaused, pausedHistory,
+                                graphPaused, pausedHistory, gaugeTheme,
+                                gaugeLayout,
+                                allowGaugeThemes = !steamOs,
+                                onGaugeTheme = {
+                                    gaugeTheme = it
+                                    context.preferences.setGaugeTheme(it)
+                                },
+                                onGaugeLayout = {
+                                    gaugeLayout = it
+                                    context.preferences.setGaugeLayout(it)
+                                },
                                 onToggleGraphPause = {
                                     if (graphPaused) {
                                         graphPaused = false
@@ -308,7 +417,7 @@ private fun LoggerWorkspace(context: LoggerWorkspaceContext) {
                                         }
                                         graphPaused = true
                                     }
-                                },
+                                }, preferences = context.preferences,
                                 modifier = Modifier.weight(1f).fillMaxHeight())
                         }
                     }
@@ -327,8 +436,10 @@ private fun SessionTelemetry(
     channels: List<LoggerChannel>,
     samples: Map<String, LiveDataSample>,
     history: Map<String, List<LiveDataSample>>,
+    runtimeMessage: LoggerMessageSnapshot,
     themeLabel: String?,
-    onToggleTheme: (() -> Unit)?
+    onToggleTheme: (() -> Unit)?,
+    onResetStatistics: () -> Unit
 ) {
     val metrics = sessionMetrics(channels, samples, history)
     val scroll = rememberScrollState()
@@ -343,10 +454,22 @@ private fun SessionTelemetry(
         MetricText("Live", metrics.liveChannels.toString())
         MetricText("Received", "${metrics.receivedPoints} points")
         MetricText("Window", metrics.windowLabel)
+        if (runtimeMessage.message.isNotBlank()) {
+            Text(runtimeMessage.message,
+                color = if (runtimeMessage.isError)
+                    MaterialTheme.colors.error
+                else MaterialTheme.colors.onSurface.copy(alpha = .72f),
+                fontSize = 11.sp, maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.widthIn(max = 420.dp))
+        }
         if (themeLabel != null && onToggleTheme != null) {
             TextButton(onClick = onToggleTheme, Modifier.height(34.dp)) {
                 Text(themeLabel, fontSize = 11.sp)
             }
+        }
+        TextButton(onClick = onResetStatistics, Modifier.height(34.dp)) {
+            Text("Reset statistics", fontSize = 11.sp)
         }
     }
 }
@@ -366,6 +489,7 @@ private fun SessionBar(
     state: LoggerSessionState,
     selectedCount: Int,
     darkTheme: Boolean,
+    allowThemeChange: Boolean,
     onToggleTheme: () -> Unit,
     onConnect: () -> Unit,
     onDisconnect: () -> Unit,
@@ -388,7 +512,8 @@ private fun SessionBar(
         ) {
             Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
                 Box(
-                    Modifier.background(brandRed, RoundedCornerShape(7.dp))
+                    Modifier.background(MaterialTheme.colors.primary,
+                            RoundedCornerShape(7.dp))
                         .padding(horizontal = 8.dp, vertical = 6.dp)
                 ) {
                     Text("RR2", color = Color.White, fontWeight = FontWeight.Bold,
@@ -432,9 +557,11 @@ private fun SessionBar(
                     }
                 )
             }
-            TextButton(onClick = onToggleTheme, Modifier.height(48.dp)) {
-                Text(if (darkTheme) "Light mode" else "Dark mode",
-                    maxLines = 1)
+            if (allowThemeChange) {
+                TextButton(onClick = onToggleTheme, Modifier.height(48.dp)) {
+                    Text(if (darkTheme) "Light mode" else "Dark mode",
+                        maxLines = 1)
+                }
             }
         }
     }
@@ -472,62 +599,243 @@ private fun ChannelRail(
     onFilterChanged: (String) -> Unit,
     context: LoggerWorkspaceContext,
     searchFocus: FocusRequester,
-    modifier: Modifier
+    onHide: () -> Unit,
+    modifier: Modifier,
+    compact: Boolean = false
 ) {
-    val needle = filter.trim().lowercase()
-    val visible = channels.filter {
-        needle.isEmpty() || it.name.lowercase().contains(needle) ||
-            it.parameterId.lowercase().contains(needle) ||
-            it.units.lowercase().contains(needle)
+    var activeKind by remember { mutableStateOf(LoggerChannelKind.PARAMETER) }
+    var confirmClearAll by remember { mutableStateOf(false) }
+    val visible = remember(channels, activeKind, filter) {
+        filterChannels(channels, activeKind, filter)
     }
-    val selected = channels.filter { it.isSelected }
+    val channelColors = remember(channels) {
+        channels.filter { it.isSelected }.mapIndexed { index, channel ->
+            channel.parameterId to graphColors[index % graphColors.size]
+        }.toMap()
+    }
+    val categoryChannels = remember(channels, activeKind) {
+        channels.filter { it.kind == activeKind }
+    }
+    val listState = rememberLazyListState()
+    LaunchedEffect(activeKind, filter) {
+        listState.scrollToItem(0)
+    }
     Column(modifier.background(MaterialTheme.colors.surface)) {
-        Text("CHANNELS", Modifier.padding(start = 14.dp, top = 13.dp),
-            fontWeight = FontWeight.Bold, fontSize = 13.sp)
+        Row(
+            Modifier.fillMaxWidth().padding(start = 14.dp,
+                top = if (compact) 5.dp else 13.dp,
+                end = 14.dp, bottom = if (compact) 2.dp else 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("CHANNELS", Modifier.weight(1f),
+                fontWeight = FontWeight.Bold, fontSize = 13.sp)
+            Text(
+                "${categoryChannels.count { it.isSelected }} / " +
+                    "${categoryChannels.size} selected",
+                color = MaterialTheme.colors.onSurface.copy(.58f),
+                fontSize = 10.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+            Spacer(Modifier.width(4.dp))
+            TextButton(onClick = onHide, Modifier.height(32.dp)) {
+                Text("Hide", fontSize = 10.sp)
+            }
+        }
+        ChannelKindSelector(channels, activeKind) { activeKind = it }
         TextField(
             value = filter,
             onValueChange = onFilterChanged,
-            placeholder = { Text("Search channels · Ctrl+F") },
+            placeholder = {
+                Text("Search ${activeKind.displayName.lowercase()}",
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+            },
             singleLine = true,
-            modifier = Modifier.fillMaxWidth().padding(10.dp)
+            modifier = Modifier.fillMaxWidth().padding(
+                    horizontal = 10.dp, vertical = if (compact) 4.dp else 10.dp)
                 .focusRequester(searchFocus)
                 .semantics { contentDescription = "Search Logger channels" }
         )
+        if (!compact) {
+            Row(
+                Modifier.fillMaxWidth().padding(start = 8.dp, end = 8.dp,
+                    bottom = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                TextButton(
+                    onClick = {
+                        context.channels.setSelected(
+                            categoryChannels.map { it.parameterId }, false)
+                    },
+                    enabled = categoryChannels.any { it.isSelected },
+                    modifier = Modifier.weight(1f).height(34.dp)
+                ) {
+                    Text("Clear category", fontSize = 10.sp, maxLines = 1)
+                }
+                TextButton(
+                    onClick = { confirmClearAll = true },
+                    enabled = channels.any { it.isSelected },
+                    modifier = Modifier.weight(1f).height(34.dp)
+                ) {
+                    Text("Clear all", fontSize = 10.sp, maxLines = 1)
+                }
+            }
+        }
         if (channels.isEmpty()) {
             EmptyState(
                 "No Logger channels are available",
                 "Add a Logger definition, then return here to choose channels.",
                 Modifier.weight(1f)
             )
+        } else if (categoryChannels.isEmpty()) {
+            EmptyState(
+                "No ${activeKind.displayName.lowercase()} available",
+                if (activeKind == LoggerChannelKind.EXTERNAL)
+                    "Configure an external sensor, then return here to select its channels."
+                else "The current Logger definition does not provide this channel type.",
+                Modifier.weight(1f)
+            )
         } else if (visible.isEmpty()) {
             EmptyState(
-                "No matching channels",
+                "No matching ${activeKind.displayName.lowercase()}",
                 "Try a name, parameter ID, or unit.",
                 Modifier.weight(1f)
             )
         } else {
-            LazyColumn(Modifier.weight(1f).fillMaxWidth()) {
-                LoggerChannelKind.entries.forEach { kind ->
-                    val group = visible.filter { it.kind == kind }
-                    if (group.isNotEmpty()) {
-                        item(key = "heading-${kind.name}") {
-                            ChannelGroupHeader(kind.displayName, group.size)
-                        }
-                        items(group, key = { it.parameterId }) { channel ->
-                            val colorIndex = selected.indexOf(channel)
-                            ChannelRow(
-                                channel,
-                                samples[channel.parameterId],
-                                colorIndex.takeIf { it >= 0 }?.let {
-                                    graphColors[it % graphColors.size]
-                                }
-                            ) {
-                                context.channels.setSelected(
-                                    channel.parameterId, it)
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize()
+                        .padding(end = 10.dp)
+                        .pointerInput(listState) {
+                            detectVerticalDragGestures { change, dragAmount ->
+                                change.consume()
+                                listState.dispatchRawDelta(-dragAmount)
                             }
                         }
+                ) {
+                    items(visible, key = { it.parameterId }) { channel ->
+                        ChannelRow(
+                            channel,
+                            samples[channel.parameterId],
+                            channelColors[channel.parameterId],
+                            onSelected = {
+                                context.channels.setSelected(
+                                    channel.parameterId, it)
+                            },
+                            onUnitSelected = {
+                                context.channels.setUnitOption(
+                                    channel.parameterId, it)
+                            }
+                        )
                     }
                 }
+                VerticalScrollbar(
+                    adapter = rememberScrollbarAdapter(listState),
+                    modifier = Modifier.align(Alignment.CenterEnd)
+                        .width(10.dp)
+                        .fillMaxHeight()
+                        .padding(vertical = 3.dp)
+                )
+            }
+        }
+    }
+    if (confirmClearAll) {
+        AlertDialog(
+            onDismissRequest = { confirmClearAll = false },
+            title = { Text("Clear all Logger channels?") },
+            text = {
+                Text("This removes all ${channels.count { it.isSelected }} " +
+                    "selected channels from the current Logger session.")
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmClearAll = false
+                    context.channels.setSelected(
+                        channels.map { it.parameterId }, false)
+                }) { Text("Clear all") }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmClearAll = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun ShowChannelsControl(
+    compact: Boolean,
+    onShow: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier.background(MaterialTheme.colors.surface)
+            .clickable(role = Role.Button, onClick = onShow)
+            .semantics { contentDescription = "Show Logger channels" },
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            if (compact) "Show channels" else "›\nCHANNELS",
+            color = MaterialTheme.colors.primary,
+            fontSize = if (compact) 10.sp else 9.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = if (compact) 1 else 2,
+            lineHeight = 12.sp,
+            textAlign = TextAlign.Center,
+            modifier = if (compact) Modifier.padding(vertical = 10.dp)
+                else Modifier.padding(horizontal = 4.dp)
+        )
+    }
+}
+
+@Composable
+private fun ChannelKindSelector(
+    channels: List<LoggerChannel>,
+    active: LoggerChannelKind,
+    onSelect: (LoggerChannelKind) -> Unit
+) {
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(5.dp)
+    ) {
+        LoggerChannelKind.entries.forEach { kind ->
+            val selected = kind == active
+            val count = channels.count { it.kind == kind }
+            Column(
+                Modifier.weight(1f).height(45.dp)
+                    .background(
+                        if (selected) MaterialTheme.colors.primary.copy(.18f)
+                        else MaterialTheme.colors.background,
+                        RoundedCornerShape(7.dp)
+                    )
+                    .border(
+                        1.dp,
+                        if (selected) MaterialTheme.colors.primary
+                        else MaterialTheme.colors.onSurface.copy(.16f),
+                        RoundedCornerShape(7.dp)
+                    )
+                    .clickable(role = Role.Button) { onSelect(kind) }
+                    .semantics {
+                        contentDescription =
+                            "Show ${kind.displayName}, $count available"
+                    }
+                    .padding(horizontal = 3.dp, vertical = 5.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    if (kind == LoggerChannelKind.EXTERNAL)
+                        "External\nSensors" else kind.displayName,
+                    color = if (selected) MaterialTheme.colors.primary
+                    else MaterialTheme.colors.onSurface.copy(.74f),
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 2,
+                    lineHeight = 10.sp,
+                    textAlign = TextAlign.Center,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
         }
     }
@@ -538,8 +846,12 @@ private fun ChannelRow(
     channel: LoggerChannel,
     sample: LiveDataSample?,
     accentColor: Color?,
-    onSelected: (Boolean) -> Unit
+    onSelected: (Boolean) -> Unit,
+    onUnitSelected: (String) -> Unit
 ) {
+    var unitMenuExpanded by remember(channel.parameterId) {
+        mutableStateOf(false)
+    }
     Row(
         Modifier.fillMaxWidth().heightIn(min = 52.dp)
             .toggleable(
@@ -568,13 +880,45 @@ private fun ChannelRow(
                     FontWeight.SemiBold else FontWeight.Normal,
                 color = accentColor ?: MaterialTheme.colors.onSurface)
             Text(
-                listOf(channel.parameterId, channel.units)
+                listOf(
+                    channel.parameterId,
+                    channel.units.takeIf { channel.unitOptions.size <= 1 }
+                        .orEmpty()
+                )
                     .filter { it.isNotBlank() }.joinToString("  •  "),
                 color = MaterialTheme.colors.onSurface.copy(.57f),
                 fontSize = 11.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
+        }
+        if (channel.unitOptions.size > 1) {
+            Box {
+                TextButton(
+                    onClick = { unitMenuExpanded = true },
+                    modifier = Modifier.height(34.dp)
+                ) {
+                    Text("${channel.units} ▾", fontSize = 11.sp,
+                        maxLines = 1)
+                }
+                DropdownMenu(
+                    expanded = unitMenuExpanded,
+                    onDismissRequest = { unitMenuExpanded = false }
+                ) {
+                    channel.unitOptions.forEach { option ->
+                        DropdownMenuItem(onClick = {
+                            unitMenuExpanded = false
+                            onUnitSelected(option.id)
+                        }) {
+                            Text(
+                                (if (option.isSelected) "✓  " else "") +
+                                    option.label,
+                                fontSize = 12.sp
+                            )
+                        }
+                    }
+                }
+            }
         }
         if (sample != null) {
             Text(
@@ -590,27 +934,6 @@ private fun ChannelRow(
 }
 
 @Composable
-private fun ChannelGroupHeader(name: String, count: Int) {
-    Row(
-        Modifier.fillMaxWidth()
-            .background(MaterialTheme.colors.background)
-            .padding(horizontal = 14.dp, vertical = 7.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(name.uppercase(), Modifier.weight(1f),
-            color = MaterialTheme.colors.onSurface.copy(.62f),
-            fontSize = 11.sp, fontWeight = FontWeight.Bold)
-        Text(count.toString(),
-            Modifier.background(
-                MaterialTheme.colors.onSurface.copy(.08f),
-                RoundedCornerShape(10.dp)
-            ).padding(horizontal = 7.dp, vertical = 2.dp),
-            color = MaterialTheme.colors.onSurface.copy(.62f),
-            fontSize = 10.sp, fontWeight = FontWeight.Bold)
-    }
-}
-
-@Composable
 private fun WorkspaceBody(
     activeView: LoggerWorkspaceView,
     channels: List<LoggerChannel>,
@@ -618,7 +941,13 @@ private fun WorkspaceBody(
     history: Map<String, List<LiveDataSample>>,
     graphPaused: Boolean,
     pausedHistory: Map<String, List<LiveDataSample>>,
+    gaugeTheme: LoggerGaugeTheme,
+    gaugeLayout: LoggerGaugeLayout,
+    allowGaugeThemes: Boolean,
+    onGaugeTheme: (LoggerGaugeTheme) -> Unit,
+    onGaugeLayout: (LoggerGaugeLayout) -> Unit,
     onToggleGraphPause: () -> Unit,
+    preferences: LoggerWorkspacePreferences,
     modifier: Modifier
 ) {
     val selected = channels.filter { it.isSelected }
@@ -632,7 +961,8 @@ private fun WorkspaceBody(
             LoggerWorkspaceView.GRAPH -> GraphWorkspace(
                 selected, graphHistory, graphPaused, onToggleGraphPause)
             LoggerWorkspaceView.DASHBOARD -> DashboardWorkspace(
-                selected, samples, history)
+                selected, samples, history, gaugeTheme, allowGaugeThemes,
+                onGaugeTheme, gaugeLayout, onGaugeLayout, preferences)
             LoggerWorkspaceView.ANALYSIS -> AnalysisWorkspace(
                 selected, samples, history)
         }
@@ -658,7 +988,7 @@ private fun OverviewWorkspace(
     Column(Modifier.fillMaxSize()) {
         SectionTitle(
             "Session overview",
-            "Live values, measured peaks, and trends in one workspace"
+            "Live values, recent peaks, and trends in one workspace"
         )
         BoxWithConstraints(Modifier.fillMaxWidth()) {
             val cardHeight = if (maxWidth < 700.dp) 108.dp else 142.dp
@@ -886,17 +1216,26 @@ private fun GraphWorkspace(
                 drawLine(gridColor, Offset(x, 0f), Offset(x, size.height), 1f)
             }
             displayed.forEachIndexed { index, channel ->
-                val values = history[channel.parameterId].orEmpty()
-                    .map { it.rawValue }
-                val minimum = values.minOrNull() ?: return@forEachIndexed
-                val maximum = values.maxOrNull() ?: return@forEachIndexed
+                val points = history[channel.parameterId].orEmpty()
+                val minimum = points.minOfOrNull { it.rawValue }
+                    ?: return@forEachIndexed
+                val maximum = points.maxOfOrNull { it.rawValue }
+                    ?: return@forEachIndexed
                 val span = (maximum - minimum).takeIf { it != 0.0 } ?: 1.0
+                val firstTimestamp = points.first().timestampMillis
+                val elapsed = (points.last().timestampMillis - firstTimestamp)
+                    .coerceAtLeast(0L)
                 val path = Path()
-                values.forEachIndexed { sampleIndex, value ->
-                    val x = if (values.size == 1) 0f else
-                        size.width * sampleIndex / (values.size - 1f)
+                points.forEachIndexed { sampleIndex, sample ->
+                    val x = if (elapsed == 0L) {
+                        if (points.size == 1) 0f else
+                            size.width * sampleIndex / (points.size - 1f)
+                    } else size.width *
+                        (sample.timestampMillis - firstTimestamp) /
+                        elapsed.toFloat()
                     val y = size.height -
-                        (size.height * ((value - minimum) / span)).toFloat()
+                        (size.height * ((sample.rawValue - minimum) / span))
+                            .toFloat()
                     if (sampleIndex == 0) path.moveTo(x, y)
                     else path.lineTo(x, y)
                 }
@@ -908,7 +1247,7 @@ private fun GraphWorkspace(
             horizontalArrangement = Arrangement.SpaceBetween) {
             Text("Oldest", color = MaterialTheme.colors.onSurface.copy(.46f),
                 fontSize = 10.sp)
-            Text("SESSION TIME",
+            Text("RECENT TIME WINDOW",
                 color = MaterialTheme.colors.onSurface.copy(.46f),
                 fontSize = 10.sp, fontWeight = FontWeight.Bold)
             Text("Latest", color = MaterialTheme.colors.onSurface.copy(.46f),
@@ -949,8 +1288,19 @@ private fun GraphHeader(
 private fun DashboardWorkspace(
     selected: List<LoggerChannel>,
     samples: Map<String, LiveDataSample>,
-    history: Map<String, List<LiveDataSample>>
+    history: Map<String, List<LiveDataSample>>,
+    gaugeTheme: LoggerGaugeTheme,
+    allowGaugeThemes: Boolean,
+    onGaugeTheme: (LoggerGaugeTheme) -> Unit,
+    gaugeLayout: LoggerGaugeLayout,
+    onGaugeLayout: (LoggerGaugeLayout) -> Unit,
+    preferences: LoggerWorkspacePreferences
 ) {
+    var showPeaks by remember { mutableStateOf(false) }
+    var editingChannel by remember { mutableStateOf<LoggerChannel?>(null) }
+    var configurationRevision by remember { mutableStateOf(0) }
+    var layoutRevision by remember { mutableStateOf(0) }
+    var arranging by remember { mutableStateOf(false) }
     if (selected.isEmpty()) {
         EmptyState(
             "Build a live dashboard",
@@ -959,23 +1309,252 @@ private fun DashboardWorkspace(
         return
     }
     Column(Modifier.fillMaxSize()) {
-        SectionTitle("Dashboard", "Current values and measured session peaks")
+        SectionTitle("Dashboard", if (arranging)
+            "Arrange tiles, choose a role, and set each tile footprint"
+            else "Current values and measured recent peaks")
+        GaugeControls(
+            gaugeTheme, allowGaugeThemes, showPeaks,
+            history.values.any { it.isNotEmpty() },
+            onGaugeTheme, { showPeaks = !showPeaks },
+            gaugeLayout, onGaugeLayout, arranging,
+            { arranging = !arranging },
+            {
+                preferences.dashboardTiles.keys.forEach {
+                    preferences.setDashboardTile(it, null)
+                }
+                layoutRevision++
+            }
+        )
+        Spacer(Modifier.height(14.dp))
+        val ordered = dashboardChannels(selected,
+            preferences.getDashboardTiles(), layoutRevision)
         LazyVerticalGrid(
-            columns = GridCells.Adaptive(238.dp),
+            columns = GridCells.Adaptive(gaugeLayout.minimumWidth()),
             Modifier.fillMaxSize(),
             horizontalArrangement = Arrangement.spacedBy(11.dp),
             verticalArrangement = Arrangement.spacedBy(11.dp)
         ) {
-            gridItems(selected, key = { it.parameterId }) { channel ->
+            gridItems(ordered, key = {
+                "${it.parameterId}:$configurationRevision:$layoutRevision"
+            }, span = { channel ->
+                val tile = dashboardTile(channel.parameterId,
+                    ordered.indexOf(channel), preferences)
+                GridItemSpan(when (tile.size) {
+                    LoggerDashboardTileSize.STANDARD -> 1
+                    LoggerDashboardTileSize.WIDE -> minOf(2, maxLineSpan)
+                    LoggerDashboardTileSize.LARGE -> maxLineSpan
+                })
+            }) { channel ->
+                val index = ordered.indexOf(channel)
+                val tile = dashboardTile(channel.parameterId, index,
+                    preferences)
                 LiveGaugeCard(
                     channel,
                     samples[channel.parameterId],
                     history[channel.parameterId].orEmpty(),
-                    graphColors[selected.indexOf(channel) % graphColors.size],
-                    Modifier.fillMaxWidth().height(218.dp)
+                    graphColors[index % graphColors.size],
+                    gaugeTheme,
+                    showPeaks,
+                    preferences.getGaugeConfiguration(channel.parameterId),
+                    { editingChannel = channel },
+                    tile, arranging,
+                    index > 0, index < ordered.lastIndex,
+                    {
+                        moveDashboardTile(ordered, index, -1, preferences)
+                        layoutRevision++
+                    }, {
+                        moveDashboardTile(ordered, index, 1, preferences)
+                        layoutRevision++
+                    }, {
+                        preferences.setDashboardTile(channel.parameterId,
+                            tile.withRole(tile.role.next()))
+                        layoutRevision++
+                    }, {
+                        preferences.setDashboardTile(channel.parameterId,
+                            tile.withSize(tile.size.next()))
+                        layoutRevision++
+                    },
+                    Modifier.fillMaxWidth().height(
+                        tile.size.cardHeight(gaugeLayout) +
+                            if (arranging) 44.dp else 0.dp)
                 )
             }
         }
+    }
+    editingChannel?.let { channel ->
+        GaugeConfigurationDialog(
+            channel,
+            preferences.getGaugeConfiguration(channel.parameterId),
+            onDismiss = { editingChannel = null },
+            onSave = { configuration ->
+                preferences.setGaugeConfiguration(
+                    channel.parameterId, configuration)
+                configurationRevision++
+                editingChannel = null
+            }
+        )
+    }
+}
+
+@Composable
+private fun GaugeControls(
+    selected: LoggerGaugeTheme,
+    allowThemes: Boolean,
+    showPeaks: Boolean,
+    hasSamples: Boolean,
+    onSelect: (LoggerGaugeTheme) -> Unit,
+    onTogglePeaks: () -> Unit,
+    gaugeLayout: LoggerGaugeLayout,
+    onGaugeLayout: (LoggerGaugeLayout) -> Unit,
+    arranging: Boolean,
+    onToggleArrange: () -> Unit,
+    onResetLayout: () -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(7.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("VALUES", color = MaterialTheme.colors.onSurface.copy(.50f),
+                fontSize = 10.sp, fontWeight = FontWeight.Bold)
+            GaugeControlChip(
+                if (showPeaks) "Peak recall" else "Live values",
+                showPeaks, hasSamples, onTogglePeaks
+            )
+        }
+        if (allowThemes) {
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(7.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                Text("GAUGE STYLE",
+                    color = MaterialTheme.colors.onSurface.copy(.50f),
+                    fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                LoggerGaugeTheme.values().filter {
+                    it != LoggerGaugeTheme.HANDHELD
+                }.forEach { theme ->
+                    val active = theme == selected
+                    GaugeControlChip(theme.displayName, active, true) {
+                        onSelect(theme)
+                    }
+                }
+            }
+        }
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(7.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            if (allowThemes) {
+                Text("GAUGE SIZE",
+                    color = MaterialTheme.colors.onSurface.copy(.50f),
+                    fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                LoggerGaugeLayout.values().forEach { layout ->
+                    GaugeControlChip(layout.displayName,
+                        layout == gaugeLayout, true) { onGaugeLayout(layout) }
+                }
+                Spacer(Modifier.width(5.dp))
+            }
+            Text("LAYOUT",
+                color = MaterialTheme.colors.onSurface.copy(.50f),
+                fontSize = 10.sp, fontWeight = FontWeight.Bold)
+            GaugeControlChip(if (arranging) "Done" else "Arrange",
+                arranging, true, onToggleArrange)
+            if (arranging) {
+                GaugeControlChip("Reset layout", false, true, onResetLayout)
+            }
+        }
+    }
+}
+
+private fun dashboardTile(
+    parameterId: String,
+    fallbackOrder: Int,
+    preferences: LoggerWorkspacePreferences
+): LoggerDashboardTile = preferences.getDashboardTile(parameterId)
+    ?: LoggerDashboardTile(LoggerDashboardTileRole.GAUGE,
+        LoggerDashboardTileSize.STANDARD, fallbackOrder)
+
+internal fun dashboardChannels(
+    selected: List<LoggerChannel>,
+    saved: Map<String, LoggerDashboardTile>,
+    revision: Int = 0
+): List<LoggerChannel> {
+    @Suppress("UNUSED_VARIABLE") val observedRevision = revision
+    val original = selected.withIndex().associate { it.value.parameterId to it.index }
+    return selected.sortedWith(compareBy<LoggerChannel> {
+        saved[it.parameterId]?.order ?: Int.MAX_VALUE
+    }.thenBy { original[it.parameterId] ?: Int.MAX_VALUE })
+}
+
+private fun moveDashboardTile(
+    ordered: List<LoggerChannel>,
+    from: Int,
+    direction: Int,
+    preferences: LoggerWorkspacePreferences
+) {
+    val to = from + direction
+    if (from !in ordered.indices || to !in ordered.indices) return
+    val next = ordered.toMutableList()
+    val moving = next.removeAt(from)
+    next.add(to, moving)
+    next.forEachIndexed { index, channel ->
+        val current = dashboardTile(channel.parameterId, index, preferences)
+        if (current.order != index) {
+            preferences.setDashboardTile(channel.parameterId,
+                current.withOrder(index))
+        }
+    }
+}
+
+private fun LoggerGaugeLayout.minimumWidth(): Dp = when (this) {
+    LoggerGaugeLayout.COMPACT -> 188.dp
+    LoggerGaugeLayout.STANDARD -> 238.dp
+    LoggerGaugeLayout.LARGE -> 310.dp
+}
+
+private fun LoggerGaugeLayout.cardHeight(): Dp = when (this) {
+    LoggerGaugeLayout.COMPACT -> 210.dp
+    LoggerGaugeLayout.STANDARD -> 250.dp
+    LoggerGaugeLayout.LARGE -> 304.dp
+}
+
+private fun LoggerDashboardTileSize.cardHeight(
+    density: LoggerGaugeLayout
+): Dp = density.cardHeight() + when (this) {
+    LoggerDashboardTileSize.STANDARD -> 0.dp
+    LoggerDashboardTileSize.WIDE -> 10.dp
+    LoggerDashboardTileSize.LARGE -> 70.dp
+}
+
+@Composable
+private fun GaugeControlChip(
+    label: String,
+    active: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit
+) {
+    TextButton(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = Modifier.height(36.dp)
+            .background(
+                if (active) MaterialTheme.colors.primary.copy(.16f)
+                else MaterialTheme.colors.surface,
+                RoundedCornerShape(18.dp)
+            )
+            .border(
+                1.dp,
+                if (active) MaterialTheme.colors.primary.copy(.75f)
+                else MaterialTheme.colors.onSurface.copy(.15f),
+                RoundedCornerShape(18.dp)
+            )
+    ) {
+        Text(label,
+            color = when {
+                !enabled -> MaterialTheme.colors.onSurface.copy(.32f)
+                active -> MaterialTheme.colors.primary
+                else -> MaterialTheme.colors.onSurface.copy(.72f)
+            },
+            fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
     }
 }
 
@@ -987,15 +1566,15 @@ private fun AnalysisWorkspace(
 ) {
     if (selected.isEmpty()) {
         EmptyState(
-            "No session to analyze",
-            "Choose channels and collect samples to build a session summary."
+            "No recent data to analyze",
+            "Choose channels and collect samples to build a recent summary."
         )
         return
     }
     val summary = analysisSummary(selected, history)
     Column(Modifier.fillMaxSize()) {
-        SectionTitle("Session analysis",
-            "A read-only summary calculated from received samples")
+        SectionTitle("Recent analysis",
+            "A read-only summary calculated from the retained sample window")
         LazyRow(Modifier.fillMaxWidth().height(86.dp),
             horizontalArrangement = Arrangement.spacedBy(9.dp)) {
             item { AnalysisMetricCard("Channels", summary.channels.toString(),
@@ -1040,17 +1619,53 @@ private fun LiveGaugeCard(
     sample: LiveDataSample?,
     samples: List<LiveDataSample>,
     accentColor: Color,
+    gaugeTheme: LoggerGaugeTheme,
+    showPeak: Boolean,
+    configuration: LoggerGaugeConfiguration?,
+    onConfigure: () -> Unit,
+    tile: LoggerDashboardTile,
+    arranging: Boolean,
+    canMovePrevious: Boolean,
+    canMoveNext: Boolean,
+    onMovePrevious: () -> Unit,
+    onMoveNext: () -> Unit,
+    onCycleRole: () -> Unit,
+    onCycleSize: () -> Unit,
     modifier: Modifier
 ) {
     val stats = statistics(samples)
-    val progress = measuredProgress(sample?.rawValue, stats)
+    val standardRange = standardGaugeRange(channel)
+    val inferredRange = standardRange ?: paddedRange(stats)
+    val range = if (configuration?.hasCustomScale() == true) GaugeRange(
+        configuration.scaleMinimum, configuration.scaleMaximum)
+        else inferredRange
+    val displayedRaw = if (showPeak) stats?.maximum else sample?.rawValue
+    val displayedValue = if (showPeak) stats?.maximum?.formatValue()
+        else sample?.displayValue
+    val progress = gaugeProgress(displayedRaw, range)
+    val style = gaugeStyle(gaugeTheme)
+    var alertState by remember(channel.parameterId, configuration) {
+        mutableStateOf(LoggerGaugeConfiguration.AlertState.NORMAL)
+    }
+    LaunchedEffect(displayedRaw, configuration) {
+        if (displayedRaw != null && configuration != null) {
+            alertState = configuration.alertState(displayedRaw, alertState)
+        } else {
+            alertState = LoggerGaugeConfiguration.AlertState.NORMAL
+        }
+    }
+    val alerting = alertState != LoggerGaugeConfiguration.AlertState.NORMAL
     Column(
         modifier.background(MaterialTheme.colors.surface, RoundedCornerShape(10.dp))
-            .border(1.dp, MaterialTheme.colors.onSurface.copy(.14f),
+            .border(if (alerting) 2.dp else 1.dp,
+                if (alerting) faultRed
+                else MaterialTheme.colors.onSurface.copy(.14f),
                 RoundedCornerShape(10.dp))
             .semantics(mergeDescendants = true) {
                 contentDescription = liveValueAccessibilityLabel(
-                    channel, sample, stats)
+                    channel, sample, stats, showPeak) + if (alerting) {
+                    ", ${alertState.name.lowercase()} warning active"
+                } else ""
             }
             .padding(horizontal = 14.dp, vertical = 12.dp)
     ) {
@@ -1062,64 +1677,551 @@ private fun LiveGaugeCard(
                 color = accentColor, fontWeight = FontWeight.SemiBold,
                 fontSize = 13.sp, maxLines = 1,
                 overflow = TextOverflow.Ellipsis)
-        }
-        Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-            GaugeFace(progress, accentColor)
-            Column(horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier
-                    .background(
-                        MaterialTheme.colors.surface.copy(alpha = .94f),
-                        RoundedCornerShape(7.dp)
-                    )
-                    .padding(horizontal = 8.dp, vertical = 3.dp)) {
-                Text(sample?.displayValue ?: "—", color = accentColor,
-                    fontSize = 28.sp, fontWeight = FontWeight.Bold,
-                    maxLines = 1)
-                Text(channel.units.ifBlank { "CURRENT" },
-                    color = MaterialTheme.colors.onSurface.copy(.55f),
-                    fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+            if (alerting) {
+                Text("!  ${alertState.name}", color = faultRed,
+                    fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.width(4.dp))
+            }
+            if (!arranging) {
+                TextButton(onClick = onConfigure,
+                    modifier = Modifier.requiredWidth(44.dp).height(30.dp),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)) {
+                    Text("SET", fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                }
             }
         }
-        Row(Modifier.fillMaxWidth()) {
-            Text("MIN  ${stats?.minimum?.formatValue() ?: "—"}",
-                Modifier.weight(1f),
-                color = MaterialTheme.colors.onSurface.copy(.52f),
-                fontSize = 10.sp)
-            Text("MAX  ${stats?.maximum?.formatValue() ?: "—"}",
-                color = MaterialTheme.colors.onSurface.copy(.52f),
-                fontSize = 10.sp)
+        if (arranging) {
+            Row(Modifier.fillMaxWidth().padding(top = 3.dp),
+                horizontalArrangement = Arrangement.spacedBy(5.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                TileArrangeButton("←", canMovePrevious, onMovePrevious,
+                    Modifier.width(42.dp), "Move previous")
+                TileArrangeButton("→", canMoveNext, onMoveNext,
+                    Modifier.width(42.dp), "Move next")
+                TileArrangeButton(tile.role.displayName, true, onCycleRole,
+                    Modifier.weight(1f),
+                    "Change role; current ${tile.role.displayName}")
+                TileArrangeButton(tile.size.displayName, true, onCycleSize,
+                    Modifier.weight(1f),
+                    "Change size; current ${tile.size.displayName}")
+            }
+        }
+        when (tile.role) {
+            LoggerDashboardTileRole.GAUGE -> GaugeTileBody(
+                progress, style, displayedValue, showPeak, channel, range,
+                when {
+                    configuration?.hasCustomScale() == true -> "CUSTOM SCALE"
+                    standardRange != null -> "REFERENCE SCALE"
+                    stats != null -> "RECENT SCALE"
+                    else -> "AUTO SCALE · WAITING FOR DATA"
+                })
+            LoggerDashboardTileRole.VALUE -> ValueTileBody(
+                displayedValue, showPeak, channel, accentColor, progress)
+            LoggerDashboardTileRole.TREND -> TrendTileBody(
+                displayedValue, showPeak, channel, samples, accentColor)
+            LoggerDashboardTileRole.ALARM -> AlarmTileBody(
+                displayedValue, showPeak, channel, configuration,
+                alertState, alerting)
+        }
+        SessionStatsStrip(stats)
+    }
+}
+
+@Composable
+private fun TileArrangeButton(
+    label: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    accessibilityLabel: String = label
+) {
+    Box(modifier.height(42.dp)
+            .background(MaterialTheme.colors.surface, RoundedCornerShape(6.dp))
+            .border(1.dp, MaterialTheme.colors.onSurface.copy(.16f),
+                RoundedCornerShape(6.dp))
+            .clickable(enabled = enabled, onClick = onClick)
+            .semantics { contentDescription = accessibilityLabel }
+            .padding(horizontal = 4.dp),
+        contentAlignment = Alignment.Center) {
+        Text(label,
+            color = MaterialTheme.colors.onSurface.copy(
+                if (enabled) .76f else .28f),
+            fontSize = 10.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
+            overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
+    }
+}
+
+@Composable
+private fun ColumnScope.GaugeTileBody(
+    progress: Float?,
+    style: GaugeStyle,
+    displayedValue: String?,
+    showPeak: Boolean,
+    channel: LoggerChannel,
+    range: GaugeRange,
+    scaleLabel: String
+) {
+    BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
+        val faceWidth = minOf(maxWidth, maxHeight * 1.55f)
+        if (maxWidth > 650.dp) {
+            GaugeRangeMarker("SCALE LOW", range.minimum, channel.units,
+                style.primaryColor, Modifier.align(Alignment.CenterStart))
+            GaugeRangeMarker("SCALE HIGH", range.maximum, channel.units,
+                style.primaryColor, Modifier.align(Alignment.CenterEnd))
+        }
+        Box(Modifier.width(faceWidth).fillMaxHeight()
+            .align(Alignment.Center)) {
+            GaugeFace(progress, style)
+            Text(range.minimum.formatScaleTick(),
+                color = style.tickColor.copy(.76f),
+                fontSize = 9.sp, fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.align(Alignment.BottomStart)
+                    .padding(start = 12.dp, bottom = 11.dp))
+            Text(range.maximum.formatScaleTick(),
+                color = style.tickColor.copy(.76f),
+                fontSize = 9.sp, fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.align(Alignment.BottomEnd)
+                    .padding(end = 12.dp, bottom = 11.dp))
+            Column(horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.align(Alignment.Center)
+                    .background(style.faceColor.copy(alpha = .94f),
+                        RoundedCornerShape(7.dp))
+                    .padding(horizontal = 10.dp, vertical = 4.dp)) {
+                TileValue(displayedValue, style.valueColor, showPeak, channel)
+            }
+            Text(scaleLabel, color = style.tickColor.copy(.46f),
+                fontSize = 8.sp, fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.align(Alignment.BottomCenter)
+                    .padding(bottom = 2.dp))
         }
     }
 }
 
 @Composable
-private fun GaugeFace(progress: Float?, accentColor: Color) {
-    val trackColor = MaterialTheme.colors.onSurface.copy(alpha = .10f)
-    val surfaceColor = MaterialTheme.colors.surface
+private fun GaugeRangeMarker(
+    label: String,
+    value: Double,
+    units: String,
+    color: Color,
+    modifier: Modifier
+) {
+    Column(modifier.width(150.dp)
+        .background(color.copy(.06f), RoundedCornerShape(8.dp))
+        .border(1.dp, color.copy(.20f), RoundedCornerShape(8.dp))
+        .padding(11.dp)) {
+        Text(label, color = color.copy(.72f), fontSize = 9.sp,
+            fontWeight = FontWeight.Bold)
+        Text(value.formatScaleTick(), color = MaterialTheme.colors.onSurface,
+            fontSize = 22.sp, fontWeight = FontWeight.Bold,
+            fontFamily = FontFamily.Monospace)
+        Text(units.ifBlank { "FULL SCALE" },
+            color = MaterialTheme.colors.onSurface.copy(.45f), fontSize = 9.sp)
+    }
+}
+
+@Composable
+private fun SessionStatsStrip(stats: SampleStatistics?) {
+    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+        Row(Modifier.widthIn(max = 440.dp).fillMaxWidth()
+            .background(MaterialTheme.colors.onSurface.copy(.035f),
+                RoundedCornerShape(6.dp))
+            .padding(horizontal = 10.dp, vertical = 5.dp)) {
+            Text("RECENT MIN  ${stats?.minimum?.formatValue() ?: "—"}",
+                Modifier.weight(1f),
+                color = MaterialTheme.colors.onSurface.copy(.52f),
+                fontSize = 9.sp, fontWeight = FontWeight.SemiBold)
+            Text("RECENT MAX  ${stats?.maximum?.formatValue() ?: "—"}",
+                Modifier.weight(1f),
+                color = MaterialTheme.colors.onSurface.copy(.52f),
+                fontSize = 9.sp, fontWeight = FontWeight.SemiBold,
+                textAlign = TextAlign.End)
+        }
+    }
+}
+
+@Composable
+private fun ColumnScope.ValueTileBody(
+    displayedValue: String?,
+    showPeak: Boolean,
+    channel: LoggerChannel,
+    valueColor: Color,
+    progress: Float?
+) {
+    Column(Modifier.fillMaxWidth().weight(1f)
+        .background(Color(0xFF0B1218), RoundedCornerShape(9.dp))
+        .border(1.dp, valueColor.copy(.32f), RoundedCornerShape(9.dp))
+        .padding(horizontal = 16.dp, vertical = 11.dp),
+        verticalArrangement = Arrangement.Center) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
+            Column(Modifier.weight(1f)) {
+                Text(if (showPeak) "PEAK RECALL" else "LIVE SIGNAL",
+                    color = valueColor.copy(.78f), fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold)
+                Text(displayedValue ?: "— —", color = valueColor,
+                    fontSize = 48.sp, fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace, maxLines = 1)
+            }
+            Text(channel.units.ifBlank { "VALUE" },
+                color = Color.White.copy(.62f), fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(bottom = 9.dp))
+        }
+        Spacer(Modifier.height(7.dp))
+        Canvas(Modifier.fillMaxWidth().height(7.dp)) {
+            drawRoundRect(valueColor.copy(.16f), cornerRadius =
+                androidx.compose.ui.geometry.CornerRadius(size.height / 2f))
+            drawRoundRect(valueColor.copy(.70f), size = Size(size.width *
+                (progress ?: 0f).coerceIn(0f, 1f),
+                size.height), cornerRadius =
+                androidx.compose.ui.geometry.CornerRadius(size.height / 2f))
+        }
+    }
+}
+
+@Composable
+private fun ColumnScope.TrendTileBody(
+    displayedValue: String?,
+    showPeak: Boolean,
+    channel: LoggerChannel,
+    samples: List<LiveDataSample>,
+    accent: Color
+) {
+    Column(Modifier.fillMaxWidth().weight(1f)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
+            Text(displayedValue ?: "—", color = accent, fontSize = 29.sp,
+                fontWeight = FontWeight.Bold, maxLines = 1)
+            Spacer(Modifier.width(6.dp))
+            Text((if (showPeak) "PEAK " else "") + channel.units,
+                color = MaterialTheme.colors.onSurface.copy(.52f),
+                fontSize = 10.sp, modifier = Modifier.padding(bottom = 5.dp))
+        }
+        TileSparkline(samples, accent, Modifier.fillMaxWidth().weight(1f))
+    }
+}
+
+@Composable
+private fun TileSparkline(
+    samples: List<LiveDataSample>,
+    color: Color,
+    modifier: Modifier
+) {
+    val grid = MaterialTheme.colors.onSurface.copy(.08f)
+    Canvas(modifier.background(color.copy(.05f), RoundedCornerShape(7.dp))
+        .padding(8.dp)) {
+        drawLine(grid, Offset(0f, size.height / 2f),
+            Offset(size.width, size.height / 2f), 1f)
+        val values = samples.takeLast(120).map { it.rawValue }
+        if (values.size < 2) return@Canvas
+        val minimum = values.minOrNull() ?: return@Canvas
+        val maximum = values.maxOrNull() ?: return@Canvas
+        val span = (maximum - minimum).takeIf { it != 0.0 } ?: 1.0
+        val path = Path()
+        values.forEachIndexed { index, value ->
+            val x = size.width * index / (values.size - 1f)
+            val y = size.height -
+                (size.height * ((value - minimum) / span)).toFloat()
+            if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
+        }
+        drawPath(path, color, style = Stroke(2.8f, cap = StrokeCap.Round))
+    }
+}
+
+@Composable
+private fun ColumnScope.AlarmTileBody(
+    displayedValue: String?,
+    showPeak: Boolean,
+    channel: LoggerChannel,
+    configuration: LoggerGaugeConfiguration?,
+    alertState: LoggerGaugeConfiguration.AlertState,
+    alerting: Boolean
+) {
+    Box(Modifier.fillMaxWidth().weight(1f)
+        .background(if (alerting) faultRed.copy(.12f)
+            else MaterialTheme.colors.onSurface.copy(.035f),
+            RoundedCornerShape(8.dp)), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(if (alerting) alertState.name else "MONITORING",
+                color = if (alerting) faultRed
+                    else MaterialTheme.colors.onSurface.copy(.55f),
+                fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            Text(displayedValue ?: "—",
+                color = if (alerting) faultRed else MaterialTheme.colors.onSurface,
+                fontSize = 42.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+            Text(alarmLimits(configuration, channel.units, showPeak),
+                color = MaterialTheme.colors.onSurface.copy(.52f),
+                fontSize = 10.sp, textAlign = TextAlign.Center)
+        }
+    }
+}
+
+private fun alarmLimits(
+    configuration: LoggerGaugeConfiguration?,
+    units: String,
+    showPeak: Boolean
+): String {
+    if (showPeak) return "PEAK RECALL  $units"
+    if (configuration?.hasWarnings() != true) return "SET WARNING LIMITS"
+    val low = configuration.lowWarning?.formatValue()?.let { "LOW $it" }
+    val high = configuration.highWarning?.formatValue()?.let { "HIGH $it" }
+    return listOfNotNull(low, high).joinToString("   ·   ") +
+        units.takeIf { it.isNotBlank() }?.let { " $it" }.orEmpty()
+}
+
+@Composable
+private fun TileValue(
+    displayedValue: String?,
+    color: Color,
+    showPeak: Boolean,
+    channel: LoggerChannel
+) {
+    Text(displayedValue ?: "—", color = color,
+        fontSize = 28.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+    Text((if (showPeak) "PEAK  " else "") +
+        channel.units.ifBlank { if (showPeak) "" else "CURRENT" },
+        color = MaterialTheme.colors.onSurface.copy(.55f),
+        fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+}
+
+@Composable
+private fun GaugeConfigurationDialog(
+    channel: LoggerChannel,
+    existing: LoggerGaugeConfiguration?,
+    onDismiss: () -> Unit,
+    onSave: (LoggerGaugeConfiguration?) -> Unit
+) {
+    var scaleMinimum by remember(channel.parameterId, existing) {
+        mutableStateOf(existing?.scaleMinimum.toInput())
+    }
+    var scaleMaximum by remember(channel.parameterId, existing) {
+        mutableStateOf(existing?.scaleMaximum.toInput())
+    }
+    var lowWarning by remember(channel.parameterId, existing) {
+        mutableStateOf(existing?.lowWarning.toInput())
+    }
+    var highWarning by remember(channel.parameterId, existing) {
+        mutableStateOf(existing?.highWarning.toInput())
+    }
+    var hysteresis by remember(channel.parameterId, existing) {
+        mutableStateOf(existing?.hysteresis?.toInput() ?: "0")
+    }
+    val empty = scaleMinimum.isBlank() && scaleMaximum.isBlank() &&
+        lowWarning.isBlank() && highWarning.isBlank()
+    val result = runCatching {
+        if (empty) null else LoggerGaugeConfiguration(
+            scaleMinimum.optionalDouble(), scaleMaximum.optionalDouble(),
+            lowWarning.optionalDouble(), highWarning.optionalDouble(),
+            hysteresis.ifBlank { "0" }.toDouble()
+        )
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Column {
+                Text("Gauge settings", fontWeight = FontWeight.Bold)
+                Text(channel.name, color = MaterialTheme.colors.primary,
+                    fontSize = 13.sp)
+            }
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Leave a warning blank to keep it off. RomRaider2 does " +
+                    "not guess safety limits for your vehicle or setup.",
+                    color = MaterialTheme.colors.onSurface.copy(.68f),
+                    fontSize = 12.sp)
+                GaugeInputRow("CUSTOM SCALE", scaleMinimum, scaleMaximum,
+                    { scaleMinimum = it }, { scaleMaximum = it })
+                GaugeInputRow("WARNINGS", lowWarning, highWarning,
+                    { lowWarning = it }, { highWarning = it })
+                TextField(
+                    hysteresis, { hysteresis = it },
+                    Modifier.fillMaxWidth(), singleLine = true,
+                    label = { Text("Warning hysteresis  [${channel.units}]") }
+                )
+                Text("Hysteresis keeps an alert active until the value moves " +
+                    "safely back past the limit.",
+                    color = MaterialTheme.colors.onSurface.copy(.55f),
+                    fontSize = 11.sp)
+                result.exceptionOrNull()?.message?.let { message ->
+                    Text(message, color = faultRed, fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold)
+                }
+                if (existing != null) {
+                    TextButton(onClick = { onSave(null) }) {
+                        Text("Use automatic scale and no warnings")
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onSave(result.getOrNull()) },
+                enabled = result.isSuccess) { Text("Save") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
+}
+
+@Composable
+private fun GaugeInputRow(
+    label: String,
+    first: String,
+    second: String,
+    onFirst: (String) -> Unit,
+    onSecond: (String) -> Unit
+) {
+    Column {
+        Text(label, color = MaterialTheme.colors.onSurface.copy(.50f),
+            fontSize = 10.sp, fontWeight = FontWeight.Bold)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TextField(first, onFirst, Modifier.weight(1f), singleLine = true,
+                label = { Text(if (label == "WARNINGS") "Low" else "Minimum") })
+            TextField(second, onSecond, Modifier.weight(1f), singleLine = true,
+                label = { Text(if (label == "WARNINGS") "High" else "Maximum") })
+        }
+    }
+}
+
+private fun String.optionalDouble(): Double? =
+    trim().takeIf { it.isNotEmpty() }?.toDouble()
+
+private fun Double?.toInput(): String = this?.let {
+    if (it % 1.0 == 0.0) it.toLong().toString() else it.toString()
+} ?: ""
+
+@Composable
+private fun GaugeFace(progress: Float?, style: GaugeStyle) {
     Canvas(Modifier.fillMaxSize().padding(horizontal = 9.dp, vertical = 5.dp)) {
-        val radius = minOf(size.width * .38f, size.height * .62f)
-        val center = Offset(size.width / 2f, size.height * .74f)
+        val radius = minOf(size.width * .40f, size.height * .46f)
+        val center = Offset(size.width / 2f, size.height * .51f)
         val topLeft = Offset(center.x - radius, center.y - radius)
         val arcSize = Size(radius * 2f, radius * 2f)
         val start = 145f
         val sweep = 250f
-        drawArc(trackColor, start, sweep, false, topLeft, arcSize,
-            style = Stroke(width = 9f, cap = StrokeCap.Round))
+        drawCircle(style.bezelColor.copy(.40f), radius * 1.10f, center)
+        drawCircle(style.bezelColor, radius * 1.055f, center,
+            style = Stroke(width = 5f))
+        drawCircle(style.faceColor, radius * 1.01f, center)
+        drawCircle(Color.White.copy(.055f), radius * .95f, center,
+            style = Stroke(width = 2f))
+        drawArc(style.secondaryColor.copy(.28f), start, sweep, false,
+            topLeft, arcSize, style = Stroke(width = 10f,
+                cap = StrokeCap.Round))
+        drawArc(style.warningColor.copy(.76f), start + sweep * .84f,
+            sweep * .16f, false, topLeft, arcSize,
+            style = Stroke(width = 10f, cap = StrokeCap.Round))
+        repeat(style.tickCount) { index ->
+            val angle = (start + sweep * index /
+                (style.tickCount - 1f)) * PI / 180.0
+            val major = index % style.majorTickEvery == 0
+            val outer = Offset(
+                center.x + cos(angle).toFloat() * radius * .91f,
+                center.y + sin(angle).toFloat() * radius * .91f
+            )
+            val innerRadius = radius * if (major) .77f else .83f
+            val inner = Offset(
+                center.x + cos(angle).toFloat() * innerRadius,
+                center.y + sin(angle).toFloat() * innerRadius
+            )
+            drawLine(style.tickColor.copy(if (major) .92f else .52f),
+                inner, outer, strokeWidth = if (major) 2.5f else 1.25f,
+                cap = StrokeCap.Round)
+        }
         if (progress != null) {
-            drawArc(accentColor, start, sweep * progress, false,
-                topLeft, arcSize,
-                style = Stroke(width = 9f, cap = StrokeCap.Round))
+            if (style.segmented) {
+                repeat(31) { index ->
+                    val fraction = index / 30f
+                    val angle = (start + sweep * fraction) * PI / 180.0
+                    val point = Offset(
+                        center.x + cos(angle).toFloat() * radius,
+                        center.y + sin(angle).toFloat() * radius
+                    )
+                    drawCircle(
+                        if (fraction <= progress) style.primaryColor
+                        else style.secondaryColor.copy(.35f),
+                        if (index % 5 == 0) 3.6f else 2.8f,
+                        point
+                    )
+                }
+            } else if (style.glow) {
+                drawArc(style.primaryColor.copy(.12f), start,
+                    sweep * progress, false, topLeft, arcSize,
+                    style = Stroke(width = 22f, cap = StrokeCap.Round))
+                drawArc(style.primaryColor.copy(.26f), start,
+                    sweep * progress, false, topLeft, arcSize,
+                    style = Stroke(width = 14f, cap = StrokeCap.Round))
+            }
+            if (!style.segmented) {
+                drawArc(style.primaryColor, start, sweep * progress, false,
+                    topLeft, arcSize,
+                    style = Stroke(width = 8f, cap = StrokeCap.Round))
+            }
             val angle = (start + sweep * progress) * PI / 180.0
             val tip = Offset(
                 center.x + cos(angle).toFloat() * radius * .78f,
                 center.y + sin(angle).toFloat() * radius * .78f
             )
-            drawLine(accentColor, center, tip, strokeWidth = 4f,
-                cap = StrokeCap.Round)
-            drawCircle(surfaceColor, 7f, center)
-            drawCircle(accentColor, 4f, center)
+            if (style.showNeedle) {
+                drawLine(style.needleColor.copy(.28f),
+                    center + Offset(2f, 2f), tip + Offset(2f, 2f),
+                    strokeWidth = 6f, cap = StrokeCap.Round)
+                drawLine(style.needleColor, center, tip, strokeWidth = 4f,
+                    cap = StrokeCap.Round)
+            }
+            drawCircle(style.faceColor, 8f, center)
+            drawCircle(style.needleColor, 5f, center)
         }
     }
+}
+
+private data class GaugeStyle(
+    val faceColor: Color,
+    val bezelColor: Color,
+    val primaryColor: Color,
+    val secondaryColor: Color,
+    val warningColor: Color,
+    val tickColor: Color,
+    val valueColor: Color,
+    val needleColor: Color,
+    val glow: Boolean,
+    val segmented: Boolean,
+    val showNeedle: Boolean,
+    val tickCount: Int,
+    val majorTickEvery: Int
+)
+
+private fun gaugeStyle(theme: LoggerGaugeTheme): GaugeStyle = when (theme) {
+    LoggerGaugeTheme.RR2_CLASSIC -> GaugeStyle(
+        Color(0xFF151C24), Color(0xFF2D3945), brandRed,
+        Color(0xFF718397), Color(0xFFD92632), Color.White,
+        Color.White, brandRed,
+        false, false, true, 26, 5)
+    LoggerGaugeTheme.RALLY_HERITAGE -> GaugeStyle(
+        Color(0xFF101318), Color(0xFF68717A), Color(0xFFFF3447),
+        Color(0xFFE7EDF2), Color(0xFFFF3447),
+        Color(0xFFF7FAFC), Color.White,
+        Color(0xFFFF3447), true, false, true, 31, 5)
+    LoggerGaugeTheme.AMBER_GT -> GaugeStyle(
+        Color(0xFF090A0C), Color(0xFF4A3214), Color(0xFFFFA31A),
+        Color(0xFF6C4514), Color(0xFFFF4B22),
+        Color(0xFFFFD68A), Color(0xFFFFB13B),
+        Color(0xFFFFA31A), true, true, false, 16, 5)
+    LoggerGaugeTheme.CENTRAL_TACH -> GaugeStyle(
+        Color(0xFFF2EEE3), Color(0xFFB7B0A4), Color(0xFFD71920),
+        Color(0xFF252525), Color(0xFFD71920),
+        Color(0xFF171717), Color(0xFF111111),
+        Color(0xFFD71920), false, false, true, 31, 5)
+    LoggerGaugeTheme.NEON_CIRCUIT -> GaugeStyle(
+        Color(0xFF06131D), Color(0xFF43216B), Color(0xFF22E8FF),
+        Color(0xFF8A2BE2), Color(0xFFFF3CAC),
+        Color(0xFF9AF5FF), Color(0xFF53F0FF),
+        Color(0xFFFF3CAC), true, false, true, 37, 6)
+    LoggerGaugeTheme.HANDHELD -> GaugeStyle(
+        Color(0xFF111820), Color(0xFF2A475E), Color(0xFF66C0F4),
+        Color(0xFF2A475E), Color(0xFFFFB44A),
+        Color(0xFFD8EDF8), Color(0xFFECF8FF),
+        Color(0xFF66C0F4), true, false, true, 31, 5)
 }
 
 internal fun measuredProgress(current: Double?, stats: SampleStatistics?): Float? {
@@ -1127,6 +2229,78 @@ internal fun measuredProgress(current: Double?, stats: SampleStatistics?): Float
     val span = stats.maximum - stats.minimum
     return if (span == 0.0) 1f else
         ((current - stats.minimum) / span).coerceIn(0.0, 1.0).toFloat()
+}
+
+internal data class GaugeRange(
+    val minimum: Double,
+    val maximum: Double
+)
+
+internal fun gaugeProgress(current: Double?, range: GaugeRange): Float? {
+    if (current == null) return null
+    val span = range.maximum - range.minimum
+    if (span <= 0.0) return null
+    return ((current - range.minimum) / span).coerceIn(0.0, 1.0).toFloat()
+}
+
+/**
+ * Stable defaults keep a needle meaningful during a session. Unknown channels
+ * receive one padded range from their captured history rather than using the
+ * current value as an implied percentage.
+ */
+internal fun gaugeRange(
+    channel: LoggerChannel,
+    stats: SampleStatistics?
+): GaugeRange = standardGaugeRange(channel) ?: paddedRange(stats)
+
+internal fun standardGaugeRange(channel: LoggerChannel): GaugeRange? {
+    val identity = "${channel.parameterId} ${channel.name}".lowercase()
+    val units = channel.units.trim().lowercase()
+    return when {
+        identity.contains("rpm") || identity.contains("engine speed") ->
+            GaugeRange(0.0, 9000.0)
+        units.contains("lambda") || identity.contains("lambda") ->
+            GaugeRange(0.6, 1.4)
+        units.contains("afr") || identity.contains("air/fuel") ||
+            identity.contains("wideband") || identity.contains("afr") ->
+            GaugeRange(8.0, 22.0)
+        identity.contains("egt") || identity.contains("exhaust gas") ->
+            if (units.contains("c")) GaugeRange(200.0, 1000.0)
+            else GaugeRange(400.0, 1800.0)
+        identity.contains("boost") || identity.contains("manifold relative") ->
+            when {
+                units.contains("kpa") -> GaugeRange(-100.0, 200.0)
+                units == "bar" -> GaugeRange(-1.0, 2.0)
+                else -> GaugeRange(-15.0, 30.0)
+            }
+        identity.contains("oil pressure") || identity.contains("fuel pressure") ->
+            when {
+                units.contains("kpa") -> GaugeRange(0.0, 800.0)
+                units == "bar" -> GaugeRange(0.0, 10.0)
+                else -> GaugeRange(0.0, 120.0)
+            }
+        identity.contains("temperature") || identity.contains("temp") ->
+            if (units.contains("c")) GaugeRange(40.0, 140.0)
+            else GaugeRange(100.0, 280.0)
+        identity.contains("voltage") || units == "v" ->
+            GaugeRange(8.0, 18.0)
+        identity.contains("load") && units == "%" ->
+            GaugeRange(0.0, 300.0)
+        identity.contains("throttle") || identity.contains("duty") ||
+            units == "%" -> GaugeRange(0.0, 100.0)
+        identity.contains("ignition") || identity.contains("timing") ->
+            GaugeRange(-20.0, 60.0)
+        identity.contains("knock") -> GaugeRange(-12.0, 12.0)
+        else -> null
+    }
+}
+
+private fun paddedRange(stats: SampleStatistics?): GaugeRange {
+    if (stats == null) return GaugeRange(0.0, 1.0)
+    val span = stats.maximum - stats.minimum
+    val padding = if (span > 0.0) span * .12
+        else maxOf(kotlin.math.abs(stats.maximum) * .20, 1.0)
+    return GaugeRange(stats.minimum - padding, stats.maximum + padding)
 }
 
 @Composable
@@ -1260,8 +2434,10 @@ private fun WorkspaceNavigation(
                         shape = RoundedCornerShape(7.dp),
                         colors = ButtonDefaults.textButtonColors(
                             backgroundColor = if (view == active)
-                                brandRed.copy(alpha = .09f) else Color.Transparent,
-                            contentColor = if (view == active) brandRed
+                                MaterialTheme.colors.primary.copy(alpha = .09f)
+                            else Color.Transparent,
+                            contentColor = if (view == active)
+                                MaterialTheme.colors.primary
                             else MaterialTheme.colors.onSurface.copy(.68f))
                     ) {
                         Text(
@@ -1273,7 +2449,8 @@ private fun WorkspaceNavigation(
                         )
                     }
                     Box(Modifier.width(34.dp).height(3.dp).background(
-                        if (view == active) brandRed else Color.Transparent,
+                        if (view == active) MaterialTheme.colors.primary
+                        else Color.Transparent,
                         RoundedCornerShape(topStart = 3.dp, topEnd = 3.dp)
                     ))
                 }
@@ -1296,6 +2473,20 @@ internal fun channelAccessibilityLabel(channel: LoggerChannel): String {
         .filter { it.isNotBlank() }
         .joinToString(", ")
     return "$details, ${if (channel.isSelected) "selected" else "not selected"}"
+}
+
+internal fun filterChannels(
+    channels: List<LoggerChannel>,
+    kind: LoggerChannelKind,
+    filter: String
+): List<LoggerChannel> {
+    val needle = filter.trim().lowercase()
+    return channels.filter { channel ->
+        channel.kind == kind && (needle.isEmpty() ||
+            channel.name.lowercase().contains(needle) ||
+            channel.parameterId.lowercase().contains(needle) ||
+            channel.units.lowercase().contains(needle))
+    }
 }
 
 internal data class SampleStatistics(
@@ -1362,9 +2553,12 @@ internal fun sessionMetrics(
 internal fun liveValueAccessibilityLabel(
     channel: LoggerChannel,
     sample: LiveDataSample?,
-    stats: SampleStatistics?
+    stats: SampleStatistics?,
+    showPeak: Boolean = false
 ): String {
-    val current = sample?.displayValue ?: "no current value"
+    val current = if (showPeak) {
+        stats?.maximum?.formatValue()?.let { "peak $it" } ?: "no peak value"
+    } else sample?.displayValue ?: "no current value"
     val units = channel.units.takeIf { it.isNotBlank() }?.let { " $it" }.orEmpty()
     val range = if (stats == null) "no measured range" else
         "measured minimum ${stats.minimum.formatValue()} and maximum " +
@@ -1408,6 +2602,12 @@ private fun Double.formatValue(): String {
     }
 }
 
+private fun Double.formatScaleTick(): String = when {
+    this == toLong().toDouble() -> toLong().toString()
+    kotlin.math.abs(this) < 10.0 -> "%.1f".format(this)
+    else -> "%.1f".format(this).trimEnd('0').trimEnd('.')
+}
+
 private fun stateLabel(state: LoggerSessionState): String = when (state) {
     LoggerSessionState.STOPPED -> "Disconnected"
     LoggerSessionState.CONNECTING -> "Connecting"
@@ -1417,7 +2617,22 @@ private fun stateLabel(state: LoggerSessionState): String = when (state) {
     LoggerSessionState.RECORDING -> "Recording"
 }
 
-private fun workspaceColors(dark: Boolean): Colors = if (dark) {
+private fun workspaceColors(dark: Boolean, steamOs: Boolean = false): Colors =
+    if (steamOs) {
+    darkColors(
+        primary = Color(0xFF66C0F4),
+        primaryVariant = Color(0xFF2A475E),
+        secondary = Color(0xFF5BBE84),
+        background = Color(0xFF171A21),
+        surface = Color(0xFF1B2838),
+        error = Color(0xFFE85A6A),
+        onPrimary = Color(0xFF101820),
+        onSecondary = Color.White,
+        onBackground = Color(0xFFEAF4FA),
+        onSurface = Color(0xFFEAF4FA),
+        onError = Color.White
+    )
+} else if (dark) {
     darkColors(
         primary = brandRed,
         primaryVariant = graphite,
@@ -1448,6 +2663,6 @@ private fun workspaceColors(dark: Boolean): Colors = if (dark) {
 }
 
 private inline fun onUiThread(crossinline action: () -> Unit) {
-    if (SwingUtilities.isEventDispatchThread()) action()
-    else SwingUtilities.invokeLater { action() }
+    if (EventQueue.isDispatchThread()) action()
+    else EventQueue.invokeLater { action() }
 }

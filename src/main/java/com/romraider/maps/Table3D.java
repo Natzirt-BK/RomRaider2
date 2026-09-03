@@ -46,10 +46,6 @@ public class Table3D extends Table {
         return Table.TableType.TABLE_3D;
     }
 
-    public Table3DView getTableView() {
-        return (Table3DView) tableView;
-    }
-
     public Table1D getXAxis() {
         return xAxis;
     }
@@ -282,7 +278,7 @@ public class Table3D extends Table {
         yAxis.populateCompareValues(compareTable3D.getYAxis());
 
         calcCellRanges();
-        if(tableView != null) tableView.drawTable();
+        TablePresentationService.changed(this);
     }
 
     @Override
@@ -377,14 +373,11 @@ public class Table3D extends Table {
         }
 
         this.curScale = curScale;
-        if(tableView!=null) tableView.drawTable();
+        TablePresentationService.changed(this);
     }
 
     private void setHighlightXY(int x, int y) {
-        if(tableView!=null) {
-            tableView.highlightBeginX = x;
-            tableView.highlightBeginY = y;
-        }
+        TablePresentationService.selectionChanged(this, x, y);
     }
 
     public void deSelectCellAt(int x, int y) {

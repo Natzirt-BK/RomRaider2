@@ -4,11 +4,44 @@ package com.romraider.logger.api;
 import static org.junit.Assert.assertEquals;
 
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.Test;
 
 public class LoggerSessionServiceTest {
+    @Test
+    public void suppressesDuplicateCommandsWhileOneIsPending()
+            throws Exception {
+        LoggerLiveDataBus bus = LoggerLiveDataBus.getInstance();
+        bus.stopped();
+        AtomicInteger connects = new AtomicInteger();
+        CountDownLatch entered = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        LoggerSessionService service = new LoggerSessionService(bus,
+                () -> {
+                    connects.incrementAndGet();
+                    entered.countDown();
+                    try {
+                        release.await(2, TimeUnit.SECONDS);
+                    } catch (InterruptedException interrupted) {
+                        Thread.currentThread().interrupt();
+                    }
+                }, () -> { }, () -> { }, () -> { }, failure -> { });
+        try {
+            service.connect();
+            assertEquals(true, entered.await(2, TimeUnit.SECONDS));
+            service.connect();
+            release.countDown();
+            Thread.sleep(50L);
+            assertEquals(1, connects.get());
+        } finally {
+            release.countDown();
+            service.close();
+            bus.stopped();
+        }
+    }
+
     @Test
     public void commandsFollowTheObservedSessionState() throws Exception {
         LoggerLiveDataBus bus = LoggerLiveDataBus.getInstance();

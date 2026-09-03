@@ -18,8 +18,13 @@ builds, an update may require uninstalling an older preview first.
   logs.
 - Import a RomRaider v370 Logger definition and an existing Logger profile.
 - Run the clearly marked simulated Logger and save its CSV.
+- Review the two-column mobile gauge dashboard, switch between its five styles,
+  reset measured peaks, and use the simulated gauge demo without an ECU.
 - Check whether Android detects an attached OpenPort 2.0 and grants USB
   permission.
+- Attach an OpenPort 2.0 while RomRaider2 is closed and confirm Android offers
+  to open the preview. This prepares the adapter only; it does not query the ECU
+  or start logging.
 
 The application contains no ECU flash or memory-write command. ROM editing only
 changes an in-memory document and saves a new file through Android's document
@@ -37,9 +42,9 @@ completed RC5 vehicle qualification. It is for careful, parked testing only:
 - stop if the adapter, phone, or vehicle behaves unexpectedly;
 - do not rely on the preview for safety-critical monitoring.
 
-CAN, Mitsubishi MUT-II, transmission sessions, calculated parameters, serial
-external sensors, ECU writing, and flashing are not available in this Android
-preview.
+CAN, Mitsubishi Lancer Evolution MUT-II, transmission sessions, calculated
+parameters, serial external sensors, ECU writing, and flashing are not
+available in this Android preview.
 
 ## Reporting useful results
 

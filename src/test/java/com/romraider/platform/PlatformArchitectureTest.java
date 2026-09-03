@@ -59,6 +59,30 @@ public class PlatformArchitectureTest {
     }
 
     @Test
+    public void retainsQualifiedRamTuneDiscoveryMetadataForCurrentSession() {
+        RamTuneRuntimeMetadata metadata = new RamTuneRuntimeMetadata(
+                "2.3 build 100", 0x123456, 128);
+
+        context.setDimeModRuntime(DimeModState.ACTIVE, true, metadata);
+
+        assertTrue(context.isRamTuneRuntimeAvailable());
+        assertTrue(context.hasQualifiedRamTuneMetadata());
+        assertEquals(0x123456L, context.getRamTuneRuntimeMetadata().get()
+                .getSignatureAddress());
+        context.setDimeModState(DimeModState.UNKNOWN);
+        assertFalse(context.getRamTuneRuntimeMetadata().isPresent());
+    }
+
+    @Test
+    public void doesNotQualifyOutOfRangeRamTuneMetadata() {
+        context.setDimeModRuntime(DimeModState.ACTIVE, true,
+                new RamTuneRuntimeMetadata("test", 0x1000000L, 12));
+
+        assertTrue(context.isRamTuneRuntimeAvailable());
+        assertFalse(context.hasQualifiedRamTuneMetadata());
+    }
+
+    @Test
     public void evoExposesOnlyEvoModulesAndMut2Capability() {
         context.setPlatform(VehiclePlatform.EVO_8_9);
         PlatformCapabilities evo = PlatformRegistry.get(context.getPlatform());
@@ -91,6 +115,75 @@ public class PlatformArchitectureTest {
         assertTrue(features.get(DimeModFeature.FLEX_FUEL));
         assertTrue(features.get(DimeModFeature.EXTERNAL_INPUTS));
         assertFalse(features.get(DimeModFeature.VALET_MODE));
+    }
+
+    @Test
+    public void detectsCarBerryAndMerpModFromExplicitRomIdentity() {
+        Rom carBerry = new Rom(new RomID());
+        carBerry.getRomID().setXmlid("CarBerry");
+        Rom merpMod = new Rom(new RomID());
+        merpMod.getRomID().setInternalIdString(
+                "A2ZJE11J.MeRpMoD.Switch.Testing.v00.60");
+
+        assertEquals(RomModificationEvidence.ROM_IDENTITY,
+                RomModificationDetector.detect(carBerry).get(
+                        RomModification.CARBERRY));
+        assertEquals(RomModificationEvidence.ROM_IDENTITY,
+                RomModificationDetector.detect(merpMod).get(
+                        RomModification.MERP_MOD));
+    }
+
+    @Test
+    public void detectsOnlyExplicitlyBrandedModificationTables() {
+        Rom rom = new Rom(new RomID());
+        Table1D carBerry = new Table1D();
+        carBerry.setName("Launch Control - Enable");
+        carBerry.setCategory("CarBerry - Launch Control");
+        rom.addTableByName(carBerry);
+        Table1D generic = new Table1D();
+        generic.setName("Flex Fuel Blend");
+        generic.setCategory("Custom Features");
+        rom.addTableByName(generic);
+
+        java.util.Map<RomModification, RomModificationEvidence> detected =
+                RomModificationDetector.detect(rom);
+
+        assertEquals(RomModificationEvidence.BRANDED_TABLES,
+                detected.get(RomModification.CARBERRY));
+        assertEquals(RomModificationEvidence.NOT_DETECTED,
+                detected.get(RomModification.MERP_MOD));
+        assertEquals(RomModificationEvidence.NOT_DETECTED,
+                detected.get(RomModification.DIME_MOD));
+        assertFalse(DimeModFeatureDetector.detect(rom).get(
+                DimeModFeature.FLEX_FUEL));
+    }
+
+    @Test
+    public void detectsCarBerryAndMerpModFeaturesOnlyFromTheirOwnTables() {
+        Rom rom = new Rom(new RomID());
+        Table1D carBerry = new Table1D();
+        carBerry.setName("Flex Fuel - Enable");
+        carBerry.setCategory("CarBerry - Flex Fuel");
+        rom.addTableByName(carBerry);
+        Table1D merp = new Table1D();
+        merp.setName("MerpMod SD Mode Switch");
+        merp.setCategory("MerpMod - Speed Density");
+        rom.addTableByName(merp);
+        Table1D generic = new Table1D();
+        generic.setName("Launch Control");
+        generic.setCategory("Miscellaneous");
+        rom.addTableByName(generic);
+
+        java.util.Map<RomModificationFeature, Boolean> features =
+                RomModificationFeatureDetector.detect(rom);
+
+        assertTrue(features.get(RomModificationFeature.CARBERRY_FLEX_FUEL));
+        assertFalse(features.get(
+                RomModificationFeature.CARBERRY_LAUNCH_CONTROL));
+        assertTrue(features.get(
+                RomModificationFeature.MERPMOD_SPEED_DENSITY));
+        assertFalse(features.get(
+                RomModificationFeature.MERPMOD_LAUNCH_CONTROL));
     }
 
     @Test(expected = IllegalArgumentException.class)

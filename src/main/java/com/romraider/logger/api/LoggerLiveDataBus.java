@@ -20,7 +20,7 @@ import com.romraider.logger.ecu.definition.LoggerData;
 /** Thread-safe bridge between the existing logger backend and integrated views. */
 public final class LoggerLiveDataBus implements LoggerStatusListener {
     private static final Logger LOGGER = getLogger(LoggerLiveDataBus.class);
-    private static final int MAX_HISTORY_SAMPLES = 240;
+    private static final int MAX_HISTORY_SAMPLES = 2_000;
     private static final LoggerLiveDataBus INSTANCE = new LoggerLiveDataBus();
     private final CopyOnWriteArrayList<LoggerLiveDataListener> listeners =
             new CopyOnWriteArrayList<LoggerLiveDataListener>();

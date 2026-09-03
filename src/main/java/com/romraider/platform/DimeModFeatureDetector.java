@@ -17,8 +17,10 @@ public final class DimeModFeatureDetector {
     public static Map<DimeModFeature, Boolean> detect(Rom rom) {
         EnumMap<DimeModFeature, Boolean> detected =
                 new EnumMap<DimeModFeature, Boolean>(DimeModFeature.class);
+        boolean dimeModIdentified = RomModificationDetector.detect(rom)
+                .get(RomModification.DIME_MOD).isDetected();
         StringBuilder searchable = new StringBuilder();
-        if (rom != null) {
+        if (rom != null && dimeModIdentified) {
             for (Table table : rom.getTables()) {
                 append(searchable, table.getName());
                 append(searchable, table.getCategory());

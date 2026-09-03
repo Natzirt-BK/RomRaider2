@@ -2,6 +2,7 @@
 package com.romraider.editor.ecu;
 
 import java.awt.BorderLayout;
+import java.awt.Component;
 import java.awt.Font;
 import java.util.Map;
 
@@ -19,6 +20,7 @@ import com.romraider.platform.DimeModState;
 import com.romraider.platform.PlatformContext;
 import com.romraider.platform.VehiclePlatform;
 import com.romraider.ui.ThemeToken;
+import com.romraider.ui.ModernTableStyle;
 import com.romraider.ui.UiThemeService;
 
 /** Truthful definition/runtime capability view for Subaru DimeMod work. */
@@ -62,12 +64,12 @@ public final class DimeModFeaturePanel extends JPanel {
         }
         JTable table = new JTable(model);
         table.setName("DIMEMOD FEATURES");
-        table.setFillsViewportHeight(true);
+        ModernTableStyle.apply(table);
         table.setRowSelectionAllowed(false);
-        table.setShowVerticalLines(false);
-        table.getTableHeader().setReorderingAllowed(false);
         table.getColumnModel().getColumn(0).setPreferredWidth(170);
         table.getColumnModel().getColumn(1).setPreferredWidth(250);
+        table.getColumnModel().getColumn(1).setCellRenderer(
+                new AvailabilityRenderer());
         add(new JScrollPane(table), BorderLayout.CENTER);
 
         JLabel safety = new JLabel("RAM writes remain disabled; mapped means "
@@ -77,6 +79,28 @@ public final class DimeModFeaturePanel extends JPanel {
                 ThemeToken.SECONDARY_TEXT));
         safety.setToolTipText(safety.getText());
         add(safety, BorderLayout.SOUTH);
+    }
+
+    private static final class AvailabilityRenderer
+            extends ModernTableStyle.ZebraRenderer {
+        private static final long serialVersionUID = 1L;
+
+        @Override
+        public Component getTableCellRendererComponent(JTable table,
+                Object value, boolean selected, boolean focus, int row,
+                int column) {
+            JLabel label = (JLabel) super.getTableCellRendererComponent(table,
+                    value, selected, focus, row, column);
+            if (!selected) {
+                String text = value == null ? "" : value.toString();
+                ThemeToken token = text.startsWith("Mapped in")
+                        ? ThemeToken.SUCCESS
+                        : text.startsWith("Mapped ") ? ThemeToken.WARNING
+                        : ThemeToken.SECONDARY_TEXT;
+                label.setForeground(UiThemeService.getInstance().color(token));
+            }
+            return label;
+        }
     }
 
     static String status(DimeModFeature feature, boolean detected,

@@ -6,13 +6,20 @@
 package com.romraider.ui;
 
 import java.awt.Color;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 import javax.swing.BorderFactory;
 import javax.swing.UIManager;
 import javax.swing.plaf.ColorUIResource;
 
 public final class UiThemeService {
+    public interface Listener {
+        void themeChanged(ThemeMode mode, ThemePalette palette);
+    }
+
     private static final UiThemeService INSTANCE = new UiThemeService();
+    private final CopyOnWriteArrayList<Listener> listeners =
+            new CopyOnWriteArrayList<Listener>();
     private ThemeMode currentMode = ThemeMode.LIGHT;
     private ThemePalette currentPalette = ThemePalettes.light();
 
@@ -27,8 +34,11 @@ public final class UiThemeService {
         if (mode == null) {
             throw new IllegalArgumentException("Theme mode is required");
         }
-        currentMode = mode;
-        currentPalette = ThemePalettes.forMode(mode);
+        currentMode = RuntimeUiProfile.theme(mode);
+        currentPalette = RuntimeUiProfile.isSteamOs()
+                ? ThemePalettes.handheld()
+                : ThemePalettes.forMode(currentMode);
+        ApplicationThemeService.getInstance().apply(currentMode);
 
         Color background = color(ThemeToken.BACKGROUND);
         Color surface = color(ThemeToken.SURFACE);
@@ -53,7 +63,9 @@ public final class UiThemeService {
         put(raised, "Button.background", "ToggleButton.background",
                 "TabbedPane.background", "TableHeader.background",
                 "TabbedPane.unselectedBackground", "ScrollBar.track",
-                "ProgressBar.background", "control");
+                "ProgressBar.background", "SplitPane.background",
+                "SplitPane.shadow", "SplitPane.darkShadow",
+                "SplitPaneDivider.draggingColor", "control");
         put(raised, "ComboBox.buttonBackground");
         put(surface, "TabbedPane.contentAreaColor");
         put(text, "Label.foreground", "Button.foreground",
@@ -105,6 +117,7 @@ public final class UiThemeService {
         put(background.brighter(), "TabbedPane.darkShadow",
                 "TabbedPane.shadow", "ComboBox.buttonShadow");
         put(raised.brighter(), "TabbedPane.light", "TabbedPane.highlight");
+        put(raised.brighter(), "SplitPane.highlight");
         put(raised.brighter(), "ComboBox.buttonHighlight");
         put(raised, "controlShadow", "Separator.foreground", "Tree.hash");
         put(background.darker(), "controlDkShadow",
@@ -132,16 +145,35 @@ public final class UiThemeService {
         UIManager.put("RadioButtonMenuItemUI",
                 "javax.swing.plaf.basic.BasicRadioButtonMenuItemUI");
         UIManager.put("ToolBarUI", "javax.swing.plaf.basic.BasicToolBarUI");
-        UIManager.put("ButtonUI", "javax.swing.plaf.basic.BasicButtonUI");
-        UIManager.put("ToggleButtonUI", "javax.swing.plaf.basic.BasicToggleButtonUI");
+        UIManager.put("ButtonUI",
+                "com.romraider.ui.swing.RoundedButtonUI");
+        UIManager.put("ToggleButtonUI",
+                "com.romraider.ui.swing.RoundedButtonUI");
         UIManager.put("CheckBoxUI", "javax.swing.plaf.basic.BasicCheckBoxUI");
         UIManager.put("RadioButtonUI", "javax.swing.plaf.basic.BasicRadioButtonUI");
-        UIManager.put("TabbedPaneUI", "javax.swing.plaf.basic.BasicTabbedPaneUI");
+        UIManager.put("TabbedPaneUI",
+                "com.romraider.ui.swing.ModernTabbedPaneUI");
+        UIManager.put("ScrollBarUI",
+                "com.romraider.ui.swing.ModernScrollBarUI");
         UIManager.put("ComboBoxUI", "javax.swing.plaf.basic.BasicComboBoxUI");
         UIManager.put("TableUI", "javax.swing.plaf.basic.BasicTableUI");
         UIManager.put("TableHeaderUI", "javax.swing.plaf.basic.BasicTableHeaderUI");
         UIManager.put("ListUI", "javax.swing.plaf.basic.BasicListUI");
         UIManager.put("TreeUI", "javax.swing.plaf.basic.BasicTreeUI");
+        UIManager.put("SplitPaneUI",
+                "javax.swing.plaf.basic.BasicSplitPaneUI");
+
+        for (Listener listener : listeners) {
+            listener.themeChanged(currentMode, currentPalette);
+        }
+    }
+
+    public void addListener(Listener listener) {
+        if (listener != null) listeners.addIfAbsent(listener);
+    }
+
+    public void removeListener(Listener listener) {
+        listeners.remove(listener);
     }
 
     public synchronized ThemeMode getCurrentMode() {

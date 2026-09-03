@@ -146,8 +146,8 @@ public class RomCellRenderer implements TreeCellRenderer {
 
         Component returnValue = null;
 
-        if (value != null && value instanceof Rom) {
-            Rom rom = ((Rom) value);
+        if (value instanceof SwingRomTreeNode) {
+            Rom rom = ((SwingRomTreeNode) value).getRom();
             Color background = color(selected ? "Tree.selectionBackground"
                     : "Tree.background", tree.getBackground());
             Color foreground = color(selected ? "Tree.selectionForeground"

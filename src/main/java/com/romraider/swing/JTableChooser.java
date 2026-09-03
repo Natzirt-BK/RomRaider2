@@ -66,12 +66,10 @@ public class JTableChooser extends JOptionPane implements MouseListener {
 
         for (int i = 0; i < roms.size(); i++) {
             final Rom rom = roms.get(i);
-            rom.getTableNodes().values();
             final DefaultMutableTreeNode romNode = new DefaultMutableTreeNode(rom.getFileName());
             rootNode.add(romNode);
 
-            for (TableTreeNode tableTreeNode : rom.getTableNodes().values()) {
-                final Table table = tableTreeNode.getTable();
+            for (Table table : rom.getTableCatalog()) {
                 // use the length of the table name to set the width of the displayTree
                 // so the entire name can be read without being cut off on the right
                 if (table.getName().length() > nameLength) {
@@ -122,7 +120,8 @@ public class JTableChooser extends JOptionPane implements MouseListener {
             }
         });
 
-        int result = showOptionDialog(SwingUtilities.windowForComponent(targetTable.getTableView()),
+        int result = showOptionDialog(SwingUtilities.windowForComponent(
+                        SwingTableViewRegistry.find(targetTable)),
                 displayPanel,
                 rb.getString("SELECT"), JOptionPane.DEFAULT_OPTION,
                 JOptionPane.PLAIN_MESSAGE, null, values, values[0]);

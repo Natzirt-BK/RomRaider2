@@ -19,11 +19,10 @@
 
 package com.romraider.logger.external.core;
 
-import com.romraider.logger.ecu.EcuLogger;
-import javax.swing.Action;
 import java.util.List;
 import java.util.Properties;
 
+/** Toolkit-neutral external sensor source used by every Logger shell. */
 public interface ExternalDataSource {
     String getId();
 
@@ -32,8 +31,6 @@ public interface ExternalDataSource {
     String getVersion();
 
     List<? extends ExternalDataItem> getDataItems();
-
-    Action getMenuAction(EcuLogger logger);
 
     void setPort(String port);
 

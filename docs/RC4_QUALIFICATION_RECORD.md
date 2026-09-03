@@ -26,11 +26,22 @@ same candidate.
   `FAIL`, or `NOT RUN`
 - First-run definition prompt: `PASS`, `FAIL`, or `NOT RUN`
 - Editor load/edit/save/reopen: `PASS`, `FAIL`, or `NOT RUN`
+- New Grid direct edit, fine/coarse adjustment, restore, and Classic Grid
+  round trip: `PASS`, `FAIL`, or `NOT RUN`
+- New Grid arrow keys, Ctrl+C/Ctrl+V, Ctrl+Z/Ctrl+Y, and wide/narrow scrolling:
+  `PASS`, `FAIL`, or `NOT RUN`
+- New Grid Shift+arrow/Shift+click range selection, Ctrl+A, block copy/paste,
+  rejected oversized block, and one-step block undo: `PASS`, `FAIL`, or
+  `NOT RUN`
+- DimeMod, CarBerry, and MerpMod definition-evidence view: `PASS`, `FAIL`, or
+  `NOT RUN`
 - Logger Overview/Data/Graph/Dashboard/Analysis: `PASS`, `FAIL`, or `NOT RUN`
 - Logger Light/Dark and normal/narrow layouts: `PASS`, `FAIL`, or `NOT RUN`
 - Recording controls and offline log analysis: `PASS`, `FAIL`, or `NOT RUN`
 - RC4 version shown in startup log and About screens: `PASS`, `FAIL`, or
   `NOT RUN`
+- SteamOS welcome, first-run prompt, and 1280x800 handheld shell (SteamOS
+  candidate only): `PASS`, `FAIL`, or `NOT RUN`
 
 ## Findings
 

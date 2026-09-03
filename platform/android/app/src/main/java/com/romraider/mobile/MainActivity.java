@@ -8,6 +8,7 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.graphics.Color;
 import android.graphics.Typeface;
@@ -25,10 +26,12 @@ import android.text.Editable;
 import android.text.InputType;
 import android.text.TextWatcher;
 import android.view.Gravity;
+import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.GridLayout;
 import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -56,12 +59,15 @@ import com.romraider.portable.logger.PortableLoggerQueryPlan;
 import com.romraider.portable.logger.PortableLoggerValue;
 
 import java.io.InputStream;
+import java.io.File;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
+import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -70,6 +76,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /** Early portable client: offline editing and log review, with no ECU writes. */
 public final class MainActivity extends Activity {
@@ -91,6 +98,8 @@ public final class MainActivity extends Activity {
     private static final int BORDER = Color.rgb(52, 67, 80);
     private static final int ACCENT = Color.rgb(217, 38, 50);
     private static final int POSITIVE = Color.rgb(36, 120, 75);
+    private static final String PREF_GAUGE_THEME = "logger_gauge_theme";
+    private static final int MOBILE_GAUGE_LIMIT = 8;
 
     private LinearLayout content;
     private Button loggerTab;
@@ -118,8 +127,18 @@ public final class MainActivity extends Activity {
     private TextView usbStatusView;
     private TextView liveLoggerView;
     private Button liveLoggerButton;
+    private GridLayout loggerGaugeGrid;
+    private TextView loggerGaugeEmpty;
+    private final Map<String, MobileGaugeView> loggerGaugeViews =
+            new LinkedHashMap<>();
+    private final Map<String, MobileGaugeSnapshot> loggerGaugeSnapshots =
+            new LinkedHashMap<>();
+    private final Map<MobileGaugeTheme, Button> loggerGaugeThemeButtons =
+            new LinkedHashMap<>();
+    private MobileGaugeTheme loggerGaugeTheme = MobileGaugeTheme.RR2_CLASSIC;
     private final Handler previewHandler = new Handler(Looper.getMainLooper());
     private final ExecutorService workerExecutor = Executors.newSingleThreadExecutor();
+    private final AtomicInteger recoveryGeneration = new AtomicInteger();
     private volatile OpenPortUsbTransport openPort;
     private volatile ReadOnlyLoggerSession liveLogger;
     private volatile PortableLogSession liveLog;
@@ -192,6 +211,15 @@ public final class MainActivity extends Activity {
                 RECEIVER_NOT_EXPORTED);
         showWorkspace();
         showLogger();
+        restoreUnsavedWorkspace();
+        previewHandler.post(() -> prepareAttachedOpenPort(getIntent()));
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        prepareAttachedOpenPort(intent);
     }
 
     @Override
@@ -216,6 +244,7 @@ public final class MainActivity extends Activity {
     @Override
     protected void onStop() {
         stopLiveLogger("Live logging stopped when RomRaider2 left the foreground.");
+        scheduleWorkspaceRecovery();
         super.onStop();
     }
 
@@ -242,7 +271,7 @@ public final class MainActivity extends Activity {
                 + BuildConfig.VERSION_NAME.toUpperCase(Locale.ROOT), 10, MUTED));
         brand.addView(brandText, new LinearLayout.LayoutParams(
                 0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        TextView safety = text("READ ONLY", 10, Color.rgb(101, 211, 151));
+        TextView safety = text("ECU READ ONLY", 10, Color.rgb(101, 211, 151));
         safety.setTypeface(Typeface.DEFAULT_BOLD);
         safety.setPadding(dp(9), dp(6), dp(9), dp(6));
         safety.setBackground(rounded(Color.rgb(18, 57, 42),
@@ -284,6 +313,11 @@ public final class MainActivity extends Activity {
         usbStatusView = null;
         liveLoggerView = null;
         liveLoggerButton = null;
+        loggerGaugeGrid = null;
+        loggerGaugeEmpty = null;
+        loggerGaugeViews.clear();
+        loggerGaugeSnapshots.clear();
+        loggerGaugeThemeButtons.clear();
         selectTab(loggerTab, editorTab);
         content.removeAllViews();
 
@@ -292,6 +326,8 @@ public final class MainActivity extends Activity {
         content.addView(heading);
         content.addView(text("Review logs, prepare a session, and verify the "
                 + "OpenPort from one workspace.", 13, MUTED), matchWrap(dp(14)));
+
+        content.addView(loggerDashboardCard(), cardParams(dp(10)));
 
         LinearLayout reviewCard = sectionCard("LOG REVIEW",
                 "Open a RomRaider or RomRaider2 CSV and review the latest "
@@ -446,15 +482,41 @@ public final class MainActivity extends Activity {
             return;
         }
         if (!manager.hasPermission(device)) {
-            usbState = "Waiting for OpenPort USB permission.";
-            refreshUsbStatus();
-            PendingIntent permission = PendingIntent.getBroadcast(this, 0,
-                    new Intent(ACTION_USB_PERMISSION).setPackage(getPackageName()),
-                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-            manager.requestPermission(device, permission);
+            requestOpenPortPermission(manager, device);
             return;
         }
         openOpenPort(device);
+    }
+
+    private void prepareAttachedOpenPort(Intent intent) {
+        if (intent == null || !UsbManager.ACTION_USB_DEVICE_ATTACHED.equals(
+                intent.getAction())) return;
+        UsbDevice device = Build.VERSION.SDK_INT >= 33
+                ? intent.getParcelableExtra(UsbManager.EXTRA_DEVICE,
+                        UsbDevice.class)
+                : intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
+        if (!OpenPortUsbTransport.isOpenPort(device)) return;
+        if (!loggerVisible) showLogger();
+        UsbManager manager = (UsbManager) getSystemService(USB_SERVICE);
+        if (manager == null) return;
+        if (manager.hasPermission(device)) {
+            usbState = "OpenPort attached. Preparing the adapter without querying the ECU...";
+            refreshUsbStatus();
+            openOpenPort(device);
+        } else {
+            requestOpenPortPermission(manager, device);
+        }
+    }
+
+    private void requestOpenPortPermission(UsbManager manager,
+            UsbDevice device) {
+        usbState = "OpenPort attached. Waiting for USB permission; the ECU "
+                + "will not be queried.";
+        refreshUsbStatus();
+        PendingIntent permission = PendingIntent.getBroadcast(this, 0,
+                new Intent(ACTION_USB_PERMISSION).setPackage(getPackageName()),
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        manager.requestPermission(device, permission);
     }
 
     private void openOpenPort(UsbDevice device) {
@@ -657,58 +719,91 @@ public final class MainActivity extends Activity {
         super.onActivityResult(requestCode, resultCode, data);
         if (resultCode != RESULT_OK || data == null || data.getData() == null) return;
         Uri uri = data.getData();
-        try {
-            if (requestCode == OPEN_ROM) {
+        if (requestCode == OPEN_ROM) {
+            String name = displayName(uri);
+            workerExecutor.execute(() -> {
                 try (InputStream input = getContentResolver().openInputStream(uri)) {
-                    rom = PortableRomDocument.read(displayName(uri), input);
+                    PortableRomDocument opened = PortableRomDocument.read(name, input);
+                    runOnUiThread(() -> {
+                        rom = opened;
+                        ecuDefinition = null;
+                        ecuDefinitionName = "";
+                        selectedTable = null;
+                        ecuDefinitionState = "ROM opened. Load a matching "
+                                + "RomRaider ECU definition.";
+                        showEditor();
+                        scheduleWorkspaceRecovery();
+                    });
+                } catch (Exception ex) {
+                    fileFailure(ex, "The ROM could not be opened.");
                 }
-                ecuDefinition = null;
-                ecuDefinitionName = "";
-                selectedTable = null;
-                ecuDefinitionState = "ROM opened. Load a matching RomRaider ECU definition.";
-                showEditor();
-            } else if (requestCode == SAVE_ROM && rom != null) {
-                try (OutputStream output = getContentResolver().openOutputStream(uri, "w")) {
-                    rom.write(output);
+            });
+        } else if (requestCode == SAVE_ROM && rom != null) {
+            PortableRomDocument saving = rom;
+            byte[] savedBytes = saving.snapshot();
+            workerExecutor.execute(() -> {
+                try (OutputStream output = getContentResolver()
+                        .openOutputStream(uri, "w")) {
+                    output.write(savedBytes);
+                    boolean clean = saving.markSavedIfCurrent(savedBytes);
+                    runOnUiThread(() -> {
+                        if (rom == saving) refreshRom();
+                        notice(clean ? "Saved a separate ROM copy."
+                                : "ROM copy saved; newer edits remain unsaved.");
+                        scheduleWorkspaceRecovery();
+                    });
+                } catch (Exception ex) {
+                    fileFailure(ex, "The ROM copy could not be saved.");
                 }
-                rom.markSaved();
-                refreshRom();
-                notice("Saved a separate ROM copy.");
-            } else if (requestCode == OPEN_LOG) {
-                PortableLogSession session;
+            });
+        } else if (requestCode == OPEN_LOG) {
+            String name = displayName(uri);
+            workerExecutor.execute(() -> {
                 try (InputStream input = getContentResolver().openInputStream(uri);
-                     InputStreamReader reader = new InputStreamReader(input, StandardCharsets.UTF_8)) {
-                    session = PortableLogCsvReader.read(reader);
+                     InputStreamReader reader = new InputStreamReader(input,
+                             StandardCharsets.UTF_8)) {
+                    PortableLogSession opened = PortableLogCsvReader.read(reader);
+                    runOnUiThread(() -> {
+                        showLogger();
+                        showLogSummary(name, opened);
+                    });
+                } catch (Exception ex) {
+                    fileFailure(ex, "The log could not be opened.");
                 }
-                showLogger();
-                showLogSummary(displayName(uri), session);
-            } else if (requestCode == OPEN_LOGGER_DEFINITION) {
-                loadLoggerDefinition(uri, displayName(uri));
-            } else if (requestCode == OPEN_LOGGER_PROFILE) {
-                loadLoggerProfile(uri, displayName(uri));
-            } else if (requestCode == OPEN_ECU_DEFINITION) {
-                loadEcuDefinition(uri, displayName(uri));
-            } else if (requestCode == SAVE_PREVIEW_LOG
-                    && previewSession != null) {
-                try (OutputStream output = getContentResolver()
-                             .openOutputStream(uri, "w");
-                     OutputStreamWriter writer = new OutputStreamWriter(
-                             output, StandardCharsets.UTF_8)) {
-                    previewSession.writeLongFormCsv(writer);
-                }
-                notice("Saved the offline preview log.");
-            } else if (requestCode == SAVE_LIVE_LOG && liveLog != null) {
-                try (OutputStream output = getContentResolver()
-                             .openOutputStream(uri, "w");
-                     OutputStreamWriter writer = new OutputStreamWriter(
-                             output, StandardCharsets.UTF_8)) {
-                    liveLog.writeLongFormCsv(writer);
-                }
-                notice("Saved the read-only live log.");
-            }
-        } catch (Exception ex) {
-            notice(ex.getMessage() == null ? "The file could not be opened." : ex.getMessage());
+            });
+        } else if (requestCode == OPEN_LOGGER_DEFINITION) {
+            loadLoggerDefinition(uri, displayName(uri));
+        } else if (requestCode == OPEN_LOGGER_PROFILE) {
+            loadLoggerProfile(uri, displayName(uri));
+        } else if (requestCode == OPEN_ECU_DEFINITION) {
+            loadEcuDefinition(uri, displayName(uri));
+        } else if (requestCode == SAVE_PREVIEW_LOG
+                && previewSession != null) {
+            saveLogAsync(uri, previewSession, "Saved the offline preview log.");
+        } else if (requestCode == SAVE_LIVE_LOG && liveLog != null) {
+            saveLogAsync(uri, liveLog, "Saved the read-only live log.");
         }
+    }
+
+    private void saveLogAsync(Uri uri, PortableLogSession session,
+            String successMessage) {
+        workerExecutor.execute(() -> {
+            try (OutputStream output = getContentResolver()
+                         .openOutputStream(uri, "w");
+                 OutputStreamWriter writer = new OutputStreamWriter(
+                         output, StandardCharsets.UTF_8)) {
+                session.writeLongFormCsv(writer);
+                runOnUiThread(() -> notice(successMessage));
+            } catch (Exception ex) {
+                fileFailure(ex, "The log could not be saved.");
+            }
+        });
+    }
+
+    private void fileFailure(Exception failure, String fallback) {
+        String message = failure.getMessage() == null
+                ? fallback : failure.getMessage();
+        runOnUiThread(() -> notice(message));
     }
 
     private void loadEcuDefinition(Uri uri, String name) {
@@ -909,6 +1004,7 @@ public final class MainActivity extends Activity {
             table.replaceValue(rom, row, column, value);
             refreshRom();
             renderSelectedTable();
+            scheduleWorkspaceRecovery();
             notice("Table value applied to the working copy.");
         } catch (RuntimeException ex) {
             notice(ex.getMessage() == null ? "That table value is not valid."
@@ -919,6 +1015,8 @@ public final class MainActivity extends Activity {
     private void loadLoggerDefinition(Uri uri, String name) {
         stopLoggerPreview(null);
         stopLiveLogger(null);
+        loggerDefinition = null;
+        loggerDefinitionName = "";
         loggerSetupState = "Reading logger definition...";
         refreshLoggerSetupStatus();
         workerExecutor.execute(() -> {
@@ -939,6 +1037,8 @@ public final class MainActivity extends Activity {
     private void loadLoggerProfile(Uri uri, String name) {
         stopLoggerPreview(null);
         stopLiveLogger(null);
+        loggerProfile = null;
+        loggerProfileName = "";
         loggerSetupState = "Reading logger profile...";
         refreshLoggerSetupStatus();
         workerExecutor.execute(() -> {
@@ -1048,7 +1148,15 @@ public final class MainActivity extends Activity {
             return;
         }
 
+        PortableLogSession previousLog = liveLog;
         liveLog = null;
+        if (previousLog != null) {
+            try {
+                previousLog.discard();
+            } catch (Exception ignored) {
+                // The cache directory will remove abandoned preview files.
+            }
+        }
         if (liveLoggerButton != null) {
             liveLoggerButton.setText(R.string.logger_live_stop);
         }
@@ -1056,8 +1164,20 @@ public final class MainActivity extends Activity {
             liveLoggerView.setText("READ-ONLY LOGGER\nOpening SSM K-Line and identifying the ECU...");
         }
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        final PortableLogSession recording;
+        try {
+            recording = PortableLogSession.streaming(new File(getCacheDir(),
+                    "romraider2-live-log.csv.part"), 10_000);
+        } catch (Exception failure) {
+            notice(failure.getMessage() == null
+                    ? "Live-log storage could not be prepared."
+                    : failure.getMessage());
+            getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+            return;
+        }
         ReadOnlyLoggerSession session = new ReadOnlyLoggerSession(transport,
-                definition, profile, new ReadOnlyLoggerSession.Listener() {
+                definition, profile, recording,
+                new ReadOnlyLoggerSession.Listener() {
                     @Override
                     public void onIdentified(String ecuId, int ready,
                             int unavailable) {
@@ -1079,6 +1199,7 @@ public final class MainActivity extends Activity {
                             if (liveLoggerView != null) {
                                 liveLoggerView.setText(display);
                             }
+                            updateLoggerGauges(values);
                         });
                     }
 
@@ -1177,6 +1298,210 @@ public final class MainActivity extends Activity {
                     .append(value.getSelection().getConversion().getUnits());
         }
         loggerPreviewView.setText(summary.toString());
+        updateLoggerGauges(values);
+    }
+
+    private LinearLayout loggerDashboardCard() {
+        LinearLayout card = sectionCard("MOBILE DASHBOARD",
+                "Glanceable fixed-scale gauges for simulated and read-only "
+                        + "live data. Theme choice is saved on this device.");
+        SharedPreferences preferences = getPreferences(MODE_PRIVATE);
+        loggerGaugeTheme = MobileGaugeTheme.fromName(preferences.getString(
+                PREF_GAUGE_THEME, MobileGaugeTheme.RR2_CLASSIC.name()));
+
+        HorizontalScrollView themeScroll = new HorizontalScrollView(this);
+        themeScroll.setHorizontalScrollBarEnabled(false);
+        LinearLayout themes = new LinearLayout(this);
+        themes.setOrientation(LinearLayout.HORIZONTAL);
+        for (MobileGaugeTheme theme : MobileGaugeTheme.values()) {
+            Button choice = button(theme.displayName);
+            choice.setMinWidth(dp(126));
+            choice.setContentDescription("Use " + theme.displayName
+                    + " dashboard gauges");
+            choice.setOnClickListener(view -> setLoggerGaugeTheme(theme));
+            loggerGaugeThemeButtons.put(theme, choice);
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT);
+            params.setMargins(0, 0, dp(7), 0);
+            themes.addView(choice, params);
+        }
+        themeScroll.addView(themes, matchWrap());
+        card.addView(themeScroll, matchWrap(dp(10)));
+
+        Button demo = button("SHOW GAUGE DEMO");
+        styleButton(demo, POSITIVE, POSITIVE);
+        demo.setContentDescription("Show simulated values for visual review");
+        demo.setOnClickListener(view -> showLoggerGaugeDemo());
+        Button resetPeaks = button("RESET PEAKS");
+        resetPeaks.setOnClickListener(view -> resetLoggerGaugePeaks());
+        card.addView(actionRow(demo, resetPeaks), matchWrap(dp(10)));
+
+        loggerGaugeEmpty = statusText("Run the offline preview or the "
+                + "read-only logger to populate this dashboard, or show the "
+                + "simulated demo for a visual check.");
+        card.addView(loggerGaugeEmpty, matchWrap(dp(8)));
+        loggerGaugeGrid = new GridLayout(this);
+        loggerGaugeGrid.setColumnCount(2);
+        loggerGaugeGrid.setAlignmentMode(GridLayout.ALIGN_MARGINS);
+        loggerGaugeGrid.setUseDefaultMargins(false);
+        card.addView(loggerGaugeGrid, matchWrap());
+        styleLoggerGaugeThemeButtons();
+        return card;
+    }
+
+    private void setLoggerGaugeTheme(MobileGaugeTheme theme) {
+        loggerGaugeTheme = theme;
+        getPreferences(MODE_PRIVATE).edit().putString(
+                PREF_GAUGE_THEME, theme.name()).apply();
+        for (MobileGaugeView gauge : loggerGaugeViews.values()) {
+            gauge.setTheme(theme);
+        }
+        styleLoggerGaugeThemeButtons();
+    }
+
+    private void styleLoggerGaugeThemeButtons() {
+        for (Map.Entry<MobileGaugeTheme, Button> entry
+                : loggerGaugeThemeButtons.entrySet()) {
+            boolean selected = entry.getKey() == loggerGaugeTheme;
+            styleButton(entry.getValue(),
+                    selected ? ACCENT : PANEL_RAISED,
+                    selected ? ACCENT : BORDER);
+            entry.getValue().setSelected(selected);
+        }
+    }
+
+    private void updateLoggerGauges(List<PortableLoggerValue> values) {
+        GridLayout grid = loggerGaugeGrid;
+        if (grid == null || values == null) return;
+        for (PortableLoggerValue value : values) {
+            PortableSelectedParameter selection = value.getSelection();
+            updateLoggerGauge(selection.getParameter().getId(),
+                    selection.getParameter().getName(),
+                    selection.getConversion().getUnits(),
+                    selection.getConversion().getFormat(), value.getValue());
+        }
+    }
+
+    private void updateLoggerGauge(String id, String name, String units,
+            String format, double value) {
+        GridLayout grid = loggerGaugeGrid;
+        if (grid == null) return;
+        MobileGaugeSnapshot snapshot = loggerGaugeSnapshots.get(id);
+        if (snapshot == null) {
+            if (loggerGaugeSnapshots.size() >= MOBILE_GAUGE_LIMIT) return;
+            snapshot = new MobileGaugeSnapshot(id, name, units, format, value);
+            loggerGaugeSnapshots.put(id, snapshot);
+        } else {
+            snapshot.accept(value);
+        }
+        MobileGaugeView gauge = loggerGaugeViews.get(id);
+            if (gauge == null) {
+                gauge = new MobileGaugeView(this);
+                gauge.setTheme(loggerGaugeTheme);
+                int index = loggerGaugeViews.size();
+                GridLayout.LayoutParams params = new GridLayout.LayoutParams(
+                        GridLayout.spec(index / 2),
+                        GridLayout.spec(index % 2, 1f));
+                params.width = 0;
+                params.height = ViewGroup.LayoutParams.WRAP_CONTENT;
+                params.setMargins(dp(3), dp(3), dp(3), dp(3));
+                grid.addView(gauge, params);
+                loggerGaugeViews.put(id, gauge);
+            }
+        gauge.setValue(snapshot.id, snapshot.name,
+                snapshot.displayValue(), snapshot.units, snapshot.value,
+                snapshot.minimum, snapshot.maximum);
+        if (loggerGaugeEmpty != null && !loggerGaugeViews.isEmpty()) {
+            loggerGaugeEmpty.setVisibility(View.GONE);
+        }
+    }
+
+    private void showLoggerGaugeDemo() {
+        clearLoggerGauges();
+        demoGauge("P-RPM", "Engine Speed", "rpm", "0", 720, 6650, 4210);
+        demoGauge("P-BOOST", "Boost Pressure", "psi", "0.0", -8.6, 18.4, 12.7);
+        demoGauge("P-COOLANT", "Coolant Temperature", "°F", "0", 154, 207, 196);
+        demoGauge("P-AFR", "Air/Fuel Ratio", "AFR", "0.0", 10.9, 14.7, 12.1);
+        demoGauge("P-VOLTAGE", "Battery Voltage", "V", "0.0", 11.8, 14.4, 13.9);
+        demoGauge("P-THROTTLE", "Throttle Opening", "%", "0.0", 4, 100, 72);
+        demoGauge("P-IGNITION", "Ignition Timing", "°", "0.0", -2, 36, 24);
+        demoGauge("P-KNOCK", "Knock Correction", "°", "0.00", -4.2, 0, -1.4);
+        if (loggerGaugeEmpty != null) {
+            loggerGaugeEmpty.setText(R.string.logger_simulated_gauge_demo);
+            loggerGaugeEmpty.setVisibility(View.VISIBLE);
+        }
+    }
+
+    private void demoGauge(String id, String name, String units, String format,
+            double minimum, double maximum, double current) {
+        updateLoggerGauge(id, name, units, format, minimum);
+        updateLoggerGauge(id, name, units, format, maximum);
+        updateLoggerGauge(id, name, units, format, current);
+    }
+
+    private void resetLoggerGaugePeaks() {
+        for (MobileGaugeSnapshot snapshot : loggerGaugeSnapshots.values()) {
+            snapshot.resetPeaks();
+            MobileGaugeView gauge = loggerGaugeViews.get(snapshot.id);
+            if (gauge != null) {
+                gauge.setValue(snapshot.id, snapshot.name,
+                        snapshot.displayValue(), snapshot.units, snapshot.value,
+                        snapshot.minimum, snapshot.maximum);
+            }
+        }
+        if (loggerGaugeSnapshots.isEmpty()) {
+            notice("There are no dashboard peaks to reset yet.");
+        }
+    }
+
+    private void clearLoggerGauges() {
+        loggerGaugeSnapshots.clear();
+        loggerGaugeViews.clear();
+        if (loggerGaugeGrid != null) loggerGaugeGrid.removeAllViews();
+    }
+
+    private static final class MobileGaugeSnapshot {
+        private final String id;
+        private final String name;
+        private final String units;
+        private final String format;
+        private double value;
+        private double minimum;
+        private double maximum;
+
+        private MobileGaugeSnapshot(String id, String name, String units,
+                String format, double value) {
+            this.id = id;
+            this.name = name;
+            this.units = units;
+            this.format = format;
+            this.value = value;
+            minimum = value;
+            maximum = value;
+        }
+
+        private void accept(double next) {
+            value = next;
+            minimum = Math.min(minimum, next);
+            maximum = Math.max(maximum, next);
+        }
+
+        private void resetPeaks() {
+            minimum = value;
+            maximum = value;
+        }
+
+        private String displayValue() {
+            try {
+                DecimalFormat formatter = new DecimalFormat(format,
+                        DecimalFormatSymbols.getInstance(Locale.ROOT));
+                formatter.setGroupingUsed(false);
+                return formatter.format(value);
+            } catch (IllegalArgumentException exception) {
+                return String.format(Locale.ROOT, "%.2f", value);
+            }
+        }
     }
 
     private static List<byte[]> simulatedResponses(
@@ -1250,6 +1575,7 @@ public final class MainActivity extends Activity {
             rom.replace(offset, replacement);
             refreshRom();
             renderSelectedTable();
+            scheduleWorkspaceRecovery();
         } catch (RuntimeException ex) {
             notice(ex.getMessage() == null ? "That edit is not valid." : ex.getMessage());
         }
@@ -1260,7 +1586,49 @@ public final class MainActivity extends Activity {
             rom.reset();
             refreshRom();
             renderSelectedTable();
+            scheduleWorkspaceRecovery();
         }
+    }
+
+    private void restoreUnsavedWorkspace() {
+        workerExecutor.execute(() -> {
+            try {
+                PortableRomDocument recovered =
+                        MobileRomRecoveryStore.restore(getFilesDir());
+                if (recovered == null) return;
+                runOnUiThread(() -> {
+                    if (rom != null) return;
+                    rom = recovered;
+                    ecuDefinition = null;
+                    ecuDefinitionName = "";
+                    selectedTable = null;
+                    ecuDefinitionState = "Recovered unsaved ROM work. Load "
+                            + "the matching ECU definition to continue editing.";
+                    showEditor();
+                    notice("Recovered unsaved ROM work from the previous session.");
+                });
+            } catch (Exception failure) {
+                try {
+                    MobileRomRecoveryStore.save(getFilesDir(), null);
+                } catch (Exception ignored) {
+                    // A later launch can retry app-private cache cleanup.
+                }
+                fileFailure(failure, "Unsaved ROM recovery could not be opened.");
+            }
+        });
+    }
+
+    private void scheduleWorkspaceRecovery() {
+        PortableRomDocument document = rom;
+        int generation = recoveryGeneration.incrementAndGet();
+        workerExecutor.execute(() -> {
+            if (generation != recoveryGeneration.get()) return;
+            try {
+                MobileRomRecoveryStore.save(getFilesDir(), document);
+            } catch (Exception failure) {
+                fileFailure(failure, "Unsaved ROM recovery could not be updated.");
+            }
+        });
     }
 
     private void refreshRom() {

@@ -1173,7 +1173,9 @@ public class SettingsForm extends AbstractFrame implements MouseListener, Action
 
     private void drawVisibleTables() {
         for(TableFrame tableFrame : getEditor().getOpenTableFrames()) {
-            tableFrame.getTable().getTableView().drawTable();
+            if (tableFrame.getTableView() != null) {
+                tableFrame.getTableView().drawTable();
+            }
         }
     }
 

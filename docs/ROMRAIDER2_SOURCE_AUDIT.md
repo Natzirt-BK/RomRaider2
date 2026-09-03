@@ -1,6 +1,6 @@
 # RomRaider2 source audit
 
-Last reviewed: 2026-08-31
+Last reviewed: 2026-09-01
 
 This file records what was checked in the old forks and branches so useful work
 does not get forgotten or merged blindly later.
@@ -29,6 +29,20 @@ surface as the current code. Synthetic tests now cover DM20 version/address
 parsing, runtime channel creation, known error bits, bad structure signatures,
 and unsupported major versions. Private ROMs, definitions, profiles, and logs
 were not copied into the repository.
+
+## CarBerry and MerpMod
+
+The local CarBerry 4.2 definition set was reviewed for feature naming only. It
+contains explicitly branded sections for Speed Density, Anti-Lag, Launch
+Control, No-Lift-To-Shift, Flex Fuel, Map Switching, Knock-CEL, and Alcohol
+Injection. RomRaider2 now reports those sections as loaded-definition evidence;
+it does not treat `beforeram` or a table address as proof of RAM-tune support.
+
+The available MerpMod material is a logger-definition set and testing profiles,
+not a verified live-tuning contract. RomRaider2 can identify explicitly branded
+MerpMod tables and report the mapped feature names it finds, but it does not
+claim an active runtime or writable RAM region. No definition or private test
+file was copied into the software repository.
 
 ## blicraft review
 

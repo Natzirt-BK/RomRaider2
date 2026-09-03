@@ -53,11 +53,11 @@ import javax.swing.Action;
 
 import com.romraider.logger.ecu.EcuLogger;
 import com.romraider.logger.external.core.ExternalDataItem;
-import com.romraider.logger.external.core.ExternalDataSource;
+import com.romraider.logger.external.core.SwingExternalDataSource;
 import com.romraider.logger.external.core.ExternalSensorType;
 import com.romraider.logger.external.te.io.TERunner;
 
-public final class TEDataSource implements ExternalDataSource {
+public final class TEDataSource implements SwingExternalDataSource {
     private final Map<ExternalSensorType, TEDataItem> dataItems = new HashMap<ExternalSensorType, TEDataItem>();
     private TERunner runner;
     private String port;

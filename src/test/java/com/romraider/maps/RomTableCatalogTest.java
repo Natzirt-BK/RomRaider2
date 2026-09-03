@@ -12,6 +12,8 @@ import java.util.Vector;
 
 import org.junit.Test;
 
+import com.romraider.swing.SwingRomTreeRegistry;
+
 public class RomTableCatalogTest {
     @Test
     public void neutralCatalogAndSwingTreeMirrorShareTableIdentity() {
@@ -23,7 +25,8 @@ public class RomTableCatalogTest {
         rom.addTableByName(boost);
 
         assertSame(boost, rom.getTableByName("BOOST"));
-        assertSame(boost, rom.getTableNodeByName("boost").getTable());
+        assertSame(boost, SwingRomTreeRegistry.nodeFor(rom)
+                .getTableNodeByName("boost").getTable());
         assertEquals(Arrays.asList("Boost", "Timing"), names(rom.getTables()));
         assertEquals(Arrays.asList("Timing", "Boost"),
                 catalogNames(rom.getTableCatalog()));
@@ -41,7 +44,8 @@ public class RomTableCatalogTest {
 
         rom.removeTableByName(boost);
         assertNull(rom.getTableByName("boost"));
-        assertNull(rom.getTableNodeByName("boost"));
+        assertNull(SwingRomTreeRegistry.nodeFor(rom)
+                .getTableNodeByName("boost"));
         assertEquals(Arrays.asList("Timing"), names(rom.getTables()));
     }
 

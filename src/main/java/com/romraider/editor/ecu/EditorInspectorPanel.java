@@ -65,6 +65,7 @@ import com.romraider.ui.ThemeToken;
 import com.romraider.ui.UiThemeService;
 import com.romraider.ui.ModernIconFactory;
 import com.romraider.ui.ModernIconFactory.Action;
+import com.romraider.ui.ModernTableStyle;
 import com.romraider.ui.swing.ModernSearchField;
 
 /** Context-sensitive information rail for the modern Editor workbench. */
@@ -174,9 +175,16 @@ public final class EditorInspectorPanel extends JPanel implements PlatformContex
         setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
         JLabel heading = new JLabel("INSPECTOR");
         heading.setFont(heading.getFont().deriveFont(Font.BOLD));
+        heading.setForeground(UiThemeService.getInstance().color(
+                ThemeToken.ACCENT));
         selectionTitle.setFont(selectionTitle.getFont().deriveFont(Font.BOLD,
                 selectionTitle.getFont().getSize2D() + 1.0f));
         JPanel header = new JPanel(new BorderLayout());
+        header.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(0, 0, 1, 0,
+                        UiThemeService.getInstance().color(
+                                ThemeToken.RAISED_SURFACE)),
+                BorderFactory.createEmptyBorder(2, 2, 8, 2)));
         header.add(heading, BorderLayout.NORTH);
         header.add(selectionTitle, BorderLayout.SOUTH);
         add(header, BorderLayout.NORTH);
@@ -396,13 +404,11 @@ public final class EditorInspectorPanel extends JPanel implements PlatformContex
         panel.add(header, BorderLayout.NORTH);
 
         changeTable.setName("ROM CHANGE TABLE");
-        changeTable.setFillsViewportHeight(true);
+        ModernTableStyle.apply(changeTable);
         changeTable.setRowSelectionAllowed(true);
         changeTable.setColumnSelectionAllowed(false);
         changeTable.setSelectionMode(javax.swing.ListSelectionModel.SINGLE_SELECTION);
-        changeTable.setShowVerticalLines(false);
         changeTable.setAutoResizeMode(JTable.AUTO_RESIZE_SUBSEQUENT_COLUMNS);
-        changeTable.getTableHeader().setReorderingAllowed(false);
         changeTable.getTableHeader().setToolTipText(
                 "Table name and number of changed cells");
         changeTable.getColumnModel().getColumn(0).setMinWidth(48);
@@ -410,7 +416,8 @@ public final class EditorInspectorPanel extends JPanel implements PlatformContex
         changeTable.getColumnModel().getColumn(0).setMaxWidth(64);
         changeTable.getColumnModel().getColumn(1).setMinWidth(70);
         changeTable.getColumnModel().getColumn(1).setPreferredWidth(165);
-        DefaultTableCellRenderer countRenderer = new DefaultTableCellRenderer();
+        DefaultTableCellRenderer countRenderer =
+                new ModernTableStyle.ZebraRenderer();
         countRenderer.setHorizontalAlignment(JLabel.RIGHT);
         changeTable.getColumnModel().getColumn(0).setCellRenderer(countRenderer);
         changeTable.getSelectionModel().addListSelectionListener(
@@ -650,23 +657,24 @@ public final class EditorInspectorPanel extends JPanel implements PlatformContex
         panel.add(status, BorderLayout.NORTH);
 
         liveParameters.setName("LIVE PARAMETERS");
-        liveParameters.setFillsViewportHeight(true);
+        ModernTableStyle.apply(liveParameters);
         liveParameters.setRowSelectionAllowed(true);
         liveParameters.setSelectionMode(
                 javax.swing.ListSelectionModel.SINGLE_SELECTION);
-        liveParameters.setShowVerticalLines(false);
-        liveParameters.setRowHeight(Math.max(24, liveParameters.getRowHeight()));
         liveParameters.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
-        liveParameters.getTableHeader().setReorderingAllowed(false);
         TableColumnModel columns = liveParameters.getColumnModel();
         configureColumn(columns, 0, 75, 100);
         configureColumn(columns, 1, 48, 60);
         configureColumn(columns, 2, 40, 48);
+        columns.getColumn(0).setCellRenderer(
+                new ModernTableStyle.TokenRenderer(ThemeToken.LIVE_TRACE));
 
-        DefaultTableCellRenderer valueRenderer = new DefaultTableCellRenderer();
+        DefaultTableCellRenderer valueRenderer =
+                new ModernTableStyle.ZebraRenderer();
         valueRenderer.setHorizontalAlignment(JLabel.RIGHT);
         columns.getColumn(1).setCellRenderer(valueRenderer);
-        DefaultTableCellRenderer unitRenderer = new DefaultTableCellRenderer();
+        DefaultTableCellRenderer unitRenderer =
+                new ModernTableStyle.ZebraRenderer();
         unitRenderer.setHorizontalAlignment(JLabel.CENTER);
         columns.getColumn(2).setCellRenderer(unitRenderer);
 
@@ -944,11 +952,21 @@ public final class EditorInspectorPanel extends JPanel implements PlatformContex
     }
 
     private static JPanel section(String title, JPanel content) {
-        JPanel section = new JPanel(new BorderLayout());
+        JPanel section = new JPanel(new BorderLayout(0, 6));
         section.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createEmptyBorder(0, 0, 8, 0),
-                BorderFactory.createTitledBorder(title)));
+                BorderFactory.createCompoundBorder(
+                        BorderFactory.createEmptyBorder(0, 0, 8, 0),
+                        BorderFactory.createLineBorder(
+                                UiThemeService.getInstance().color(
+                                        ThemeToken.RAISED_SURFACE))),
+                BorderFactory.createEmptyBorder(9, 10, 10, 10)));
+        JLabel heading = new JLabel(title);
+        heading.setFont(heading.getFont().deriveFont(Font.BOLD,
+                Math.max(10.0f, heading.getFont().getSize2D() - 1.0f)));
+        heading.setForeground(UiThemeService.getInstance().color(
+                ThemeToken.ACCENT));
         section.setName(title);
+        section.add(heading, BorderLayout.NORTH);
         section.add(content, BorderLayout.CENTER);
         section.setAlignmentX(LEFT_ALIGNMENT);
         return section;

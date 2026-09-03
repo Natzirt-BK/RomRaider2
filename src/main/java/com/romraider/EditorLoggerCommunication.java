@@ -24,6 +24,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.PrintWriter;
+import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 
@@ -31,7 +32,7 @@ public final class EditorLoggerCommunication {
 
     public enum Exec_type {EDITOR, LOGGER, UNKNOWN};
     
-    private static final String HOST = "localhost";
+    private static final InetAddress LOOPBACK = InetAddress.getLoopbackAddress();
     private static final int PORT = 23272;
     
     private static Exec_type currentExecType;
@@ -57,7 +58,7 @@ public final class EditorLoggerCommunication {
 
     public static boolean isRunning() {
         try {
-            ServerSocket sock = new ServerSocket(PORT);
+            ServerSocket sock = new ServerSocket(PORT, 1, LOOPBACK);
             sock.close();
             return false;
         } catch (IOException ex) {
@@ -66,7 +67,7 @@ public final class EditorLoggerCommunication {
     }
 
     public static ExecutableInstance waitForOtherExec() throws IOException {
-        ServerSocket sock = new ServerSocket(PORT);
+        ServerSocket sock = new ServerSocket(PORT, 1, LOOPBACK);
         
         try {
             Socket client = sock.accept();
@@ -97,7 +98,7 @@ public final class EditorLoggerCommunication {
     
     public static void sendTypeToOtherExec(String[] args) {
         try {
-            Socket socket = new Socket(HOST, PORT);
+            Socket socket = new Socket(LOOPBACK, PORT);
             OutputStream os = socket.getOutputStream();
             
             try {

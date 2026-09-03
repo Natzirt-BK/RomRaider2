@@ -45,11 +45,13 @@ import com.romraider.activity.ActivitySnapshot;
 import com.romraider.activity.ActivityState;
 import com.romraider.activity.ApplicationActivityListener;
 import com.romraider.activity.ApplicationActivityService;
+import com.romraider.activity.ProgressReporter;
 import com.romraider.ui.ThemeToken;
 import com.romraider.ui.UiThemeService;
 import com.romraider.util.ResourceUtil;
 
-public class JProgressPane extends JPanel implements PropertyChangeListener{
+public class JProgressPane extends JPanel implements PropertyChangeListener,
+        ProgressReporter {
 
     private static final long serialVersionUID = -6827936662738014543L;
     private static final ResourceBundle rb = new ResourceUtil().getBundle(

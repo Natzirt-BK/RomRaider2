@@ -4,6 +4,8 @@ src/main/java/com/romraider/Version.java
 build/
 .gradle/
 **/.gradle/
+.kotlin/
+**/.kotlin/
 **/build/
 target/
 tmp/

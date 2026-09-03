@@ -39,9 +39,9 @@ import com.romraider.io.connection.SerialConnectionProperties;
 import com.romraider.logger.ecu.EcuLogger;
 import com.romraider.logger.external.apsx.io.ApsxRunner;
 import com.romraider.logger.external.core.ExternalDataItem;
-import com.romraider.logger.external.core.ExternalDataSource;
+import com.romraider.logger.external.core.SwingExternalDataSource;
 
-public final class ApsxDataSource implements ExternalDataSource {
+public final class ApsxDataSource implements SwingExternalDataSource {
     private SerialConnectionProperties connectionProperties;
     private ApsxDataItem dataItem = new ApsxDataItem(AFR_147, LAMBDA, AFR_90, AFR_146, AFR_64, AFR_155, AFR_172, AFR_34);
     private ApsxRunner runner;

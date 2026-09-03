@@ -38,7 +38,7 @@ public final class IntegratedOptionDialog {
     private IntegratedOptionDialog() {
     }
 
-    public static int show(Component owner, String message, String title,
+    public static int show(Component owner, Object message, String title,
             int messageType, Object[] options, Object initialValue) {
         DialogParts parts = create(owner, message, title, messageType,
                 options, initialValue);
@@ -50,7 +50,7 @@ public final class IntegratedOptionDialog {
         return JOptionPane.CLOSED_OPTION;
     }
 
-    static DialogParts create(Component owner, String message, String title,
+    static DialogParts create(Component owner, Object message, String title,
             int messageType, Object[] options, Object initialValue) {
         Window ownerWindow = owner == null ? null
                 : SwingUtilities.getWindowAncestor(owner);

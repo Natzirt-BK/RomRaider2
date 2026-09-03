@@ -135,8 +135,10 @@ public class CompareImagesForm extends JFrame implements ActionListener {
                     Rom rightRom = (Rom) comboBoxImageRight.getSelectedItem();
 
                     // Display Tables
-                    TableTreeNode leftNode = leftRom.getTableNodeByName(tableName);
-                    TableTreeNode rightNode = rightRom.getTableNodeByName(tableName);
+                    TableTreeNode leftNode = SwingRomTreeRegistry.nodeFor(
+                            leftRom).getTableNodeByName(tableName);
+                    TableTreeNode rightNode = SwingRomTreeRegistry.nodeFor(
+                            rightRom).getTableNodeByName(tableName);
                     
                     // Set Comparison
                     if(leftNode != null && rightNode != null) {

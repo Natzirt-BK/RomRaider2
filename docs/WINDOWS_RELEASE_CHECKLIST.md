@@ -78,8 +78,8 @@ stable Windows release before then.
   reports that the 32-bit helper was selected for the x64 application.
 - Confirm ECU identification, start/stop logging, reconnect after unplugging,
   and clean shutdown without a stale connection.
-- Confirm Mitsubishi MUT-II and Subaru K-line behavior separately; success on
-  one protocol does not qualify the other.
+- Confirm Mitsubishi Lancer Evolution MUT-II and Subaru K-line behavior
+  separately; success on one protocol does not qualify the other.
 - Validate a Windows COM-port external sensor with jSerialComm 2.11.4.
 - Keep flashing disabled; this release does not qualify ECU writes.
 

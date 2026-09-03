@@ -49,6 +49,7 @@ import com.romraider.logger.analysis.PlaybackState;
 import com.romraider.logger.analysis.RomRaiderCsvLogParser;
 import com.romraider.logger.analysis.RecentLogCaptureService;
 import com.romraider.ui.ThemeToken;
+import com.romraider.ui.ModernTableStyle;
 import com.romraider.ui.UiThemeService;
 import com.romraider.swing.IntegratedFileChooser;
 
@@ -143,15 +144,13 @@ public final class LogAnalysisPanel extends JPanel {
         add(header, BorderLayout.NORTH);
 
         statisticsTable.setAutoCreateRowSorter(true);
-        statisticsTable.setFillsViewportHeight(true);
         statisticsTable.setName("LOG ANALYSIS STATISTICS");
-        statisticsTable.setShowVerticalLines(false);
-        statisticsTable.setRowHeight(Math.max(statisticsTable.getRowHeight(),
-                26));
-        statisticsTable.getTableHeader().setReorderingAllowed(false);
+        ModernTableStyle.apply(statisticsTable);
         statisticsTable.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
         statisticsTable.getColumnModel().getColumn(0).setMinWidth(180);
         statisticsTable.getColumnModel().getColumn(0).setPreferredWidth(310);
+        statisticsTable.getColumnModel().getColumn(0).setCellRenderer(
+                new ModernTableStyle.TokenRenderer(ThemeToken.LIVE_TRACE));
         statisticsTable.getColumnModel().getColumn(1).setMinWidth(70);
         statisticsTable.getColumnModel().getColumn(1).setPreferredWidth(110);
         for (int column = 2; column < tableModel.getColumnCount(); column++) {

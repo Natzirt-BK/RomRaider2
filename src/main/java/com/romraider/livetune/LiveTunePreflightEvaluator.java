@@ -37,6 +37,9 @@ public final class LiveTunePreflightEvaluator {
         add(checks, "runtime-feature", "RAM Tune feature",
                 context.isRuntimeRamTuneAvailable(),
                 "The connected DimeMod runtime must advertise RAM Tune");
+        add(checks, "runtime-metadata", "RAM Tune metadata",
+                context.isRuntimeMetadataQualified(),
+                "The current session must provide a valid signature and lookup table");
         EcuIdentity connected = context.getConnectedIdentity();
         boolean identityMatches = connected != null
                 && plan.getExpectedIdentity().equals(connected);

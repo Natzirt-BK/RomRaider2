@@ -23,6 +23,7 @@ import com.romraider.logger.ecu.comms.query.dimemod.DmInit;
 import com.romraider.logger.ecu.comms.query.dimemod.DmInitCallback;
 import com.romraider.platform.DimeModState;
 import com.romraider.platform.PlatformContext;
+import com.romraider.platform.RamTuneRuntimeMetadata;
 import com.romraider.platform.VehicleModule;
 import com.romraider.platform.VehiclePlatform;
 import com.romraider.platform.ui.PlatformSelectorPanel;
@@ -39,6 +40,8 @@ import com.romraider.ui.TouchTargetService;
 import com.romraider.ui.BrandImages;
 import com.romraider.ui.ThemeToken;
 import com.romraider.ui.ThemeMode;
+import com.romraider.ui.RuntimeUiProfile;
+import com.romraider.logger.api.LoggerGaugeTheme;
 import com.romraider.ui.UiThemeService;
 import com.romraider.swing.IntegratedOptionDialog;
 import com.romraider.logger.ecu.ui.*;
@@ -70,7 +73,6 @@ import static javax.swing.JOptionPane.PLAIN_MESSAGE;
 import static javax.swing.JOptionPane.WARNING_MESSAGE;
 import static javax.swing.JOptionPane.showConfirmDialog;
 import static javax.swing.JOptionPane.showMessageDialog;
-import static javax.swing.JOptionPane.showOptionDialog;
 import static javax.swing.JSplitPane.HORIZONTAL_SPLIT;
 import static javax.swing.KeyStroke.getKeyStroke;
 import static javax.swing.ScrollPaneConstants.HORIZONTAL_SCROLLBAR_AS_NEEDED;
@@ -87,6 +89,7 @@ import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.GraphicsDevice;
 import java.awt.GraphicsEnvironment;
+import java.awt.Rectangle;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.FocusEvent;
@@ -334,7 +337,7 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
     public static synchronized EcuLogger getEcuLogger(ECUEditor ecuEditor) {
     	if (instance != null ) return instance;
     	else {
-    		instance = new EcuLogger(ecuEditor);
+		instance = new EcuLogger(ecuEditor);
     		return instance;
     	}
     }
@@ -473,7 +476,13 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
                 PlatformContext.getInstance().setDimeModRuntime(
                         dmInit == null ? DimeModState.NOT_PRESENT
                                 : DimeModState.ACTIVE,
-                        dmInit != null && dmInit.isRamTuneEnabled());
+                        dmInit != null && dmInit.isRamTuneEnabled(),
+                        dmInit != null && dmInit.isRamTuneEnabled()
+                                ? new RamTuneRuntimeMetadata(
+                                        dmInit.getDimeModVersion(),
+                                        dmInit.getRamTuneSignatureAddress(),
+                                        dmInit.getRamTuneLutSize())
+                                : null);
                 if (dmInit != EcuLogger.this.dmInit || (dmInit != null && forceUpdate)) {
                     invokeLater(() -> {
                         EcuLogger.this.dmInit = dmInit;
@@ -507,7 +516,8 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
         mafUpdateHandler = new MafUpdateHandler();
         injectorUpdateHandler = new InjectorUpdateHandler();
         dynoUpdateHandler = new DynoUpdateHandler();
-        controller = new LoggerControllerImpl(ecuInitCallback, dmInitCallback,this, liveDataUpdateHandler,
+        controller = new LoggerControllerImpl(ecuInitCallback, dmInitCallback,
+                this, SwingUtilities::invokeLater, liveDataUpdateHandler,
                 graphUpdateHandler, dashboardUpdateHandler, mafUpdateHandler, injectorUpdateHandler,
                 dynoUpdateHandler, fileUpdateHandler, TableUpdateHandler.getInstance(), DataflowSimulationHandler.getInstance());
         controller.addListener(new FileLoggingConnectionMonitor(
@@ -575,21 +585,38 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
                 .getLoggerWorkspaceDarkTheme();
         ThemeMode applicationTheme = UiThemeService.getInstance()
                 .getCurrentMode();
-        boolean darkWorkspace = storedWorkspaceTheme != null
+        boolean darkWorkspace = RuntimeUiProfile.isSteamOs() ||
+                (storedWorkspaceTheme != null
                 ? storedWorkspaceTheme.booleanValue()
                 : applicationTheme == ThemeMode.DARK
-                        || applicationTheme == ThemeMode.HIGH_CONTRAST;
+                        || applicationTheme == ThemeMode.HIGH_CONTRAST);
         workspacePreferences = new LoggerWorkspacePreferences(
                 getSettings().getLoggerWorkspaceView(), darkWorkspace,
+                RuntimeUiProfile.isSteamOs() ? LoggerGaugeTheme.HANDHELD
+                        : getSettings().getLoggerGaugeTheme(),
                 (view, dark) -> {
                     getSettings().setLoggerWorkspaceView(view);
                     getSettings().setLoggerWorkspaceDarkTheme(dark);
-                });
+                }, getSettings()::setLoggerGaugeTheme,
+                getSettings().getLoggerGaugeLayout(),
+                getSettings()::setLoggerGaugeLayout,
+                getSettings().getLoggerGaugeConfigurations(),
+                getSettings()::setLoggerGaugeConfiguration,
+                getSettings().getLoggerDashboardTiles(),
+                getSettings()::setLoggerDashboardTile);
         installChannelCatalogListeners();
     }
 
     public void loadLoggerParams() {
-        loadLoggerConfig();
+        loadLoggerParams(null);
+    }
+
+    /**
+     * Applies a definition that was parsed away from the Swing event thread.
+     * A null loader keeps the normal startup and reload path.
+     */
+    public void loadLoggerParams(EcuDataLoader preloadedDefinition) {
+        loadLoggerConfig(preloadedDefinition);
         loadFromExternalDataSources();
         refreshChannelCatalog();
         LoggerParameterFocusService.getInstance().retryPending();
@@ -754,7 +781,7 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
         }
     }
 
-    private void loadLoggerConfig() {
+    private void loadLoggerConfig(EcuDataLoader preloadedDefinition) {
         String loggerConfigFilePath = getSettings().getLoggerDefinitionFilePath();
         if (isNullOrEmpty(loggerConfigFilePath))
         	{
@@ -766,9 +793,14 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
         	}
         else {
             try {
-                EcuDataLoader dataLoader = new EcuDataLoaderImpl();
-                dataLoader.loadConfigFromXml(loggerConfigFilePath, getSettings().getLoggerProtocol(),
-                        getSettings().getFileLoggingControllerSwitchId(), ecuInit);
+                EcuDataLoader dataLoader = preloadedDefinition;
+                if (dataLoader == null) {
+                    dataLoader = new EcuDataLoaderImpl();
+                    dataLoader.loadConfigFromXml(loggerConfigFilePath,
+                            getSettings().getLoggerProtocol(),
+                            getSettings().getFileLoggingControllerSwitchId(),
+                            ecuInit);
+                }
                 List<EcuParameter> ecuParams = dataLoader.getEcuParameters();
                 updateDmEcuParams(ecuParams);
                 addConvertorUpdateListeners(ecuParams);
@@ -828,12 +860,10 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
 
     private void showErrorConfigDialog(Exception e) {
         Object[] options = {"OK"};
-        showOptionDialog(this,
+        IntegratedOptionDialog.show(this,
                 rb.getString("LOGGERDEFERROR") + e.getMessage(),
                 rb.getString("LOGGERCONFIG"),
-                DEFAULT_OPTION,
                 ERROR_MESSAGE,
-                null,
                 options,
                 options[0]);
     }
@@ -922,14 +952,12 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
 
             if (!profileProto.equalsIgnoreCase(getSettings().getLoggerProtocol())) {
                 Object[] options = {rb.getString("LOAD"), rb.getString("CANCEL")};
-                int answer = showOptionDialog(this,
+                int answer = IntegratedOptionDialog.show(this,
                         MessageFormat.format(
                                 rb.getString("PROFILEWRONGPROTO"),
                                 profileProto),
                                 rb.getString("PROTOCOLMISMATCH"),
-                        DEFAULT_OPTION,
                         WARNING_MESSAGE,
-                        null,
                         options,
                         options[1]);
                 if (answer == 1) {
@@ -2208,6 +2236,7 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
             backupCurrentProfile();
             LOGGER.info("Logger shutdown successful");
 
+
             if(ECUEditorManager.getECUEditorWithoutCreation() == null) {
             	System.exit(0);
             }
@@ -2498,7 +2527,8 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
 
         // set window properties
         ecuLogger.pack();
-        TouchTargetService.apply(ecuLogger, settings.getDisplayMode());
+        TouchTargetService.apply(ecuLogger,
+                RuntimeUiProfile.displayMode(settings.getDisplayMode()));
         ecuLogger.selectTab(settings.getLoggerSelectedTabIndex());
         ecuLogger.setRefreshMode(settings.getRefreshMode());
 
@@ -2518,9 +2548,18 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
             // display in window
             ecuLogger.addWindowListener(ecuLogger);
             BrandImages.apply(ecuLogger);
-            ecuLogger.setSize(settings.getLoggerWindowSize());
-            ecuLogger.setLocation(settings.getLoggerWindowLocation());
-            if (settings.isLoggerWindowMaximized()) ecuLogger.setExtendedState(MAXIMIZED_BOTH);
+            if (RuntimeUiProfile.isSteamOs()) {
+                Rectangle bounds = GraphicsEnvironment
+                        .getLocalGraphicsEnvironment().getMaximumWindowBounds();
+                ecuLogger.setBounds(bounds);
+                ecuLogger.setExtendedState(MAXIMIZED_BOTH);
+            } else {
+                ecuLogger.setSize(settings.getLoggerWindowSize());
+                ecuLogger.setLocation(settings.getLoggerWindowLocation());
+                if (settings.isLoggerWindowMaximized()) {
+                    ecuLogger.setExtendedState(MAXIMIZED_BOTH);
+                }
+            }
             ecuLogger.setDefaultCloseOperation(defaultCloseOperation);
             ecuLogger.setVisible(true);
         }

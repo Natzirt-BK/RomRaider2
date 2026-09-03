@@ -54,10 +54,10 @@ import javax.swing.Action;
 
 import com.romraider.logger.ecu.EcuLogger;
 import com.romraider.logger.external.core.ExternalDataItem;
-import com.romraider.logger.external.core.ExternalDataSource;
+import com.romraider.logger.external.core.SwingExternalDataSource;
 import com.romraider.logger.external.ecotrons.io.AlmRunner;
 
-public final class AlmDataSource implements ExternalDataSource {
+public final class AlmDataSource implements SwingExternalDataSource {
     private final Map<AlmSensorType, AlmDataItem> dataItems = new HashMap<AlmSensorType, AlmDataItem>();
     private AlmRunner runner;
     private String port;

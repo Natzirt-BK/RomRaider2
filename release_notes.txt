@@ -1,108 +1,147 @@
 RomRaider2 ECU Studio 1.1.0 RC4
 ================================
 
-RC4 is published as a development prerelease for early desktop and portable
-platform feedback. The remaining hardware checks are listed below.
+RC4 is a development preview of the new RomRaider2 interface. It is ready for
+desktop and portable-platform feedback, but the remaining hardware checks are
+still required before it can be treated as a stable release.
 
-Changes since RC3
------------------
+What changed since RC3
+----------------------
 
 Logger
 
-- Added the first replacement Logger workspace using Compose Desktop while
-  keeping one ECU session and one selected-channel list.
-- Added Overview, Data, Graph, Dashboard, and Analysis views with responsive
-  normal and narrow layouts.
-- Added Light and Dark themes, consistent channel colours, live telemetry
-  status, recording controls, search, and Ctrl+1 through Ctrl+5 navigation.
-- Added a unified RR2 header, current values in the channel browser, grouped
-  channel counts, gauge-style dashboard cards, live-value graph legends,
-  percentile statistics, and a clearer active-view strip.
-- Made the replacement Logger the primary Data, Graph, Dashboard, and live
-  Analysis workspace. The specialized MAF, Injector, Dyno, and saved-log
-  analysis tools remain available without duplicate legacy live tabs.
-- Persisted the selected replacement view and theme.
-- Connected the replacement views to the real session, recording, channel, and
-  live-sample services.
+- Rebuilt the main Logger workspace around five views: Overview, Data, Graph,
+  Dashboard, and Analysis. They all use the same connection, selected-channel
+  list, recording state, and live data.
+- Added a faster channel browser with search, grouped counts, current values,
+  colour-coded parameter names, touch scrolling, and a visible scrollbar.
+- Added five original gauge styles with stable scales, measured minimum and
+  maximum values, peak recall, consistent number formatting, and saved Compact,
+  Standard, or Large dashboard density.
+- Added per-channel gauge settings. Custom scales and low or high warnings are
+  optional, saved between sessions, and use hysteresis to prevent flicker near
+  a limit. RomRaider2 never guesses a safety limit for the user.
+- Added saved dashboard layouts. Each selected channel can be moved, resized,
+  and shown as a Gauge, large Value, live Trend, or warning-focused Alarm tile.
+- Added clearer connection and recording controls, live session totals,
+  responsive narrow layouts, and Ctrl+1 through Ctrl+5 view shortcuts.
+- Kept the established MAF, Injector, Dyno, and saved-log tools available while
+  removing duplicate live-data workspaces.
+- Moved Logger-definition installation and validation off the interface thread.
+  Large definitions now show progress and roll back cleanly if validation
+  fails.
 - Added an explicit Reconnecting state with a capped 1/2/4/5-second retry
   schedule and clearer disconnected feedback.
 
 Editor and live tuning
 
-- Added a UI-neutral live-tuning plan with bounded changes, overlap checks,
-  stale-value protection, identity checks, and readback verification.
-- Added projection of real changed Editor table bytes into an offline plan.
-- Added a read-only Tune inspector with selected/all-changed scope, byte ranges,
-  before/after values, and visible safety gates.
-- Covered 3D table row gaps and X/Y axis changes in the offline projection.
-- Added preflight checks for Subaru, the engine ECU, DimeMod state, mapped
-  definitions, runtime RAM Tune discovery, and an exact ECU identity match.
-- Kept execution restricted to the mock ECU transport. Production ECU memory
-  writing and flashing remain unavailable.
-- Improved the DimeMod panel and Editor inspector so mapped support and runtime
-  RAM Tune discovery are reported separately.
+- Refreshed the Editor toolbar, calibration browser, search field, inspector,
+  empty workspace, buttons, tabs, and scrollbars so the desktop interface uses
+  one visual system on Linux and Windows.
+- Replaced the dense legacy startup notes box with a larger themed RC4 welcome
+  surface that is easier to scan and scroll.
+- Moved the unsaved-ROM confirmation into the same integrated desktop dialog
+  style used by startup and definition setup.
+- Updated definition-match and Logger configuration warnings to use the shared
+  desktop dialog style on Linux and Windows.
+- Removed the bright legacy split-pane dividers that remained in dark and
+  SteamOS layouts.
+- Reworked the active calibration surface with a framed heatmap, a clearer
+  teal selection outline, labelled actions when space allows, and a cell-edit
+  strip that wraps instead of hiding controls on narrow windows.
+- Added an opt-in replacement calibration grid backed by the current ROM
+  table. It shows real axes, values, changed cells, selection details, and
+  both-axis scrolling. Single-cell edits now use the same scaling, range
+  checks, ROM bytes, definition fine/coarse increments, and undo/redo history
+  as the classic grid. Arrow keys move the active cell, and Enter applies typed
+  input. A changed cell can be restored to its loaded value without resetting
+  the rest of the table.
+- Added active-cell Ctrl+C/Ctrl+V and Ctrl+Z/Ctrl+Y shortcuts to the new grid.
+  Pasted values still pass the table's normal validation and ROM history.
+- Added Shift+arrow and Shift+click range selection plus tab/newline block copy
+  and paste to the replacement grid. A pasted block is validated before any
+  cell changes and becomes one undoable operation. Ctrl+A selects the full map.
+- Added larger touch targets and kept scaling useful from small laptops through
+  high-DPI and garage displays.
+- Added loaded-ROM recognition for DimeMod, CarBerry, and MerpMod. Recognition
+  uses explicit ROM identity or branded definition tables and stays separate
+  from live ECU verification.
+- Added mapped-feature details for CarBerry and MerpMod instead of limiting the
+  ROM-modification view to DimeMod features.
+- Added quick counts and clearer status colours to the ROM-modification view so
+  mapped definition content and live ECU evidence are easier to tell apart.
+- Standardized table spacing, headers, and alternating rows across Logger
+  channels, live values, offline analysis, Editor live data and changes, ROM
+  comparison, modification details, and the live-tune preview.
+- Added a restrained teal treatment to live parameter and analysis channel
+  names so values scan faster without colouring every table cell.
+- Removed the default Subaru/Engine ECU label from an empty Editor. Vehicle and
+  ROM-modification context now stays hidden until a ROM or real session gives
+  the application evidence to show it.
+- Added a read-only Tune inspector that can review one table or every changed
+  table, including byte ranges, before/after values, and the checks that still
+  block live execution.
+- Added a clear Ready to Review or Offline Preview badge to the Tune inspector
+  without adding any connection or write action.
+- Added bounded live-tuning plans with overlap detection, stale-value checks,
+  exact ECU identity matching, and readback verification.
+- Retained the DimeMod RAM Tune signature address and lookup-table size from
+  the current ECU session so later address qualification does not rely on the
+  feature bit alone.
+- Added a separate preflight failure when RAM Tune is advertised without valid
+  runtime signature and lookup-table metadata.
+- Covered 3D row gaps and X/Y axis edits when building an offline plan from
+  changed Editor tables.
+- Kept live ECU memory writing restricted to the mock transport. Production RAM
+  writing and flashing are not available.
 
-Runtime and packages
+Android and SteamOS
 
-- Added the Compose Logger and its platform renderer to the self-contained
-  Linux and Windows package checks.
-- Added the required Compose and Skia license notices.
-- Added early native macOS packaging for both Apple silicon and Intel, plus a
-  SteamOS Desktop Mode bundle. These remain development previews. The Android
-  foundation is available separately as an explicitly experimental test APK,
-  not as a desktop RC4 package.
-- Expanded the Android foundation with traditional RomRaider CSV review and a
-  read-only OpenPort preparation path for USB permission, firmware, and vehicle
-  voltage checks.
-- Wired an Android foreground-only Subaru SSM K-Line logger from exact ECU
-  identification through profile resolution, bounded address reads, converted
-  live values, and CSV recording. It rejects transmission-only parameters,
-  exposes no ECU writes, and remains labeled for RC5 connected qualification.
-- Added exact ROM-size and internal-ID matching for RomRaider ECU definitions
-  on Android, with searchable named numeric tables, scaled cell values, and
-  bounded offline edits. Android does not correct checksums and clearly marks
-  saved files as review copies that must not be flashed.
-- Reworked the Android Logger and Editor presentation with the same RR2 colour
-  system, grouped cards, paired actions, clearer status panels, and a visible
-  read-only safety state.
-- Fixed packaged settings precedence so an unrelated `settings.xml` beside the
-  launch directory cannot replace the package-owned configuration.
-- Updated candidate labels, verification scripts, and workflow artifacts for
-  RC4.
+- Added a native Android gauge dashboard shared by simulated and read-only live
+  samples. It has five styles, fixed scales, min/current/max values, saved theme
+  selection, peak reset, and an offline visual demo that does not need an ECU.
+- Kept Android ROM editing definition-backed and read-only toward the vehicle.
+  Saved ROM copies still require checksum and desktop review and must not be
+  flashed from the preview.
+- Kept the Android Subaru SSM K-Line path foreground-only and read-only. It can
+  identify an ECU, resolve a profile, display converted values, and record CSV,
+  but connected qualification remains scheduled for RC5.
+- Added a SteamOS handheld profile with one dark Steam-like theme, larger touch
+  controls, a 1280x800 maximized layout, and a supported Non-Steam Game setup
+  guide. The bundle does not change the read-only SteamOS system partition.
+- The existing macOS previews are unchanged in this visual pass. Mac work is
+  paused until the Linux, Windows, Android, and SteamOS interfaces settle.
 
 Checks completed
 ----------------
 
-- The shared Java 21 suite passes with the live-tuning and settings-precedence
-  regression tests.
-- Compose tests pass and the replacement workspace stages successfully.
-- The Linux Java 21 application image builds and its packaged launcher starts
-  under a clean virtual display.
-- Overview, Data, Graph, Dashboard, Analysis, Light, Dark, and narrow layouts
-  have passed automated Linux rendering checks. Final user visual approval is
-  still required.
-- The Android shared core passes definition inheritance, exact-match,
-  conversion, editing, and mismatch tests. The APK builds, passes lint, and has
-  passed a Waydroid launch and layout smoke check.
+- The shared Java 21 suite and Compose Logger tests pass.
+- The Android APK and shared portable core build successfully.
+- The Linux Java 21 image and SteamOS bundle pass their package checks with the
+  correct native Compose renderer and without ROMs, definitions, or private
+  vehicle files.
+- Logger views, gauge styles, warning states, first-run definition prompt, and
+  the refreshed Editor shell have passed isolated Linux rendering checks.
+- The matching Windows source passed the Java and Compose suites in the VM. Its
+  portable image also passed a native launch and first-run visual check.
+- The public RC4 replacement was approved after the Linux and Android review
+  builds were exercised and the Windows parity pass was completed.
 
 Known limits
 ------------
 
-- RC4 desktop packages are public development previews rather than a stable
-  release.
-- The specialized MAF, Injector, Dyno, and saved-log analysis tools still use
-  their established Swing panels.
-- Refreshed Linux, Windows, and Android candidates require user visual approval
-  before the public RC4 files are replaced.
+- RC4 remains a development preview.
 - No new in-car qualification is planned until RC5.
+- Android background logging, reconnect handling, and connected SSM testing are
+  not complete.
 - Mitsubishi Lancer Evolution MUT-II still needs vehicle qualification.
 - ECU flashing and production ECU memory writing are not available.
 
 License and upstream work
 -------------------------
 
-RomRaider2 remains GPL-licensed and keeps the required RomRaider authorship and
-notices. It is derived from RomRaider and DimeSPb/RomRaider.
+RomRaider2 remains GPL-licensed and retains the original RomRaider authorship
+and notices. Its main upstream sources are:
 
 - https://github.com/RomRaider/RomRaider
 - https://github.com/DimeSPb/RomRaider

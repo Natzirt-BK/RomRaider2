@@ -100,7 +100,9 @@ public class RomTree extends JTree implements MouseListener {
             return description == null || description.trim().isEmpty()
                     ? node.getTable().getName() : description;
         }
-        if (value instanceof Rom) return ((Rom) value).getFileName();
+        if (value instanceof SwingRomTreeNode) {
+            return ((SwingRomTreeNode) value).getRom().getFileName();
+        }
         if (value instanceof CategoryTreeNode) {
             int count = ((CategoryTreeNode) value).getChildCount();
             return count + (count == 1
@@ -153,8 +155,8 @@ public class RomTree extends JTree implements MouseListener {
     public static Rom getRomNode(Object currentNode){
         if (currentNode == null) {
             return null;
-        } else if(currentNode instanceof Rom) {
-            return (Rom)currentNode;
+        } else if(currentNode instanceof SwingRomTreeNode) {
+            return ((SwingRomTreeNode) currentNode).getRom();
         } else if(currentNode instanceof TableTreeNode) {
             return getRomNode(((TableTreeNode)currentNode).getParent());
         } else if(currentNode instanceof CategoryTreeNode) {

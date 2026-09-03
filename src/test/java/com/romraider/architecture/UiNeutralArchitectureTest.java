@@ -2,6 +2,7 @@
 package com.romraider.architecture;
 
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertFalse;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -22,13 +23,76 @@ public class UiNeutralArchitectureTest {
                 "romraider");
         List<String> violations = new ArrayList<String>();
         for (String packagePath : Arrays.asList("activity",
-                "editor/calibration", "editor/compare", "editor/recovery",
-                "flash", "livetune", "logger/api")) {
+                "desktop",
+                "editor/calibration", "editor/compare", "editor/document",
+                "editor/io", "editor/recovery",
+                "flash", "livetune", "logger/api", "logger/runtime")) {
             collectUiImports(sourceRoot.resolve(packagePath), violations);
         }
 
+        inspect(sourceRoot.resolve("logger/external/core/ExternalDataSource.java"),
+                violations);
+        inspect(sourceRoot.resolve(
+                "logger/ecu/comms/manager/QueryManagerImpl.java"),
+                violations);
+        inspect(sourceRoot.resolve("ui/ApplicationThemeService.java"),
+                violations);
+        inspect(sourceRoot.resolve("ECUExec.java"), violations);
+
         assertTrue("UI-neutral packages import Swing/AWT: " + violations,
                 violations.isEmpty());
+    }
+
+    @Test
+    public void calibrationModelDoesNotOwnSwingFrames() throws Exception {
+        Path tableSource = Paths.get("src", "main", "java", "com",
+                "romraider", "maps", "Table.java");
+        String source = new String(Files.readAllBytes(tableSource),
+                StandardCharsets.UTF_8);
+
+        assertFalse("Table must not import or store a Swing TableFrame",
+                source.contains("TableFrame"));
+        assertFalse("Table must not retain a tableFrame presentation field",
+                source.contains("tableFrame"));
+        assertFalse("Table must not import or store a Swing TableView",
+                source.contains("TableView"));
+        assertFalse("Table must not retain a tableView presentation field",
+                source.contains("tableView"));
+
+        Path cellSource = Paths.get("src", "main", "java", "com",
+                "romraider", "maps", "DataCell.java");
+        String cell = new String(Files.readAllBytes(cellSource),
+                StandardCharsets.UTF_8);
+        assertFalse("DataCell must not own a Swing DataCellView",
+                cell.contains("DataCellView"));
+        assertFalse("DataCell must not call the Swing editor manager",
+                cell.contains("ECUEditorManager"));
+
+        Path romSource = Paths.get("src", "main", "java", "com",
+                "romraider", "maps", "Rom.java");
+        String rom = new String(Files.readAllBytes(romSource),
+                StandardCharsets.UTF_8);
+        assertFalse("Rom must not inherit from a Swing tree node",
+                rom.contains("extends DefaultMutableTreeNode"));
+        assertFalse("Rom must not own Swing table tree nodes",
+                rom.contains("TableTreeNode"));
+        assertFalse("Rom must not import Swing or AWT",
+                rom.contains("javax.swing") || rom.contains("java.awt")
+                        || rom.contains("com.romraider.swing"));
+    }
+
+    @Test
+    public void productionDesktopDoesNotAutomaticallyFallBackToSwing()
+            throws Exception {
+        Path source = Paths.get("src", "main", "java", "com",
+                "romraider", "ECUExec.java");
+        String ecuExec = new String(Files.readAllBytes(source),
+                StandardCharsets.UTF_8);
+        int launch = ecuExec.indexOf("LegacySwingApplication.launch(args)");
+        int guard = ecuExec.lastIndexOf("if (legacySwingRequested())", launch);
+
+        assertTrue("Legacy Swing launch must remain behind an explicit guard",
+                launch >= 0 && guard >= 0);
     }
 
     private static void collectUiImports(Path directory,

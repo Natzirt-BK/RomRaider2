@@ -103,14 +103,23 @@ public class ECUEditorToolBar extends JToolBar implements ActionListener {
         this.setFloatable(false);
         this.setRollover(true);
         this.setLayout(new BorderLayout(12, 0));
-        this.setBorder(BorderFactory.createEmptyBorder(4, 10, 4, 10));
+        this.setBackground(UiThemeService.getInstance().color(
+                ThemeToken.SURFACE));
+        this.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(0, 0, 1, 0,
+                        UiThemeService.getInstance().color(
+                                ThemeToken.RAISED_SURFACE)),
+                BorderFactory.createEmptyBorder(7, 10, 7, 10)));
 
         this.updateIcons();
 
         brand.setIconTextGap(8);
+        brand.setForeground(UiThemeService.getInstance().color(
+                ThemeToken.PRIMARY_TEXT));
         this.add(brand, BorderLayout.WEST);
 
         JPanel actions = new JPanel(new FlowLayout(FlowLayout.LEFT, 3, 0));
+        actions.setOpaque(false);
         actions.add(openImage);
         actions.add(saveImage);
         actions.add(fileSeparator);
@@ -127,6 +136,7 @@ public class ECUEditorToolBar extends JToolBar implements ActionListener {
         this.add(actions, BorderLayout.CENTER);
 
         JPanel context = new JPanel(new BorderLayout(10, 0));
+        context.setOpaque(false);
         connectionStatus.setName("ECU CONNECTION STATUS");
         connectionStatus.setForeground(UiThemeService.getInstance().color(
                 ThemeToken.SECONDARY_TEXT));
@@ -134,6 +144,7 @@ public class ECUEditorToolBar extends JToolBar implements ActionListener {
                 "No integrated ECU communication session is active");
         context.add(connectionStatus, BorderLayout.WEST);
         JPanel viewControls = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
+        viewControls.setOpaque(false);
         viewControls.add(navigation);
         viewControls.add(search);
         viewControls.add(inspector);
@@ -233,6 +244,9 @@ public class ECUEditorToolBar extends JToolBar implements ActionListener {
         button.setVerticalTextPosition(SwingConstants.CENTER);
         button.setIconTextGap(5);
         button.setMargin(new Insets(3, 7, 3, 7));
+        Dimension preferred = button.getPreferredSize();
+        button.setPreferredSize(new Dimension(preferred.width, 36));
+        button.setMinimumSize(new Dimension(preferred.width, 36));
     }
 
     private void updateResponsiveContext() {
@@ -405,8 +419,8 @@ public class ECUEditorToolBar extends JToolBar implements ActionListener {
 
     private static JSeparator groupSeparator() {
         JSeparator separator = new JSeparator(SwingConstants.VERTICAL);
-        separator.setPreferredSize(new Dimension(1, 42));
-        separator.setMaximumSize(new Dimension(1, 42));
+        separator.setPreferredSize(new Dimension(1, 28));
+        separator.setMaximumSize(new Dimension(1, 28));
         return separator;
     }
 

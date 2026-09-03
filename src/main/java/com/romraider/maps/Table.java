@@ -27,7 +27,6 @@ import javax.naming.NameNotFoundException;
 import org.apache.log4j.Logger;
 
 import com.romraider.Settings;
-import com.romraider.swing.TableFrame;
 import com.romraider.util.ByteUtil;
 import com.romraider.util.JEPUtil;
 import com.romraider.util.NumberUtil;
@@ -38,9 +37,6 @@ public abstract class Table implements Serializable, Comparable<Table> {
     protected static final Logger LOGGER = Logger.getLogger(Table.class);
     protected static final String ST_DELIMITER = "\t\n\r\f";
     protected static Settings.Endian memModelEndian;
-
-    protected TableView tableView;
-    protected TableFrame tableFrame;
 
     protected String name;
     protected String category = "Other";
@@ -80,22 +76,6 @@ public abstract class Table implements Serializable, Comparable<Table> {
     public enum DataLayout {
         DEFAULT,
         BOSCH_SUBTRACT
-    }
-
-    public void setTableView(TableView v) {
-        this.tableView = v;
-    }
-
-    public TableView getTableView() {
-        return this.tableView;
-    }
-
-    public void setTableFrame(TableFrame v) {
-        this.tableFrame = v;
-    }
-
-    public TableFrame getTableFrame() {
-        return this.tableFrame;
     }
 
     public DataCell[] getData() {
@@ -555,7 +535,7 @@ public abstract class Table implements Serializable, Comparable<Table> {
         if (getType() != TableType.SWITCH) {
             for(Scale scale : scales) {
                 if (!scale.validate()) {
-                    TableView.showBadScalePopup(this, scale);
+                    TablePresentationService.invalidScale(this, scale);
                 }
             }
         }
@@ -579,7 +559,7 @@ public abstract class Table implements Serializable, Comparable<Table> {
         }
 
         calcCellRanges();
-        if(tableView != null) tableView.drawTable();
+        TablePresentationService.changed(this);
     }
 
     public void clearSelection() {
@@ -594,14 +574,14 @@ public abstract class Table implements Serializable, Comparable<Table> {
         if(y >= 0 && y < data.length) {
             clearSelection();
             data[y].setSelected(true);
-            if(tableView!=null) tableView.highlightBeginY = y;
+            TablePresentationService.selectionChanged(this, 0, y);
         }
     }
 
     public void selectCellAtWithoutClear(int y) {
         if(y >= 0 && y < data.length) {
             data[y].setSelected(true);
-            if(tableView!=null) tableView.highlightBeginY = y;
+            TablePresentationService.selectionChanged(this, 0, y);
         }
     }
 
@@ -700,9 +680,7 @@ public abstract class Table implements Serializable, Comparable<Table> {
     public void setCurrentScale(Scale curScale) {
         this.curScale = curScale;
 
-        if(tableView!=null) {
-            tableView.drawTable();
-        }
+        TablePresentationService.changed(this);
     }
 
     public Settings getSettings()
@@ -727,13 +705,13 @@ public abstract class Table implements Serializable, Comparable<Table> {
     public void setCompareTable(Table compareTable) {
         this.compareTable = compareTable;
 
-        if(tableView!= null) tableView.drawTable();
+        TablePresentationService.changed(this);
     }
 
     public void setCompareValueType(Settings.DataType compareValueType) {
         this.compareValueType = compareValueType;
 
-        if(tableView!= null) tableView.drawTable();
+        TablePresentationService.changed(this);
     }
 
     public Settings.DataType getCompareValueType() {
@@ -743,7 +721,7 @@ public abstract class Table implements Serializable, Comparable<Table> {
     public void colorCells() {
         calcCellRanges();
 
-        if(tableView!=null) tableView.drawTable();
+        TablePresentationService.changed(this);
     }
 
     public void refreshCompare() {

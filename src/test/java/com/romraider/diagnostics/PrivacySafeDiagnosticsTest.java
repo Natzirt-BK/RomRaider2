@@ -43,4 +43,19 @@ public class PrivacySafeDiagnosticsTest {
         assertTrue(report.contains("com.romraider.xml.Parser.parse(Parser.java:42)"));
         assertFalse(report.contains(System.getProperty("user.home")));
     }
+
+    @Test
+    public void runtimeSummaryExcludesPersonalAndFilesystemProperties() {
+        String summary = PrivacySafeDiagnostics.buildRuntimeSummary();
+
+        assertTrue(summary.contains("OS="));
+        assertTrue(summary.contains("architecture="));
+        assertTrue(summary.contains("Java="));
+        assertTrue(summary.contains(System.getProperty("java.version")));
+        assertFalse(summary.contains("network-redacted"));
+        assertFalse(summary.contains(System.getProperty("user.home")));
+        assertFalse(summary.contains(System.getProperty("user.dir")));
+        assertFalse(summary.contains("java.class.path"));
+        assertFalse(summary.contains("user.name"));
+    }
 }

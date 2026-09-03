@@ -37,10 +37,10 @@ import javax.swing.Action;
 
 import com.romraider.logger.ecu.EcuLogger;
 import com.romraider.logger.external.core.ExternalDataItem;
-import com.romraider.logger.external.core.ExternalDataSource;
+import com.romraider.logger.external.core.SwingExternalDataSource;
 import com.romraider.logger.external.fourteenpoint7.io.NawRunner;
 
-public final class NawDataSource implements ExternalDataSource {
+public final class NawDataSource implements SwingExternalDataSource {
     private NawDataItem dataItem = new NawDataItem(LAMBDA, AFR_147, AFR_90, AFR_146, AFR_64, AFR_155, AFR_172, AFR_34);
     private NawRunner runner;
     private String port;

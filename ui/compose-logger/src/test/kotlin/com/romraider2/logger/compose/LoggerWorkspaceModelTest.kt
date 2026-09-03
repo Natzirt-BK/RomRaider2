@@ -10,12 +10,16 @@ import com.romraider.logger.api.LoggerLiveDataBus
 import com.romraider.logger.api.LoggerSessionService
 import com.romraider.logger.api.LoggerWorkspacePreferences
 import com.romraider.logger.api.LoggerWorkspaceView
+import com.romraider.logger.api.LoggerDashboardTile
+import com.romraider.logger.api.LoggerDashboardTileRole
+import com.romraider.logger.api.LoggerDashboardTileSize
 import com.romraider.logger.ecu.ui.spi.LoggerWorkspaceContext
 import com.romraider.logger.ecu.ui.spi.LoggerWorkspaceProvider
 import java.util.ServiceLoader
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class LoggerWorkspaceModelTest {
     @Test
@@ -91,6 +95,27 @@ class LoggerWorkspaceModelTest {
     }
 
     @Test
+    fun channelBrowserKeepsCategoriesSeparateAndSearchesTheActiveCategory() {
+        val channels = listOf(
+            LoggerChannel("P-RPM", "Engine Speed", "rpm",
+                LoggerChannelKind.PARAMETER, true),
+            LoggerChannel("S-CLUTCH", "Clutch Switch", "",
+                LoggerChannelKind.SWITCH, false),
+            LoggerChannel("E-WIDEBAND", "External Wideband", "lambda",
+                LoggerChannelKind.EXTERNAL, false)
+        )
+
+        assertEquals(listOf("S-CLUTCH"),
+            filterChannels(channels, LoggerChannelKind.SWITCH, "clutch")
+                .map { it.parameterId })
+        assertEquals(listOf("E-WIDEBAND"),
+            filterChannels(channels, LoggerChannelKind.EXTERNAL, "lambda")
+                .map { it.parameterId })
+        assertTrue(filterChannels(
+            channels, LoggerChannelKind.PARAMETER, "wideband").isEmpty())
+    }
+
+    @Test
     fun telemetryUsesOnlyReceivedPointsAndTimestamps() {
         val channel = LoggerChannel(
             "P-RPM", "Engine Speed", "rpm",
@@ -135,6 +160,61 @@ class LoggerWorkspaceModelTest {
         assertEquals(2, summary.samples)
         assertEquals("3.0 s", summary.durationLabel)
         assertEquals("1 / 2", summary.coverageLabel)
+    }
+
+    @Test
+    fun knownGaugeChannelsUseStableRealWorldScales() {
+        val rpm = LoggerChannel("P-RPM", "Engine Speed", "rpm",
+            LoggerChannelKind.PARAMETER, true)
+        val boost = LoggerChannel("P-BOOST", "Manifold Relative Pressure",
+            "psi", LoggerChannelKind.PARAMETER, true)
+        val throttle = LoggerChannel("P-TPS", "Throttle Opening Angle", "%",
+            LoggerChannelKind.PARAMETER, true)
+        val afr = LoggerChannel("X-AEM-WIDEBAND", "AEM UEGO Wideband",
+            "AFR Gasoline", LoggerChannelKind.EXTERNAL, true)
+        val egt = LoggerChannel("X-AEM-EGT", "AEM X-WiFi EGT 1", "F",
+            LoggerChannelKind.EXTERNAL, true)
+
+        assertEquals(GaugeRange(0.0, 9000.0), gaugeRange(rpm, null))
+        assertEquals(GaugeRange(-15.0, 30.0), gaugeRange(boost, null))
+        assertEquals(GaugeRange(0.0, 100.0), gaugeRange(throttle, null))
+        assertEquals(GaugeRange(8.0, 22.0), gaugeRange(afr, null))
+        assertEquals(GaugeRange(400.0, 1800.0), gaugeRange(egt, null))
+        assertEquals(.5f, gaugeProgress(4500.0, gaugeRange(rpm, null)))
+    }
+
+    @Test
+    fun unknownGaugeChannelsReceiveAStablePaddedCapturedRange() {
+        val channel = LoggerChannel("P-CUSTOM", "Custom sensor", "unit",
+            LoggerChannelKind.PARAMETER, true)
+        val stats = statistics(listOf(sample(10.0), sample(20.0)))!!
+
+        val range = gaugeRange(channel, stats)
+
+        assertTrue(range.minimum < 10.0)
+        assertTrue(range.maximum > 20.0)
+        assertEquals(0f, gaugeProgress(-100.0, range))
+        assertEquals(1f, gaugeProgress(100.0, range))
+    }
+
+    @Test
+    fun dashboardChannelsFollowSavedOrderAndKeepUnsavedSelectionOrder() {
+        val rpm = LoggerChannel("P-RPM", "Engine Speed", "rpm",
+            LoggerChannelKind.PARAMETER, true)
+        val boost = LoggerChannel("P-BOOST", "Boost", "psi",
+            LoggerChannelKind.PARAMETER, true)
+        val afr = LoggerChannel("P-AFR", "Air/Fuel Ratio", "AFR",
+            LoggerChannelKind.PARAMETER, true)
+        val saved = mapOf(
+            "P-BOOST" to LoggerDashboardTile(LoggerDashboardTileRole.ALARM,
+                LoggerDashboardTileSize.WIDE, 0),
+            "P-RPM" to LoggerDashboardTile(LoggerDashboardTileRole.GAUGE,
+                LoggerDashboardTileSize.STANDARD, 1)
+        )
+
+        assertEquals(listOf("P-BOOST", "P-RPM", "P-AFR"),
+            dashboardChannels(listOf(rpm, boost, afr), saved)
+                .map { it.parameterId })
     }
 
     private fun sample(value: Double) = LiveDataSample(

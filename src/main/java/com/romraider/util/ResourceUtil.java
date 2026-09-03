@@ -19,9 +19,6 @@
 
 package com.romraider.util;
 
-import static javax.swing.JOptionPane.ERROR_MESSAGE;
-import static javax.swing.JOptionPane.showMessageDialog;
-
 import java.io.File;
 import java.net.URL;
 import java.net.URLClassLoader;
@@ -47,10 +44,8 @@ public final class ResourceUtil {
                     ResourceUtil.class.getClassLoader());
         } catch (Exception e) {
             if (externalFailure != null) e.addSuppressed(externalFailure);
-            showMessageDialog(null,
-                    e.getLocalizedMessage(),
-                    "Error",
-                    ERROR_MESSAGE);
+            System.err.println("Unable to load resource bundle '" + bundle
+                    + "': " + e.getLocalizedMessage());
         }
         return null;
     }

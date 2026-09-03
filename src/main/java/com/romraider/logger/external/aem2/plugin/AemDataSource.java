@@ -38,9 +38,9 @@ import javax.swing.Action;
 import com.romraider.logger.ecu.EcuLogger;
 import com.romraider.logger.external.aem2.io.AemRunner;
 import com.romraider.logger.external.core.ExternalDataItem;
-import com.romraider.logger.external.core.ExternalDataSource;
+import com.romraider.logger.external.core.SwingExternalDataSource;
 
-public final class AemDataSource implements ExternalDataSource {
+public final class AemDataSource implements SwingExternalDataSource {
     private AemDataItem dataItem = new AemDataItem(LAMBDA, AFR_147, AFR_90, AFR_146, AFR_64, AFR_155, AFR_172, AFR_34);
     private AemRunner runner;
     private String port;

@@ -35,12 +35,12 @@ import org.apache.log4j.Logger;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
+import com.romraider.activity.ProgressReporter;
 import com.romraider.maps.Rom;
 import com.romraider.maps.RomID;
 import com.romraider.maps.Table;
 import com.romraider.maps.checksum.ChecksumFactory;
 import com.romraider.maps.checksum.ChecksumManager;
-import com.romraider.swing.JProgressPane;
 import com.romraider.util.HexUtil;
 import com.romraider.util.ResourceUtil;
 
@@ -49,7 +49,7 @@ public final class DOMRomUnmarshaller {
             .getLogger(DOMRomUnmarshaller.class);
     private static final ResourceBundle rb = new ResourceUtil().getBundle(
             DOMRomUnmarshaller.class.getName());
-    private JProgressPane progress = null;
+    private ProgressReporter progress = null;
     private ChecksumManager checksumManager = null;
     private TableScaleUnmarshaller tableScaleHandler = new TableScaleUnmarshaller();
 
@@ -59,7 +59,7 @@ public final class DOMRomUnmarshaller {
     }
 
     public Rom unmarshallXMLDefinition(File definition, Node rootNode, Node romNode, byte[] input,
-            JProgressPane progress) throws
+            ProgressReporter progress) throws
             XMLParseException, StackOverflowError, Exception {
 
         this.progress = progress;

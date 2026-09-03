@@ -40,17 +40,20 @@ import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
 
 import com.romraider.Settings;
+import com.romraider.activity.ProgressReporter;
 import com.romraider.editor.workspace.EditorWorkspacePreferences;
 import com.romraider.editor.workspace.TableLocation;
 import com.romraider.logger.external.phidget.interfacekit.io.IntfKitSensor;
-import com.romraider.swing.JProgressPane;
+import com.romraider.logger.api.LoggerGaugeConfiguration;
+import com.romraider.logger.api.LoggerDashboardTile;
 import com.romraider.util.ResourceUtil;
 
 public final class DOMSettingsBuilder {
     private static final ResourceBundle rb = new ResourceUtil().getBundle(
             DOMSettingsBuilder.class.getName());
 
-    public void buildSettings(Settings settings, File output, JProgressPane progress, String versionNumber) throws IOException {
+    public void buildSettings(Settings settings, File output,
+            ProgressReporter progress, String versionNumber) throws IOException {
 
         IIOMetadataNode settingsNode = new IIOMetadataNode("settings");
 
@@ -88,7 +91,7 @@ public final class DOMSettingsBuilder {
             final StreamResult sr = new StreamResult(fos);
             transformer.transform(dom, sr); // make sure attributes are not null before transforming
             fos.flush();
-            progress.complete("Settings saved");
+            progress.update("Settings saved", 100);
         } catch (TransformerConfigurationException e) {
             throw new RuntimeException(e);
         } catch (TransformerException e) {
@@ -449,7 +452,44 @@ public final class DOMSettingsBuilder {
             tabs.setAttribute("workspace-dark", String.valueOf(
                     settings.getLoggerWorkspaceDarkTheme()));
         }
+        tabs.setAttribute("gauge-theme",
+                settings.getLoggerGaugeTheme().name());
+        tabs.setAttribute("gauge-layout",
+                settings.getLoggerGaugeLayout().name());
         loggerSettings.appendChild(tabs);
+
+        IIOMetadataNode gaugeConfigurations = new IIOMetadataNode(
+                "gauge-configurations");
+        gaugeConfigurations.setAttribute("schema", "1");
+        for (Map.Entry<String, LoggerGaugeConfiguration> entry
+                : settings.getLoggerGaugeConfigurations().entrySet()) {
+            LoggerGaugeConfiguration configuration = entry.getValue();
+            IIOMetadataNode channel = new IIOMetadataNode("channel");
+            channel.setAttribute("id", entry.getKey());
+            setOptional(channel, "scale-min", configuration.getScaleMinimum());
+            setOptional(channel, "scale-max", configuration.getScaleMaximum());
+            setOptional(channel, "warn-low", configuration.getLowWarning());
+            setOptional(channel, "warn-high", configuration.getHighWarning());
+            channel.setAttribute("hysteresis", String.valueOf(
+                    configuration.getHysteresis()));
+            gaugeConfigurations.appendChild(channel);
+        }
+        loggerSettings.appendChild(gaugeConfigurations);
+
+        IIOMetadataNode dashboardLayout = new IIOMetadataNode(
+                "dashboard-layout");
+        dashboardLayout.setAttribute("schema", "1");
+        for (Map.Entry<String, LoggerDashboardTile> entry
+                : settings.getLoggerDashboardTiles().entrySet()) {
+            LoggerDashboardTile tile = entry.getValue();
+            IIOMetadataNode channel = new IIOMetadataNode("tile");
+            channel.setAttribute("id", entry.getKey());
+            channel.setAttribute("role", tile.getRole().name());
+            channel.setAttribute("size", tile.getSize().name());
+            channel.setAttribute("order", String.valueOf(tile.getOrder()));
+            dashboardLayout.appendChild(channel);
+        }
+        loggerSettings.appendChild(dashboardLayout);
 
         // definition path
         IIOMetadataNode definition = new IIOMetadataNode("definition");
@@ -571,5 +611,10 @@ public final class DOMSettingsBuilder {
             return "";
         }
         return attr;
+    }
+
+    private static void setOptional(IIOMetadataNode node, String name,
+            Double value) {
+        if (value != null) node.setAttribute(name, String.valueOf(value));
     }
 }

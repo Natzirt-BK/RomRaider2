@@ -19,38 +19,28 @@
 
 package com.romraider;
 
-import static com.romraider.Settings.COMMA;
 import static com.romraider.Version.BUILDNUMBER;
 import static com.romraider.Version.PRODUCT_NAME;
 import static com.romraider.Version.SUPPORT_URL;
 import static com.romraider.Version.VERSION;
-import static com.romraider.editor.ecu.ECUEditorManager.*;
-import static com.romraider.logger.ecu.EcuLogger.startLogger;
-import static com.romraider.swing.LookAndFeelManager.initLookAndFeel;
 import static com.romraider.util.LogManager.initDebugLogging;
 import static com.romraider.EditorLoggerCommunication.*;
-import static javax.swing.JOptionPane.INFORMATION_MESSAGE;
-import static javax.swing.JOptionPane.WARNING_MESSAGE;
-import static javax.swing.JOptionPane.showMessageDialog;
-import static javax.swing.WindowConstants.DISPOSE_ON_CLOSE;
-import static javax.swing.WindowConstants.DO_NOTHING_ON_CLOSE;
 import static org.apache.log4j.Logger.getLogger;
 
 import java.io.IOException;
 import java.text.DateFormat;
 import java.text.MessageFormat;
-import java.util.Arrays;
 import java.util.ResourceBundle;
 
 import org.apache.log4j.Logger;
 
-import com.romraider.editor.ecu.ECUEditor;
-import com.romraider.editor.ecu.ECUEditorManager;
-import com.romraider.logger.ecu.EcuLogger;
+import com.romraider.desktop.DesktopApplicationCommands;
+import com.romraider.desktop.DesktopApplicationLoader;
+import com.romraider.diagnostics.PrivacySafeDiagnostics;
 import com.romraider.platform.PlatformCapabilities;
 import com.romraider.platform.PlatformContext;
 import com.romraider.platform.PlatformRegistry;
-import com.romraider.runtime.RuntimeArchitecture;
+import com.romraider.ui.ApplicationThemeService;
 import com.romraider.util.ResourceUtil;
 import com.romraider.util.SettingsManager;
 
@@ -71,34 +61,14 @@ public class ECUExec {
         if (rb == null) return;
         // init debug logging
         initDebugLogging();
-        // dump the system properties to the log file as early as practical to
-        // help debugging/support
+        // Record a small, share-safe runtime summary for debugging/support.
         LOGGER.info(PRODUCT_NAME + " " + VERSION + " Build: " + BUILDNUMBER);
         LOGGER.info(MessageFormat.format(rb.getString("SUPPORT"), SUPPORT_URL));
         LOGGER.info(DateFormat.getDateTimeInstance(
                 DateFormat.FULL,
                 DateFormat.LONG).format(System.currentTimeMillis()));
-        LOGGER.info("System Properties: \n\t"
-                + System.getProperties().toString().replace(COMMA, "\n\t"));
+        LOGGER.info(PrivacySafeDiagnostics.buildRuntimeSummary());
 
-        /**
-         * Bitness of supporting libraries must match the bitness of RomRaider
-         * and the running JRE.  Notify if mixed bitness is detected.
-         */
-        if (!RuntimeArchitecture.isCompatible(Version.BUILD_ARCH) &&
-                !containsLoggerArg(args)) {
-            showMessageDialog(null,
-                    MessageFormat.format(
-                    		rb.getString("COMPATJRE"), PRODUCT_NAME, Version.BUILD_ARCH),
-                    rb.getString("JREWARN"),
-                    WARNING_MESSAGE);
-        }
-
-        // check for dodgy threading - dev only
-        //RepaintManager.setCurrentManager(new ThreadCheckingRepaintManager(true));
-
-        // set look and feel
-        initLookAndFeel();
         initializePlatformContext();
         setExecType(args);
 
@@ -107,19 +77,30 @@ public class ECUExec {
         	// The other executable will open us, close this app
         	EditorLoggerCommunication.sendTypeToOtherExec(args);
         } else {
-            // open editor or logger
-            if (containsLoggerArg(args)) {
-                openLogger(DISPOSE_ON_CLOSE, args);
-            } else {
-                openEditor(args);
+            startExecCommunicationDaemon();
+            if (DesktopApplicationLoader.launch(args)) {
+                return;
             }
-
-            startExecCommunication();
+            if (legacySwingRequested()) {
+                LegacySwingApplication.launch(args);
+            } else {
+                LOGGER.error("Compose desktop shell is unavailable; "
+                        + "use -Dromraider2.desktop.shell=swing only for "
+                        + "legacy compatibility testing");
+            }
         }
+    }
+
+    private static void startExecCommunicationDaemon() {
+        Thread listener = new Thread(ECUExec::startExecCommunication,
+                "RomRaider single-instance listener");
+        listener.setDaemon(true);
+        listener.start();
     }
 
     private static void initializePlatformContext() {
         Settings settings = SettingsManager.getSettings();
+        ApplicationThemeService.getInstance().apply(settings.getThemeMode());
         PlatformContext context = PlatformContext.getInstance();
         context.setPlatform(settings.getVehiclePlatform());
         PlatformCapabilities capabilities = PlatformRegistry.get(
@@ -134,13 +115,7 @@ public class ECUExec {
     	EditorLoggerCommunication.setExectable(execType, args);
     }
 
-    public static void showAlreadyRunningMessage() {
-        showMessageDialog(null,
-                MessageFormat.format(rb.getString("ISRUNNING"), PRODUCT_NAME),
-                PRODUCT_NAME, INFORMATION_MESSAGE);
-    }
-
-    private static boolean containsLoggerArg(String[] args) {
+    static boolean containsLoggerArg(String[] args) {
         for (String arg : args) {
             if (	arg.equalsIgnoreCase(START_LOGGER_ARG) ||
             		arg.equalsIgnoreCase(START_LOGGER_FULLSCREEN_ARG) ||
@@ -151,56 +126,31 @@ public class ECUExec {
         return false;
     }
 
-    public static void openLogger(int defaultCloseOperation, String[] args) {
-        startLogger(defaultCloseOperation, getECUEditorWithoutCreation(), args);
-    }
+    private static void startExecCommunication() {
+        while (true) {
+            try {
+                ExecutableInstance instance =
+                        EditorLoggerCommunication.waitForOtherExec();
 
-    private static void openEditor(String[] args) {
-        ECUEditor editor = getECUEditor();
-        // ECUEditor owns its guarded shutdown flow. Swing must not dispose the
-        // window after a cancelled unsaved-changes prompt.
-        editor.setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
-        editor.initializeEditorUI();
-        editor.checkDefinitions();
-        editor.reviewRecoverySnapshots();
-
-        if (args.length > 0) {
-            editor.openImage(args[0]);
+                if (DesktopApplicationCommands.dispatch(
+                        instance.currentArgs)) {
+                    LOGGER.info("Forwarded request to active desktop shell");
+                    continue;
+                }
+                if (legacySwingRequested()) {
+                    LegacySwingApplication.handleForwarded(instance);
+                } else {
+                    LOGGER.warn("No active Compose window accepted the "
+                            + "forwarded request");
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
         }
     }
 
-    private static void startExecCommunication() {
-	    while (true) {
-	    	try {
-	    		ExecutableInstance instance = EditorLoggerCommunication.waitForOtherExec();
-
-	    		if(instance.execType == Exec_type.LOGGER) {
-	    			if(EditorLoggerCommunication.getExecutableType() == Exec_type.LOGGER ||
-	    					EcuLogger.getEcuLoggerWithoutCreation() != null) {
-	    				showAlreadyRunningMessage();
-	    				continue;
-	    			}
-
-	    			openLogger(DISPOSE_ON_CLOSE, instance.currentArgs);
-	    			LOGGER.info("Opening Logger with args: " +  Arrays.toString(instance.currentArgs));
-	    		}
-	    		else if(instance.execType == Exec_type.EDITOR) {
-				openEditor(instance.currentArgs);
-
-		    		if(EditorLoggerCommunication.getExecutableType() == Exec_type.LOGGER) {
-		    			EcuLogger.getEcuLoggerWithoutCreation().setEcuEditor(
-		    					ECUEditorManager.getECUEditorWithoutCreation());
-		    		}
-
-	    			LOGGER.info("Opening Editor with args: " +  Arrays.toString(instance.currentArgs));
-	    		}
-	    		else {
-	    			LOGGER.error("Unknown type in Editor/Logger communication with args: " +  Arrays.toString(instance.currentArgs));
-	    		}
-
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
-	    }
+    static boolean legacySwingRequested() {
+        return "swing".equalsIgnoreCase(System.getProperty(
+                "romraider2.desktop.shell", "compose"));
     }
 }

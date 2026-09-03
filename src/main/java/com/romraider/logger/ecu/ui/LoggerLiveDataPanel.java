@@ -21,6 +21,7 @@ import javax.swing.event.TableModelListener;
 
 import com.romraider.logger.ecu.ui.handler.livedata.LiveDataTableModel;
 import com.romraider.ui.ThemeToken;
+import com.romraider.ui.ModernTableStyle;
 import com.romraider.ui.UiThemeService;
 
 /** Live-value table with a useful first-run state instead of an empty grid. */
@@ -61,13 +62,12 @@ public final class LoggerLiveDataPanel extends JPanel {
 
         table = new JTable(model);
         table.setName("LOGGER LIVE DATA TABLE");
-        table.setFillsViewportHeight(true);
+        ModernTableStyle.apply(table);
         table.setAutoCreateRowSorter(true);
-        table.setShowVerticalLines(false);
-        table.setRowHeight(Math.max(table.getRowHeight(), 26));
         table.setRowSelectionAllowed(true);
         table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        table.getTableHeader().setReorderingAllowed(false);
+        table.getColumnModel().getColumn(0).setCellRenderer(
+                new ModernTableStyle.TokenRenderer(ThemeToken.LIVE_TRACE));
         JScrollPane scroll = new JScrollPane(table,
                 ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED,
                 ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);

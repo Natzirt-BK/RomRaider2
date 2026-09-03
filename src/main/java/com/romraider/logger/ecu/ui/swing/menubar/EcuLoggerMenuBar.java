@@ -85,6 +85,7 @@ import com.romraider.logger.ecu.ui.swing.menubar.action.SaveProfileAsAction;
 import com.romraider.logger.ecu.ui.swing.menubar.action.SelectProtocolAction;
 import com.romraider.logger.ecu.ui.swing.menubar.action.InstallLoggerDefinitionAction;
 import com.romraider.logger.external.core.ExternalDataSource;
+import com.romraider.logger.external.core.SwingExternalDataSource;
 import com.romraider.platform.PlatformContext;
 import com.romraider.platform.PlatformContextListener;
 import com.romraider.platform.VehicleModule;
@@ -204,7 +205,9 @@ public class EcuLoggerMenuBar extends JMenuBar
         JMenu pluginsMenu = new Menu(rb.getString("PLUGINS"), VK_P);
         pluginsMenu.setEnabled(!externalDataSources.isEmpty());
         for (ExternalDataSource dataSource : externalDataSources) {
-            Action action = dataSource.getMenuAction(logger);
+            if (!(dataSource instanceof SwingExternalDataSource)) continue;
+            Action action = ((SwingExternalDataSource) dataSource)
+                    .getMenuAction(logger);
             if (action != null) {
                 pluginsMenu.add(new MenuItem(dataSource.getName(), action));
             }

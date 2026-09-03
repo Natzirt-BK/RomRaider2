@@ -52,9 +52,7 @@ import java.beans.PropertyChangeEvent;
 import java.beans.PropertyVetoException;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
-import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -89,7 +87,6 @@ import javax.swing.tree.TreePath;
 
 import org.apache.log4j.Logger;
 
-import com.romraider.ECUExec;
 import com.romraider.Settings;
 import com.romraider.editor.workspace.EditorWorkspaceService;
 import com.romraider.editor.workspace.EditorWorkspacePanel;
@@ -98,6 +95,8 @@ import com.romraider.editor.workspace.RomChangeService;
 import com.romraider.editor.workspace.RomChangeSummary;
 import com.romraider.editor.recovery.RomRecoveryService;
 import com.romraider.editor.recovery.RecoverySnapshot;
+import com.romraider.ui.ThemeToken;
+import com.romraider.ui.UiThemeService;
 import com.romraider.editor.search.UnifiedSearchPanel;
 import com.romraider.editor.compare.TableComparison;
 import com.romraider.flash.FlashBackendRegistry;
@@ -123,9 +122,21 @@ import com.romraider.maps.TableBitwiseSwitchView;
 import com.romraider.maps.TableSwitch;
 import com.romraider.maps.TableSwitchView;
 import com.romraider.maps.TableView;
+import com.romraider.maps.TablePresentationListener;
+import com.romraider.maps.TablePresentationService;
+import com.romraider.maps.Scale;
+import com.romraider.maps.RomUserInteraction;
+import com.romraider.maps.RomUserInteractionService;
 import com.romraider.maps.UserLevelException;
 import com.romraider.maps.history.RomEditHistory;
 import com.romraider.maps.history.EditHistoryListener;
+import com.romraider.editor.ecu.spi.RomComparisonWorkspaceContext;
+import com.romraider.editor.ecu.spi.RomComparisonWorkspaceLoader;
+import com.romraider.editor.ecu.spi.EditorNavigationWorkspace;
+import com.romraider.editor.ecu.spi.EditorNavigationWorkspaceContext;
+import com.romraider.editor.ecu.spi.EditorNavigationWorkspaceLoader;
+import com.romraider.editor.document.EditorDocument;
+import com.romraider.editor.document.EditorDocumentSession;
 import com.romraider.net.URL;
 import com.romraider.platform.PlatformContext;
 import com.romraider.platform.RomPlatformResolver;
@@ -143,6 +154,9 @@ import com.romraider.swing.MDIDesktopPane;
 import com.romraider.swing.RomTree;
 import com.romraider.swing.RomTreeRootNode;
 import com.romraider.swing.SettingsForm;
+import com.romraider.swing.SwingTableFrameRegistry;
+import com.romraider.swing.SwingRomTreeNode;
+import com.romraider.swing.SwingRomTreeRegistry;
 import com.romraider.swing.TableFrame;
 import com.romraider.swing.TableToolBar;
 import com.romraider.swing.TableTreeNode;
@@ -187,16 +201,64 @@ public class ECUEditor extends AbstractFrame {
     private OpenImageWorker openImageWorker;
     private SetUserLevelWorker setUserLevelWorker;
     private final Settings settings = SettingsManager.getSettings();
-    private EditorWorkspacePanel workspacePanel;
+    private final EditorDocumentSession documentSession =
+            new EditorDocumentSession();
+    private final TablePresentationListener tableValidationPresenter =
+            new TablePresentationListener() {
+                public void invalidScale(Table table, Scale scale) {
+                    Runnable warning = () ->
+                            TableView.showBadScalePopup(table, scale);
+                    if (SwingUtilities.isEventDispatchThread()) warning.run();
+                    else SwingUtilities.invokeLater(warning);
+                }
+            };
+    private final RomUserInteraction romUserInteraction =
+            new RomUserInteraction() {
+                public void definitionError(Rom rom, Table table,
+                        String title, String message, Throwable failure) {
+                    showRomOperationMessage(message, title,
+                            JOptionPane.ERROR_MESSAGE);
+                }
+
+                public boolean confirmChecksumFix(Rom rom, Table table,
+                        String title, String message) {
+                    final boolean[] confirmed = {false};
+                    Runnable prompt = () -> {
+                        Object[] choices = {rb.getString("YES"),
+                                rb.getString("NO")};
+                        confirmed[0] = IntegratedOptionDialog.show(
+                                ECUEditor.this, message, title,
+                                JOptionPane.QUESTION_MESSAGE, choices,
+                                choices[0]) == 0;
+                    };
+                    runOnEventThreadAndWait(prompt);
+                    return confirmed[0];
+                }
+
+                public void checksumValidationFailed(Rom rom, String title,
+                        String message) {
+                    showRomOperationMessage(message, title,
+                            JOptionPane.WARNING_MESSAGE);
+                }
+
+                public void checksumUpdated(Rom rom, String message) {
+                    SwingUtilities.invokeLater(() ->
+                            statusPanel.complete(message));
+                }
+            };
+    private EditorNavigationWorkspace workspacePanel;
     private EditHistoryListener editHistoryListener;
     private RomRecoveryService.Listener recoveryListener;
 
     public ECUEditor() {
+        TablePresentationService.addFallbackListener(
+                tableValidationPresenter);
+        RomUserInteractionService.addHandler(romUserInteraction);
         registerSearchCommands();
         inspectorPanel.setOpenTableAction(table -> {
             if (table == null || table.getRom() == null) return;
-            TableTreeNode node = table.getRom().getTableNodeByName(
-                    table.getName());
+            TableTreeNode node = SwingRomTreeRegistry.nodeFor(table.getRom())
+                    .getTableNodeByName(table.getName());
             if (node == null) return;
             setLastSelectedRom(table.getRom());
             displayTable(node);
@@ -208,16 +270,24 @@ public class ECUEditor extends AbstractFrame {
         }
 
         Dimension savedWindowSize = settings.getWindowSize();
-        boolean touchLayout = settings.getDisplayMode().isTouchOptimized();
+        boolean touchLayout = com.romraider.ui.RuntimeUiProfile.displayMode(
+                settings.getDisplayMode()).isTouchOptimized();
         int minimumWidth = touchLayout ? 840 : 900;
         int minimumHeight = touchLayout ? 580 : 600;
         setMinimumSize(new Dimension(minimumWidth, minimumHeight));
         setSize(Math.max(minimumWidth, savedWindowSize.width),
                 Math.max(minimumHeight, savedWindowSize.height));
-        setLocation(clampWindowLocation(settings.getWindowLocation(), getSize(),
-                GraphicsEnvironment.getLocalGraphicsEnvironment()
-                        .getMaximumWindowBounds()));
-        if (settings.isWindowMaximized()) {
+        Rectangle usableBounds = GraphicsEnvironment
+                .getLocalGraphicsEnvironment().getMaximumWindowBounds();
+        if (com.romraider.ui.RuntimeUiProfile.isSteamOs()) {
+            setBounds(usableBounds);
+            setExtendedState(MAXIMIZED_BOTH);
+        } else {
+            setLocation(clampWindowLocation(settings.getWindowLocation(),
+                    getSize(), usableBounds));
+        }
+        if (!com.romraider.ui.RuntimeUiProfile.isSteamOs()
+                && settings.isWindowMaximized()) {
             setExtendedState(MAXIMIZED_BOTH);
         }
 
@@ -263,13 +333,24 @@ public class ECUEditor extends AbstractFrame {
         leftScrollPane = new JScrollPane(imageList,
                 VERTICAL_SCROLLBAR_AS_NEEDED, HORIZONTAL_SCROLLBAR_AS_NEEDED);
 
-        workspacePanel = new EditorWorkspacePanel(imageRoot, imageList,
-                leftScrollPane,
-                new EditorWorkspacePanel.LocationOpener() {
-                    public void open(TableLocation location) {
-                        openTableLocation(location);
-                    }
-                });
+        EditorNavigationWorkspaceContext navigationContext =
+                new EditorNavigationWorkspaceContext(documentSession,
+                        new EditorNavigationWorkspaceContext.Opener() {
+                            public void open(TableLocation location) {
+                                openTableLocation(location);
+                            }
+                        });
+        workspacePanel = EditorNavigationWorkspaceLoader.create(
+                navigationContext);
+        if (workspacePanel == null) {
+            workspacePanel = new EditorWorkspacePanel(imageRoot, imageList,
+                    leftScrollPane,
+                    new EditorWorkspacePanel.LocationOpener() {
+                        public void open(TableLocation location) {
+                            openTableLocation(location);
+                        }
+                    });
+        }
         
         JScrollPane inspectorScrollPane = new JScrollPane(inspectorPanel,
                 VERTICAL_SCROLLBAR_AS_NEEDED, HORIZONTAL_SCROLLBAR_NEVER);
@@ -282,17 +363,18 @@ public class ECUEditor extends AbstractFrame {
         workspaceSplitPane.setResizeWeight(1.0);
         workspaceSplitPane.setContinuousLayout(true);
         workspaceSplitPane.setDividerSize(5);
-        inspectorRequestedVisible = !settings.getDisplayMode().isTouchOptimized();
+        inspectorRequestedVisible = !com.romraider.ui.RuntimeUiProfile
+                .displayMode(settings.getDisplayMode()).isTouchOptimized();
         inspectorVisible = inspectorRequestedVisible;
         inspectorScrollPane.setVisible(inspectorVisible);
         workspaceSplitPane.setDividerSize(inspectorVisible ? 5 : 0);
 
         splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT,
-				workspacePanel, workspaceSplitPane);
+				workspacePanel.getComponent(), workspaceSplitPane);
         navigationVisible = settings.isNavigationPanelVisible();
         navigationWidth = Math.max(190,
                 Math.min(300, settings.getSplitPaneLocation()));
-        workspacePanel.setVisible(navigationVisible);
+        workspacePanel.getComponent().setVisible(navigationVisible);
         splitPane.setDividerSize(navigationVisible ? 5 : 0);
         splitPane.setDividerLocation(navigationVisible ? navigationWidth : 0);
         splitPane.addPropertyChangeListener(this);
@@ -309,7 +391,9 @@ public class ECUEditor extends AbstractFrame {
 
         workbenchStatus = new EditorStatusBar(new EditorStatusBar.Actions() {
             public void resetChanges() { resetCurrentRomChanges(); }
-            public void showDimeModFeatures() { showDimeModFeaturesWorkspace(); }
+            public void showRomModifications() {
+                showRomModificationsWorkspace();
+            }
         }, statusPanel);
         this.add(workbenchStatus, BorderLayout.SOUTH);
         recoveryListener = (rom, state, snapshot, failure) ->
@@ -403,7 +487,8 @@ public class ECUEditor extends AbstractFrame {
         positionInspector();
         setupDragAndDrop();
         installWorkspaceShortcuts();
-        TouchTargetService.apply(this, settings.getDisplayMode());
+        TouchTargetService.apply(this, com.romraider.ui.RuntimeUiProfile
+                .displayMode(settings.getDisplayMode()));
         validate();
         showInitializedEditor();
     }
@@ -522,35 +607,64 @@ public class ECUEditor extends AbstractFrame {
             BufferedReader br = new BufferedReader(new FileReader(
                     settings.getReleaseNotes()));
             try {
-                // new version being used, display release notes
-                JTextArea releaseNotes = new JTextArea();
-                releaseNotes.setEditable(false);
-                releaseNotes.setWrapStyleWord(true);
-                releaseNotes.setLineWrap(true);
-                releaseNotes.setFont(new Font(rb.getString("RELEASENOTESFONT"),
-                        Font.PLAIN, 12));
-
                 StringBuffer sb = new StringBuffer();
                 while (br.ready()) {
                     sb.append(br.readLine()).append(Settings.NEW_LINE);
                 }
-                releaseNotes.setText(sb.toString());
-                releaseNotes.setCaretPosition(0);
-
-                JScrollPane scroller = new JScrollPane(releaseNotes,
-                        VERTICAL_SCROLLBAR_ALWAYS, HORIZONTAL_SCROLLBAR_NEVER);
-                scroller.setPreferredSize(new Dimension(600, 500));
-
-                showMessageDialog(this, scroller,
+                Object[] options = {"Continue"};
+                IntegratedOptionDialog.show(this,
+                        createReleaseNotesPanel(sb.toString()),
                         PRODUCT_NAME + " " + VERSION + " "
                                 + rb.getString("RELEASENOTES"),
-                        INFORMATION_MESSAGE);
+                        JOptionPane.PLAIN_MESSAGE, options, options[0]);
             } finally {
                 br.close();
             }
         } catch (Exception e) {
             /* Ignore */
         }
+    }
+
+    static JPanel createReleaseNotesPanel(String notes) {
+        JPanel panel = new JPanel(new BorderLayout(0, 12));
+        panel.setName("RELEASE NOTES PANEL");
+        panel.setBorder(javax.swing.BorderFactory.createEmptyBorder(
+                8, 8, 2, 8));
+
+        JPanel heading = new JPanel(new GridLayout(2, 1, 0, 3));
+        heading.setOpaque(false);
+        JLabel title = new JLabel("WHAT'S NEW IN RC4");
+        title.setFont(title.getFont().deriveFont(Font.BOLD,
+                title.getFont().getSize2D() + 3.0f));
+        title.setForeground(UiThemeService.getInstance().color(
+                ThemeToken.ACCENT));
+        JLabel summary = new JLabel("A development preview of the new "
+                + "desktop and portable interface.");
+        summary.setForeground(UiThemeService.getInstance().color(
+                ThemeToken.SECONDARY_TEXT));
+        heading.add(title);
+        heading.add(summary);
+        panel.add(heading, BorderLayout.NORTH);
+
+        JTextArea releaseNotes = new JTextArea(notes == null ? "" : notes);
+        releaseNotes.setName("RELEASE NOTES TEXT");
+        releaseNotes.setEditable(false);
+        releaseNotes.setFocusable(true);
+        releaseNotes.setWrapStyleWord(true);
+        releaseNotes.setLineWrap(true);
+        releaseNotes.setMargin(new java.awt.Insets(12, 14, 12, 14));
+        releaseNotes.setFont(releaseNotes.getFont().deriveFont(Font.PLAIN,
+                Math.max(13.0f, releaseNotes.getFont().getSize2D())));
+        releaseNotes.setCaretPosition(0);
+        JScrollPane scroller = new JScrollPane(releaseNotes,
+                VERTICAL_SCROLLBAR_ALWAYS, HORIZONTAL_SCROLLBAR_NEVER);
+        scroller.setName("RELEASE NOTES SCROLL");
+        scroller.setBorder(javax.swing.BorderFactory.createLineBorder(
+                UiThemeService.getInstance().color(
+                        ThemeToken.RAISED_SURFACE)));
+        scroller.setPreferredSize(new Dimension(700, 480));
+        panel.add(scroller, BorderLayout.CENTER);
+        return panel;
     }
 
     public void handleExit() {
@@ -597,6 +711,12 @@ public class ECUEditor extends AbstractFrame {
             LOGGER.error("Unable to save editor settings during shutdown", error);
         }
 
+        TablePresentationService.removeListener(null,
+                tableValidationPresenter);
+        RomUserInteractionService.removeHandler(romUserInteraction);
+        workspacePanel.close();
+        documentSession.close();
+
         if(EcuLogger.getEcuLoggerWithoutCreation()== null) {
             System.exit(0);
         }
@@ -604,6 +724,25 @@ public class ECUEditor extends AbstractFrame {
             ECUEditorManager.clearECUEditor();
             EcuLogger.getEcuLoggerWithoutCreation().setEcuEditor(null);
             dispose();
+        }
+    }
+
+    private void showRomOperationMessage(String message, String title,
+            int messageType) {
+        runOnEventThreadAndWait(() -> IntegratedOptionDialog.show(
+                ECUEditor.this, message, title, messageType,
+                new Object[] {"OK"}, "OK"));
+    }
+
+    private static void runOnEventThreadAndWait(Runnable action) {
+        if (SwingUtilities.isEventDispatchThread()) {
+            action.run();
+            return;
+        }
+        try {
+            SwingUtilities.invokeAndWait(action);
+        } catch (Exception failure) {
+            LOGGER.error("Unable to present ROM operation message", failure);
         }
     }
 
@@ -628,13 +767,12 @@ public class ECUEditor extends AbstractFrame {
 
         String saveLabel = changedRoms.size() == 1 ? "Save" : "Save All";
         Object[] choices = {saveLabel, "Discard Changes", "Cancel"};
-        int answer = JOptionPane.showOptionDialog(this, details.toString(),
+        int answer = IntegratedOptionDialog.show(this, details.toString(),
                 total == 1 ? "1 unsaved ROM change"
                         : total > 1 ? total + " unsaved ROM changes"
                         : changedRoms.size() == 1 ? "Unsaved ROM changes"
                         : changedRoms.size() + " ROMs have unsaved changes",
-                JOptionPane.YES_NO_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE,
-                null, choices, choices[0]);
+                JOptionPane.WARNING_MESSAGE, choices, choices[0]);
         if (answer == 1) return true;
         if (answer != 0) return false;
 
@@ -715,19 +853,21 @@ public class ECUEditor extends AbstractFrame {
     }
 
     public void addRom(Rom input) {
-        input.refreshDisplayedTables();
+        SwingRomTreeNode romNode = SwingRomTreeRegistry.nodeFor(input);
+        romNode.refreshDisplayedTables();
         RomChangeService.rememberSavedBinary(input);
         EditorWorkspaceService.getInstance().indexRom(input);
+        documentSession.openRom(input);
 
         // add to ecu image list pane
-        getImageRoot().add(input);
+        getImageRoot().add(romNode);
 
         getImageList().setVisible(true);
         getImageList().expandPath(new TreePath(getImageRoot()));
-        getImageList().expandPath(new TreePath(input.getPath()));
+        getImageList().expandPath(new TreePath(romNode.getPath()));
 
         if(!settings.isOpenExpanded()) {
-            imageList.collapsePath(new TreePath(input.getPath()));
+            imageList.collapsePath(new TreePath(romNode.getPath()));
         }
 
         getImageList().setRootVisible(false);
@@ -774,7 +914,8 @@ public class ECUEditor extends AbstractFrame {
         String activeTable = service.preferences().getActiveTable(romId);
         TableFrame activeFrame = null;
         for (String tableName : savedTables) {
-            TableTreeNode node = rom.getTableNodeByName(tableName);
+            TableTreeNode node = SwingRomTreeRegistry.nodeFor(rom)
+                    .getTableNodeByName(tableName);
             if (node == null) continue;
             openClosedTable(node);
             if (node.getFrame() != null && tableName.equals(activeTable)) {
@@ -838,7 +979,6 @@ public class ECUEditor extends AbstractFrame {
     {
         Table t = node.getTable();
         TableView v = getTableViewForTable(t);
-        t.setTableView(v);
         try {
             if (t != null) {    
     	        v.populateTableVisual();
@@ -849,6 +989,7 @@ public class ECUEditor extends AbstractFrame {
                 frame.pack();
                 frame.RegisterTable();
                 documentWorkspace.open(frame);
+                documentSession.openTable(rom, t);
             }
         }
         catch(Exception e) {
@@ -881,6 +1022,7 @@ public class ECUEditor extends AbstractFrame {
 
         Rom rom = RomTree.getRomNode(node);
         if (rom != null && node.getTable() != null && node.getFrame() != null) {
+            documentSession.openTable(rom, node.getTable());
             EditorWorkspaceService.getInstance().tableOpened(rom, node.getTable());
             workspacePanel.refresh();
             inspectorPanel.showSelection(rom, node.getTable());
@@ -895,13 +1037,14 @@ public class ECUEditor extends AbstractFrame {
         if (frame == null) return;
         Table table = frame.getTable();
         if (table != null && table.getRom() != null) {
+            documentSession.closeTable(table.getRom(), table);
             EditorWorkspaceService.getInstance().tableClosed(table.getRom(), table);
         }
         documentWorkspace.close(frame);
         frame.setVisible(false);
         if (frame.getParent() == rightPanel) rightPanel.remove(frame);
         else frame.DeregisterTable();
-        if (table != null) table.setTableFrame(null);
+        SwingTableFrameRegistry.unregister(table, frame);
         try {
             frame.setClosed(true);
         } catch (PropertyVetoException exception) {
@@ -929,6 +1072,7 @@ public class ECUEditor extends AbstractFrame {
             setLastSelectedRom(table.getRom());
         }
         if (table.getRom() != null) {
+            documentSession.activateTable(table.getRom(), table);
             EditorWorkspaceService.getInstance().tableActivated(
                     table.getRom(), table);
         }
@@ -1030,12 +1174,12 @@ public class ECUEditor extends AbstractFrame {
     }
 
     private void openTableLocation(TableLocation location) {
-        for (int i = 0; i < imageRoot.getChildCount(); i++) {
-            Object child = imageRoot.getChildAt(i);
-            if (!(child instanceof Rom)) continue;
-            Rom rom = (Rom) child;
+        for (EditorDocument document :
+                documentSession.snapshot().getDocuments()) {
+            Rom rom = document.getRom();
             if (!EditorWorkspaceService.romIdentity(rom).equals(location.getRomId())) continue;
-            for (TableTreeNode node : rom.getTableNodes().values()) {
+            for (TableTreeNode node : SwingRomTreeRegistry.nodeFor(rom)
+                    .getTableNodes().values()) {
                 if (node.getTable().getName().equals(location.getTableName())) {
                     setLastSelectedRom(rom);
                     displayTable(node);
@@ -1050,7 +1194,8 @@ public class ECUEditor extends AbstractFrame {
     private void reopenClosedTable(Table table) {
         if (table == null || table.getRom() == null
                 || !getImages().contains(table.getRom())) return;
-        TableTreeNode node = table.getRom().getTableNodeByName(table.getName());
+        TableTreeNode node = SwingRomTreeRegistry.nodeFor(table.getRom())
+                .getTableNodeByName(table.getName());
         if (node == null) return;
         setLastSelectedRom(table.getRom());
         displayTable(node);
@@ -1081,10 +1226,15 @@ public class ECUEditor extends AbstractFrame {
             }
         }
 
-        rom.removeFromParent();
+        documentSession.closeRom(rom);
+
+        SwingRomTreeNode romNode = SwingRomTreeRegistry.nodeFor(rom);
+        romNode.removeFromParent();
+        SwingRomTreeRegistry.forget(rom);
 
         if (imageRoot.getChildCount() > 0) {
-            editor.setLastSelectedRom((Rom) imageRoot.getChildAt(0));
+            editor.setLastSelectedRom(((SwingRomTreeNode)
+                    imageRoot.getChildAt(0)).getRom());
         } else {
             editor.setLastSelectedRom(null);
         }
@@ -1093,6 +1243,10 @@ public class ECUEditor extends AbstractFrame {
         editor.setCursor(null);
         editor.refreshAfterNewRom();
 
+        for (Table table : rom.getTableCatalog()) {
+            com.romraider.logger.ecu.ui.handler.table.TableUpdateHandler
+                    .getInstance().deregisterTable(table);
+        }
         rom.clearData();
     }
 
@@ -1114,6 +1268,7 @@ public class ECUEditor extends AbstractFrame {
     public void setLastSelectedRom(Rom lastSelectedRom) {
         boolean romChanged = this.lastSelectedRom != lastSelectedRom;
         this.lastSelectedRom = lastSelectedRom;
+        documentSession.activateRom(lastSelectedRom);
         applyRomPlatformContext(lastSelectedRom);
         if (lastSelectedRom == null) {
             setTitle(titleText);
@@ -1156,7 +1311,7 @@ public class ECUEditor extends AbstractFrame {
     private void setNavigationVisible(boolean visible) {
         navigationVisible = visible;
         settings.setNavigationPanelVisible(visible);
-        workspacePanel.setVisible(visible);
+        workspacePanel.getComponent().setVisible(visible);
         splitPane.setDividerSize(visible ? 5 : 0);
         splitPane.setDividerLocation(visible ? navigationWidth : 0);
         if (toolBar != null) toolBar.setNavigationVisible(visible);
@@ -1283,11 +1438,11 @@ public class ECUEditor extends AbstractFrame {
                 panel);
     }
 
-    public void showDimeModFeaturesWorkspace() {
+    public void showRomModificationsWorkspace() {
         PlatformContext context = PlatformContext.getInstance();
-        DimeModFeaturePanel panel = new DimeModFeaturePanel(
+        RomModificationPanel panel = new RomModificationPanel(
                 getLastSelectedRom(), context);
-        documentWorkspace.openUtility("dimemod-features", "DimeMod Features",
+        documentWorkspace.openUtility("rom-modifications", "ROM Modifications",
                 ModernIconFactory.icon(
                         com.romraider.ui.ModernIconFactory.Action.TOOLS),
                 panel);
@@ -1418,13 +1573,22 @@ public class ECUEditor extends AbstractFrame {
                     "Compare ROMs", INFORMATION_MESSAGE);
             return;
         }
-        RomComparePanel panel = new RomComparePanel(roms,
-                new RomComparePanel.Listener() {
+        JComponent panel = RomComparisonWorkspaceLoader.create(roms,
+                new RomComparisonWorkspaceContext.Listener() {
                     public void openComparison(Rom left, Rom right,
                             TableComparison comparison) {
                         openTableComparison(left, right, comparison);
                     }
                 });
+        if (panel == null) {
+            panel = new RomComparePanel(roms,
+                    new RomComparePanel.Listener() {
+                        public void openComparison(Rom left, Rom right,
+                                TableComparison comparison) {
+                            openTableComparison(left, right, comparison);
+                        }
+                    });
+        }
         documentWorkspace.openUtility("rom-comparison", "Compare ROMs",
                 ModernIconFactory.icon(
                         com.romraider.ui.ModernIconFactory.Action.COMPARE), panel);
@@ -1458,9 +1622,11 @@ public class ECUEditor extends AbstractFrame {
             TableComparison comparison) {
         if (left == null || right == null || comparison == null
                 || !comparison.isAvailableInBoth()) return;
-        TableTreeNode leftNode = left.getTableNodeByName(
+        TableTreeNode leftNode = SwingRomTreeRegistry.nodeFor(left)
+                .getTableNodeByName(
                 comparison.getTableName());
-        TableTreeNode rightNode = right.getTableNodeByName(
+        TableTreeNode rightNode = SwingRomTreeRegistry.nodeFor(right)
+                .getTableNodeByName(
                 comparison.getTableName());
         if (leftNode == null || rightNode == null) return;
         ensureTableOpen(leftNode);
@@ -1505,15 +1671,15 @@ public class ECUEditor extends AbstractFrame {
 
     public Vector<Rom> getImages() {
         Vector<Rom> images = new Vector<Rom>();
-        for (int i = 0; i < imageRoot.getChildCount(); i++) {
-            if(imageRoot.getChildAt(i) instanceof Rom) {
-                Rom rom = (Rom) imageRoot.getChildAt(i);
-                if(null != rom) {
-                    images.add(rom);
-                }
-            }
+        for (EditorDocument document :
+                documentSession.snapshot().getDocuments()) {
+            images.add(document.getRom());
         }
         return images;
+    }
+
+    public EditorDocumentSession getDocumentSession() {
+        return documentSession;
     }
 
     @Override
@@ -1573,21 +1739,6 @@ public class ECUEditor extends AbstractFrame {
         }
     }
 
-    public static byte[] readFile(File inputFile) throws IOException {
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        FileInputStream fis = new FileInputStream(inputFile);
-        try {
-            byte[] buf = new byte[8192];
-            int bytesRead;
-            while ((bytesRead = fis.read(buf)) != -1) {
-                baos.write(buf, 0, bytesRead);
-            }
-        } finally {
-            fis.close();
-        }
-        return baos.toByteArray();
-    }
-
     public void launchLogger() {
         EcuLogger logger = EcuLogger.getEcuLoggerWithoutCreation();
         if (logger != null) {
@@ -1598,7 +1749,8 @@ public class ECUEditor extends AbstractFrame {
             ThreadUtil.runAsDaemon(new Runnable() {
                 @Override
                 public void run() {
-                    ECUExec.openLogger(DISPOSE_ON_CLOSE, new String[] {"-logger"});
+                    EcuLogger.startLogger(DISPOSE_ON_CLOSE,
+                            ECUEditor.this, new String[] {"-logger"});
                 }
             });
         }
@@ -1647,7 +1799,7 @@ class SetUserLevelWorker extends SwingWorker<Void, Void> {
     @Override
     protected Void doInBackground() throws Exception {
         for(Rom rom : ECUEditorManager.getECUEditor().getImages()) {
-            rom.refreshDisplayedTables();
+            SwingRomTreeRegistry.nodeFor(rom).refreshDisplayedTables();
         }
         return null;
     }

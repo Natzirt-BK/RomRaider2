@@ -32,9 +32,9 @@ public final class ThemePalettes {
         return palette(
                 new Color(16, 21, 27), new Color(23, 30, 38),
                 new Color(32, 41, 52), new Color(228, 232, 237),
-                new Color(169, 177, 186), new Color(119, 129, 141),
+                new Color(169, 177, 186), new Color(217, 38, 50),
                 new Color(220, 155, 55), new Color(215, 25, 32),
-                new Color(59, 176, 112), new Color(52, 65, 80),
+                new Color(59, 176, 112), new Color(91, 35, 43),
                 new Color(116, 79, 30), new Color(92, 47, 51),
                 new Color(86, 174, 166));
     }
@@ -43,11 +43,23 @@ public final class ThemePalettes {
         return palette(
                 new Color(242, 245, 248), Color.WHITE,
                 new Color(225, 230, 236), new Color(28, 34, 40),
-                new Color(91, 103, 115), new Color(0, 111, 183),
+                new Color(91, 103, 115), new Color(217, 38, 50),
                 new Color(185, 112, 0), new Color(190, 42, 42),
-                new Color(20, 130, 72), new Color(173, 214, 255),
+                new Color(20, 130, 72), new Color(255, 214, 218),
                 new Color(255, 226, 158), new Color(221, 201, 255),
                 new Color(0, 140, 132));
+    }
+
+    /** Dark handheld palette used only by the SteamOS bundle profile. */
+    public static ThemePalette handheld() {
+        return palette(
+                new Color(23, 26, 33), new Color(27, 40, 56),
+                new Color(42, 71, 94), new Color(239, 246, 251),
+                new Color(163, 182, 196), new Color(102, 192, 244),
+                new Color(238, 170, 68), new Color(234, 74, 86),
+                new Color(88, 190, 132), new Color(34, 76, 104),
+                new Color(102, 74, 30), new Color(79, 51, 65),
+                new Color(71, 178, 208));
     }
 
     public static ThemePalette highContrast() {

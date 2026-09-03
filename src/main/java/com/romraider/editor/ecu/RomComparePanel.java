@@ -23,7 +23,6 @@ import javax.swing.JScrollPane;
 import javax.swing.JTable;
 import javax.swing.ListCellRenderer;
 import javax.swing.ListSelectionModel;
-import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 
 import com.romraider.editor.compare.RomComparisonResult;
@@ -33,8 +32,10 @@ import com.romraider.editor.compare.TableComparisonStatus;
 import com.romraider.maps.Rom;
 import com.romraider.ui.ModernIconFactory;
 import com.romraider.ui.ModernIconFactory.Action;
+import com.romraider.ui.ModernTableStyle;
 import com.romraider.ui.ThemeToken;
 import com.romraider.ui.UiThemeService;
+import com.romraider.ui.swing.ResponsiveFlowLayout;
 
 /** Responsive compare document hosted inside the main editor workspace. */
 public final class RomComparePanel extends JPanel {
@@ -54,6 +55,7 @@ public final class RomComparePanel extends JPanel {
         public boolean isCellEditable(int row, int column) { return false; }
     };
     private final JTable results = new JTable(model);
+    private final JButton open = new JButton("Open Selected Comparison");
     private final List<TableComparison> comparisons =
             new ArrayList<TableComparison>();
     private final Listener listener;
@@ -75,7 +77,9 @@ public final class RomComparePanel extends JPanel {
         heading.add(title, BorderLayout.NORTH);
         heading.add(help, BorderLayout.SOUTH);
 
-        JPanel selectors = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        JPanel selectors = new JPanel(new ResponsiveFlowLayout(
+                FlowLayout.LEFT, 8, 4));
+        selectors.setName("ROM COMPARE SELECTORS");
         selectors.add(new JLabel("Left ROM"));
         selectors.add(leftRom);
         selectors.add(new JLabel("Right ROM"));
@@ -93,9 +97,7 @@ public final class RomComparePanel extends JPanel {
 
         results.setName("ROM COMPARISON RESULTS");
         results.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        results.setFillsViewportHeight(true);
-        results.setShowVerticalLines(false);
-        results.getTableHeader().setReorderingAllowed(false);
+        ModernTableStyle.apply(results);
         results.getColumnModel().getColumn(0).setPreferredWidth(135);
         results.getColumnModel().getColumn(0).setMaxWidth(180);
         results.getColumnModel().getColumn(0).setCellRenderer(
@@ -113,9 +115,11 @@ public final class RomComparePanel extends JPanel {
                 }
             }
         });
+        results.getSelectionModel().addListSelectionListener(event -> {
+            if (!event.getValueIsAdjusting()) updateOpenAction();
+        });
         add(new JScrollPane(results), BorderLayout.CENTER);
 
-        JButton open = new JButton("Open Selected Comparison");
         open.setName("OPEN SELECTED ROM COMPARISON");
         open.addActionListener(event -> openSelected());
         JPanel footer = new JPanel(new BorderLayout(8, 0));
@@ -163,6 +167,7 @@ public final class RomComparePanel extends JPanel {
             model.addRow(new Object[] {comparison, comparison.getTableName()});
         }
         if (model.getRowCount() > 0) results.setRowSelectionInterval(0, 0);
+        else updateOpenAction();
     }
 
     private void openSelected() {
@@ -176,7 +181,19 @@ public final class RomComparePanel extends JPanel {
                 (Rom) rightRom.getSelectedItem(), comparison);
     }
 
-    private static final class StatusRenderer extends DefaultTableCellRenderer {
+    private void updateOpenAction() {
+        int row = results.getSelectedRow();
+        if (row < 0 || listener == null) {
+            open.setEnabled(false);
+            return;
+        }
+        Object value = model.getValueAt(results.convertRowIndexToModel(row), 0);
+        open.setEnabled(value instanceof TableComparison
+                && ((TableComparison) value).isAvailableInBoth());
+    }
+
+    private static final class StatusRenderer
+            extends ModernTableStyle.ZebraRenderer {
         private static final long serialVersionUID = 1L;
         public Component getTableCellRendererComponent(JTable table, Object value,
                 boolean selected, boolean focus, int row, int column) {

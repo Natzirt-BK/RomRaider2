@@ -35,7 +35,21 @@ foreach ($Tool in @($Java, $Javap, $Jdeps, $Jpackage)) {
     }
 }
 
-$JavaSettings = (& $Java -XshowSettings:properties -version 2>&1) -join "`n"
+$JavaSettingsProcess = New-Object System.Diagnostics.Process
+$JavaSettingsProcess.StartInfo = New-Object System.Diagnostics.ProcessStartInfo
+$JavaSettingsProcess.StartInfo.FileName = $Java
+$JavaSettingsProcess.StartInfo.Arguments = "-XshowSettings:properties -version"
+$JavaSettingsProcess.StartInfo.UseShellExecute = $false
+$JavaSettingsProcess.StartInfo.RedirectStandardOutput = $true
+$JavaSettingsProcess.StartInfo.RedirectStandardError = $true
+[void]$JavaSettingsProcess.Start()
+$JavaSettingsOutput = $JavaSettingsProcess.StandardOutput.ReadToEnd()
+$JavaSettingsError = $JavaSettingsProcess.StandardError.ReadToEnd()
+$JavaSettingsProcess.WaitForExit()
+if ($JavaSettingsProcess.ExitCode -ne 0) {
+    throw "Unable to inspect the Java runtime: $JavaSettingsError"
+}
+$JavaSettings = $JavaSettingsOutput + "`n" + $JavaSettingsError
 if ($JavaSettings -notmatch "java\.specification\.version\s*=\s*21(?:\s|$)") {
     throw "A Java 21 JDK is required: $JdkRoot"
 }

@@ -52,6 +52,7 @@ public class TableFrame extends JInternalFrame implements InternalFrameListener,
     private static final long serialVersionUID = -2651279694660392351L;
     private static final ResourceBundle rb = new ResourceUtil().getBundle(
             TableFrame.class.getName());
+    private final Table table;
     private TableView tableView;
     private final TableMenuBar tableMenuBar;
     private boolean workspaceManaged;
@@ -59,12 +60,13 @@ public class TableFrame extends JInternalFrame implements InternalFrameListener,
     public TableFrame(String title, TableView tableView) {
         super(title, true, true);
         this.tableView = tableView;
-        Table t = tableView.getTable();
+        this.table = tableView.getTable();
+        Table t = table;
 
         Icon icon = RomCellRenderer.getIconForTable(t);
         setFrameIcon(icon);
 
-        t.setTableFrame(this);
+        SwingTableFrameRegistry.register(t, this);
         add(tableView);
 
         setBorder(createBevelBorder(0));
@@ -115,16 +117,16 @@ public class TableFrame extends JInternalFrame implements InternalFrameListener,
     public void internalFrameOpened(InternalFrameEvent e) {}
 
     @Override
-    public void internalFrameClosed(InternalFrameEvent e) {}
+    public void internalFrameClosed(InternalFrameEvent e) {
+        SwingTableFrameRegistry.unregister(table, this);
+    }
     @Override
     public void internalFrameIconified(InternalFrameEvent e) {}
     @Override
     public void internalFrameDeiconified(InternalFrameEvent e) {}
 
     public Table getTable() {
-    	if(tableView == null) return null;
-
-        return tableView.getTable();
+		return table;
     }
     public TableView getTableView() {
         return tableView;
@@ -279,8 +281,9 @@ public class TableFrame extends JInternalFrame implements InternalFrameListener,
         if(images.size() > 1) {
 	        for(Rom rom : images) {
 	        	if (rom == getTable().getRom()) continue;
-	        	if(rom.getTableNodes().containsKey(getTable().getName().toLowerCase())) {
-	        		TableTreeNode tableNode = rom.getTableNodes().get(getTable().getName().toLowerCase());
+	        TableTreeNode tableNode = SwingRomTreeRegistry.nodeFor(rom)
+                        .getTableNodeByName(getTable().getName());
+	        if(tableNode != null) {
                     JRadioButtonMenuItem similarTable = new TableMenuItem(tableNode.getTable());
                     similarTable.setToolTipText(tableNode.getTable().getName());
                     similarTable.addActionListener(this);

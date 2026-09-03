@@ -63,6 +63,8 @@ public class CalibrationGridProjectionServiceTest {
         assertEquals("4.0", grid.cellAt(1, 1).getDisplayValue());
         assertEquals("10.0", grid.getColumnLabels().get(0));
         assertEquals("30.0", grid.getRowLabels().get(0));
+        assertEquals("Load", grid.getColumnAxisName());
+        assertEquals("RPM", grid.getRowAxisName());
     }
 
     private static Table1D line(String name, int address, int size) {

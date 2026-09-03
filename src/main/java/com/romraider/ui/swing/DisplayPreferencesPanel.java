@@ -18,6 +18,7 @@ import javax.swing.JPanel;
 import com.romraider.Settings;
 import com.romraider.ui.DisplayMode;
 import com.romraider.ui.ThemeMode;
+import com.romraider.ui.RuntimeUiProfile;
 import com.romraider.ui.UiDisplayService;
 import com.romraider.ui.UiScale;
 import com.romraider.util.SettingsManager;
@@ -45,6 +46,18 @@ public final class DisplayPreferencesPanel extends JPanel {
         modeSelector.setToolTipText(
                 "Touch is a dedicated mode with larger targets, rows, tabs, and spacing");
         themeSelector.setToolTipText("Apply centralized semantic colors at runtime");
+        if (RuntimeUiProfile.isSteamOs()) {
+            modeSelector.removeAllItems();
+            modeSelector.addItem(DisplayMode.TOUCH);
+            modeSelector.setEnabled(false);
+            modeSelector.setToolTipText(
+                    "The SteamOS profile uses touch-sized controls");
+            themeSelector.removeAllItems();
+            themeSelector.addItem(ThemeMode.DARK);
+            themeSelector.setEnabled(false);
+            themeSelector.setToolTipText(
+                    "The SteamOS profile uses its single handheld theme");
+        }
 
         ActionListener listener = new ActionListener() {
             public void actionPerformed(ActionEvent event) {
@@ -76,8 +89,10 @@ public final class DisplayPreferencesPanel extends JPanel {
         refreshing = true;
         try {
             scaleSelector.setSelectedItem(settings.getUiScale());
-            modeSelector.setSelectedItem(settings.getDisplayMode());
-            themeSelector.setSelectedItem(settings.getThemeMode());
+            modeSelector.setSelectedItem(RuntimeUiProfile.displayMode(
+                    settings.getDisplayMode()));
+            themeSelector.setSelectedItem(RuntimeUiProfile.theme(
+                    settings.getThemeMode()));
         } finally {
             refreshing = false;
         }

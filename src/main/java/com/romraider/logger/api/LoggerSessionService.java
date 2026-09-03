@@ -7,6 +7,8 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
 /**
@@ -27,6 +29,7 @@ public final class LoggerSessionService implements LoggerLiveDataListener,
     private final ExecutorService commands;
     private final CopyOnWriteArrayList<Consumer<LoggerSessionState>> listeners =
             new CopyOnWriteArrayList<Consumer<LoggerSessionState>>();
+    private final AtomicBoolean commandPending = new AtomicBoolean();
     private volatile LoggerSessionState state;
     private volatile boolean closed;
 
@@ -80,13 +83,11 @@ public final class LoggerSessionService implements LoggerLiveDataListener,
     }
 
     public void connect() {
-        if (state != LoggerSessionState.STOPPED) return;
-        submit(connectAction);
+        submit(() -> state == LoggerSessionState.STOPPED, connectAction);
     }
 
     public void disconnect() {
-        if (state == LoggerSessionState.STOPPED) return;
-        submit(new Runnable() {
+        submit(() -> state != LoggerSessionState.STOPPED, new Runnable() {
             public void run() {
                 if (state == LoggerSessionState.RECORDING) {
                     stopRecordingAction.run();
@@ -97,27 +98,36 @@ public final class LoggerSessionService implements LoggerLiveDataListener,
     }
 
     public void startRecording() {
-        if (state != LoggerSessionState.LIVE_ECU
-                && state != LoggerSessionState.LIVE_EXTERNAL) return;
-        submit(startRecordingAction);
+        submit(() -> state == LoggerSessionState.LIVE_ECU
+                || state == LoggerSessionState.LIVE_EXTERNAL,
+                startRecordingAction);
     }
 
     public void stopRecording() {
-        if (state != LoggerSessionState.RECORDING) return;
-        submit(stopRecordingAction);
+        submit(() -> state == LoggerSessionState.RECORDING,
+                stopRecordingAction);
     }
 
-    private void submit(final Runnable action) {
-        if (closed) return;
-        commands.execute(new Runnable() {
-            public void run() {
-                try {
-                    action.run();
-                } catch (RuntimeException failure) {
-                    failureHandler.accept(failure);
+    private void submit(final BooleanSupplier allowed,
+            final Runnable action) {
+        if (closed || !allowed.getAsBoolean()
+                || !commandPending.compareAndSet(false, true)) return;
+        try {
+            commands.execute(new Runnable() {
+                public void run() {
+                    try {
+                        if (allowed.getAsBoolean()) action.run();
+                    } catch (RuntimeException failure) {
+                        failureHandler.accept(failure);
+                    } finally {
+                        commandPending.set(false);
+                    }
                 }
-            }
-        });
+            });
+        } catch (RuntimeException rejected) {
+            commandPending.set(false);
+            failureHandler.accept(rejected);
+        }
     }
 
     public void sessionStateChanged(LoggerSessionState next) {

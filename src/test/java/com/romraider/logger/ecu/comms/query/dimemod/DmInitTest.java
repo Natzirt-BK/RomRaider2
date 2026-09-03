@@ -64,6 +64,15 @@ public class DmInitTest {
         assertTrue(discovery.getEcuParams().isEmpty());
     }
 
+    @Test
+    public void retainsAdvertisedRamTuneSignatureAndLookupMetadata() {
+        DmInit discovery = new DmInit(dm20RamTuneDiscovery());
+
+        assertTrue(discovery.isRamTuneEnabled());
+        assertEquals(0x123456, discovery.getRamTuneSignatureAddress());
+        assertEquals(96, discovery.getRamTuneLutSize());
+    }
+
     private static byte[] dm20Discovery() {
         ByteBuffer data = ByteBuffer.allocate(100);
         data.put((byte) 2);
@@ -75,6 +84,26 @@ public class DmInitTest {
         for (int index = 0; index < 21; index++) {
             data.putInt(0x1000 + index * 0x10);
         }
+        return data.array();
+    }
+
+    private static byte[] dm20RamTuneDiscovery() {
+        ByteBuffer data = ByteBuffer.allocate(120);
+        data.put((byte) 2);
+        data.put((byte) 0);
+        data.putShort((short) 43);
+        data.putInt(0x20000);
+        data.put((byte) 0x80);
+        data.put((byte) 0);
+        data.put((byte) 0);
+        data.put((byte) 0);
+        data.putInt(0xDEAD0001);
+        for (int index = 0; index < 20; index++) {
+            data.putInt(0x1000 + index * 0x10);
+        }
+        data.putInt(0xDEAD0020);
+        data.putInt(0x123456);
+        data.putInt(96);
         return data.array();
     }
 

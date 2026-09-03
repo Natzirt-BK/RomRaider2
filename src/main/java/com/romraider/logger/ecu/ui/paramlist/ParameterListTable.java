@@ -22,6 +22,8 @@ package com.romraider.logger.ecu.ui.paramlist;
 import com.romraider.logger.ecu.EcuLogger;
 import com.romraider.logger.ecu.definition.EcuData;
 import com.romraider.logger.ecu.definition.ExternalData;
+import com.romraider.ui.ModernTableStyle;
+import com.romraider.ui.ThemeToken;
 
 import static com.romraider.util.ParamChecker.isNullOrEmpty;
 
@@ -45,16 +47,15 @@ public final class ParameterListTable extends JTable {
     public ParameterListTable(ParameterListTableModel tableModel) {
         super(tableModel);
         this.tableModel = tableModel;
-        this.getTableHeader().setReorderingAllowed(false);
+        ModernTableStyle.applyLayout(this);
         TableRowSorter<ParameterListTableModel> sorter =
                 new TableRowSorter<ParameterListTableModel>(tableModel);
         sorter.setSortable(0, false);
         sorter.setSortable(1, true);
         sorter.setSortable(2, false);
         setRowSorter(sorter);
-        setFillsViewportHeight(true);
-        setShowVerticalLines(false);
-        setRowHeight(Math.max(getRowHeight(), 26));
+        getColumnModel().getColumn(1).setCellRenderer(
+                new ModernTableStyle.TokenRenderer(ThemeToken.LIVE_TRACE));
         if (EcuLogger.isTouchEnabled() == true)
         {
             this.setRowHeight(40);

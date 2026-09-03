@@ -46,6 +46,7 @@ import com.romraider.maps.Table1DView;
 import com.romraider.maps.Table1DView.Table1DType;
 import com.romraider.maps.DataCell;
 import com.romraider.maps.Rom;
+import com.romraider.maps.RomID;
 import com.romraider.maps.Table;
 import com.romraider.maps.Table3D;
 import com.romraider.flash.FlashBackendRegistry;
@@ -205,10 +206,24 @@ public class EditorWorkbenchComponentsTest {
         assertTrue(reset.getPreferredSize().height <= 22);
         assertFalse(reset.isEnabled());
         assertFalse(resetRequested[0]);
-        JButton dimeMod = findNamed(bar, JButton.class,
-                "DIMEMOD STATUS CHIP");
-        assertNotNull(dimeMod);
-        assertTrue(dimeMod.isVisible());
+        JButton romMod = findNamed(bar, JButton.class,
+                "ROM MODIFICATION STATUS CHIP");
+        assertNotNull(romMod);
+        assertFalse(romMod.isVisible());
+        assertEquals("ROM Mods: None detected", romMod.getText());
+        JLabel initialContext = findNamed(bar, JLabel.class,
+                "VEHICLE AND ROM CONTEXT");
+        assertEquals("No vehicle context", initialContext.getText());
+        Rom moddedRom = new Rom(new RomID());
+        moddedRom.getRomID().setXmlid("CarBerry");
+        moddedRom.populateTables(new byte[] {0}, new JProgressPane());
+        Table1D merpTable = new Table1D();
+        merpTable.setName("MerpMod SD Mode Switch");
+        merpTable.setCategory("MerpMod - Speed Density");
+        moddedRom.addTableByName(merpTable);
+        bar.showRom(moddedRom);
+        assertTrue(romMod.isVisible());
+        assertEquals("ROM Mods: CarBerry + MerpMod", romMod.getText());
         JLabel recovery = findNamed(bar, JLabel.class, "ROM RECOVERY STATUS");
         assertNotNull(recovery);
         assertFalse(recovery.isVisible());
@@ -433,6 +448,8 @@ public class EditorWorkbenchComponentsTest {
         assertFalse(toolbar.isVisible());
         assertEquals(0, toolbar.getMinimumSize().width);
         assertTrue(toolbar.getMinimumSize().height > 0);
+        assertNotNull(findNamed(toolbar, JLabel.class,
+                "TABLE TOOLBAR TITLE"));
         assertNotNull(findButton(toolbar, "Set"));
         assertNotNull(findButton(toolbar, "Multiply"));
         JButton more = findNamed(toolbar, JButton.class,
@@ -449,6 +466,20 @@ public class EditorWorkbenchComponentsTest {
         assertEquals("Increase by fine step",
                 findButton(toolbar, "+").getAccessibleContext()
                         .getAccessibleName());
+    }
+
+    @Test
+    public void tableToolbarReportsWrappedHeightAtNarrowWidths() {
+        TableToolBar toolbar = new TableToolBar();
+        toolbar.setVisible(true);
+        toolbar.setSize(1180, 120);
+        int wideHeight = toolbar.getPreferredSize().height;
+        toolbar.setSize(720, 120);
+        int narrowHeight = toolbar.getPreferredSize().height;
+
+        assertTrue(narrowHeight > wideHeight);
+        assertEquals(0, toolbar.getMinimumSize().width);
+        assertEquals(narrowHeight, toolbar.getMinimumSize().height);
     }
 
     @Test
@@ -545,6 +576,9 @@ public class EditorWorkbenchComponentsTest {
         assertNotNull(findNamed(document, JPanel.class, "DATALOG VIEWER"));
         assertNotNull(findNamed(document, JScrollPane.class,
                 "CALIBRATION TABLE SCROLL"));
+        assertFalse(findNamed(document, JScrollPane.class,
+                "CALIBRATION TABLE SCROLL").getBorder()
+                        instanceof javax.swing.border.EmptyBorder);
         JPanel legacyHeader = findNamed(ignition.getTableView(), JPanel.class,
                 "TABLE VIEW HEADER");
         if (legacyHeader != null) assertFalse(legacyHeader.isVisible());
@@ -704,8 +738,16 @@ public class EditorWorkbenchComponentsTest {
                 "ROM COMPARISON RESULTS"));
         assertNotNull(findNamed(panel, JButton.class,
                 "COMPARE SELECTED ROMS"));
-        assertNotNull(findNamed(panel, JButton.class,
-                "OPEN SELECTED ROM COMPARISON"));
+        JButton openComparison = findNamed(panel, JButton.class,
+                "OPEN SELECTED ROM COMPARISON");
+        assertNotNull(openComparison);
+        assertFalse(openComparison.isEnabled());
+
+        JPanel selectors = findNamed(panel, JPanel.class,
+                "ROM COMPARE SELECTORS");
+        assertNotNull(selectors);
+        selectors.setSize(300, 20);
+        assertTrue(selectors.getPreferredSize().height > 30);
     }
 
     @Test
@@ -872,7 +914,8 @@ public class EditorWorkbenchComponentsTest {
         assertFalse(toggle.isSelected());
         assertFalse(host.isVisible());
         assertTrue(toggle.isOpaque());
-        assertEquals(UiThemeService.getInstance().color(ThemeToken.ACCENT),
+        assertEquals(UiThemeService.getInstance().color(
+                ThemeToken.LIVE_TRACE),
                 toggle.getBackground());
         assertEquals(UiThemeService.contrastText(toggle.getBackground()),
                 toggle.getForeground());
@@ -1089,6 +1132,30 @@ public class EditorWorkbenchComponentsTest {
     }
 
     @Test
+    public void mapHeaderLabelsTheReplacementAndClassicGridsClearly() {
+        final boolean[] visible = {false};
+        TableFrame frame = tableFrame("Fuel Map");
+        MapDocumentHeader header = new MapDocumentHeader(frame.getTable(),
+                frame.getTableMenuBar(), true, shown -> { }, null, null,
+                null);
+        header.setCalibrationPreview(true,
+                shown -> visible[0] = shown.booleanValue());
+        JToggleButton preview = findNamed(header, JToggleButton.class,
+                "CALIBRATION WORKSPACE TOGGLE");
+
+        assertNotNull(preview);
+        assertTrue(preview.isVisible());
+        assertEquals("New Grid", preview.getText());
+        assertTrue(preview.getToolTipText().contains("replacement"));
+        preview.doClick();
+        assertTrue(visible[0]);
+        assertEquals("Classic Grid", preview.getText());
+        preview.doClick();
+        assertFalse(visible[0]);
+        header.disposeHeader();
+    }
+
+    @Test
     public void mapHeaderKeepsMetadataOutFromUnderActionButtons() {
         TableFrame frame = tableFrame("Volumetric Efficiency");
         MapDocumentHeader header = new MapDocumentHeader(frame.getTable(),
@@ -1104,6 +1171,43 @@ public class EditorWorkbenchComponentsTest {
         assertNotNull(actions);
         assertTrue(identity.getX() + identity.getWidth() <= actions.getX());
         assertFalse(metadata.getText().contains("TABLE_"));
+        header.disposeHeader();
+    }
+
+    @Test
+    public void releaseNotesUseTheModernScrollableStartupSurface() {
+        JPanel panel = ECUEditor.createReleaseNotesPanel(
+                "RomRaider2 RC4\n\nLogger\n- New workspace");
+        JTextArea text = findNamed(panel, JTextArea.class,
+                "RELEASE NOTES TEXT");
+        JScrollPane scroll = findNamed(panel, JScrollPane.class,
+                "RELEASE NOTES SCROLL");
+
+        assertNotNull(text);
+        assertNotNull(scroll);
+        assertFalse(text.isEditable());
+        assertTrue(text.getLineWrap());
+        assertTrue(scroll.getPreferredSize().width >= 700);
+    }
+
+    @Test
+    public void mapHeaderAddsActionLabelsOnlyWhenSpaceAllows() {
+        TableFrame frame = tableFrame("Fuel Map");
+        MapDocumentHeader header = new MapDocumentHeader(frame.getTable(),
+                frame.getTableMenuBar(), true, visible -> { }, null, null,
+                null);
+        JButton search = findNamed(header, JButton.class, "SEARCH MAPS");
+        JButton undo = findNamed(header, JButton.class, "UNDO EDIT");
+
+        header.setSize(1000, 70);
+        header.doLayout();
+        assertEquals("Search", search.getText());
+        assertEquals("Undo", undo.getText());
+
+        header.setSize(700, 70);
+        header.doLayout();
+        assertNull(search.getText());
+        assertNull(undo.getText());
         header.disposeHeader();
     }
 
@@ -1144,7 +1248,6 @@ public class EditorWorkbenchComponentsTest {
         Table1D table = new Table1D();
         table.setName(name);
         Table1DView view = new Table1DView(table, Table1DType.NO_AXIS);
-        table.setTableView(view);
         return new TableFrame(name + " | test.bin", view);
     }
 

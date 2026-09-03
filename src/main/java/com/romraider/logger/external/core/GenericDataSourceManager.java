@@ -30,7 +30,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
 
-public final class GenericDataSourceManager implements ExternalDataSource {
+public final class GenericDataSourceManager implements SwingExternalDataSource {
     private static final Logger LOGGER = getLogger(GenericDataSourceManager.class);
     private final List<Stoppable> connectors = new ArrayList<Stoppable>();
     private final ExternalDataSource dataSource;
@@ -63,16 +63,18 @@ public final class GenericDataSourceManager implements ExternalDataSource {
 
     @Override
     public Action getMenuAction(EcuLogger logger) {
-        Action action = dataSource.getMenuAction(logger);
+        Action action = dataSource instanceof SwingExternalDataSource
+                ? ((SwingExternalDataSource) dataSource).getMenuAction(logger)
+                : null;
         return action == null ? new GenericPluginMenuAction(logger, this) : action;
     }
 
     @Override
     public synchronized void setPort(String port) {
-        if (port == null || port.trim().length() == 0) return;
-        port = port.trim();
+        port = port == null ? "" : port.trim();
         if (port.equals(getPort())) return;
-        LOGGER.info(dataSource.getName() + ": port " + port + " selected");
+        LOGGER.info(dataSource.getName() + (port.length() == 0
+                ? ": port cleared" : ": port " + port + " selected"));
         boolean reconnect = connectCount > 0;
         doDisconnect();
         dataSource.setPort(port);

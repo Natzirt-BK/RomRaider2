@@ -37,10 +37,10 @@ import javax.swing.Action;
 
 import com.romraider.logger.ecu.EcuLogger;
 import com.romraider.logger.external.core.ExternalDataItem;
-import com.romraider.logger.external.core.ExternalDataSource;
+import com.romraider.logger.external.core.SwingExternalDataSource;
 import com.romraider.logger.external.innovate.generic.serial.io.InnovateRunner;
 
-public final class InnovateDataSource implements ExternalDataSource {
+public final class InnovateDataSource implements SwingExternalDataSource {
     private InnovateDataItem dataItem = new InnovateDataItem(AFR_147, LAMBDA, AFR_90, AFR_146, AFR_64, AFR_155, AFR_172, AFR_34);
     private InnovateRunner runner;
     private String port;

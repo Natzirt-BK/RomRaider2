@@ -98,10 +98,10 @@ import javax.swing.Action;
 
 import com.romraider.logger.ecu.EcuLogger;
 import com.romraider.logger.external.core.ExternalDataItem;
-import com.romraider.logger.external.core.ExternalDataSource;
+import com.romraider.logger.external.core.SwingExternalDataSource;
 import com.romraider.logger.external.plx.io.PlxRunner;
 
-public final class PlxDataSource implements ExternalDataSource {
+public final class PlxDataSource implements SwingExternalDataSource {
     private final Map<PlxSensorType, PlxDataItem> dataItems = new HashMap<PlxSensorType, PlxDataItem>();
     private PlxRunner runner;
     private String port;

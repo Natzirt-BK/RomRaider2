@@ -61,6 +61,53 @@ public class LoggerChannelServiceTest {
         assertEquals("rpm:true", selectedId.get());
     }
 
+    @Test
+    public void bulkSelectionUsesOneCommandWithOnlyChannelsThatChange() {
+        AtomicInteger commands = new AtomicInteger();
+        AtomicReference<List<String>> selectedIds =
+                new AtomicReference<List<String>>();
+        LoggerChannelService service = new LoggerChannelService(
+                (ids, selected) -> {
+                    commands.incrementAndGet();
+                    selectedIds.set(Arrays.asList(ids.toArray(new String[0])));
+                    assertFalse(selected);
+                }, (id, option) -> { }, failure -> { throw failure; });
+        service.replaceChannels(Arrays.asList(
+                channel("rpm", "Engine Speed", true),
+                channel("boost", "Boost", false),
+                channel("load", "Engine Load", true)));
+
+        service.setSelected(Arrays.asList("rpm", "boost", "missing", "load"),
+                false);
+
+        assertEquals(1, commands.get());
+        assertEquals(Arrays.asList("rpm", "load"), selectedIds.get());
+    }
+
+    @Test
+    public void unitCommandsUseNeutralOptionIdsAndIgnoreCurrentChoice() {
+        AtomicInteger commands = new AtomicInteger();
+        AtomicReference<String> choice = new AtomicReference<String>();
+        LoggerChannelService service = new LoggerChannelService(
+                (ids, selected) -> { },
+                (id, option) -> {
+                    commands.incrementAndGet();
+                    choice.set(id + ":" + option);
+                }, failure -> { throw failure; });
+        LoggerChannel channel = new LoggerChannel(
+                "temperature", "Coolant Temperature", "C",
+                LoggerChannelKind.PARAMETER, true, Arrays.asList(
+                        new LoggerChannelUnitOption("0", "C", true),
+                        new LoggerChannelUnitOption("1", "F", false)));
+        service.replaceChannels(Arrays.asList(channel));
+
+        service.setUnitOption("temperature", "0");
+        service.setUnitOption("temperature", "1");
+
+        assertEquals(1, commands.get());
+        assertEquals("temperature:1", choice.get());
+    }
+
     private static LoggerChannel channel(String id, String name,
             boolean selected) {
         return new LoggerChannel(id, name, "rpm",

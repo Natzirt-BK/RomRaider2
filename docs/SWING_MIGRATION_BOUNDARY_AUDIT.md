@@ -1,10 +1,22 @@
 # Swing migration boundary audit
 
-This audit turns the Swing exit direction into an incremental extraction plan.
-It records the current dependencies rather than treating the replacement UI as
-a rewrite. The existing Swing application remains usable while one shared ROM
-and logger state is made available to both the compatibility UI and the future
-shell.
+This audit tracks the incremental Swing exit. Compose Desktop now owns normal
+Editor and Logger startup. The old Swing application is retained only as an
+explicit compatibility mode while the remaining workflow gaps are closed.
+
+Last reviewed: 2026-09-02
+
+## Production startup boundary
+
+- Normal Linux and Windows startup discovers and launches the Compose desktop
+  provider.
+- Startup no longer falls back to Swing when Compose is missing or fails.
+- The former application can only be selected with
+  `-Dromraider2.desktop.shell=swing` for compatibility testing.
+- `ECUExec`, the desktop command router, document/session services, calibration
+  commands, Logger runtime, and theme state have no Swing or AWT imports.
+- The Java 21 Linux application image has been launched from its packaged
+  location and confirmed to enter the Compose ECU Studio directly.
 
 ## Current boundary
 
@@ -16,14 +28,14 @@ The source inventory below counts Java files with direct `java.awt`,
 | --- | ---: | ---: | --- |
 | `editor/compare` | 4 | 0 | Neutral after the first extraction slice |
 | `editor/recovery` | 3 | 0 | Ready for another UI toolkit |
-| `logger/api` | 13 | 0 | Live data, channel selection, session commands, preferences, and state are neutral |
+| `logger/api` | 22 | 0 | Live data, messages, gauges, channel selection, session commands, preferences, and state are neutral |
 | `flash` | 19 | 0 | Backend, capability, preflight, and progress contracts are neutral |
 | `livetune` | 12 | 0 | Drafts, staging, preflight, session state, and mock verification are neutral |
 | `activity` | 4 | 0 | Application activity state is neutral |
-| `editor/calibration` | 3 | 0 | Immutable 1D/2D/3D grid snapshots are ready for a replacement view |
+| `editor/calibration` | 17 | 0 | Grid snapshots, grouped edits, undo/redo, and change listeners are neutral |
 | `editor/workspace` | 9 | 1 | Only the presentation panel imports Swing/AWT after the first extraction slice |
 | `editor/search` | 4 | 1 | Service/model are neutral; panel is Swing |
-| `maps` | 43 | 9 | Domain and presentation are still coupled |
+| `maps` | 43 | 9 | Core ownership is neutral; classic Swing view classes remain beside it for compatibility |
 
 The counts are a baseline, not a completion metric. Indirect dependencies also
 matter: a class can avoid importing Swing while exposing a model that owns a
@@ -31,21 +43,21 @@ Swing object.
 
 ## Principal coupling points
 
-### ROM owns presentation state
+### ROM and Table ownership is separated
 
-`Rom` stores `TableTreeNode` instances rather than a toolkit-neutral table
-catalog. It also performs confirmation dialogs, locates Swing windows, accepts
-`JProgressPane`, and closes `TableFrame`/`TableView` instances. This prevents a
-replacement shell from opening and closing a ROM without participating in the
-Swing object graph.
+`Rom`, `Table`, and `DataCell` no longer inherit from or own Swing tree nodes,
+frames, views, or cell components. Toolkit-neutral table catalogs,
+presentation listeners, and user-interaction services are now the shared
+boundary. Swing-only registries maintain the old view associations when the
+compatibility shell is selected.
 
-### Table owns its Swing view
+### Compose owns the desktop document session
 
-`Table` stores both `TableView` and `TableFrame`. Scale validation can invoke a
-popup through `TableView`. A calibration table therefore acts as both the ROM
-data model and a presentation registry. This is the first ownership cycle to
-remove; the replacement UI must render the existing table data without being
-stored by it.
+The normal Editor shell opens, saves, closes, activates, compares, and edits ROM
+documents through neutral controllers. It provides unsaved-change handling,
+definition selection, progress, theme switching, table navigation, grouped
+cell edits, copy/paste, and shared undo/redo without constructing a Swing
+window.
 
 ### Workspace indexing consumes Swing nodes
 
@@ -56,21 +68,22 @@ API rather than `TableTreeNode`. `Rom` now stores the neutral catalog and keeps
 the old Swing tree nodes as a synchronized compatibility mirror. Moving that
 mirror into a Swing adapter is the remaining ownership inversion.
 
-### Logger control now has a neutral boundary
+### Logger runtime is independent of EcuLogger
 
-`LoggerSessionService` owns connect, disconnect, recording commands, explicit
-session state, failure handling, and listener disposal. `LoggerChannelService`
-owns the UI-neutral channel catalog and selection. `EcuLogger` remains the
-compatibility host and adapts the existing parameter, switch, and external
-source models into these services, but the replacement workspace no longer
-drives Swing buttons or tables.
+`LoggerDesktopRuntime` now owns the controller, query path, live-data bus, CSV
+writer, channel/profile catalog, session state, messages, preferences, DimeMod
+reload, and external-source setup. The normal Compose Logger does not create a
+hidden `EcuLogger` or drive Swing controls. It can connect, disconnect, record,
+configure definitions and ports, select external sensors, review live data,
+and open captured CSV logs.
 
 ### Legacy plug-ins expose Swing actions
 
-Several external logger data sources publish `javax.swing.Action` objects.
-Those are a later logger-migration boundary. Plug-ins should eventually expose
-command descriptors and execute methods; the Swing host may adapt them to
-`Action` during compatibility.
+The runtime plug-in contract is neutral. The old menu action is isolated in
+`SwingExternalDataSource` and is only consumed by the legacy menu adapter.
+Current plug-in implementations still implement both interfaces so the old
+shell remains testable; removing their Swing-side methods is a cleanup task,
+not a dependency of the Compose Logger runtime.
 
 ## Extraction order
 
@@ -118,6 +131,17 @@ write ROM bytes directly.
 Gate: Swing and prototype views pass the same command-contract tests and show
 the same changed cells after a scripted edit sequence.
 
+Status: the first command slice is complete. The replacement Compose grid
+renders the active `Table`, applies scalar values through `DataCell` scaling
+and range checks, and shares `RomEditHistory` with the classic grid. Changes,
+undo, and redo made from either grid refresh the replacement snapshot. Locked,
+static, invalid, and detached tables fail before an edit is recorded. Arrow
+navigation, definition fine/coarse increments, and loaded-value restore all
+use the same boundary. Shift+arrow or Shift+click range selection copies
+tab/newline blocks, and grouped block paste is validated before it becomes one
+history operation. Across, down, and two-direction interpolation use definition
+axis breakpoints and commit as one validated history operation.
+
 ### 5. Neutral logger session controller
 
 Separate connect, disconnect, parameter selection, polling, recording, and
@@ -128,17 +152,15 @@ legacy external-source actions at the Swing edge.
 Gate: controller tests cover connect/cancel/disconnect, start/stop recording,
 device failure, and listener disposal without a `JFrame` or Swing table model.
 
-Status: complete for the first Logger replacement checkpoint. The existing
-Swing workspaces and the Compose workspace share the same controller, channel
-selection, received samples, and recording state.
+Status: complete for the production Logger runtime. The Compose shell owns its
+controller and state; `EcuLogger` is now a legacy-only host.
 
 ### 6. Replacement workspace checkpoint
 
-The first Compose Desktop checkpoint is now the Logger workspace described in
-`ROMRAIDER2_UI_DIRECTION.md`. It uses the real channel, session, recording, and
-live-data services. The visual fixture is test-only and is excluded from the
-runtime jar. Compose and its matching native renderer are staged for both
-Windows x64 and Linux x64 packages.
+Compose Desktop is now the normal top-level Editor and Logger shell. It uses
+the real document, calibration, Logger, and live-tune planning services. Visual
+fixtures remain test-only. Compose and matching native renderers are staged
+for Windows x64 and Linux x64 packages.
 
 The Editor Tune inspector now consumes the same neutral draft projection and
 shows changed ranges without adding a production write command. The projection
@@ -147,11 +169,14 @@ silently omitting them. The portable
 shared core also proves bounded ROM byte editing and logger CSV round-trips
 without desktop or Android framework imports.
 
-The full replacement shell and definition-backed calibration workspace remain
-next. They must use a real ROM and neutral edit commands, not a copied
-calibration model.
-JavaFX remains the recorded fallback until the packaged Windows pass and the
-broader accessibility, keyboard, scaling, and rendering gates are complete.
+The definition-backed calibration workspace now ships in the normal Compose
+Editor. It uses a real ROM and the neutral command boundary, not a copied
+calibration model. Direct entry, keyboard range movement,
+spreadsheet-format block copy/paste, fine/coarse changes, restore, interpolation,
+axis-value editing, and shared undo/redo are working. The matched Windows build
+passed its Java and Compose suites plus a native package launch and first-run
+visual check. Broader accessibility remains open. JavaFX is no longer the
+planned fallback.
 
 ## Progress through the extraction plan
 
@@ -161,10 +186,12 @@ Swing dependencies from services and prepares search, compare, and the
 replacement left rail without changing ROM bytes, logger behavior, or current
 windows.
 
-The Logger slice completed the neutral session and channel boundaries and added
-the first packaged Compose workspace. The next Editor slice should move the
-tree-node mirror out of `Rom`, followed by a Swing-only table-view registry.
-These have more lifecycle risk and remain separate review and test checkpoints.
+The ownership extractions and default-shell cutover are complete. Calibration
+interpolation, axis editing, and definition-priority management are also
+Compose-owned. Remaining work is feature parity and deletion: add essential
+settings workflows to Compose, decide which specialized legacy Logger tools
+stay, complete accessibility work, then remove the compatibility shell and its
+Swing-only adapters from release builds.
 
 ## Enforcement
 

@@ -38,6 +38,16 @@ A plan is ready only when all of these checks pass:
 5. The DimeMod runtime advertises RAM Tune.
 6. The connected ECU ID and ROM ID exactly match the staged plan.
 
+The current Logger session now retains the DimeMod runtime version, RAM Tune
+signature address, and reported lookup-table size separately from the feature
+bit. RC4 only checks and displays that metadata. It does not interpret the LUT
+as writable ranges, and invalid or out-of-range metadata is never described as
+qualified.
+
+The live-tune preflight treats that qualified metadata as its own gate. A
+runtime feature bit by itself is not enough to make a plan ready, even in the
+mock executor.
+
 Before the mock executor writes anything, it reads every staged address and
 compares the result with the value captured by the Editor. Each change is read
 back immediately after it is applied. A stale value, identity change,
@@ -46,8 +56,8 @@ disconnect, rejection, timeout, or readback mismatch fails the session.
 ## Next steps
 
 - Move the same preview contract into the replacement calibration workspace.
-- Define address ranges from verified DimeMod metadata rather than accepting
-  an arbitrary RAM address.
+- Read and validate the runtime lookup table, then bind staged address ranges
+  to its verified entries instead of accepting an arbitrary RAM address.
 - Add cancellation, recovery, and transaction logging.
 - Build a separately reviewed production executor only after connected testing
   and per-version DimeMod qualification.

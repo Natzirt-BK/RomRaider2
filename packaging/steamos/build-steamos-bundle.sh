@@ -22,8 +22,11 @@ trap 'rm -rf -- "$stage"' EXIT HUP INT TERM
 bundle=$stage/$bundle_name
 mkdir -p "$bundle"
 cp -a -- "$application_image" "$bundle/RomRaider2"
+printf '%s\n' 'java-options=-Dromraider2.ui.profile=steamos' >> \
+    "$bundle/RomRaider2/lib/app/RomRaider2.cfg"
 cp -- "$repo_root/packaging/steamos/Launch RomRaider2.sh" "$bundle/"
 cp -- "$repo_root/packaging/steamos/Install Desktop Shortcut.sh" "$bundle/"
+cp -- "$repo_root/packaging/steamos/Game Mode Setup.txt" "$bundle/"
 cp -- "$repo_root/packaging/steamos/romraider2-steamos.desktop.in" "$bundle/"
 chmod +x "$bundle/Launch RomRaider2.sh" \
     "$bundle/Install Desktop Shortcut.sh"
@@ -37,6 +40,9 @@ grep -q '^JAVA_VERSION="21\.' "$bundle/RomRaider2/lib/runtime/release"
 [[ ! -e "$bundle/RomRaider2/lib/app/org-jetbrains-skiko-skiko-awt-runtime-macos-x64-0.150.1.jar" ]]
 grep -Fq 'GenericName=ECU Tools' \
     "$bundle/romraider2-steamos.desktop.in"
+grep -Fq 'romraider2.ui.profile=steamos' \
+    "$bundle/RomRaider2/lib/app/RomRaider2.cfg"
+grep -Fq 'Add a Non-Steam Game' "$bundle/Game Mode Setup.txt"
 if command -v desktop-file-validate >/dev/null 2>&1; then
     validation_file=$stage/romraider2-steamos.desktop
     sed -e "s|@LAUNCHER@|$bundle/Launch RomRaider2.sh|g" \

@@ -31,6 +31,8 @@ import com.romraider.logger.ecu.ui.handler.graph.GraphUpdateHandler;
 import com.romraider.logger.ecu.ui.handler.livedata.LiveDataTableModel;
 import com.romraider.logger.ecu.ui.paramlist.ParameterListTable;
 import com.romraider.logger.ecu.ui.paramlist.ParameterListTableModel;
+import com.romraider.ui.ThemeToken;
+import com.romraider.ui.UiThemeService;
 
 public class LoggerWorkspaceComponentsTest {
     @Test
@@ -63,6 +65,14 @@ public class LoggerWorkspaceComponentsTest {
 
                 assertEquals("0 / 3 selected",
                         browser.getSummaryLabel().getText());
+                assertTrue(parameterTable.getRowHeight() >= 27);
+                assertEquals(30, parameterTable.getTableHeader()
+                        .getPreferredSize().height);
+                Component parameterName = parameterTable.getCellRenderer(0, 1)
+                        .getTableCellRendererComponent(parameterTable,
+                                "Boost Pressure", false, false, 0, 1);
+                assertEquals(UiThemeService.getInstance().color(
+                        ThemeToken.LIVE_TRACE), parameterName.getForeground());
                 browser.getSearchField().setText("boost");
                 assertEquals(1, parameterTable.getRowCount());
                 assertEquals(0, externalTable.getRowCount());
@@ -96,6 +106,9 @@ public class LoggerWorkspaceComponentsTest {
                 assertTrue(empty.isVisible());
                 assertFalse(panel.getResetButton().isEnabled());
                 assertTrue(panel.getTable().getAutoCreateRowSorter());
+                assertTrue(panel.getTable().getRowHeight() >= 27);
+                assertEquals(30, panel.getTable().getTableHeader()
+                        .getPreferredSize().height);
 
                 model.addParam(data("P-RPM", "Engine Speed", "rpm"));
                 assertFalse(empty.isVisible());

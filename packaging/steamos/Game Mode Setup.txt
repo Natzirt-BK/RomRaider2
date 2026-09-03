@@ -1,0 +1,25 @@
+RomRaider2 in Game Mode
+
+1. Switch to Desktop Mode.
+2. Run "Install Desktop Shortcut.sh" once.
+3. Open Steam and choose Add a Game > Add a Non-Steam Game.
+4. Select RomRaider2 ECU Studio and add it.
+5. Return to Game Mode. RomRaider2 will be in Library > Non-Steam.
+
+Suggested Steam Input mapping
+
+- Right trackpad: mouse
+- R2: left mouse click
+- D-pad: arrow keys
+- A: Enter
+- B: Escape
+
+This keeps normal touch and trackpad input available while making tabs,
+buttons, lists, and dialogs usable from the controller. Change the mapping in
+Steam if you prefer a different layout.
+
+The SteamOS build uses one dark handheld layout with larger touch and
+controller targets. It does not need sudo and does not change the read-only
+SteamOS system partition.
+
+RomRaider2 is an independent project and is not affiliated with Valve.

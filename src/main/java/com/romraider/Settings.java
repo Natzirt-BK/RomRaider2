@@ -32,6 +32,7 @@ import java.awt.Point;
 import java.io.File;
 import java.io.Serializable;
 import java.util.Locale;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Vector;
 
@@ -40,6 +41,10 @@ import com.romraider.io.connection.ConnectionProperties;
 import com.romraider.logger.ecu.definition.EcuDefinition;
 import com.romraider.logger.ecu.definition.Module;
 import com.romraider.logger.api.LoggerWorkspaceView;
+import com.romraider.logger.api.LoggerGaugeTheme;
+import com.romraider.logger.api.LoggerGaugeConfiguration;
+import com.romraider.logger.api.LoggerGaugeLayout;
+import com.romraider.logger.api.LoggerDashboardTile;
 import com.romraider.logger.external.phidget.interfacekit.io.IntfKitSensor;
 import com.romraider.platform.VehicleModule;
 import com.romraider.platform.VehiclePlatform;
@@ -246,6 +251,12 @@ public class Settings implements Serializable {
     private LoggerWorkspaceView loggerWorkspaceView =
             LoggerWorkspaceView.OVERVIEW;
     private Boolean loggerWorkspaceDarkTheme;
+    private LoggerGaugeTheme loggerGaugeTheme = LoggerGaugeTheme.RR2_CLASSIC;
+    private LoggerGaugeLayout loggerGaugeLayout = LoggerGaugeLayout.STANDARD;
+    private Map<String, LoggerGaugeConfiguration> loggerGaugeConfigurations =
+            new LinkedHashMap<String, LoggerGaugeConfiguration>();
+    private Map<String, LoggerDashboardTile> loggerDashboardTiles =
+            new LinkedHashMap<String, LoggerDashboardTile>();
     private int loggerSelectedGaugeIndex = 0;
     private boolean loggerParameterListState = true;
     private ConnectionProperties loggerConnectionProperties;
@@ -740,6 +751,57 @@ public class Settings implements Serializable {
 
     public void setLoggerWorkspaceDarkTheme(Boolean darkTheme) {
         loggerWorkspaceDarkTheme = darkTheme;
+    }
+
+    public LoggerGaugeTheme getLoggerGaugeTheme() {
+        return loggerGaugeTheme;
+    }
+
+    public void setLoggerGaugeTheme(LoggerGaugeTheme gaugeTheme) {
+        if (gaugeTheme == null) {
+            throw new IllegalArgumentException("Logger gauge theme is required");
+        }
+        loggerGaugeTheme = gaugeTheme;
+    }
+
+    public LoggerGaugeLayout getLoggerGaugeLayout() {
+        return loggerGaugeLayout;
+    }
+
+    public void setLoggerGaugeLayout(LoggerGaugeLayout layout) {
+        if (layout == null) {
+            throw new IllegalArgumentException("Logger gauge layout is required");
+        }
+        loggerGaugeLayout = layout;
+    }
+
+    public Map<String, LoggerGaugeConfiguration> getLoggerGaugeConfigurations() {
+        return loggerGaugeConfigurations;
+    }
+
+    public void setLoggerGaugeConfiguration(String parameterId,
+            LoggerGaugeConfiguration configuration) {
+        if (parameterId == null || parameterId.trim().isEmpty()) {
+            throw new IllegalArgumentException("Logger parameter ID is required");
+        }
+        if (configuration == null) {
+            loggerGaugeConfigurations.remove(parameterId);
+        } else {
+            loggerGaugeConfigurations.put(parameterId, configuration);
+        }
+    }
+
+    public Map<String, LoggerDashboardTile> getLoggerDashboardTiles() {
+        return loggerDashboardTiles;
+    }
+
+    public void setLoggerDashboardTile(String parameterId,
+            LoggerDashboardTile tile) {
+        if (parameterId == null || parameterId.trim().isEmpty()) {
+            throw new IllegalArgumentException("Logger parameter ID is required");
+        }
+        if (tile == null) loggerDashboardTiles.remove(parameterId);
+        else loggerDashboardTiles.put(parameterId, tile);
     }
 
     public void setLoggerSelectedGaugeIndex(int loggerSelectGaugeIndex) {

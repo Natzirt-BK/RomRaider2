@@ -51,13 +51,29 @@ public final class PortableRomDocument {
         return new PortableRomDocument(name, output.toByteArray());
     }
 
-    public String getName() { return name; }
-    public int size() { return current.length; }
-    public boolean hasChanges() { return !Arrays.equals(saved, current); }
-    public byte byteAt(int offset) { return current[checkedOffset(offset)]; }
-    public byte[] snapshot() { return current.clone(); }
+    public static PortableRomDocument recover(String name, byte[] saved,
+            byte[] current) {
+        if (saved == null || current == null || saved.length != current.length) {
+            throw new IllegalArgumentException(
+                    "Saved and current ROM data must have the same length");
+        }
+        PortableRomDocument document = new PortableRomDocument(name, saved);
+        document.current = current.clone();
+        return document;
+    }
 
-    public void replace(int offset, byte[] replacement) {
+    public String getName() { return name; }
+    public synchronized int size() { return current.length; }
+    public synchronized boolean hasChanges() {
+        return !Arrays.equals(saved, current);
+    }
+    public synchronized byte byteAt(int offset) {
+        return current[checkedOffset(offset)];
+    }
+    public synchronized byte[] snapshot() { return current.clone(); }
+    public synchronized byte[] savedSnapshot() { return saved.clone(); }
+
+    public synchronized void replace(int offset, byte[] replacement) {
         if (replacement == null || replacement.length == 0) {
             throw new IllegalArgumentException("Replacement bytes are required");
         }
@@ -68,21 +84,28 @@ public final class PortableRomDocument {
         System.arraycopy(replacement, 0, current, offset, replacement.length);
     }
 
-    public void reset() {
+    public synchronized void reset() {
         current = saved.clone();
     }
 
-    public void markSaved() {
+    public synchronized void markSaved() {
         saved = current.clone();
     }
 
-    public void write(OutputStream output) throws IOException {
+    /** Marks only the exact bytes written by an asynchronous save as clean. */
+    public synchronized boolean markSavedIfCurrent(byte[] written) {
+        if (written == null || !Arrays.equals(current, written)) return false;
+        saved = written.clone();
+        return true;
+    }
+
+    public synchronized void write(OutputStream output) throws IOException {
         if (output == null) throw new IllegalArgumentException(
                 "A ROM output stream is required");
         output.write(current);
     }
 
-    public List<PortableByteChange> changes() {
+    public synchronized List<PortableByteChange> changes() {
         if (!hasChanges()) return Collections.emptyList();
         List<PortableByteChange> changes =
                 new ArrayList<PortableByteChange>();

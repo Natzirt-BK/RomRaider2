@@ -46,10 +46,10 @@ import javax.swing.Action;
 import com.romraider.logger.ecu.EcuLogger;
 import com.romraider.logger.external.aem.xwifi.io.AemRunner;
 import com.romraider.logger.external.core.ExternalDataItem;
-import com.romraider.logger.external.core.ExternalDataSource;
+import com.romraider.logger.external.core.SwingExternalDataSource;
 
 
-public final class AemDataSource implements ExternalDataSource {
+public final class AemDataSource implements SwingExternalDataSource {
     private final Map<AemSensorType, AemDataItem> dataItems = new HashMap<AemSensorType, AemDataItem>();
     private AemRunner runner;
     private String port;

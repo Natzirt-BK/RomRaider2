@@ -36,10 +36,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.ResourceBundle;
 import java.util.Set;
-
-import javax.swing.SwingUtilities;
-
-import com.romraider.logger.ecu.EcuLogger;
+import java.util.function.Consumer;
 import com.romraider.logger.ecu.comms.query.dimemod.DmInitCallback;
 import org.apache.log4j.Logger;
 
@@ -84,6 +81,7 @@ public final class QueryManagerImpl implements QueryManager {
     private final EcuInitCallback ecuInitCallback;
     private final DmInitCallback dmInitCallback;
     private final MessageListener messageListener;
+    private final Consumer<Runnable> notificationExecutor;
     private FileLoggerControllerSwitchMonitor monitor;
     private EcuQuery fileLoggerQuery;
     private Thread queryManagerThread;
@@ -99,12 +97,23 @@ public final class QueryManagerImpl implements QueryManager {
             DmInitCallback dmInitCallback,
             MessageListener messageListener,
             DataUpdateHandler... dataUpdateHandlers) {
+        this(ecuInitCallback, dmInitCallback, messageListener,
+                Runnable::run, dataUpdateHandlers);
+    }
+
+    public QueryManagerImpl(EcuInitCallback ecuInitCallback,
+            DmInitCallback dmInitCallback,
+            MessageListener messageListener,
+            Consumer<Runnable> notificationExecutor,
+            DataUpdateHandler... dataUpdateHandlers) {
         checkNotNull(ecuInitCallback,
                 messageListener,
+                notificationExecutor,
                 dataUpdateHandlers);
         this.ecuInitCallback = ecuInitCallback;
         this.dmInitCallback = dmInitCallback;
         this.messageListener = messageListener;
+        this.notificationExecutor = notificationExecutor;
         this.updateHandlers = dataUpdateHandlers;
         stop = true;
     }
@@ -559,7 +568,7 @@ public final class QueryManagerImpl implements QueryManager {
     }
 
     private void notifyConnecting() {
-        SwingUtilities.invokeLater(new Runnable() {
+        notificationExecutor.accept(new Runnable() {
             @Override
             public void run() {
                 for (LoggerStatusListener listener : listeners) {
@@ -570,7 +579,7 @@ public final class QueryManagerImpl implements QueryManager {
     }
 
     private void notifyReading() {
-        SwingUtilities.invokeLater(new Runnable() {
+        notificationExecutor.accept(new Runnable() {
             @Override
             public void run() {
                 for (LoggerStatusListener listener : listeners) {
@@ -584,7 +593,7 @@ public final class QueryManagerImpl implements QueryManager {
     }
 
     private void notifyReconnecting() {
-        SwingUtilities.invokeLater(new Runnable() {
+        notificationExecutor.accept(new Runnable() {
             @Override
             public void run() {
                 for (LoggerStatusListener listener : listeners) {
@@ -595,7 +604,7 @@ public final class QueryManagerImpl implements QueryManager {
     }
 
     private void notifyStopped() {
-        SwingUtilities.invokeLater(new Runnable() {
+        notificationExecutor.accept(new Runnable() {
             @Override
             public void run() {
                 for (LoggerStatusListener listener : listeners) {

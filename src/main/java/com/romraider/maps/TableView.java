@@ -52,12 +52,15 @@ import javax.swing.JViewport;
 import javax.swing.KeyStroke;
 import javax.swing.Scrollable;
 import javax.swing.SwingConstants;
+import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 import org.apache.log4j.Logger;
 
 import com.romraider.Settings;
 import com.romraider.editor.ecu.ECUEditorManager;
 import com.romraider.swing.TableFrame;
+import com.romraider.swing.SwingTableFrameRegistry;
+import com.romraider.swing.SwingTableViewRegistry;
 import com.romraider.swing.TableToolBar;
 import com.romraider.ui.ThemeToken;
 import com.romraider.ui.UiThemeService;
@@ -65,7 +68,8 @@ import com.romraider.util.NumberUtil;
 import com.romraider.util.ResourceUtil;
 import com.romraider.util.SettingsManager;
 
-public abstract class TableView extends JPanel implements Serializable, Scrollable {
+public abstract class TableView extends JPanel implements Serializable, Scrollable,
+        TablePresentationListener {
     private static final long serialVersionUID = 6559256489995552645L;
     protected static final Logger LOGGER = Logger.getLogger(TableView.class);
     private static final ResourceBundle rb = new ResourceUtil().getBundle(TableView.class.getName());
@@ -103,6 +107,8 @@ public abstract class TableView extends JPanel implements Serializable, Scrollab
 
     protected TableView(Table table) {
     	this.table = table;
+        SwingTableViewRegistry.register(table, this);
+        TablePresentationService.addListener(table, this);
 
         this.setLayout(borderLayout);
         Color surface = UiThemeService.getInstance().color(ThemeToken.SURFACE);
@@ -688,7 +694,7 @@ public abstract class TableView extends JPanel implements Serializable, Scrollab
     }
 
     public TableFrame getFrame() {
-    	return table.getTableFrame();
+		return SwingTableFrameRegistry.find(table);
     }
 
     public TableView getAxisParent() {
@@ -700,7 +706,15 @@ public abstract class TableView extends JPanel implements Serializable, Scrollab
     }
 
     public void setTable(Table t) {
-    	 this.table = t;
+         Table previous = this.table;
+         if (previous == t) return;
+         TablePresentationService.removeListener(previous, this);
+         SwingTableViewRegistry.unregister(previous, this);
+         this.table = t;
+         if (t != null) {
+             SwingTableViewRegistry.register(t, this);
+             TablePresentationService.addListener(t, this);
+         }
     }
 
     public Table getTable() {
@@ -756,6 +770,69 @@ public abstract class TableView extends JPanel implements Serializable, Scrollab
 	            }
 	        }
     	}
+    }
+
+    @Override
+    public void tableChanged(Table changedTable) {
+        if (changedTable != table) return;
+        if (SwingUtilities.isEventDispatchThread()) refreshPresentation();
+        else SwingUtilities.invokeLater(() -> {
+            if (changedTable == table) refreshPresentation();
+        });
+    }
+
+    @Override
+    public void cellChanged(Table changedTable, DataCell cell) {
+        if (changedTable != table || cell == null) return;
+        Runnable refresh = () -> {
+            if (changedTable != table) return;
+            drawDataCell(cell);
+            refreshToolbar();
+        };
+        if (SwingUtilities.isEventDispatchThread()) refresh.run();
+        else SwingUtilities.invokeLater(refresh);
+    }
+
+    protected void drawDataCell(DataCell cell) {
+        if (data == null) return;
+        for (DataCellView view : data) {
+            if (view != null && view.getDataCell() == cell) {
+                view.drawCell();
+                return;
+            }
+        }
+    }
+
+    private void refreshPresentation() {
+        drawTable();
+        refreshToolbar();
+    }
+
+    private void refreshToolbar() {
+        com.romraider.editor.ecu.ECUEditor editor =
+                ECUEditorManager.getECUEditorWithoutCreation();
+        if (editor != null && editor.getTableToolBar() != null) {
+            editor.getTableToolBar().updateTableToolBar(table);
+        }
+    }
+
+    @Override
+    public void selectionAnchorChanged(Table changedTable, int x, int y) {
+        if (changedTable != table) return;
+        highlightBeginX = x;
+        highlightBeginY = y;
+    }
+
+    @Override
+    public void invalidScale(Table changedTable, Scale scale) {
+        if (changedTable != table) return;
+        if (SwingUtilities.isEventDispatchThread()) {
+            showBadScalePopup(changedTable, scale);
+        } else {
+            SwingUtilities.invokeLater(() -> {
+                if (changedTable == table) showBadScalePopup(changedTable, scale);
+            });
+        }
     }
 
     protected void addPresetPanel(PresetManager m) {

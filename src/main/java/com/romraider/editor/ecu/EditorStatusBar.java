@@ -28,6 +28,9 @@ import com.romraider.editor.workspace.RomChangeService;
 import com.romraider.editor.workspace.TableChangeSummary;
 import com.romraider.platform.PlatformContext;
 import com.romraider.platform.PlatformContextListener;
+import com.romraider.platform.RomModification;
+import com.romraider.platform.RomModificationDetector;
+import com.romraider.platform.RomModificationEvidence;
 import com.romraider.platform.VehiclePlatform;
 import com.romraider.ui.ModernIconFactory;
 import com.romraider.ui.ModernIconFactory.Action;
@@ -39,7 +42,7 @@ import com.romraider.swing.JProgressPane;
 public final class EditorStatusBar extends JPanel implements PlatformContextListener {
     public interface Actions {
         void resetChanges();
-        default void showDimeModFeatures() { }
+        default void showRomModifications() { }
     }
 
     private static final long serialVersionUID = 1L;
@@ -47,7 +50,7 @@ public final class EditorStatusBar extends JPanel implements PlatformContextList
     private final JLabel state = new JLabel("● NO ROM");
     private final JLabel context = new JLabel("Ready");
     private final JLabel recovery = new JLabel();
-    private final JButton dimeMod = new JButton();
+    private final JButton romMod = new JButton("ROM Mods: None detected");
     private final JButton reset = new JButton("Reset Changes",
             ModernIconFactory.icon(Action.UNDO));
     private final JPanel actionPanel = new JPanel(new java.awt.FlowLayout(
@@ -86,15 +89,15 @@ public final class EditorStatusBar extends JPanel implements PlatformContextList
         progressStatus.addStatusComponent(recovery);
         context.setName("VEHICLE AND ROM CONTEXT");
         context.setHorizontalAlignment(JLabel.CENTER);
-        dimeMod.setName("DIMEMOD STATUS CHIP");
-        dimeMod.setMargin(new Insets(0, 7, 0, 7));
-        dimeMod.setFocusable(false);
-        dimeMod.setToolTipText("Open detected DimeMod features");
-        dimeMod.addActionListener(event -> actions.showDimeModFeatures());
+        romMod.setName("ROM MODIFICATION STATUS CHIP");
+        romMod.setMargin(new Insets(0, 7, 0, 7));
+        romMod.setFocusable(false);
+        romMod.setToolTipText("Open ROM modification detection details");
+        romMod.addActionListener(event -> actions.showRomModifications());
         JPanel contextPanel = new JPanel(new java.awt.BorderLayout(6, 0));
         contextPanel.setOpaque(false);
         contextPanel.add(context, java.awt.BorderLayout.CENTER);
-        contextPanel.add(dimeMod, java.awt.BorderLayout.EAST);
+        contextPanel.add(romMod, java.awt.BorderLayout.EAST);
         actionPanel.setOpaque(false);
         actionPanel.add(reset);
         progressStatus.setMinimumSize(new Dimension(0, 24));
@@ -126,6 +129,7 @@ public final class EditorStatusBar extends JPanel implements PlatformContextList
         });
         changeMonitor = new Timer(1200, event -> refreshChangedCells());
         changeMonitor.setRepeats(true);
+        render();
     }
 
     @Override
@@ -176,7 +180,7 @@ public final class EditorStatusBar extends JPanel implements PlatformContextList
     }
 
     private void render() {
-        renderDimeModChip();
+        renderRomModChip();
         Rom rom = currentRom;
         if (rom == null) {
             lastChangedCells = 0;
@@ -186,7 +190,7 @@ public final class EditorStatusBar extends JPanel implements PlatformContextList
             state.setToolTipText("Open a ROM to view its change state");
             fullIdentity = "No ROM open";
             renderRecovery(RecoveryState.IDLE);
-            fullContext = platformText();
+            fullContext = "No vehicle context";
             updateResponsiveText();
             reset.setEnabled(false);
             return;
@@ -220,13 +224,29 @@ public final class EditorStatusBar extends JPanel implements PlatformContextList
                 : "No calibration changes to reset");
     }
 
-    private void renderDimeModChip() {
+    private void renderRomModChip() {
         PlatformContext platform = PlatformContext.getInstance();
-        boolean visible = platform.getPlatform() == VehiclePlatform.SUBARU;
-        dimeMod.setVisible(visible);
-        dimeMod.setText("DimeMod: "
-                + platform.getDimeModState().getDisplayName());
-        dimeMod.setEnabled(visible);
+        java.util.Map<RomModification, RomModificationEvidence> detected =
+                RomModificationDetector.detect(currentRom);
+        StringBuilder names = new StringBuilder();
+        for (RomModification modification : RomModification.values()) {
+            if (detected.get(modification).isDetected()) {
+                if (names.length() > 0) names.append(" + ");
+                names.append(modification.getDisplayName());
+            }
+        }
+        boolean visible = currentRom != null
+                && (platform.getPlatform() == VehiclePlatform.SUBARU
+                        || names.length() > 0);
+        romMod.setVisible(visible);
+        romMod.setText(names.length() == 0
+                ? "ROM Mods: None detected" : "ROM Mods: " + names);
+        romMod.setToolTipText(names.length() == 0
+                ? "No explicit DimeMod, CarBerry, or MerpMod markers were "
+                        + "found in the loaded ROM definition"
+                : "Definition evidence found for " + names
+                        + "; this is not live ECU verification");
+        romMod.setEnabled(visible);
     }
 
     private void refreshChangedCells() {

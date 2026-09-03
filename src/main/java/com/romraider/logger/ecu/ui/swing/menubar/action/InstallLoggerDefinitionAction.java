@@ -26,11 +26,15 @@ import static javax.swing.JOptionPane.ERROR_MESSAGE;
 import static javax.swing.JOptionPane.INFORMATION_MESSAGE;
 import static javax.swing.JOptionPane.WARNING_MESSAGE;
 
+import java.awt.Cursor;
 import java.awt.event.ActionEvent;
 import java.io.File;
 import java.text.MessageFormat;
+import java.util.concurrent.ExecutionException;
 
 import javax.swing.JFileChooser;
+import javax.swing.SwingUtilities;
+import javax.swing.SwingWorker;
 
 import com.romraider.logger.ecu.EcuLogger;
 import com.romraider.logger.ecu.definition.EcuDataLoader;
@@ -42,12 +46,21 @@ import com.romraider.swing.menubar.action.AbstractAction;
 import com.romraider.util.SettingsManager;
 
 public final class InstallLoggerDefinitionAction extends AbstractAction {
+    private boolean working;
 
     public InstallLoggerDefinitionAction(EcuLogger logger) {
         super(logger);
     }
 
     public void actionPerformed(ActionEvent actionEvent) {
+        if (working) return;
+        // Let the Help menu close and repaint before file-system discovery
+        // starts inside the platform file chooser.
+        SwingUtilities.invokeLater(this::chooseDefinition);
+    }
+
+    private void chooseDefinition() {
+        if (working) return;
         File current = getFile(
                 logger.getSettings().getLoggerDefinitionFilePath());
         JFileChooser chooser = getDefinitionFileChooser(current);
@@ -67,53 +80,108 @@ public final class InstallLoggerDefinitionAction extends AbstractAction {
                 .getLoggerDefinitionFilePath();
         String previousProtocol = logger.getSettings().getLoggerProtocol();
         String previousTransport = logger.getSettings().getTransportProtocol();
-        Installation installation = null;
-        try {
-            installation = new LoggerDefinitionInstaller()
-                    .install(source.toPath(),
-                            SettingsManager.getSettingsDirectory());
-            String installedPath = installation.installedFile()
-                    .toAbsolutePath().toString();
-            EcuDataLoader activationProbe = new EcuDataLoaderImpl();
-            activationProbe.loadConfigFromXml(installedPath,
-                    logger.getSettings().getLoggerProtocol(),
-                    logger.getSettings().getFileLoggingControllerSwitchId(),
-                    null);
-            logger.getSettings().setLoggerDefinitionFilePath(installedPath);
-            SettingsManager.save(logger.getSettings());
-            logger.loadLoggerParams();
-            logger.reportMessage(MessageFormat.format(
-                    rb.getString("LDASUCCESS"),
-                    installation.installedFile().getFileName()));
-            Object[] complete = {rb.getString("LDAOK")};
-            IntegratedOptionDialog.show(logger,
-                    MessageFormat.format(rb.getString("LDASUCCESSDIALOG"),
-                            installation.version(), installedPath),
-                    rb.getString("LDASUCCESSTITLE"), INFORMATION_MESSAGE,
-                    complete, complete[0]);
-        } catch (Exception exception) {
-            logger.getSettings().setLoggerDefinitionFilePath(previousPath);
-            logger.getSettings().setLoggerProtocol(previousProtocol);
-            logger.getSettings().setTransportProtocol(previousTransport);
-            if (installation != null) {
+        working = true;
+        setEnabled(false);
+        logger.setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
+        logger.reportMessage("Installing and validating Logger definitions…");
+
+        new SwingWorker<PreparedDefinition, Void>() {
+            private Installation installation;
+
+            @Override
+            protected PreparedDefinition doInBackground() throws Exception {
+                installation = new LoggerDefinitionInstaller().install(
+                        source.toPath(), SettingsManager.getSettingsDirectory());
+                String installedPath = installation.installedFile()
+                        .toAbsolutePath().toString();
+                EcuDataLoader loaded = new EcuDataLoaderImpl();
+                loaded.loadConfigFromXml(installedPath,
+                        logger.getSettings().getLoggerProtocol(),
+                        logger.getSettings().getFileLoggingControllerSwitchId(),
+                        null);
+                return new PreparedDefinition(installation, installedPath,
+                        loaded);
+            }
+
+            @Override
+            protected void done() {
                 try {
-                    installation.rollback();
-                } catch (Exception rollbackFailure) {
-                    exception.addSuppressed(rollbackFailure);
+                    activate(get());
+                } catch (InterruptedException exception) {
+                    Thread.currentThread().interrupt();
+                    fail(exception, installation, previousPath,
+                            previousProtocol, previousTransport);
+                } catch (ExecutionException exception) {
+                    Throwable cause = exception.getCause();
+                    Exception failure = cause instanceof Exception
+                            ? (Exception) cause : exception;
+                    fail(failure, installation, previousPath,
+                            previousProtocol, previousTransport);
+                } catch (Exception exception) {
+                    fail(exception, installation, previousPath,
+                            previousProtocol, previousTransport);
+                } finally {
+                    working = false;
+                    setEnabled(true);
+                    logger.setCursor(Cursor.getDefaultCursor());
                 }
             }
+        }.execute();
+    }
+
+    private void activate(PreparedDefinition prepared) throws Exception {
+        String installedPath = prepared.installedPath;
+        logger.getSettings().setLoggerDefinitionFilePath(installedPath);
+        SettingsManager.save(logger.getSettings());
+        logger.loadLoggerParams(prepared.loaded);
+        logger.reportMessage(MessageFormat.format(
+                rb.getString("LDASUCCESS"),
+                prepared.installation.installedFile().getFileName()));
+        Object[] complete = {rb.getString("LDAOK")};
+        IntegratedOptionDialog.show(logger,
+                MessageFormat.format(rb.getString("LDASUCCESSDIALOG"),
+                        prepared.installation.version(), installedPath),
+                rb.getString("LDASUCCESSTITLE"), INFORMATION_MESSAGE,
+                complete, complete[0]);
+    }
+
+    private void fail(Exception exception, Installation installation,
+            String previousPath, String previousProtocol,
+            String previousTransport) {
+        logger.getSettings().setLoggerDefinitionFilePath(previousPath);
+        logger.getSettings().setLoggerProtocol(previousProtocol);
+        logger.getSettings().setTransportProtocol(previousTransport);
+        if (installation != null) {
             try {
-                SettingsManager.save(logger.getSettings());
+                installation.rollback();
             } catch (Exception rollbackFailure) {
                 exception.addSuppressed(rollbackFailure);
             }
-            logger.reportError(rb.getString("LDAERROR"), exception);
-            Object[] close = {rb.getString("LDAOK")};
-            IntegratedOptionDialog.show(logger,
-                    MessageFormat.format(rb.getString("LDAERRORDIALOG"),
-                            safeMessage(exception)),
-                    rb.getString("LDAERRORTITLE"), ERROR_MESSAGE,
-                    close, close[0]);
+        }
+        try {
+            SettingsManager.save(logger.getSettings());
+        } catch (Exception rollbackFailure) {
+            exception.addSuppressed(rollbackFailure);
+        }
+        logger.reportError(rb.getString("LDAERROR"), exception);
+        Object[] close = {rb.getString("LDAOK")};
+        IntegratedOptionDialog.show(logger,
+                MessageFormat.format(rb.getString("LDAERRORDIALOG"),
+                        safeMessage(exception)),
+                rb.getString("LDAERRORTITLE"), ERROR_MESSAGE,
+                close, close[0]);
+    }
+
+    private static final class PreparedDefinition {
+        private final Installation installation;
+        private final String installedPath;
+        private final EcuDataLoader loaded;
+
+        private PreparedDefinition(Installation installation,
+                String installedPath, EcuDataLoader loaded) {
+            this.installation = installation;
+            this.installedPath = installedPath;
+            this.loaded = loaded;
         }
     }
 

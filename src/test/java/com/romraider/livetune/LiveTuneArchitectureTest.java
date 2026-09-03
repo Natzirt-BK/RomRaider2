@@ -53,18 +53,34 @@ public class LiveTuneArchitectureTest {
         LiveTunePreflight ready = LiveTunePreflightEvaluator.evaluate(
                 plan, readyContext());
         assertTrue(ready.isReady());
-        assertEquals(6, ready.getChecks().size());
+        assertEquals(7, ready.getChecks().size());
 
         LiveTuneSafetyContext unavailable = new LiveTuneSafetyContext(
                 VehiclePlatform.SUBARU, VehicleModule.ENGINE_ECU,
-                DimeModState.PRESENT, true, false,
+                DimeModState.PRESENT, true, false, false,
                 new EcuIdentity("OTHER", "ROM-TEST"));
         LiveTunePreflight blocked = LiveTunePreflightEvaluator.evaluate(
                 plan, unavailable);
         assertFalse(blocked.isReady());
-        assertEquals(3, blocked.getChecks().stream()
+        assertEquals(4, blocked.getChecks().stream()
                 .filter(check -> check.getStatus()
                         == LiveTuneCheckStatus.FAIL).count());
+    }
+
+    @Test
+    public void advertisedRamTuneStillRequiresQualifiedRuntimeMetadata() {
+        LiveTuneSafetyContext incomplete = new LiveTuneSafetyContext(
+                VehiclePlatform.SUBARU, VehicleModule.ENGINE_ECU,
+                DimeModState.ACTIVE, true, true, false, IDENTITY);
+
+        LiveTunePreflight preflight = LiveTunePreflightEvaluator.evaluate(
+                plan(change("Fuel", 0x1000, 1, 2)), incomplete);
+
+        assertFalse(preflight.isReady());
+        assertEquals("runtime-metadata", preflight.getChecks().stream()
+                .filter(check -> check.getStatus()
+                        == LiveTuneCheckStatus.FAIL)
+                .findFirst().get().getId());
     }
 
     @Test
@@ -143,7 +159,7 @@ public class LiveTuneArchitectureTest {
     private static LiveTuneSafetyContext readyContext() {
         return new LiveTuneSafetyContext(VehiclePlatform.SUBARU,
                 VehicleModule.ENGINE_ECU, DimeModState.ACTIVE,
-                true, true, IDENTITY);
+                true, true, true, IDENTITY);
     }
 
     private static MockEcuTransport connectedTransport() throws Exception {

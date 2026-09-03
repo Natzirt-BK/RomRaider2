@@ -30,7 +30,7 @@ candidate. Stop if any value is missing or mismatched.
 - Unexpected USB removal and recovery: `PASS`, `FAIL`, `NOT RUN`, or `N/A`
 - Sustained logging: `PASS`, `FAIL`, `NOT RUN`, or `N/A`
 - External serial sensor: `PASS`, `FAIL`, `NOT RUN`, or `N/A`
-- Mitsubishi MUT-II: `PASS`, `FAIL`, `NOT RUN`, or `N/A`
+- Mitsubishi Lancer Evolution MUT-II: `PASS`, `FAIL`, `NOT RUN`, or `N/A`
 - Analysis/replay/marker checks: `PASS`, `FAIL`, `NOT RUN`, or `N/A`
 - Clean shutdown and adapter release: `PASS`, `FAIL`, `NOT RUN`, or `N/A`
 

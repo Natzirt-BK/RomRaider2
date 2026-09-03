@@ -195,7 +195,8 @@ public final class EditorTabbedWorkspace extends JPanel implements Scrollable {
                 listener == null ? null
                         : () -> listener.toggleFavorite(frame.getTable()));
         TouchTargetService.apply(document,
-                SettingsManager.getSettings().getDisplayMode());
+                com.romraider.ui.RuntimeUiProfile.displayMode(
+                        SettingsManager.getSettings().getDisplayMode()));
         documents.put(frame, document);
 
         Table table = frame.getTable();
@@ -208,7 +209,8 @@ public final class EditorTabbedWorkspace extends JPanel implements Scrollable {
         installTabDragSupport(header, frame);
         installMapTabContextMenu(header, frame, title);
         TouchTargetService.apply(header,
-                SettingsManager.getSettings().getDisplayMode());
+                com.romraider.ui.RuntimeUiProfile.displayMode(
+                        SettingsManager.getSettings().getDisplayMode()));
         tabs.setTabComponentAt(index, header);
         tabs.setSelectedComponent(document);
         updateTabHeaderStyles();
@@ -374,20 +376,30 @@ public final class EditorTabbedWorkspace extends JPanel implements Scrollable {
 
     private Component createEmptyState() {
         JPanel center = new JPanel(new GridBagLayout());
+        center.setBackground(UiThemeService.getInstance().color(
+                ThemeToken.BACKGROUND));
         JPanel message = new JPanel(new BorderLayout(0, 12));
-        message.setBorder(BorderFactory.createEmptyBorder(32, 32, 32, 32));
+        message.setBackground(UiThemeService.getInstance().color(
+                ThemeToken.SURFACE));
+        message.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(
+                        UiThemeService.getInstance().color(
+                                ThemeToken.RAISED_SURFACE)),
+                BorderFactory.createEmptyBorder(32, 42, 32, 42)));
 
         JLabel icon = new JLabel(ModernIconFactory.icon(Action.OPEN));
         icon.setHorizontalAlignment(SwingConstants.CENTER);
         message.add(icon, BorderLayout.NORTH);
 
         JLabel text = new JLabel("<html><div style='text-align:center'>"
-                + "<b>Open a calibration table</b><br>"
+                + "<b>OPEN A CALIBRATION TABLE</b><br><br>"
                 + "Choose a table from the browser and it will open here.<br>"
                 + "<small>Ctrl+O opens a ROM &nbsp;•&nbsp; Ctrl+P searches tables</small>"
                 + "</div></html>", SwingConstants.CENTER);
         text.setFont(text.getFont().deriveFont(Font.PLAIN,
                 text.getFont().getSize2D() + 1.0f));
+        text.setForeground(UiThemeService.getInstance().color(
+                ThemeToken.PRIMARY_TEXT));
         message.add(text, BorderLayout.CENTER);
         center.add(message);
         return center;
@@ -461,7 +473,8 @@ public final class EditorTabbedWorkspace extends JPanel implements Scrollable {
         reopen.addActionListener(event -> requestReopenLastMap());
         menu.add(reopen);
         TouchTargetService.apply(menu,
-                SettingsManager.getSettings().getDisplayMode());
+                com.romraider.ui.RuntimeUiProfile.displayMode(
+                        SettingsManager.getSettings().getDisplayMode()));
 
         if (header instanceof JComponent) {
             ((JComponent) header).putClientProperty("TAB_CONTEXT_MENU", menu);

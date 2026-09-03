@@ -9,6 +9,8 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.LinkedHashSet;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
@@ -17,7 +19,8 @@ import java.util.function.Consumer;
  * Toolkit-neutral catalog and selection commands for the active Logger.
  */
 public final class LoggerChannelService {
-    private final BiConsumer<String, Boolean> selectionCommand;
+    private final LoggerChannelSelectionCommand selectionCommand;
+    private final BiConsumer<String, String> unitCommand;
     private final Consumer<RuntimeException> failureHandler;
     private final CopyOnWriteArrayList<Consumer<List<LoggerChannel>>> listeners =
             new CopyOnWriteArrayList<Consumer<List<LoggerChannel>>>();
@@ -26,8 +29,21 @@ public final class LoggerChannelService {
 
     public LoggerChannelService(BiConsumer<String, Boolean> selectionCommand,
             Consumer<RuntimeException> failureHandler) {
-        checkNotNull(selectionCommand, failureHandler);
+        this((parameterIds, selected) -> {
+            for (String parameterId : parameterIds) {
+                selectionCommand.accept(parameterId, selected);
+            }
+        }, (parameterId, optionId) -> { }, failureHandler);
+        checkNotNull(selectionCommand);
+    }
+
+    public LoggerChannelService(
+            LoggerChannelSelectionCommand selectionCommand,
+            BiConsumer<String, String> unitCommand,
+            Consumer<RuntimeException> failureHandler) {
+        checkNotNull(selectionCommand, unitCommand, failureHandler);
         this.selectionCommand = selectionCommand;
+        this.unitCommand = unitCommand;
         this.failureHandler = failureHandler;
     }
 
@@ -61,14 +77,53 @@ public final class LoggerChannelService {
     }
 
     public void setSelected(String parameterId, boolean selected) {
-        if (parameterId == null || parameterId.trim().isEmpty()) return;
+        setSelected(Collections.singletonList(parameterId), selected);
+    }
+
+    public void setSelected(Collection<String> parameterIds,
+            boolean selected) {
+        if (parameterIds == null || parameterIds.isEmpty()) return;
+        Set<String> changed = new LinkedHashSet<String>();
+        synchronized (this) {
+            for (String parameterId : parameterIds) {
+                if (parameterId == null || parameterId.trim().isEmpty()) {
+                    continue;
+                }
+                LoggerChannel current = channels.get(parameterId);
+                if (current != null && current.isSelected() != selected) {
+                    changed.add(parameterId);
+                }
+            }
+        }
+        if (changed.isEmpty()) return;
+        try {
+            selectionCommand.setSelected(Collections.unmodifiableList(
+                    new ArrayList<String>(changed)), selected);
+        } catch (RuntimeException failure) {
+            failureHandler.accept(failure);
+        }
+    }
+
+    public void setUnitOption(String parameterId, String optionId) {
+        if (parameterId == null || parameterId.trim().isEmpty()
+                || optionId == null || optionId.trim().isEmpty()) return;
         LoggerChannel current;
         synchronized (this) {
             current = channels.get(parameterId);
         }
-        if (current == null || current.isSelected() == selected) return;
+        if (current == null) return;
+        LoggerChannelUnitOption requested = null;
+        for (LoggerChannelUnitOption option : current.getUnitOptions()) {
+            if (option.getId().equals(optionId)) requested = option;
+        }
+        if (requested == null) {
+            failureHandler.accept(new IllegalArgumentException(
+                    "Unknown unit option for " + current.getName()));
+            return;
+        }
+        if (requested.isSelected()) return;
         try {
-            selectionCommand.accept(parameterId, selected);
+            unitCommand.accept(parameterId, optionId);
         } catch (RuntimeException failure) {
             failureHandler.accept(failure);
         }

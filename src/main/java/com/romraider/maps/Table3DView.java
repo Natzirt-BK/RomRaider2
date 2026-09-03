@@ -95,6 +95,20 @@ public class Table3DView extends TableView {
     }
 
     @Override
+    protected void drawDataCell(DataCell cell) {
+        if (data == null) return;
+        for (DataCellView[] column : data) {
+            if (column == null) continue;
+            for (DataCellView view : column) {
+                if (view != null && view.getDataCell() == cell) {
+                    view.drawCell();
+                    return;
+                }
+            }
+        }
+    }
+
+    @Override
     public void populateTableVisual() {	
     	// fill first empty cell
         centerPanel.add(createAxisCornerCell());
@@ -451,8 +465,8 @@ public class Table3DView extends TableView {
                 setClipboard(String.valueOf(output));
             }
         } else {
-            getTable().getXAxis().getTableView().copySelection();
-            getTable().getYAxis().getTableView().copySelection();
+            xAxis.copySelection();
+            yAxis.copySelection();
         }
     }
 

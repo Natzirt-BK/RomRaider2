@@ -490,7 +490,7 @@ final class Java2dSurfacePanel extends JPanel implements MapVisualizationControl
             if (data[x][y] == null) return false;
             data[x][y].setSelected(true);
         }
-        if (table.getTableView() != null) table.getTableView().drawTable();
+        com.romraider.maps.TablePresentationService.changed(table);
         hoverX = x;
         hoverY = y;
         repaint();

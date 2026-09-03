@@ -1,18 +1,46 @@
 # RomRaider2 implementation status
 
-Last updated: 2026-09-01
+Last updated: 2026-09-02
 
 ## Working now
 
 - Java 21 builds and self-contained Windows/Linux application images.
 - Modern Editor workspace with tabs, search, favorites, recent and changed
   maps, comparison, undo/redo, notes, recovery, integrated 3D, and live data.
+- Responsive calibration documents with a framed heatmap, distinct selection
+  and changed-cell states, labelled wide-layout actions, and a wrapping cell
+  editor that keeps every command reachable on narrow displays.
 - Managed Editor and Logger definition installation.
 - Rebuilt Logger shell with searchable channels and Data, Graph, Dashboard,
   MAF, Injector, Dyno, and Analysis workspaces.
+- Saved desktop dashboard arrangements with Standard, Wide, and Large tiles
+  that can present a Gauge, large Value, live Trend, or configured Alarm.
 - First Compose Desktop Logger workspace using the real session, recording,
   channel-selection, and received-sample services. It includes responsive
   Overview, Data, Graph, and Dashboard views with light and dark themes.
+- First editable Compose calibration checkpoint using the active ROM table.
+  The opt-in grid renders real values, axes, heatmaps, change state, selection
+  details, and narrow scrolling. One-cell edits use the same scaling, range
+  checks, ROM bytes, and undo/redo history as the classic grid. Active-cell
+  copy/paste and Ctrl+Z/Ctrl+Y also stay on that boundary. Shift+arrow or
+  Shift+click selects a rectangular value range; copied ranges use tab/newline
+  spreadsheet format, and pasted value blocks are validated before being
+  grouped into one undo step. Ctrl+A selects the full calibration surface.
+- Compose Desktop now owns normal Editor and Logger startup. The Logger has its
+  own UI-neutral ECU runtime rather than a hidden Swing `EcuLogger`, and the
+  application no longer falls back to Swing when Compose is unavailable. The
+  old shell is available only through an explicit compatibility property.
+- The Compose Logger can configure its definition, protocol, transport,
+  module, serial port, output directory, auto-connect preference, and external
+  sensor ports. Captured CSV files can be opened into a Compose-owned offline
+  statistics window.
+- The Compose Editor includes ROM comparison and a read-only Live Tune preview
+  for DimeMod, CarBerry, and MerpMod detection and safety-gate review.
+- Compose calibration ranges can now be interpolated across, down, or in both
+  directions using definition axis breakpoints. Each operation is validated,
+  reversible, and recorded as one undo step.
+- ECU definition priority management is now Compose-owned, including search,
+  missing-file status, add/remove, reorder, and persistent save.
 - Offline CSV statistics, time and X/Y graphs, range selection, playback, and
   markers.
 - Subaru SSM/ISO9141 through OpenPort 2.0 on Linux, including a sustained in-car
@@ -22,12 +50,23 @@ Last updated: 2026-09-01
   tests.
 - DimeMod discovery, diagnostic codes, runtime Logger parameters, and mapped
   feature display. The Logger now records whether the connected runtime
-  advertises RAM Tune; vehicle writes remain disabled.
+  advertises RAM Tune plus its signature address and lookup-table size;
+  vehicle writes remain disabled.
+- Loaded-ROM recognition for DimeMod, CarBerry, and MerpMod based on explicit
+  ROM identity or branded definition tables. The Editor now lists mapped
+  CarBerry and MerpMod features as well as DimeMod features, while keeping all
+  definition evidence separate from live ECU-session verification. Summary
+  counts and status colours make that distinction visible at a glance.
 - Offline live-tuning plans with identity and capability preflight, bounded
   staged changes, stale-value checks, mock readback verification, and a new
   read-only Editor preview of selected or all changed tables.
 - Light, dark, system, and high-contrast themes plus scalable desktop and touch
   layouts.
+- Shared modern table spacing and alternating row treatment across Logger
+  channels, live values, offline analysis, Editor live data, change history,
+  ROM comparison, live-tune preview, and ROM-modification details. Specialized
+  channel checkboxes and unit selectors retain their original behavior. Live
+  parameter and analysis channel names use one restrained accent colour.
 - Local privacy-safe diagnostics and versioned settings separate from older
   RomRaider installs.
 
@@ -53,16 +92,20 @@ The OpenPort reconnect path also has an explicit Reconnecting state, quieter
 retry logging, and a capped 1/2/4/5-second retry schedule. The Java and Compose
 tests pass, and the Logger workspace has passed clean Linux visual checks for
 Overview, Data, Graph, Dashboard, dark mode, and a 600-pixel-wide layout. RC4
-is published as a development prerelease. A fresh Linux Java 21 application
-image builds and starts with the replacement workspace packaged. The packaged
-Windows visual pass remains open and is disclosed on the release.
+is published as a development prerelease. Fresh Linux and Windows Java 21
+application images build and start with the replacement workspace packaged.
+The matching Windows source passed its Java and Compose tests in the VM, and
+the packaged first-run interface passed a native Windows visual check.
 
 The Editor can now project changed bytes from real selected tables into an
 offline live-tuning plan. Preflight evaluates the ECU family, ECU role, DimeMod
 state, mapped definition, runtime RAM Tune discovery, and exact ECU identity.
+It also requires structurally valid runtime signature and lookup-table metadata
+as a separate check from the advertised feature bit.
 The new Tune inspector previews byte ranges, RAM addresses, before/after data,
-and safety gates. It has no connect or write command, and the plan can only run
-against the mock ECU transport.
+and safety gates. Its state badge and byte table now use the same visual system
+as the Logger and Editor data surfaces. It has no connect or write command, and
+the plan can only run against the mock ECU transport.
 
 A portable, UI-free ROM and logger core now supports bounded ROM byte edits,
 change ranges, save-copy output, bounded logger sessions, and round-trip CSV.
@@ -95,15 +138,20 @@ verification, recovery, and connected test plans are complete.
 
 ## Next work
 
-1. Extend the replacement calibration shell on the neutral ROM/table boundary.
-2. Inspect the native macOS ARM64 and Intel application bundles on real Macs.
-3. Rerun ECU definition table editing, logger definition/profile import, and
+1. Add essential settings parity to the Compose Editor and decide which
+   specialized MAF, Injector, and Dyno tools must move before deleting the
+   compatibility shell from release builds.
+2. Continue keyboard and screen-reader accessibility work across the Compose
+   calibration and Logger workspaces.
+3. Rerun ECU definition table editing, Logger definition/profile import, and
    the offline logger preview on the Galaxy S25; keep the wired live logger for
    RC5 connected qualification.
-4. Run the RC4 Windows package and visual pass when the VM is available again.
-5. Resume OpenPort and external-sensor in-car qualification during RC5 work.
-6. Qualify the Mitsubishi Lancer Evolution MUT-II path on a vehicle before
+4. Resume OpenPort and external-sensor in-car qualification during RC5 work.
+5. Qualify the Mitsubishi Lancer Evolution MUT-II path on a vehicle before
    describing it as supported.
+
+macOS ARM64 and Intel work remains paused while the desktop and Android
+interfaces settle.
 
 The detailed manual checks are in `WINDOWS_RELEASE_CHECKLIST.md` and
 `LINUX_IN_CAR_QUALIFICATION.md`.

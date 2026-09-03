@@ -40,7 +40,7 @@ public class EditorWorkspacePanelTest {
         assertEquals("High Octane Fuel Map", label.getText());
         assertEquals("ROM: TEST_ROM", label.getToolTipText());
         assertNotNull(label.getIcon());
-        assertEquals(30, new EditorWorkspacePanel.PlaceholderList<TableLocation>(
+        assertEquals(36, new EditorWorkspacePanel.PlaceholderList<TableLocation>(
                 new javax.swing.DefaultListModel<TableLocation>(), "Empty")
                 .getFixedCellHeight());
     }

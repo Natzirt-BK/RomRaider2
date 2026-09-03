@@ -19,10 +19,6 @@
 
 package com.romraider.xml.ConversionLayer;
 
-import static com.romraider.editor.ecu.ECUEditorManager.getECUEditor;
-import static com.romraider.swing.LookAndFeelManager.initLookAndFeel;
-import static com.romraider.util.LogManager.initDebugLogging;
-
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -30,11 +26,8 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.util.Collection;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.ResourceBundle;
-import java.util.Set;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -45,12 +38,9 @@ import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import org.xml.sax.SAXException;
 
-import com.romraider.Settings;
-import com.romraider.editor.ecu.ECUEditor;
-import com.romraider.editor.ecu.OpenImageWorker;
+import com.romraider.io.BinaryFileIO;
 import com.romraider.util.ByteUtil;
 import com.romraider.util.ResourceUtil;
-import com.romraider.util.SettingsManager;
 
 public class BMWCodingConversionLayer extends ConversionLayer {
 	protected static final ResourceBundle rb = new ResourceUtil().getBundle(BMWCodingConversionLayer.class.getName());
@@ -165,7 +155,7 @@ public class BMWCodingConversionLayer extends ConversionLayer {
 		byte[] fswInput;
 
 		try {
-			fswInput = ECUEditor.readFile(f);
+			fswInput = BinaryFileIO.read(f);
 		} catch (IOException e) {
 			return null;
 		}
@@ -204,7 +194,7 @@ public class BMWCodingConversionLayer extends ConversionLayer {
 		byte[] fswInput;
 
 		try {
-			fswInput = ECUEditor.readFile(f);
+			fswInput = BinaryFileIO.read(f);
 		} catch (IOException e) {
 			return null;
 		}
@@ -336,7 +326,7 @@ public class BMWCodingConversionLayer extends ConversionLayer {
 		byte[] input;
 
 		try {
-			input = ECUEditor.readFile(f);
+			input = BinaryFileIO.read(f);
 		} catch (IOException e) {
 			throw new SAXException(rb.getString("ERRORFILE") + f);
 		}
@@ -598,69 +588,6 @@ public class BMWCodingConversionLayer extends ConversionLayer {
 		for (BMWConversionRomNodeManager man : romManagers) {
 			man.addPreset(PSW1_s.trim(), namePSW.trim(), currentTable);
 		}
-	}
-
-	// Used for test code only
-	// Gets all files within folder
-	private static Collection<File> listFileTree(File dir) {
-		Set<File> fileTree = new HashSet<File>();
-		if (dir == null || dir.listFiles() == null) {
-			return fileTree;
-		}
-		for (File entry : dir.listFiles()) {
-			if (entry.isFile())
-				fileTree.add(entry);
-			else
-				fileTree.addAll(listFileTree(entry));
-		}
-		return fileTree;
-	}
-
-	// Test Code
-	public static void main(String args[]) {
-		initDebugLogging();
-		initLookAndFeel();
-		ECUEditor editor = getECUEditor();
-		editor.initializeEditorUI();
-		editor.checkDefinitions();
-
-		// Make sure we dont override any settings
-		SettingsManager.setTesting(true);
-		Settings settings = SettingsManager.getSettings();
-
-		settings.getEcuDefinitionFiles().clear();
-		// settings.getEcuDefinitionFiles().add(new
-		// File("C:\\NCSEXPER\\DATEN\\E46\\KMB_E46.C08"));
-		// settings.getEcuDefinitionFiles().add(new
-		// File("C:\\NCSEXPER\\DATEN\\E46\\IHK_E46.C17"));
-		// settings.getEcuDefinitionFiles().add(new
-		// File("C:\\NCSEXPER\\DATEN\\E46\\GM5.C04"));
-
-		File folder = new File("C:\\NCSEXPER\\DATEN\\");
-		Collection<File> listOfFiles = listFileTree(folder);
-
-		ConversionLayer l = new BMWCodingConversionLayer();
-
-		for (File f : listOfFiles) {
-			if (l.isFileSupported(f)) {
-				settings.getEcuDefinitionFiles().add(f);
-			}
-		}
-
-		// settings.getEcuDefinitionFiles().add(new
-		// File("C:\\NCSEXPER\\DATEN\\E36\\KMB_E36.C25"));
-		OpenImageWorker w = new OpenImageWorker(
-				new File("E:\\google_drive\\ECU_Tuning\\maps\\Tacho\\Tacho Grau\\C25_352k_248_oil_6Cyl.hex"));
-		// OpenImageWorker w = new OpenImageWorker(new
-		// File("E:\\Downloads\\ZKE_eep.bin"));
-		// OpenImageWorker w = new OpenImageWorker(new
-		// File("E:\\Downloads\\A-C_eep.bin"));
-		// OpenImageWorker w = new OpenImageWorker(new
-		// File("E:\\Downloads\\MFL_0000-1000.bin"));
-		// OpenImageWorker w = new OpenImageWorker(new
-		// File("E:\\Downloads\\IKE_eep.bin"));
-
-		w.execute();
 	}
 
 	@Override

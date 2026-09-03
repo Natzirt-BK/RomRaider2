@@ -3,7 +3,11 @@ package com.romraider.editor.ecu;
 
 import java.awt.Component;
 import java.awt.Container;
+import java.awt.Graphics2D;
+import java.awt.image.BufferedImage;
+import java.io.File;
 
+import javax.imageio.ImageIO;
 import javax.swing.JFrame;
 import javax.swing.JTabbedPane;
 import javax.swing.SwingUtilities;
@@ -16,12 +20,21 @@ import com.romraider.maps.Table1D;
 import com.romraider.platform.DimeModState;
 import com.romraider.platform.PlatformContext;
 import com.romraider.swing.JProgressPane;
+import com.romraider.ui.ThemeMode;
+import com.romraider.ui.UiThemeService;
 
 /** Manual screenshot fixture; never included in a release package. */
 public final class LiveTunePreviewVisualFixture {
     private LiveTunePreviewVisualFixture() { }
 
     public static void main(String[] args) throws Exception {
+        if (args.length < 1 || args.length > 2) {
+            throw new IllegalArgumentException(
+                    "PNG path plus optional theme are required");
+        }
+        final String output = args[0];
+        final ThemeMode theme = args.length == 2
+                ? ThemeMode.valueOf(args[1].toUpperCase()) : ThemeMode.DARK;
         Table1D table = new Table1D();
         table.setName("Primary Open Loop Fueling");
         table.setCategory("Fueling//Open Loop");
@@ -43,7 +56,8 @@ public final class LiveTunePreviewVisualFixture {
         PlatformContext.getInstance().setDimeModRuntime(
                 DimeModState.ACTIVE, true);
 
-        SwingUtilities.invokeLater(() -> {
+        SwingUtilities.invokeAndWait(() -> {
+            UiThemeService.getInstance().apply(theme);
             EditorInspectorPanel inspector = new EditorInspectorPanel();
             inspector.showSelection(rom, table);
             JTabbedPane tabs = find(inspector, JTabbedPane.class);
@@ -55,8 +69,21 @@ public final class LiveTunePreviewVisualFixture {
             frame.setSize(470, 820);
             frame.setLocation(40, 40);
             frame.setVisible(true);
+            frame.doLayout();
+            frame.validate();
+            try {
+                BufferedImage image = new BufferedImage(frame.getWidth(),
+                        frame.getHeight(), BufferedImage.TYPE_INT_ARGB);
+                Graphics2D graphics = image.createGraphics();
+                frame.paint(graphics);
+                graphics.dispose();
+                ImageIO.write(image, "png", new File(output));
+            } catch (Exception exception) {
+                throw new IllegalStateException(exception);
+            } finally {
+                frame.dispose();
+            }
         });
-        Thread.currentThread().join();
     }
 
     private static <T extends Component> T find(Container parent,

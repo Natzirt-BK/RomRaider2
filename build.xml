@@ -116,6 +116,8 @@
         <property name="javadoc.dir" value="${build.dir}/javadoc" />
         <property name="dist.dir" value="${build.dir}/dist" />
         <property name="testclasses.dir" value="${build.dir}/test" />
+        <property name="testjar.file"
+                  value="${build.dir}/test-runtime/${name.package}-tests.jar" />
 
         <!-- package naming properties -->
         <property name="jar.package" value="${name.package}.jar" />
@@ -167,7 +169,7 @@
 
         <path id="junit_runtime.classpath">
             <path refid="junit_compile.classpath" />
-            <pathelement location="${build.dir}/linux/lib/${jar.package}" />
+            <pathelement location="${testjar.file}" />
             <path refid="test.classpath" />
         </path>
 
@@ -255,7 +257,15 @@
     <target name="compile-for-unittests" depends="prepare" description="Compile and run Linux unit tests">
         <mkdir dir="${testclasses.dir}" />
         <macro_compile os="${os.linux}" srcdir="${src.dir}" destdir="${testclasses.dir}" classpathref="junit_compile.classpath" />
-        <macro_jar os="${os.linux}" basedir="${testclasses.dir}"/>
+        <mkdir dir="${build.dir}/test-runtime" />
+        <jar basedir="${testclasses.dir}" destfile="${testjar.file}">
+            <fileset dir="${src.res.dir}">
+                <include name="**/*.*" />
+            </fileset>
+            <zipfileset dir="i18n">
+                <include name="**/*.properties" />
+            </zipfileset>
+        </jar>
     </target>
     <target name="unittest" depends="compile-for-unittests" description="Perform unit tests">
         <!-- We execute same coverage on both Windows and Linux-->

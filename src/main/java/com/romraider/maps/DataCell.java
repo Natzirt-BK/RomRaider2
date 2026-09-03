@@ -28,7 +28,6 @@ import org.apache.log4j.Logger;
 
 import com.romraider.Settings;
 import com.romraider.Settings.Endian;
-import com.romraider.editor.ecu.ECUEditorManager;
 import com.romraider.maps.history.RomEditHistory;
 import com.romraider.util.ByteUtil;
 import com.romraider.util.JEPUtil;
@@ -40,8 +39,8 @@ public class DataCell implements Serializable  {
     private static final long serialVersionUID = 1111479947434817639L;
     private static final Logger LOGGER = Logger.getLogger(DataCell.class);
 
-    //View we need to keep up to date
-    private DataCellView view = null;
+    private static final String STATIC_TEXT_DELIMITER = "\t\n\r\f";
+    private static final String VALUE_WHITESPACE_PATTERN = "\u0020|\u00a0";
     private Table table;
 
     //This sounds like a View property, but the manipulation
@@ -69,7 +68,8 @@ public class DataCell implements Serializable  {
 
     public DataCell(Table table, String staticText, Rom rom) {
         this(table, rom);
-        final StringTokenizer st = new StringTokenizer(staticText, DataCellView.ST_DELIMITER);
+        final StringTokenizer st = new StringTokenizer(staticText,
+                STATIC_TEXT_DELIMITER);
         if (st.hasMoreTokens()) {
             this.staticText = st.nextToken();
         }
@@ -209,7 +209,7 @@ public class DataCell implements Serializable  {
     }
 
     public void saveBinValueInFile() {
-        if (table.getName().contains("Checksum Fix")) return;
+        if (isChecksumFixTable()) return;
 
         byte[] binData = getBinary();
         int userLevel = table.getUserLevel();
@@ -355,10 +355,7 @@ public class DataCell implements Serializable  {
         if (!table.isStaticDataTable() && this.isSelected != selected) {
             this.isSelected = selected;
 
-            if (view!=null) {
-                ECUEditorManager.getECUEditor().getTableToolBar().updateTableToolBar(table);
-                view.drawCell();
-            }
+            TablePresentationService.cellChanged(table, this);
         }
     }
 
@@ -375,18 +372,12 @@ public class DataCell implements Serializable  {
         updateView();
     }
 
-    public void setDataView(DataCellView v) {
-        view = v;
-    }
-
     public int getIndexInTable() {
         return index;
     }
 
     private void updateView() {
-        if (view != null) {
-            view.drawCell();
-        }
+        TablePresentationService.cellChanged(table, this);
     }
 
     public Table getTable() {
@@ -428,7 +419,7 @@ public class DataCell implements Serializable  {
 
     public void setRealValue(String input) throws UserLevelException {
         // create parser
-        input = input.replaceAll(DataCellView.REPLACE_TEXT, Settings.BLANK);
+        input = input.replaceAll(VALUE_WHITESPACE_PATTERN, Settings.BLANK);
         try {
             double result = 0.0;
             if (!"x".equalsIgnoreCase(input)) {
@@ -480,7 +471,7 @@ public class DataCell implements Serializable  {
     }
 
     public void setBinValue(double newBinValue) throws UserLevelException {
-        if (binValue == newBinValue || table.locked || table.getName().contains("Checksum Fix")) {
+        if (binValue == newBinValue || table.locked || isChecksumFixTable()) {
             return;
         }
 
@@ -509,6 +500,11 @@ public class DataCell implements Serializable  {
         updateView();
         RomEditHistory.getInstance().recordChange(rom, this,
                 oldBinValue, checkedValue);
+    }
+
+    private boolean isChecksumFixTable() {
+        String name = table == null ? null : table.getName();
+        return name != null && name.contains("Checksum Fix");
     }
 
     public void increment(double increment) throws UserLevelException {

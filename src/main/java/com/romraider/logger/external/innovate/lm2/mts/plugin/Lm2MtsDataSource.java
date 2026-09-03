@@ -38,12 +38,12 @@ import org.apache.log4j.Logger;
 import com.romraider.logger.ecu.EcuLogger;
 import com.romraider.logger.ecu.exception.PluginNotInstalledException;
 import com.romraider.logger.external.core.ExternalDataItem;
-import com.romraider.logger.external.core.ExternalDataSource;
+import com.romraider.logger.external.core.SwingExternalDataSource;
 //import com.romraider.logger.external.innovate.generic.mts.io.MTSSensor;
 import com.romraider.logger.external.innovate.generic.mts.io.MTSConnector;
 import com.romraider.logger.external.innovate.generic.mts.io.MTSRunner;
 
-public final class Lm2MtsDataSource implements ExternalDataSource {
+public final class Lm2MtsDataSource implements SwingExternalDataSource {
     private static final Logger LOGGER = getLogger(Lm2MtsDataSource.class);
     private Map<Integer, Lm2MtsDataItem> dataItems = new HashMap<Integer, Lm2MtsDataItem>();
     private MTSRunner runner;

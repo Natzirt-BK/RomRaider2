@@ -147,7 +147,9 @@ public final class FileLoggerImpl implements FileLogger {
                 && !settings.getLogfileNameText().isEmpty()) {
             logDir += settings.getLogfileNameText() + "_";
         }
-        logDir += dateFormat.format(new Date()) + "_[" + messageListener.getEcuInit().getEcuId() + "]" + ".csv";
+        String ecuId = messageListener.getEcuInit() == null ? "EXTERNAL"
+                : messageListener.getEcuInit().getEcuId();
+        logDir += dateFormat.format(new Date()) + "_[" + ecuId + "]" + ".csv";
         return logDir;
     }
 

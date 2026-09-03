@@ -2,7 +2,8 @@
 
 Use this checklist for the exact release-candidate application image that will
 be published. This pass qualifies Subaru OpenPort 2.0 logging only. It does not
-qualify Mitsubishi MUT-II, Windows hardware, flashing, or ECU memory writes.
+qualify Mitsubishi Lancer Evolution MUT-II, Windows hardware, flashing, or ECU
+memory writes.
 
 ## Safety and prerequisites
 

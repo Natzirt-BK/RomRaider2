@@ -2,6 +2,7 @@
 package com.romraider.editor.ecu;
 
 import java.awt.BorderLayout;
+import java.awt.CardLayout;
 import java.awt.Dimension;
 import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
@@ -16,14 +17,23 @@ import javax.swing.SwingUtilities;
 
 import com.romraider.maps.Table;
 import com.romraider.maps.TableView;
+import com.romraider.editor.ecu.spi.CalibrationWorkspaceLoader;
+import com.romraider.ui.ThemeToken;
+import com.romraider.ui.UiThemeService;
 
 /** One map document containing editing, visualization, and datalog surfaces. */
 final class TuningDocumentPanel extends JPanel {
     private static final long serialVersionUID = 1L;
+    private static final String EDITOR_GRID = "editor-grid";
+    private static final String REPLACEMENT_GRID = "replacement-grid";
     private final JSplitPane mapSplit;
     private final JSplitPane documentSplit;
     private final MapVisualizationHost visualizationHost;
     private final MapDocumentHeader documentHeader;
+    private final CardLayout calibrationCards = new CardLayout();
+    private final JPanel calibrationHost = new JPanel(calibrationCards);
+    private final boolean replacementAvailable;
+    private final javax.swing.JComponent replacementWorkspace;
     private int visualizationDividerLocation = -1;
     private int datalogDividerLocation = -1;
     private boolean narrowMapLayout;
@@ -58,19 +68,35 @@ final class TuningDocumentPanel extends JPanel {
         JPanel tableSurface = new JPanel(new BorderLayout());
         tableSurface.setName("CALIBRATION TABLE");
         tableSurface.setMinimumSize(new Dimension(180, 150));
+        tableSurface.setBackground(UiThemeService.getInstance().color(
+                ThemeToken.BACKGROUND));
+        tableSurface.setBorder(BorderFactory.createEmptyBorder(10, 10, 8, 10));
         tableView.setEmbeddedDocumentMode(true);
         JScrollPane tableScroll = new JScrollPane(tableView,
                 JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
                 JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
         tableScroll.setName("CALIBRATION TABLE SCROLL");
-        tableScroll.setBorder(BorderFactory.createEmptyBorder());
+        tableScroll.setBorder(BorderFactory.createLineBorder(
+                UiThemeService.getInstance().color(
+                        ThemeToken.RAISED_SURFACE)));
+        tableScroll.getViewport().setBackground(UiThemeService.getInstance()
+                .color(ThemeToken.SURFACE));
         tableSurface.add(tableScroll, BorderLayout.CENTER);
+
+        calibrationHost.setName("CALIBRATION VIEW HOST");
+        calibrationHost.add(tableSurface, EDITOR_GRID);
+        replacementWorkspace = CalibrationWorkspaceLoader.create(table);
+        replacementAvailable = replacementWorkspace != null;
+        if (replacementAvailable) {
+            calibrationHost.add(replacementWorkspace, REPLACEMENT_GRID);
+        }
+        calibrationCards.show(calibrationHost, EDITOR_GRID);
 
         visualizationHost = new MapVisualizationHost(table,
                 visualizationProvider);
         visualizationHost.setMinimumSize(new Dimension(160, 150));
         mapSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT,
-                tableSurface, visualizationHost);
+                calibrationHost, visualizationHost);
         mapSplit.setName("MAP AND VISUALIZATION");
         mapSplit.setResizeWeight(0.63);
         mapSplit.setContinuousLayout(true);
@@ -98,6 +124,8 @@ final class TuningDocumentPanel extends JPanel {
                 visualizationHost.hasVisualization(), visible ->
                         setVisualizationVisible(visible.booleanValue()),
                 focusTableSearchAction, favoriteState, toggleFavoriteAction);
+        documentHeader.setCalibrationPreview(replacementAvailable,
+                visible -> setReplacementVisible(visible.booleanValue()));
         add(documentHeader, BorderLayout.NORTH);
         add(documentSplit, BorderLayout.CENTER);
         setVisualizationVisible(false);
@@ -120,6 +148,7 @@ final class TuningDocumentPanel extends JPanel {
     void disposeDocument() {
         documentHeader.disposeHeader();
         visualizationHost.disposeVisualization();
+        CalibrationWorkspaceLoader.dispose(replacementWorkspace);
     }
 
     void refreshMapState() {
@@ -128,6 +157,14 @@ final class TuningDocumentPanel extends JPanel {
 
     void showVisualization() {
         setVisualizationVisible(true);
+    }
+
+    private void setReplacementVisible(boolean visible) {
+        if (!replacementAvailable) return;
+        calibrationCards.show(calibrationHost,
+                visible ? REPLACEMENT_GRID : EDITOR_GRID);
+        calibrationHost.revalidate();
+        calibrationHost.repaint();
     }
 
     private void applyMapOrientation() {

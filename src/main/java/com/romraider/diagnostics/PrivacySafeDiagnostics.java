@@ -37,6 +37,16 @@ public final class PrivacySafeDiagnostics {
 
     private PrivacySafeDiagnostics() { }
 
+    public static String buildRuntimeSummary() {
+        StringBuilder summary = new StringBuilder("Runtime: ");
+        appendInlineProperty(summary, "OS", "os.name");
+        appendInlineProperty(summary, "version", "os.version");
+        appendInlineProperty(summary, "architecture", "os.arch");
+        appendInlineProperty(summary, "Java", "java.version");
+        appendInlineProperty(summary, "vendor", "java.vendor");
+        return summary.toString();
+    }
+
     public static String buildReport(Throwable failure) {
         StringBuilder report = new StringBuilder();
         report.append(PRODUCT_NAME).append(' ').append(VERSION)
@@ -87,6 +97,15 @@ public final class PrivacySafeDiagnostics {
                 .append(value == null || value.trim().isEmpty()
                         ? "unknown" : redactFreeText(value.trim()))
                 .append('\n');
+    }
+
+    private static void appendInlineProperty(StringBuilder summary,
+            String label, String property) {
+        if (summary.length() > "Runtime: ".length()) summary.append(", ");
+        String value = System.getProperty(property);
+        summary.append(label).append('=')
+                .append(value == null || value.trim().isEmpty()
+                        ? "unknown" : value.trim());
     }
 
     private static void appendThrowable(StringBuilder report, Throwable failure,

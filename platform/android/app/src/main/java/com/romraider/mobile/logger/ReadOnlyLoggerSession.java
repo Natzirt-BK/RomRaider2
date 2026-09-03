@@ -30,21 +30,28 @@ public final class ReadOnlyLoggerSession {
     private final PortableLoggerDefinition definition;
     private final PortableLoggerProfile profile;
     private final Listener listener;
-    private final PortableLogSession log = new PortableLogSession();
+    private final PortableLogSession log;
     private final AtomicBoolean running = new AtomicBoolean();
     private volatile boolean stopRequested;
 
     public ReadOnlyLoggerSession(OpenPortUsbTransport transport,
             PortableLoggerDefinition definition, PortableLoggerProfile profile,
             Listener listener) {
+        this(transport, definition, profile, new PortableLogSession(), listener);
+    }
+
+    public ReadOnlyLoggerSession(OpenPortUsbTransport transport,
+            PortableLoggerDefinition definition, PortableLoggerProfile profile,
+            PortableLogSession log, Listener listener) {
         if (transport == null || definition == null || profile == null
-                || listener == null) {
+                || log == null || listener == null) {
             throw new IllegalArgumentException(
                     "Logger transport, definition, profile, and listener are required");
         }
         this.transport = transport;
         this.definition = definition;
         this.profile = profile;
+        this.log = log;
         this.listener = listener;
     }
 

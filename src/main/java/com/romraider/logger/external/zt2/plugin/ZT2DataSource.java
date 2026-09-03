@@ -55,11 +55,11 @@ import javax.swing.Action;
 
 import com.romraider.logger.ecu.EcuLogger;
 import com.romraider.logger.external.core.ExternalDataItem;
-import com.romraider.logger.external.core.ExternalDataSource;
+import com.romraider.logger.external.core.SwingExternalDataSource;
 import com.romraider.logger.external.core.ExternalSensorType;
 import com.romraider.logger.external.zt2.io.ZT2Runner;
 
-public final class ZT2DataSource implements ExternalDataSource {
+public final class ZT2DataSource implements SwingExternalDataSource {
     private final Map<ExternalSensorType, ZT2DataItem> dataItems = new HashMap<ExternalSensorType, ZT2DataItem>();
     private ZT2Runner runner;
     private String port;

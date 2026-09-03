@@ -62,10 +62,10 @@ import javax.swing.Action;
 
 import com.romraider.logger.ecu.EcuLogger;
 import com.romraider.logger.external.core.ExternalDataItem;
-import com.romraider.logger.external.core.ExternalDataSource;
+import com.romraider.logger.external.core.SwingExternalDataSource;
 import com.romraider.logger.external.mrf.io.MrfRunner;
 
-public final class MrfDataSource implements ExternalDataSource {
+public final class MrfDataSource implements SwingExternalDataSource {
     private final Map<MrfSensorType, MrfDataItem> dataItems = new HashMap<MrfSensorType, MrfDataItem>();
     private MrfRunner runner;
     private String port;
