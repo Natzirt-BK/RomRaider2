@@ -128,7 +128,10 @@ private val graphColors = listOf(
 )
 
 @Composable
-internal fun LoggerWorkspace(context: LoggerWorkspaceContext) {
+internal fun LoggerWorkspace(
+    context: LoggerWorkspaceContext,
+    onOpenSetup: (() -> Unit)? = null
+) {
     val steamOs = remember { RuntimeUiProfile.isSteamOs() }
     var channels by remember { mutableStateOf(context.channels.channels) }
     var samples by remember {
@@ -301,6 +304,7 @@ internal fun LoggerWorkspace(context: LoggerWorkspaceContext) {
                             context.preferences.setDarkTheme(darkTheme)
                         }
                     } else null,
+                    onOpenSetup = onOpenSetup,
                     onResetStatistics = {
                         pendingSamples.clear()
                         history = samples.mapValues { listOf(it.value) }
@@ -439,6 +443,7 @@ private fun SessionTelemetry(
     runtimeMessage: LoggerMessageSnapshot,
     themeLabel: String?,
     onToggleTheme: (() -> Unit)?,
+    onOpenSetup: (() -> Unit)?,
     onResetStatistics: () -> Unit
 ) {
     val metrics = sessionMetrics(channels, samples, history)
@@ -466,6 +471,11 @@ private fun SessionTelemetry(
         if (themeLabel != null && onToggleTheme != null) {
             TextButton(onClick = onToggleTheme, Modifier.height(34.dp)) {
                 Text(themeLabel, fontSize = 11.sp)
+            }
+        }
+        if (onOpenSetup != null) {
+            TextButton(onClick = onOpenSetup, Modifier.height(34.dp)) {
+                Text("Logger definition", fontSize = 11.sp)
             }
         }
         TextButton(onClick = onResetStatistics, Modifier.height(34.dp)) {

@@ -73,16 +73,18 @@ import com.romraider.maps.Rom
 import com.romraider.maps.RomUserInteraction
 import com.romraider.maps.RomUserInteractionService
 import com.romraider.maps.Table
+import com.romraider.swing.IntegratedFileChooser
 import com.romraider.util.SettingsManager
 import com.romraider.ui.ApplicationThemeService
 import com.romraider.ui.RuntimeUiProfile
 import com.romraider.ui.ThemeMode
 import java.awt.EventQueue
 import java.awt.FileDialog
-import java.awt.Frame
 import java.io.File
 import java.util.concurrent.CompletableFuture
 import java.util.Vector
+import javax.swing.JFileChooser
+import javax.swing.filechooser.FileFilter
 
 /**
  * Compose-owned Editor shell. The temporary Swing shell can still be selected
@@ -221,7 +223,7 @@ private fun LoggerDesktopWindow(
                     enabled = sessionState == LoggerSessionState.RECORDING)
             }
         }
-        LoggerWorkspace(context)
+        LoggerWorkspace(context, onOpenSetup = { showSetup = true })
         LaunchedEffect(runtime) {
             if (!configurationMissing && runtime.settings.autoConnectOnStartup &&
                 context.session.state == LoggerSessionState.STOPPED) {
@@ -333,7 +335,9 @@ private fun LoggerSetupDialog(
                         singleLine = true, modifier = Modifier.weight(1f))
                     TextButton(onClick = {
                         chooseFiles(owner, "Choose Logger definition",
-                            FileDialog.LOAD, false) { file ->
+                            FileDialog.LOAD, false,
+                            definition.takeIf(String::isNotBlank)?.let(::File),
+                            "Logger definitions (.xml)") { file ->
                             file.extension.equals("xml", ignoreCase = true)
                         }.firstOrNull()?.let {
                             definition = it.absolutePath
@@ -354,9 +358,17 @@ private fun LoggerSetupDialog(
                 OutlinedTextField(target, { target = it },
                     label = { Text("Target module") }, singleLine = true,
                     modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(outputDirectory, { outputDirectory = it },
-                    label = { Text("Log output directory") },
-                    singleLine = true, modifier = Modifier.fillMaxWidth())
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedTextField(outputDirectory, { outputDirectory = it },
+                        label = { Text("Log output directory") },
+                        singleLine = true, modifier = Modifier.weight(1f))
+                    TextButton(onClick = {
+                        chooseDirectory(owner, "Choose log output directory",
+                            outputDirectory.takeIf(String::isNotBlank)
+                                ?.let(::File))
+                            ?.let { outputDirectory = it.absolutePath }
+                    }) { Text("Browse") }
+                }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(autoConnect, { autoConnect = it })
                     Text("Connect when the Logger opens")
@@ -1016,7 +1028,10 @@ private fun DefinitionManagerWindow(
                         Button(onClick = {
                             chooseFiles(window, "Add ECU definitions",
                                 FileDialog.LOAD, true,
-                                DefinitionFileSupport::isSupported)
+                                selectionDescription =
+                                    "ECU definitions (.xml, .xdf, .vdf, .jdf, .Cxx)",
+                                selectionFilter =
+                                    DefinitionFileSupport::isSupported)
                                 .filter(File::isFile)
                                 .forEach { file ->
                                     if (files.none { it.absoluteFile ==
@@ -1294,7 +1309,10 @@ private class ComposeLoadInteraction(
         val choose = Runnable {
             selected = chooseFiles(null, "Choose ECU definition",
                 FileDialog.LOAD, false,
-                DefinitionFileSupport::isSupported).firstOrNull()
+                selectionDescription =
+                    "ECU definitions (.xml, .xdf, .vdf, .jdf, .Cxx)",
+                selectionFilter =
+                    DefinitionFileSupport::isSupported).firstOrNull()
         }
         if (EventQueue.isDispatchThread()) choose.run()
         else EventQueue.invokeAndWait(choose)
@@ -1368,7 +1386,9 @@ private fun addDefinitions(
     notice: (String) -> Unit
 ) {
     val files = chooseFiles(owner, "Add ECU definitions", FileDialog.LOAD, true,
-        DefinitionFileSupport::isSupported)
+        selectionDescription =
+            "ECU definitions (.xml, .xdf, .vdf, .jdf, .Cxx)",
+        selectionFilter = DefinitionFileSupport::isSupported)
     if (files.isEmpty()) return
     files.filter(File::isFile).forEach(settings::addEcuDefinitionFile)
     files.firstOrNull()?.parentFile?.let(settings::setLastDefinitionDir)
@@ -1392,22 +1412,55 @@ private fun chooseFiles(
     title: String,
     mode: Int,
     multiple: Boolean,
+    initialSelection: File? = null,
+    selectionDescription: String = "Supported files",
     selectionFilter: ((File) -> Boolean)? = null
 ): List<File> {
-    val dialog = when (owner) {
-        is Frame -> FileDialog(owner, title, mode)
-        else -> FileDialog(null as Frame?, title, mode)
-    }
+    val chooser = IntegratedFileChooser()
+    chooser.dialogTitle = title
+    chooser.isMultiSelectionEnabled = multiple
+    chooser.fileSelectionMode = JFileChooser.FILES_ONLY
+    initializeChooser(chooser, initialSelection)
     if (selectionFilter != null) {
-        dialog.filenameFilter = java.io.FilenameFilter { directory, name ->
-            selectionFilter(File(directory, name))
+        chooser.fileFilter = object : FileFilter() {
+            override fun accept(file: File): Boolean =
+                file.isDirectory || selectionFilter(file)
+
+            override fun getDescription(): String = selectionDescription
         }
     }
-    dialog.isMultipleMode = multiple
-    dialog.isVisible = true
-    val files = dialog.files?.toList().orEmpty()
-    dialog.dispose()
+    val result = if (mode == FileDialog.SAVE) {
+        chooser.showSaveDialog(owner)
+    } else {
+        chooser.showOpenDialog(owner)
+    }
+    if (result != JFileChooser.APPROVE_OPTION) return emptyList()
+    val files = if (multiple) chooser.selectedFiles.toList()
+        else listOfNotNull(chooser.selectedFile)
     return if (selectionFilter == null) files else files.filter(selectionFilter)
+}
+
+private fun chooseDirectory(
+    owner: java.awt.Window?,
+    title: String,
+    initialSelection: File? = null
+): File? {
+    val chooser = IntegratedFileChooser()
+    chooser.dialogTitle = title
+    chooser.fileSelectionMode = JFileChooser.DIRECTORIES_ONLY
+    initializeChooser(chooser, initialSelection)
+    return if (chooser.showOpenDialog(owner) == JFileChooser.APPROVE_OPTION)
+        chooser.selectedFile?.takeIf(File::isDirectory) else null
+}
+
+private fun initializeChooser(
+    chooser: IntegratedFileChooser,
+    initialSelection: File?
+) {
+    val selected = initialSelection?.absoluteFile ?: return
+    val directory = if (selected.isDirectory) selected else selected.parentFile
+    if (directory?.isDirectory == true) chooser.currentDirectory = directory
+    chooser.selectedFile = selected
 }
 
 private fun File.withRomSuffix(rom: Rom): File {

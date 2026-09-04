@@ -30,8 +30,8 @@ supporting evidence; none substitutes for the end-to-end user workflow.
 | ID | Finding | Current evidence | Required acceptance test | Status |
 | ---: | --- | --- | --- | --- |
 | 1 | 3D rotation has insufficient Y-axis movement. | RC4 has a Compose surface, but source presence does not establish usable orbit controls. | On representative 3D maps, rotate through a useful pitch and yaw range with mouse and touchpad; selection and labels remain usable. | OPEN |
-| 6 | Cancelling the ECU-definition file chooser freezes or locks the Editor. | The RC4 shell changed the definition workflow, but cancellation has not been qualified end to end. | Open the chooser, cancel from several directories, then open a ROM and reopen the manager without delay or deadlock. | IMPLEMENTED; RETEST |
-| 7 | Existing Editor definition XML files do not appear in the chooser. | RC4 includes definition-file filtering and Compose-owned priority management. | Existing, already-added, and new XML files remain visible on Linux and Windows; selecting, cancelling, and re-adding are safe. | IMPLEMENTED; RETEST |
+| 6 | Cancelling the ECU-definition file chooser freezes or locks the Editor. | The local repair replaces the Compose shell's direct AWT dialog path with the established KDE/native/Swing chooser boundary, but cancellation still needs an end-to-end packaged retest. | Open the chooser, cancel from several directories, then open a ROM and reopen the manager without delay or deadlock. | IMPLEMENTED; RETEST |
+| 7 | Existing Editor definition XML files do not appear in the chooser. | The local repair routes Compose through the established cross-platform chooser and no longer relies on AWT's Linux filename filter. | Existing, already-added, and new XML files remain visible on Linux and Windows; selecting, cancelling, and re-adding are safe. | IMPLEMENTED; RETEST |
 | 8 | Calibration tabs are missing. | RC4 contains a Compose document session and calibration workspace, but the user rejected the stripped-down workflow. | Multiple ROMs/tables can remain open as obvious tabs; switching preserves selection, edits, undo history, and layout. | OPEN |
 | 9 | Save wording and behavior are wrong. | No accepted desktop behavior has been recorded. | Present a clear Save action and a Save As path without ambiguous wording; dirty-state and overwrite confirmation behave predictably. | DECISION |
 | 10 | ECU Definitions menu wastes space; Definition Manager should be beside Open ROM and own Add Definition. | RC4 has Compose-owned definition management, but placement and menu removal need direct approval. | A visible Definition Manager command sits beside Open ROM; adding/reordering/removing occurs inside it; redundant menu is absent. | DECISION |
@@ -48,9 +48,9 @@ supporting evidence; none substitutes for the end-to-end user workflow.
 | ID | Finding | Current evidence | Required acceptance test | Status |
 | ---: | --- | --- | --- | --- |
 | 2 | A collapsed Channels pane can be reopened but not put away again. | RC4 changed the Logger shell and channel browser; reversible collapse was not accepted. | The same discoverable control expands and collapses the pane repeatedly at wide and narrow sizes without losing selections. | IMPLEMENTED; RETEST |
-| 3 | Loading a Logger definition needs a visible button, not only a menu command. | RC4 has Logger setup and definition selection, but command placement needs approval. | A visible Logger-definition action is available in normal flow and remains available through an appropriate menu/settings path. | DECISION |
-| 4 | Logger definition files disappear in the Linux chooser, including definitions already loaded. | RC4 has a chooser and validation path, but the exact Linux file workflow failed. | All appropriate XML files display in the selected folder before and after loading; cancellation and replacement are safe. | IMPLEMENTED; RETEST |
-| 5 | Log output directory needs a directory browser. | RC4 setup stores an output path, but the audited interface exposed text entry only. | A folder-browser control works on Linux and Windows, shows the current directory, permits text editing only as a secondary path, and persists. | OPEN |
+| 3 | Loading a Logger definition needs a visible button, not only a menu command. | The local repair adds a visible Logger Definition control to the live workspace while retaining the menu route. | A visible Logger-definition action is available in normal flow and remains available through an appropriate menu/settings path. | IMPLEMENTED; RETEST |
+| 4 | Logger definition files disappear in the Linux chooser, including definitions already loaded. | The local repair routes Compose through the established cross-platform chooser, applies an XML filter supported by KDE, and starts in the current definition's directory. | All appropriate XML files display in the selected folder before and after loading; cancellation and replacement are safe. | IMPLEMENTED; RETEST |
+| 5 | Log output directory needs a directory browser. | The local Logger Setup repair adds a Browse control backed by the cross-platform directory chooser while retaining the path field. | A folder-browser control works on Linux and Windows, shows the current directory, permits text editing only as a secondary path, and persists. | IMPLEMENTED; RETEST |
 | 18 | Logger-definition selection works on Windows but not Linux. | The installed Linux upgrade could omit `config/user/definitions`; a local installer patch now preserves it and its regression test passes. Chooser behavior still needs separate retest. | Test clean install and upgrade install with a preserved definition, then select another XML through the Linux chooser and start Logger. | INSTALLER PATCH |
 | 19 | More than six Overview parameters overwrite tiles instead of reflowing or scrolling. | RC4 added responsive overview/dashboard layouts. | Add at least 12 parameters at wide, medium, and narrow widths; tiles never overlap or overwrite and scrolling appears when required. | IMPLEMENTED; RETEST |
 | 20 | Modernized Dyno is missing. | The specialized Dyno remains in the compatibility shell; migration scope is explicitly undecided. | Decide and implement the desktop Dyno workflow before removing compatibility mode; qualify it with recorded/simulated data before connected claims. | OPEN |
@@ -98,6 +98,11 @@ archive checksum recorded in the qualification record.
   Java 21 unit suite, production Java build, Compose tests/staging, application
   image build, and packaged Logger startup all pass. The corrected Logger no
   longer logs or reads the legacy profile.
+- First desktop repair slice: Compose definition selection now uses the
+  established KDE/native/Swing chooser boundary instead of AWT's unreliable
+  Linux filename filtering. Logger Setup has a directory browser, and the live
+  Logger workspace has a visible Logger Definition control. Compose tests pass;
+  Linux and Windows packaged visual retests remain required.
 
 This evidence qualifies only the non-visual baseline. Matrix rows remain
 `NOT RUN` until their complete acceptance tests are performed.
