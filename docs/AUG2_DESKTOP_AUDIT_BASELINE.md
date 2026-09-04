@@ -136,7 +136,12 @@ archive checksum recorded in the qualification record.
   presented through the generic numeric calibration editor. The local repair
   recognizes standard P/B/C/U DTC switch definitions and presents only their
   Disabled/Enabled state control. Other switch tables retain their
-  definition-specific editing behavior. Packaged Linux review remains open.
+  definition-specific editing behavior.
+- User accepted Linux candidate commit `f50224f5`, archive SHA-256
+  `610434d6b14b67d6a94899dd3b59fa909eae230966e9a27bc342dea1c1ba9fab`:
+  Editor Settings opens correctly, qualifying finding 12 as a Linux pass, and
+  a DTC entry correctly exposes only its Disabled/Enabled state switch. The
+  corresponding Windows checks remain open.
 
 This evidence qualifies only the non-visual baseline. Matrix rows remain
 `NOT RUN` until their complete acceptance tests are performed.
