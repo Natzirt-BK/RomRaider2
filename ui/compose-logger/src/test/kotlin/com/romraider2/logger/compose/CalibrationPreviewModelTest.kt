@@ -8,6 +8,7 @@ import com.romraider.maps.RomID
 import com.romraider.maps.Scale
 import com.romraider.maps.Table1D
 import com.romraider.maps.Table3D
+import com.romraider.maps.TableSwitch
 import com.romraider.swing.JProgressPane
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -114,6 +115,37 @@ class CalibrationPreviewModelTest {
 
         assertEquals(0, snapshot.valueFractionDigits)
         assertEquals("21.0", snapshot.cellAt(0, 0).displayValue)
+    }
+
+    @Test
+    fun diagnosticTroubleCodeSwitchUsesBinaryStateControl() {
+        val table = TableSwitch().apply {
+            name = "(P0420) CATALYST SYSTEM EFFICIENCY BELOW THRESHOLD"
+            storageAddress = 0
+            dataSize = 1
+        }
+        val rom = Rom(RomID())
+        rom.addTableByName(table)
+        rom.populateTables(byteArrayOf(1), JProgressPane())
+        val snapshot = CalibrationGridProjectionService.project(table)
+
+        assertTrue(isDiagnosticTroubleCodeSwitch(snapshot))
+        assertTrue(diagnosticTroubleCodeEnabled(snapshot.cellAt(0, 0)))
+    }
+
+    @Test
+    fun ordinarySwitchTableKeepsItsDefinitionSpecificValueEditor() {
+        val table = TableSwitch().apply {
+            name = "Launch Control Mode"
+            storageAddress = 0
+            dataSize = 1
+        }
+        val rom = Rom(RomID())
+        rom.addTableByName(table)
+        rom.populateTables(byteArrayOf(2), JProgressPane())
+
+        assertTrue(!isDiagnosticTroubleCodeSwitch(
+            CalibrationGridProjectionService.project(table)))
     }
 
     @Test

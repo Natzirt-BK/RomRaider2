@@ -54,6 +54,7 @@ import javax.swing.border.TitledBorder;
 import com.romraider.Settings;
 import com.romraider.editor.ecu.ECUEditor;
 import com.romraider.editor.ecu.ECUEditorManager;
+import com.romraider.ui.BrandImages;
 import com.romraider.ui.UiScaleService;
 import com.romraider.ui.swing.DisplayPreferencesPanel;
 import com.romraider.util.ResourceUtil;
@@ -69,7 +70,7 @@ public class SettingsForm extends AbstractFrame implements MouseListener, Action
     private DisplayPreferencesPanel appearancePreferences;
 
     public SettingsForm() {
-        this.setIconImage(getEditor().getIconImage());
+        BrandImages.apply(this);
         initComponents();
         modernizeShell();
         initSettings();
@@ -1107,7 +1108,11 @@ public class SettingsForm extends AbstractFrame implements MouseListener, Action
             getSettings().setTableClickCount(2);
         }
 
-        getEditor().getImageList().setToggleClickCount(getSettings().getTableClickCount());
+        ECUEditor editor = getEditor();
+        if (editor != null) {
+            editor.getImageList().setToggleClickCount(
+                    getSettings().getTableClickCount());
+        }
 
         if(1 == tableClickBehavior.getSelectedIndex()) { // open/close frame
             getSettings().setTableClickBehavior(1);
@@ -1133,7 +1138,9 @@ public class SettingsForm extends AbstractFrame implements MouseListener, Action
 
         try{
             getSettings().setEditorIconScale(Integer.parseInt(textFieldEditorIconScale.getText()));
-            getEditor().getToolBar().updateIcons();
+            if (editor != null && editor.getToolBar() != null) {
+                editor.getToolBar().updateIcons();
+            }
         } catch(NumberFormatException ex) {
             // Number formatted incorrectly reset.
             textFieldEditorIconScale.setText(String.valueOf(getSettings().getEditorIconScale()));
@@ -1141,7 +1148,9 @@ public class SettingsForm extends AbstractFrame implements MouseListener, Action
 
         try{
             getSettings().setTableIconScale(Integer.parseInt(textFieldTableIconScale.getText()));
-            getEditor().getTableToolBar().updateIcons();
+            if (editor != null && editor.getTableToolBar() != null) {
+                editor.getTableToolBar().updateIcons();
+            }
         } catch(NumberFormatException ex) {
             // Number formatted incorrectly reset.
             textFieldTableIconScale.setText(String.valueOf(getSettings().getTableIconScale()));
@@ -1157,7 +1166,7 @@ public class SettingsForm extends AbstractFrame implements MouseListener, Action
 
     private ECUEditor getEditor()
     {
-        return ECUEditorManager.getECUEditor();
+        return ECUEditorManager.getECUEditorWithoutCreation();
     }
 
     public void saveSettings()
@@ -1168,11 +1177,14 @@ public class SettingsForm extends AbstractFrame implements MouseListener, Action
     public void saveSettings(Settings newSettings) {
         SettingsManager.save(newSettings);
         drawVisibleTables();
-        getEditor().refreshUI();
+        ECUEditor editor = getEditor();
+        if (editor != null) editor.refreshUI();
     }
 
     private void drawVisibleTables() {
-        for(TableFrame tableFrame : getEditor().getOpenTableFrames()) {
+        ECUEditor editor = getEditor();
+        if (editor == null) return;
+        for(TableFrame tableFrame : editor.getOpenTableFrames()) {
             if (tableFrame.getTableView() != null) {
                 tableFrame.getTableView().drawTable();
             }

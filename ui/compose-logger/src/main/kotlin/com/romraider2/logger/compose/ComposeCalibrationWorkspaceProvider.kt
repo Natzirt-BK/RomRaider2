@@ -33,6 +33,7 @@ import androidx.compose.material.AlertDialog
 import androidx.compose.material.Button
 import androidx.compose.material.OutlinedTextField
 import androidx.compose.material.Surface
+import androidx.compose.material.Switch
 import androidx.compose.material.Text
 import androidx.compose.material.TextButton
 import androidx.compose.material.darkColors
@@ -160,7 +161,10 @@ internal fun CalibrationWorkspace(context: CalibrationWorkspaceContext) {
             onDispose { controller.removeListener(listener) }
         }
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colors.background) {
-            Column(Modifier.fillMaxSize().padding(14.dp)) {
+            if (isDiagnosticTroubleCodeSwitch(snapshot)) {
+                DiagnosticTroubleCodeWorkspace(snapshot, dark, controller,
+                    status, { status = it }, { snapshot = it })
+            } else Column(Modifier.fillMaxSize().padding(14.dp)) {
                 PreviewHeader(snapshot, dark, controller, viewMode,
                     onViewMode = { viewMode = it },
                     onUndo = {
@@ -259,6 +263,129 @@ internal fun CalibrationWorkspace(context: CalibrationWorkspaceContext) {
                     status = message
                     axisEditRequest = null
                 })
+        }
+    }
+}
+
+internal fun isDiagnosticTroubleCodeSwitch(
+    snapshot: CalibrationGridSnapshot
+): Boolean = snapshot.tableType.equals("SWITCH", ignoreCase = true) &&
+    snapshot.rows == 1 && snapshot.columns == 1 &&
+    Regex("^\\s*\\([PBCU][0-9A-Fa-f]{4}\\)").containsMatchIn(
+        snapshot.tableName)
+
+internal fun diagnosticTroubleCodeEnabled(
+    cell: CalibrationCellSnapshot
+): Boolean = cell.rawValue != 0.0
+
+@Composable
+private fun DiagnosticTroubleCodeWorkspace(
+    snapshot: CalibrationGridSnapshot,
+    dark: Boolean,
+    controller: CalibrationEditController?,
+    status: String?,
+    onStatus: (String?) -> Unit,
+    onSnapshot: (CalibrationGridSnapshot) -> Unit
+) {
+    val cell = snapshot.cells.firstOrNull()
+    val enabled = cell?.let(::diagnosticTroubleCodeEnabled) ?: false
+    val code = Regex("\\(([PBCU][0-9A-Fa-f]{4})\\)")
+        .find(snapshot.tableName)?.groupValues?.getOrNull(1).orEmpty()
+    val description = snapshot.tableName
+        .replace(Regex("^\\s*\\([PBCU][0-9A-Fa-f]{4}\\)\\s*"), "")
+        .trim()
+    val setEnabled: (Boolean) -> Unit = { requested ->
+        if (controller != null && cell != null) {
+            try {
+                val result = controller.setCellValue(cell.row, cell.column,
+                    if (requested) "1" else "0")
+                onSnapshot(result.snapshot)
+                onStatus(if (result.isChanged)
+                    "$code ${if (requested) "enabled" else "disabled"}."
+                else "$code is already ${if (requested) "enabled" else "disabled"}.")
+            } catch (failure: Exception) {
+                onStatus(failure.message ?: "The diagnostic trouble code state could not be changed.")
+            }
+        }
+    }
+    Column(Modifier.fillMaxSize().padding(14.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(code.ifBlank { "Diagnostic trouble code" },
+                    color = calibrationSteel, fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold)
+                Text(description.ifBlank { snapshot.tableName },
+                    fontWeight = FontWeight.Bold, fontSize = 19.sp,
+                    maxLines = 2, overflow = TextOverflow.Ellipsis)
+            }
+            if (cell?.isChanged == true) {
+                StatusChip("CHANGED", calibrationRed, Color.White)
+                Spacer(Modifier.width(8.dp))
+            }
+            StatusChip(if (controller == null) "READ-ONLY" else "DTC CONTROL",
+                raised(dark), if (controller == null) secondary(dark)
+                else calibrationSteel)
+            if (controller != null) {
+                Spacer(Modifier.width(8.dp))
+                CompactAction("Undo", controller.canUndo()) {
+                    onStatus(historyAction(controller, false, onSnapshot))
+                }
+                Spacer(Modifier.width(6.dp))
+                CompactAction("Redo", controller.canRedo()) {
+                    onStatus(historyAction(controller, true, onSnapshot))
+                }
+            }
+        }
+        Spacer(Modifier.height(18.dp))
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Column(Modifier.width(430.dp)
+                .background(surface(dark), RoundedCornerShape(10.dp))
+                .border(1.dp, raised(dark), RoundedCornerShape(10.dp))
+                .padding(horizontal = 34.dp, vertical = 30.dp),
+                horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("DIAGNOSTIC TROUBLE CODE",
+                    color = calibrationSteel, fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(12.dp))
+                Text(if (enabled) "Enabled" else "Disabled",
+                    color = if (enabled) calibrationSteel else secondary(dark),
+                    fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(18.dp))
+                Row(verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Text("Disabled", color = if (!enabled) MaterialTheme.colors.onSurface
+                        else secondary(dark), fontWeight = FontWeight.SemiBold)
+                    Switch(checked = enabled, onCheckedChange = setEnabled,
+                        enabled = controller != null && cell != null,
+                        modifier = Modifier.semantics {
+                            contentDescription = if (enabled)
+                                "Disable $code" else "Enable $code"
+                        })
+                    Text("Enabled", color = if (enabled) MaterialTheme.colors.onSurface
+                        else secondary(dark), fontWeight = FontWeight.SemiBold)
+                }
+                if (!status.isNullOrBlank()) {
+                    Spacer(Modifier.height(18.dp))
+                    Text(status, color = if (status.contains(
+                            "could not", ignoreCase = true)) calibrationRed
+                        else calibrationSteel, fontSize = 11.sp,
+                        textAlign = TextAlign.Center)
+                }
+                if (cell?.isChanged == true && controller != null) {
+                    Spacer(Modifier.height(18.dp))
+                    TextButton(onClick = {
+                        try {
+                            val result = controller.restoreCellValue(
+                                cell.row, cell.column)
+                            onSnapshot(result.snapshot)
+                            onStatus("Saved DTC state restored.")
+                        } catch (failure: Exception) {
+                            onStatus(failure.message
+                                ?: "The saved DTC state could not be restored.")
+                        }
+                    }) { Text("Restore saved state") }
+                }
+            }
         }
     }
 }

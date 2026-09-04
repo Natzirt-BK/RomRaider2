@@ -16,6 +16,7 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 
 import com.romraider.Settings;
+import com.romraider.ui.ApplicationThemeService;
 import com.romraider.ui.DisplayMode;
 import com.romraider.ui.ThemeMode;
 import com.romraider.ui.RuntimeUiProfile;
@@ -104,5 +105,6 @@ public final class DisplayPreferencesPanel extends JPanel {
         settings.setDisplayMode((DisplayMode) modeSelector.getSelectedItem());
         settings.setThemeMode((ThemeMode) themeSelector.getSelectedItem());
         UiDisplayService.getInstance().apply(settings, true);
+        ApplicationThemeService.getInstance().apply(settings.getThemeMode());
     }
 }

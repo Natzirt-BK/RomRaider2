@@ -68,8 +68,22 @@ import com.romraider.ui.TouchTargetService;
 import com.romraider.ui.UiThemeService;
 import com.romraider.ui.swing.ApplicationControlsPanel;
 import com.romraider.swing.ECUEditorToolBar;
+import com.romraider.swing.SettingsForm;
 
 public class EditorWorkbenchComponentsTest {
+    @Test
+    public void settingsWindowDoesNotCreateASecondEditorShell() {
+        ECUEditorManager.clearECUEditor();
+        SettingsForm form = new SettingsForm();
+        try {
+            assertNull(ECUEditorManager.getECUEditorWithoutCreation());
+            assertTrue(form.getWidth() >= form.getMinimumSize().width);
+            assertTrue(form.getHeight() >= form.getMinimumSize().height);
+        } finally {
+            form.dispose();
+        }
+    }
+
     @Test
     public void editorWindowStaysInsideTheUsableDesktop() {
         assertEquals(new Point(180, 60), ECUEditor.clampWindowLocation(

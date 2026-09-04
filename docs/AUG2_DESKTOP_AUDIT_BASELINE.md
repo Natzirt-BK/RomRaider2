@@ -126,6 +126,17 @@ archive checksum recorded in the qualification record.
   immediately beside Open ROM, Definitions Manager follows it, and the
   redundant definitions menu is absent. Findings 9 and 10 are Linux passes;
   Windows remains open.
+- The first findings 11–12 candidate exposed a Settings launch defect: the
+  retained comprehensive Settings window attempted to construct a second
+  Swing Editor from the AWT event thread and therefore never appeared. The
+  candidate does not qualify finding 12. The local repair makes Settings
+  independent of a Swing Editor owner and retains optional live refresh hooks
+  only when that shell already exists.
+- User-led Editor follow-up: diagnostic trouble-code maps were incorrectly
+  presented through the generic numeric calibration editor. The local repair
+  recognizes standard P/B/C/U DTC switch definitions and presents only their
+  Disabled/Enabled state control. Other switch tables retain their
+  definition-specific editing behavior. Packaged Linux review remains open.
 
 This evidence qualifies only the non-visual baseline. Matrix rows remain
 `NOT RUN` until their complete acceptance tests are performed.
