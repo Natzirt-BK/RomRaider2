@@ -112,6 +112,7 @@ final class FxLoggerWindow {
     private final Consumer<LoggerSessionState> stateListener;
     private final Consumer<LoggerMessageSnapshot> messageListener;
     private final LoggerLiveDataListener liveListener;
+    private final ApplicationThemeService.Listener themeListener;
     private boolean disposed;
     private File activeLogFile;
     private FxLogAnalysisPane analysisPane;
@@ -150,11 +151,13 @@ final class FxLoggerWindow {
                 scheduleRefresh();
             }
         };
+        themeListener = mode -> Platform.runLater(this::refreshTheme);
 
         context.getChannels().addListener(channelListener);
         context.getSession().addStateListener(stateListener);
         context.getMessages().addListener(messageListener);
         context.getLiveData().addListener(liveListener);
+        ApplicationThemeService.getInstance().addListener(themeListener);
 
         root.setTop(new VBox(menuBar(), header(), viewBar()));
         root.setCenter(workspace());
@@ -215,9 +218,15 @@ final class FxLoggerWindow {
         settings.setThemeMode(mode);
         SettingsManager.save(settings);
         ApplicationThemeService.getInstance().apply(mode);
-        FxTheme.refresh(stage.getScene());
-        refreshViews();
         status.setText(mode + " theme applied");
+    }
+
+    private void refreshTheme() {
+        if (disposed) return;
+        FxTheme.refresh(stage.getScene());
+        detachedGauges.values().stream().map(Stage::getScene)
+                .forEach(FxTheme::refresh);
+        refreshViews();
     }
 
     private Node header() {
@@ -922,6 +931,7 @@ final class FxLoggerWindow {
         context.getSession().removeStateListener(stateListener);
         context.getMessages().removeListener(messageListener);
         context.getLiveData().removeListener(liveListener);
+        ApplicationThemeService.getInstance().removeListener(themeListener);
         runtime.close();
         if (analysisPane != null) analysisPane.close();
         new ArrayList<>(detachedGauges.values()).forEach(Stage::close);

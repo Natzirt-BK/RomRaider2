@@ -23,6 +23,7 @@ import com.romraider.maps.Rom;
 import com.romraider.maps.RomUserInteraction;
 import com.romraider.maps.RomUserInteractionService;
 import com.romraider.maps.Table;
+import com.romraider.ui.ApplicationThemeService;
 import com.romraider.util.SettingsManager;
 
 import javafx.application.Platform;
@@ -71,6 +72,7 @@ final class FxEditorWindow {
     private final EditorDocumentController controller =
             new EditorDocumentController();
     private final EditorDocumentSession.Listener documentListener;
+    private final ApplicationThemeService.Listener themeListener;
     private final RomUserInteraction romInteraction;
     private final BorderPane root = new BorderPane();
     private final BorderPane center = new BorderPane();
@@ -98,6 +100,8 @@ final class FxEditorWindow {
         snapshot = controller.getSession().snapshot();
         documentListener = next -> Platform.runLater(() -> render(next));
         controller.getSession().addListener(documentListener);
+        themeListener = mode -> Platform.runLater(this::refreshTheme);
+        ApplicationThemeService.getInstance().addListener(themeListener);
         romInteraction = createRomInteraction();
         RomUserInteractionService.addHandler(romInteraction);
 
@@ -574,10 +578,15 @@ final class FxEditorWindow {
     }
 
     private void settingsApplied() {
-        FxTheme.refresh(stage.getScene());
+        refreshTheme();
         rebuildNavigation();
         updateMetrics();
         setStatus("Editor settings applied", 100);
+    }
+
+    private void refreshTheme() {
+        FxTheme.refresh(stage.getScene());
+        calibrationPanes.values().forEach(FxCalibrationPane::refreshTheme);
     }
 
     private void showComparison() {
@@ -722,6 +731,7 @@ final class FxEditorWindow {
     private void dispose() {
         if (!closing) closing = true;
         controller.getSession().removeListener(documentListener);
+        ApplicationThemeService.getInstance().removeListener(themeListener);
         RomUserInteractionService.removeHandler(romInteraction);
         calibrationPanes.values().forEach(FxCalibrationPane::close);
         calibrationPanes.clear();

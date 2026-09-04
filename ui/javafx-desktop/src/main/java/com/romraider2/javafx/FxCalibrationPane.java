@@ -514,6 +514,11 @@ final class FxCalibrationPane extends BorderPane implements AutoCloseable {
         controller.close();
     }
 
+    void refreshTheme() {
+        if (grid != null) grid.refresh();
+        if (surface != null) surface.draw();
+    }
+
     private record RowValues(int row, List<String> values) { }
 
     @FunctionalInterface

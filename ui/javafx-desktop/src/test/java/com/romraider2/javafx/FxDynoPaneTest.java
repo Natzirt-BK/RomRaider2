@@ -9,6 +9,8 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 import com.romraider.logger.api.LiveDataSample;
+import com.romraider.logger.api.LoggerChannel;
+import com.romraider.logger.api.LoggerChannelKind;
 
 class FxDynoPaneTest {
     @Test
@@ -39,6 +41,22 @@ class FxDynoPaneTest {
 
         assertTrue(FxDynoPane.project(rpm, speed, "mph", 1600,
                 .32, 2.2, .015, 0).isEmpty());
+    }
+
+    @Test
+    void vehicleSpeedGuessDoesNotReuseEngineSpeed() {
+        LoggerChannel engine = channel("rpm", "Engine Speed", "rpm");
+        LoggerChannel vehicle = channel("speed", "Vehicle Speed", "km/h");
+
+        assertEquals(vehicle,
+                FxDynoPane.guessVehicleSpeed(List.of(engine, vehicle)));
+        assertEquals("Vehicle Speed  [km/h]",
+                FxDynoPane.channelText(vehicle));
+    }
+
+    private static LoggerChannel channel(String id, String name, String units) {
+        return new LoggerChannel(id, name, units,
+                LoggerChannelKind.PARAMETER, true);
     }
 
     private static LiveDataSample sample(String id, double value, long time) {

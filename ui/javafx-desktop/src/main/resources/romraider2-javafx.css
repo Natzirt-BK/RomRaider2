@@ -92,6 +92,13 @@
 .table-view .column-header-background { -fx-background-color: -rr-raised; }
 .table-view .column-header { -fx-background-color: transparent; -fx-border-color: transparent -rr-border -rr-border transparent; }
 .table-row-cell { -fx-cell-size: 34px; }
+.chart-series-line { -fx-stroke-width: 2.2px; }
+.default-color0.chart-series-line { -fx-stroke: -rr-accent; }
+.default-color0.chart-line-symbol, .default-color0.chart-symbol { -fx-background-color: -rr-accent, white; }
+.theme-dark .default-color0.chart-line-symbol, .theme-dark .default-color0.chart-symbol { -fx-background-color: -rr-accent, -rr-graphite; }
+.default-color1.chart-series-line { -fx-stroke: #e06432; }
+.default-color1.chart-line-symbol, .default-color1.chart-symbol { -fx-background-color: #e06432, white; }
+.theme-dark .default-color1.chart-line-symbol, .theme-dark .default-color1.chart-symbol { -fx-background-color: #ef8354, -rr-graphite; }
 .tab-pane > .tab-header-area { -fx-padding: 0 0 0 5; }
 .tab-pane > .tab-header-area > .tab-header-background { -fx-background-color: -rr-raised; -fx-border-color: transparent transparent -rr-border transparent; }
 .tab-pane > .tab-header-area > .headers-region > .tab { -fx-background-color: transparent; -fx-padding: 6 11 6 11; }

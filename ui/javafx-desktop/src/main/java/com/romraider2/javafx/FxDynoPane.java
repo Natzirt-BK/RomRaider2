@@ -134,9 +134,25 @@ final class FxDynoPane extends BorderPane {
         };
     }
 
-    private static String channelText(LoggerChannel channel) {
+    static String channelText(LoggerChannel channel) {
         return channel.getUnits().isBlank() ? channel.getName()
                 : channel.getName() + "  [" + channel.getUnits() + "]";
+    }
+
+    static LoggerChannel guessVehicleSpeed(List<LoggerChannel> channels) {
+        LoggerChannel unitMatch = null;
+        for (LoggerChannel channel : channels) {
+            String name = channel.getName().toLowerCase(Locale.ROOT);
+            if (name.contains("vehicle speed") || name.contains("road speed")) {
+                return channel;
+            }
+            String units = channel.getUnits().toLowerCase(Locale.ROOT);
+            if (unitMatch == null && (units.contains("km/h")
+                    || units.contains("kph") || units.contains("mph"))) {
+                unitMatch = channel;
+            }
+        }
+        return unitMatch;
     }
 
     void refresh(List<LoggerChannel> channels) {
@@ -152,8 +168,12 @@ final class FxDynoPane extends BorderPane {
         speed.setValue(findPrior(priorSpeed, available));
         if (rpm.getValue() == null) rpm.setValue(guess(available,
                 "rpm", "engine speed"));
-        if (speed.getValue() == null) speed.setValue(guess(available,
-                "vehicle speed", "speed"));
+        LoggerChannel vehicleSpeed = guessVehicleSpeed(available);
+        if (speed.getValue() == null || rpm.getValue() != null
+                && speed.getValue().getParameterId().equals(
+                        rpm.getValue().getParameterId())) {
+            speed.setValue(vehicleSpeed);
+        }
     }
 
     private void calculate() {
