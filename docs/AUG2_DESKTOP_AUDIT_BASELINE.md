@@ -32,8 +32,8 @@ supporting evidence; none substitutes for the end-to-end user workflow.
 | ID | Finding | Current evidence | Required acceptance test | Status |
 | ---: | --- | --- | --- | --- |
 | 1 | 3D rotation has insufficient Y-axis movement. | RC4 has a Compose surface, but source presence does not establish usable orbit controls. | On representative 3D maps, rotate through a useful pitch and yaw range with mouse and touchpad; selection and labels remain usable. | OPEN |
-| 6 | Cancelling the ECU-definition file chooser freezes or locks the Editor. | The local repair replaces the Compose shell's direct AWT dialog path with the established KDE/native/Swing chooser boundary, but cancellation still needs an end-to-end packaged retest. | Open the chooser, cancel from several directories, then open a ROM and reopen the manager without delay or deadlock. | IMPLEMENTED; RETEST |
-| 7 | Existing Editor definition XML files do not appear in the chooser. | The local repair routes Compose through the established cross-platform chooser and no longer relies on AWT's Linux filename filter. | Existing, already-added, and new XML files remain visible on Linux and Windows; selecting, cancelling, and re-adding are safe. | IMPLEMENTED; RETEST |
+| 6 | Cancelling the ECU-definition file chooser freezes or locks the Editor. | The local repair replaces the Compose shell's direct AWT dialog path with the established KDE/native/Swing chooser boundary. | Open the chooser, cancel from several directories, then open a ROM and reopen the manager without delay or deadlock. | LINUX PASS; WINDOWS RETEST |
+| 7 | Existing Editor definition XML files do not appear in the chooser. | The local repair routes Compose through the established cross-platform chooser and no longer relies on AWT's Linux filename filter. | Existing, already-added, and new XML files remain visible on Linux and Windows; selecting, cancelling, and re-adding are safe. | LINUX PASS; WINDOWS RETEST |
 | 8 | Calibration tabs are missing. | RC4 contains a Compose document session and calibration workspace, but the user rejected the stripped-down workflow. | Multiple ROMs/tables can remain open as obvious tabs; switching preserves selection, edits, undo history, and layout. | OPEN |
 | 9 | Save wording and behavior are wrong. | No accepted desktop behavior has been recorded. | Present a clear Save action and a Save As path without ambiguous wording; dirty-state and overwrite confirmation behave predictably. | DECISION |
 | 10 | ECU Definitions menu wastes space; Definition Manager should be beside Open ROM and own Add Definition. | RC4 has Compose-owned definition management, but placement and menu removal need direct approval. | A visible Definition Manager command sits beside Open ROM; adding/reordering/removing occurs inside it; redundant menu is absent. | DECISION |
@@ -107,7 +107,8 @@ archive checksum recorded in the qualification record.
   Linux and Windows packaged visual retests remain required.
 - User visual result, Linux candidate commit `6330e210`, archive SHA-256
   `1caca616ab879ddf335b44bba34ae21f5e170b9fd810e6e52654c3d97033c3a4`:
-  findings 3, 4, and 5 looked correct and functioned. Windows remains open.
+  findings 3, 4, 5, 6, and 7 looked correct and functioned. Windows remains
+  open.
 
 This evidence qualifies only the non-visual baseline. Matrix rows remain
 `NOT RUN` until their complete acceptance tests are performed.
