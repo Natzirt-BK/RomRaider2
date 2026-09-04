@@ -22,7 +22,8 @@ Desktop JavaFX cutover
   definition increments, undo/redo, restore, and a freely rotatable 3D view.
 - Added one shared Light/Dark theme state across every open Editor, Logger,
   dialog, detached gauge, chart, and calibration surface. High Contrast is no
-  longer exposed by the JavaFX desktop.
+  longer exposed by the JavaFX desktop. Explicit JavaFX text colors prevent
+  Windows system palettes from reducing light-theme contrast.
 - Improved native chooser behavior on Linux: loaded definitions stay visible,
   successful checksum updates no longer interrupt Save As, CSV analysis starts
   in the configured log folder, and duplicate ROM extensions are normalized.

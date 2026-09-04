@@ -10,6 +10,8 @@
     -fx-base: #edf2f5;
     -fx-background: #f4f7f9;
     -fx-control-inner-background: #ffffff;
+    -fx-text-base-color: -rr-text;
+    -fx-text-inner-color: -rr-text;
     -fx-text-background-color: -rr-text;
     -fx-accent: -rr-accent;
     -fx-focus-color: rgba(13,148,140,.72);
@@ -30,11 +32,22 @@
     -fx-base: #202934;
     -fx-background: #10151b;
     -fx-control-inner-background: #18212a;
+    -fx-text-base-color: -rr-text;
+    -fx-text-inner-color: -rr-text;
     -fx-text-background-color: -rr-text;
     -fx-accent: -rr-accent;
     -fx-focus-color: rgba(86,174,166,.78);
     -fx-faint-focus-color: rgba(86,174,166,.16);
     -fx-background-color: #10151b;
+    -fx-text-fill: -rr-text;
+}
+
+.label, .button, .menu-button, .toggle-button, .check-box,
+.radio-button, .menu-bar .label, .context-menu .label,
+.tab .tab-label {
+    -fx-text-fill: -rr-text;
+}
+.text-input {
     -fx-text-fill: -rr-text;
 }
 

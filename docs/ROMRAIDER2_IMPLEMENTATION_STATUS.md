@@ -85,7 +85,9 @@ Last updated: 2026-09-04
 - JavaFX theme changes propagate to every open Editor and Logger window.
   Successful checksum updates stay in the status bar, custom dialogs close with
   Escape, CSV browsing starts in the configured output folder, and Linux native
-  Save As results are protected from duplicate ROM extensions.
+  Save As results are protected from duplicate ROM extensions. Theme text
+  colors are explicit so Windows system palettes cannot override light-theme
+  labels and menus with low-contrast values.
 - The Road Dyno now presents readable channel names and units and independently
   identifies engine-speed and vehicle-speed inputs as channels are selected.
 - Long ROM, calibration, channel, and definition names retain compact layouts
