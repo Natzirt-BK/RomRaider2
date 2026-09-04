@@ -1,7 +1,6 @@
 /* RomRaider2 ECU Studio - GPL 2.0 or later. */
 package com.romraider.logger.runtime;
 
-import static com.romraider.logger.ecu.profile.UserProfileLoader.BACKUP_PROFILE;
 import static com.romraider.util.ParamChecker.isNullOrEmpty;
 
 import java.io.File;
@@ -500,7 +499,8 @@ public final class LoggerDesktopRuntime implements EcuRelatedMessageListener,
     private UserProfile loadProfile() {
         String path = settings.getLoggerProfileFilePath();
         if (isNullOrEmpty(path)) {
-            path = System.getProperty("user.home") + BACKUP_PROFILE;
+            path = LoggerProfileStorage.backupPath(
+                    SettingsManager.getSettingsDirectory()).toString();
         }
         if (!new File(path).isFile()) return null;
         return new UserProfileLoaderImpl().loadProfile(path);
@@ -639,8 +639,8 @@ public final class LoggerDesktopRuntime implements EcuRelatedMessageListener,
     }
 
     private void backupCurrentProfile() {
-        Path target = new File(System.getProperty("user.home")
-                + BACKUP_PROFILE).toPath();
+        Path target = LoggerProfileStorage.backupPath(
+                SettingsManager.getSettingsDirectory());
         try {
             Path parent = target.getParent();
             if (parent != null) Files.createDirectories(parent);

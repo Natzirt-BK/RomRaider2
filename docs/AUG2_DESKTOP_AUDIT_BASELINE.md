@@ -1,0 +1,109 @@
+# AUG2 desktop audit baseline
+
+Status: active release-blocking audit
+Source: user review of the Linux installer build and Windows RC4 build
+Recorded: 2026-09-03
+
+## Why this audit exists
+
+The earlier RC4 checks proved package construction, startup, selected visual
+fixtures, and a limited set of Editor and Logger workflows. They did not prove
+desktop feature parity with the retained Swing application. Passing those
+checks therefore did not qualify the complete desktop experience described in
+this review.
+
+Every item below remains unqualified until it passes on an exact candidate
+archive. Source code, automated tests, screenshots, and a successful launch are
+supporting evidence; none substitutes for the end-to-end user workflow.
+
+## Status vocabulary
+
+- `OPEN`: no complete replacement has been accepted.
+- `IMPLEMENTED; RETEST`: source contains a proposed correction, but the exact
+  packaged workflow has not received user approval.
+- `DECISION`: product behavior must be agreed before implementation is judged.
+- `INSTALLER PATCH`: a distribution or upgrade defect has a tested local patch
+  that is not yet a published installer revision.
+
+## Editor findings
+
+| ID | Finding | Current evidence | Required acceptance test | Status |
+| ---: | --- | --- | --- | --- |
+| 1 | 3D rotation has insufficient Y-axis movement. | RC4 has a Compose surface, but source presence does not establish usable orbit controls. | On representative 3D maps, rotate through a useful pitch and yaw range with mouse and touchpad; selection and labels remain usable. | OPEN |
+| 6 | Cancelling the ECU-definition file chooser freezes or locks the Editor. | The RC4 shell changed the definition workflow, but cancellation has not been qualified end to end. | Open the chooser, cancel from several directories, then open a ROM and reopen the manager without delay or deadlock. | IMPLEMENTED; RETEST |
+| 7 | Existing Editor definition XML files do not appear in the chooser. | RC4 includes definition-file filtering and Compose-owned priority management. | Existing, already-added, and new XML files remain visible on Linux and Windows; selecting, cancelling, and re-adding are safe. | IMPLEMENTED; RETEST |
+| 8 | Calibration tabs are missing. | RC4 contains a Compose document session and calibration workspace, but the user rejected the stripped-down workflow. | Multiple ROMs/tables can remain open as obvious tabs; switching preserves selection, edits, undo history, and layout. | OPEN |
+| 9 | Save wording and behavior are wrong. | No accepted desktop behavior has been recorded. | Present a clear Save action and a Save As path without ambiguous wording; dirty-state and overwrite confirmation behave predictably. | DECISION |
+| 10 | ECU Definitions menu wastes space; Definition Manager should be beside Open ROM and own Add Definition. | RC4 has Compose-owned definition management, but placement and menu removal need direct approval. | A visible Definition Manager command sits beside Open ROM; adding/reordering/removing occurs inside it; redundant menu is absent. | DECISION |
+| 11 | User Level menu is missing. | Essential settings parity is explicitly still open. | User level is visible and persistent, and changes expose/hide the same calibration scope as the compatibility application. | OPEN |
+| 12 | Settings menu is missing. | Essential settings parity is explicitly still open. | All retained desktop settings are reachable, understandable, persistent, and separated from Logger connection setup. | OPEN |
+| 13 | The Editor looks stripped down, lacks branding, and lost its advanced desktop character. | RC4 added window branding and richer surfaces, but aesthetic acceptance was not obtained. | First launch and loaded-ROM workspaces visibly read as a capable desktop tuning application, with approved logo, hierarchy, density, and tools. | IMPLEMENTED; RETEST |
+| 14 | View contains only themes; High Contrast is unwanted and did not work. | RC4 still documents High Contrast, so the reported product mismatch remains. | Agree the retained theme set; remove High Contrast if that decision stands; every retained option must visibly work. | DECISION |
+| 15 | Checksum Failed dialog does not match the application. | RC4 moved ROM interaction behind a neutral service, but visual parity is unqualified. | Trigger the warning with a safe fixture; typography, buttons, spacing, ownership, keyboard behavior, and recovery match the active shell. | IMPLEMENTED; RETEST |
+| 16 | Windows top-menu visuals are not modernized. | Normal RC4 startup now uses Compose on Windows. | Inspect the exact Windows archive at normal and high DPI; menus must match the approved application visual system. | IMPLEMENTED; RETEST |
+| 17 | Compare ROMs needs a visible button and must remain under Tools. | RC4 includes ROM comparison in the replacement shell. | Both entry points are present, invoke one workflow, and remain correctly enabled as documents open and close. | IMPLEMENTED; RETEST |
+
+## Logger findings
+
+| ID | Finding | Current evidence | Required acceptance test | Status |
+| ---: | --- | --- | --- | --- |
+| 2 | A collapsed Channels pane can be reopened but not put away again. | RC4 changed the Logger shell and channel browser; reversible collapse was not accepted. | The same discoverable control expands and collapses the pane repeatedly at wide and narrow sizes without losing selections. | IMPLEMENTED; RETEST |
+| 3 | Loading a Logger definition needs a visible button, not only a menu command. | RC4 has Logger setup and definition selection, but command placement needs approval. | A visible Logger-definition action is available in normal flow and remains available through an appropriate menu/settings path. | DECISION |
+| 4 | Logger definition files disappear in the Linux chooser, including definitions already loaded. | RC4 has a chooser and validation path, but the exact Linux file workflow failed. | All appropriate XML files display in the selected folder before and after loading; cancellation and replacement are safe. | IMPLEMENTED; RETEST |
+| 5 | Log output directory needs a directory browser. | RC4 setup stores an output path, but the audited interface exposed text entry only. | A folder-browser control works on Linux and Windows, shows the current directory, permits text editing only as a secondary path, and persists. | OPEN |
+| 18 | Logger-definition selection works on Windows but not Linux. | The installed Linux upgrade could omit `config/user/definitions`; a local installer patch now preserves it and its regression test passes. Chooser behavior still needs separate retest. | Test clean install and upgrade install with a preserved definition, then select another XML through the Linux chooser and start Logger. | INSTALLER PATCH |
+| 19 | More than six Overview parameters overwrite tiles instead of reflowing or scrolling. | RC4 added responsive overview/dashboard layouts. | Add at least 12 parameters at wide, medium, and narrow widths; tiles never overlap or overwrite and scrolling appears when required. | IMPLEMENTED; RETEST |
+| 20 | Modernized Dyno is missing. | The specialized Dyno remains in the compatibility shell; migration scope is explicitly undecided. | Decide and implement the desktop Dyno workflow before removing compatibility mode; qualify it with recorded/simulated data before connected claims. | OPEN |
+| 21 | Dashboard layout/style controls are unclear or target the wrong gauge; sizing, detaching, and color customization are incomplete. | RC4 added per-channel gauge configuration, several gauge roles, saved layouts, resizing, scales, warnings, and themes. Detaching is not documented as complete. | Each tile edits itself; style buttons are individually visible; Standard/Large/Custom behavior is approved; tiles reflow; color changes persist; decide and test detaching. | IMPLEMENTED; RETEST |
+| 22 | Analysis needs an in-context Open Log button and playback. | RC4 documents offline analysis and playback, but the exact interaction has not been accepted. | Open a log from inside Log Analysis, play/pause/seek it, select ranges and markers, and return without a redundant window. | IMPLEMENTED; RETEST |
+| 23 | File > Open CSV Log produces a window without useful information. | RC4 replaced the earlier statistics-only path with expanded offline analysis. | Opening from File routes to the same useful Log Analysis workspace and immediately exposes graph, statistics, channels, ranges, markers, and playback. | IMPLEMENTED; RETEST |
+| 24 | Analysis should be Log Analysis and contain the full offline-analysis workflow. | Expanded analysis exists in source; naming and packaged behavior need approval. | The visible name is Log Analysis and one coherent workspace owns the complete offline workflow. | IMPLEMENTED; RETEST |
+| 25 | Overview/Data/Graph/Dashboard/Analysis navigation belongs at the top. | Navigation placement is a product decision not established by automated checks. | Move it to the agreed top-level position and verify it remains obvious at wide, narrow, keyboard, and touch layouts. | DECISION |
+| 26 | Dashboard value/style/size buttons overlap and are too tall for the default desktop layout; Touch mode is missing. | RC4 added responsive layout work, but the reported desktop density problem remains unqualified. | No overlap at supported widths/DPI; desktop controls use approved density; a deliberate touch profile is available without degrading desktop defaults. | IMPLEMENTED; RETEST |
+
+## Cross-platform qualification matrix
+
+Every row above must be evaluated against both a clean install and an upgrade
+from the previously published installer package. A result applies only to the
+archive checksum recorded in the qualification record.
+
+| Gate | Linux x64 | Windows x64 | Evidence required |
+| --- | --- | --- | --- |
+| Clean package verification | NOT RUN | NOT RUN | Archive and internal checksums, source commit, build identity |
+| Clean first launch | NOT RUN | NOT RUN | No stale settings; branding, menus, and definition prompt inspected |
+| Upgrade/migration | NOT RUN | NOT RUN | Settings, ECU definitions, Logger definitions, profiles, logs, and layouts preserved |
+| Editor items 1, 6-17 | NOT RUN | NOT RUN | Item-by-item findings with screenshots only where useful |
+| Logger items 2-5, 18-26 | NOT RUN | NOT RUN | Item-by-item findings using the same definitions/profile/log fixture |
+| High DPI and narrow layout | NOT RUN | NOT RUN | No clipped, overlapping, unreachable, or misleading controls |
+| Keyboard/accessibility | NOT RUN | NOT RUN | Focus order, shortcuts, names, contrast, and screen-reader smoke check |
+| User visual approval | NOT RUN | NOT RUN | Explicit approval tied to the exact archive checksum |
+
+## Phase 0 evidence — 2026-09-03
+
+- Exact refreshed public Linux RC4 ZIP tested:
+  `2c70ada4bd4107612792deea93df292b8a0d79ef2ee9da1ff95d829182a17294`.
+- Package source identity: `08360a89e0e1d3baa3ca41cdc212a7cbbf32730a`.
+- Clean isolated install: installer pass; every internal package checksum pass.
+- Forced isolated upgrade from the previous release marker: settings, Logger
+  XML/DTD, ECU definition, logs, ROM content, and repository content retained
+  identical SHA-256 values; previous installation retained as a backup.
+- Exact public-package Editor and Logger launch smoke: both reached the Compose
+  desktop shell under Xvfb. This is not a visual pass.
+- Finding discovered during the smoke test: the production Compose Logger read
+  `~/.RomRaider/profile_backup.xml` when no explicit profile was configured.
+- Local correction: automatic Compose Logger profiles now live at
+  `config/user/profiles/profile_backup.xml`; the installer preserves that
+  directory during upgrade.
+- Verification of the local correction: installer regression suite, complete
+  Java 21 unit suite, production Java build, Compose tests/staging, application
+  image build, and packaged Logger startup all pass. The corrected Logger no
+  longer logs or reads the legacy profile.
+
+This evidence qualifies only the non-visual baseline. Matrix rows remain
+`NOT RUN` until their complete acceptance tests are performed.
+
+## Release rule
+
+Another desktop release must not be described as feature-complete, parity
+qualified, or visually approved while any required row remains `OPEN`,
+`DECISION`, `IMPLEMENTED; RETEST`, `INSTALLER PATCH`, or `NOT RUN`.
