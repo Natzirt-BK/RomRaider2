@@ -31,7 +31,7 @@ jobs:
           cp packaging/default/settings.xml settings.xml
           timeout 10m xvfb-run -a ant clean unittest
           ant clean build-linux
-          gradle --no-daemon :ui:compose-logger:test :ui:compose-logger:stageLoggerWorkspace
+          gradle --no-daemon :ui:javafx-desktop:test :ui:javafx-desktop:stageJavaFxLinux
           packaging/java21/audit-runtime-modules.sh build/linux/lib/RomRaider2.jar
           packaging/java21/build-linux-app-image.sh build/release-candidate-1.1.0
           packaging/java21/build-linux-release.sh
@@ -74,7 +74,7 @@ jobs:
           Copy-Item packaging/default/settings.xml settings.xml
           ant clean unittest
           ant clean build-windows
-          gradle --no-daemon :ui:compose-logger:test :ui:compose-logger:stageLoggerWorkspace
+          gradle --no-daemon :ui:javafx-desktop:test :ui:javafx-desktop:stageJavaFxWindows
           ./packaging/java21/build-j2534-bridges.ps1
           ./packaging/java21/build-windows-app-image.ps1
           ./packaging/java21/build-windows-release.ps1

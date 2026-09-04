@@ -8,6 +8,7 @@ foreach ($RequiredFile in @(
     "runtime/release",
     "app/RomRaider2.jar",
     "app/romraider2-javafx-desktop-1.1.0-rc4.jar",
+    "app/javafx-base-21.0.10-win.jar",
     "app/javafx-controls-21.0.10-win.jar",
     "app/javafx-graphics-21.0.10-win.jar",
     "app/licenses/JavaFX-21.0.10-GPL-2.0-Classpath-Exception.txt",
@@ -35,6 +36,10 @@ foreach ($RequiredFile in @(
 }
 if (Test-Path -LiteralPath (Join-Path $ReleaseRoot "app/javafx-controls-21.0.10-linux.jar")) {
     throw "The Windows package contains the Linux JavaFX runtime."
+}
+if (Get-ChildItem -LiteralPath (Join-Path $ReleaseRoot "app") -File |
+    Where-Object { $_.Name -match '(?i)compose|skiko|skia' }) {
+    throw "The Windows JavaFX package contains a Compose or Skia artifact."
 }
 
 $VersionText = Get-Content -LiteralPath (Join-Path $ReleaseRoot "VERSION.txt") -Raw
@@ -81,6 +86,12 @@ if ($LauncherConfig -notmatch [regex]::Escape('log4j.configurationFile=$APPDIR/l
 }
 if ($LauncherConfig -notmatch [regex]::Escape('romraider2.desktop.shell=javafx')) {
     throw "The packaged launcher does not select the JavaFX desktop shell."
+}
+if ($LauncherConfig -notmatch [regex]::Escape('module-path=$APPDIR')) {
+    throw "The packaged launcher does not configure the JavaFX module path."
+}
+if ($LauncherConfig -notmatch [regex]::Escape('add-modules=javafx.controls')) {
+    throw "The packaged launcher does not enable JavaFX controls."
 }
 if ($LauncherConfig -notmatch [regex]::Escape('romraider2.j2534.bridge.dir=$APPDIR/lib/windows/j2534')) {
     throw "The packaged launcher does not locate the J2534 architecture bridges."

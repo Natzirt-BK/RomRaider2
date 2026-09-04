@@ -9,9 +9,12 @@ cd "$release_root"
 grep -q '^JAVA_VERSION="21\.' lib/runtime/release
 [[ -f lib/app/RomRaider2.jar ]]
 [[ -f lib/app/romraider2-javafx-desktop-1.1.0-rc4.jar ]]
+[[ -f lib/app/javafx-base-21.0.10-linux.jar ]]
 [[ -f lib/app/javafx-controls-21.0.10-linux.jar ]]
 [[ -f lib/app/javafx-graphics-21.0.10-linux.jar ]]
 [[ ! -e lib/app/javafx-controls-21.0.10-win.jar ]]
+! find lib/app -maxdepth 1 -type f \( -iname '*compose*' -o \
+    -iname '*skiko*' -o -iname '*skia*' \) -print -quit | grep -q .
 [[ -f lib/app/licenses/JavaFX-21.0.10-GPL-2.0-Classpath-Exception.txt ]]
 [[ -f lib/app/licenses/GPL-2.0.txt ]]
 [[ -f lib/app/lib/linux/64/j2534.so ]]
@@ -46,6 +49,8 @@ grep -Fq 'romraider2.log.dir=$APPDIR/../../logs' lib/app/RomRaider2.cfg
 grep -Fq 'log4j.configurationFile=$APPDIR/lib/log4j2.xml' \
     lib/app/RomRaider2.cfg
 grep -Fq 'romraider2.desktop.shell=javafx' lib/app/RomRaider2.cfg
+grep -Fq 'module-path=$APPDIR' lib/app/RomRaider2.cfg
+grep -Fq 'add-modules=javafx.controls' lib/app/RomRaider2.cfg
 
 if [[ -f checksums/SHA256SUMS.txt ]]; then
     sha256sum -c checksums/SHA256SUMS.txt
