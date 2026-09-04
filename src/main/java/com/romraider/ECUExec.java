@@ -84,7 +84,7 @@ public class ECUExec {
             if (legacySwingRequested()) {
                 LegacySwingApplication.launch(args);
             } else {
-                LOGGER.error("Compose desktop shell is unavailable; "
+                LOGGER.error("JavaFX desktop shell is unavailable; "
                         + "use -Dromraider2.desktop.shell=swing only for "
                         + "legacy compatibility testing");
             }
@@ -140,7 +140,7 @@ public class ECUExec {
                 if (legacySwingRequested()) {
                     LegacySwingApplication.handleForwarded(instance);
                 } else {
-                    LOGGER.warn("No active Compose window accepted the "
+                    LOGGER.warn("No active desktop window accepted the "
                             + "forwarded request");
                 }
             } catch (IOException e) {
@@ -151,6 +151,6 @@ public class ECUExec {
 
     static boolean legacySwingRequested() {
         return "swing".equalsIgnoreCase(System.getProperty(
-                "romraider2.desktop.shell", "compose"));
+                "romraider2.desktop.shell", "javafx"));
     }
 }

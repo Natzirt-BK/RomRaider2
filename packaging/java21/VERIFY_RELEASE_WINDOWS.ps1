@@ -7,11 +7,11 @@ foreach ($RequiredFile in @(
     "RomRaider2 Logger.exe",
     "runtime/release",
     "app/RomRaider2.jar",
-    "app/romraider2-compose-logger-1.1.0-rc4.jar",
-    "app/org-jetbrains-skiko-skiko-awt-runtime-windows-x64-0.150.1.jar",
-    "app/licenses/Compose-Desktop-1.12.0.txt",
-    "app/licenses/Apache-2.0.txt",
-    "app/licenses/Skia-BSD-3-Clause.txt",
+    "app/romraider2-javafx-desktop-1.1.0-rc4.jar",
+    "app/javafx-controls-21.0.10-win.jar",
+    "app/javafx-graphics-21.0.10-win.jar",
+    "app/licenses/JavaFX-21.0.10-GPL-2.0-Classpath-Exception.txt",
+    "app/licenses/GPL-2.0.txt",
     "app/lib/windows/64/phidget21.dll",
     "app/lib/windows/j2534/j2534-bridge-32.exe",
     "app/lib/windows/j2534/j2534-bridge-64.exe",
@@ -33,8 +33,8 @@ foreach ($RequiredFile in @(
         throw "Required release file is missing: $RequiredFile"
     }
 }
-if (Test-Path -LiteralPath (Join-Path $ReleaseRoot "app/org-jetbrains-skiko-skiko-awt-runtime-linux-x64-0.150.1.jar")) {
-    throw "The Windows package contains the Linux Compose renderer."
+if (Test-Path -LiteralPath (Join-Path $ReleaseRoot "app/javafx-controls-21.0.10-linux.jar")) {
+    throw "The Windows package contains the Linux JavaFX runtime."
 }
 
 $VersionText = Get-Content -LiteralPath (Join-Path $ReleaseRoot "VERSION.txt") -Raw
@@ -78,6 +78,9 @@ if ($LauncherConfig -notmatch [regex]::Escape('romraider2.log.dir=$APPDIR/../log
 }
 if ($LauncherConfig -notmatch [regex]::Escape('log4j.configurationFile=$APPDIR/lib/log4j2.xml')) {
     throw "The packaged launcher does not select its Log4j configuration."
+}
+if ($LauncherConfig -notmatch [regex]::Escape('romraider2.desktop.shell=javafx')) {
+    throw "The packaged launcher does not select the JavaFX desktop shell."
 }
 if ($LauncherConfig -notmatch [regex]::Escape('romraider2.j2534.bridge.dir=$APPDIR/lib/windows/j2534')) {
     throw "The packaged launcher does not locate the J2534 architecture bridges."

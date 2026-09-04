@@ -9,3 +9,8 @@ import androidx.compose.ui.res.painterResource
 @Composable
 internal fun romRaiderWindowIcon(): Painter = painterResource(
     "com/romraider2/ui/assets/icons/app/romraider2-app-64.png")
+
+/** Full approved wordmark for branded in-application surfaces. */
+@Composable
+internal fun romRaiderHorizontalLogo(): Painter = painterResource(
+    "com/romraider2/ui/assets/branding/romraider2-logo-horizontal.png")

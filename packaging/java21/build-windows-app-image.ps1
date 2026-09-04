@@ -9,7 +9,7 @@ $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "../..")).Path
-$ComposeRoot = Join-Path $RepoRoot "build/compose/windows"
+$JavaFxRoot = Join-Path $RepoRoot "build/javafx/windows"
 if (-not $OutputRoot) {
     $OutputRoot = Join-Path $RepoRoot "build/java21-windows"
 }
@@ -59,8 +59,8 @@ if ($JavaSettings -notmatch "os\.arch\s*=\s*(amd64|x86_64)(?:\s|$)") {
 if (-not (Test-Path -LiteralPath $ApplicationJar -PathType Leaf)) {
     throw "Build RomRaider2 for Windows first; jar not found: $ApplicationJar"
 }
-if (-not (Test-Path -LiteralPath (Join-Path $ComposeRoot "romraider2-compose-logger-1.1.0-rc4.jar") -PathType Leaf)) {
-    throw "Build the Compose Logger workspace before packaging."
+if (-not (Test-Path -LiteralPath (Join-Path $JavaFxRoot "romraider2-javafx-desktop-1.1.0-rc4.jar") -PathType Leaf)) {
+    throw "Stage the JavaFX desktop workspace before packaging."
 }
 foreach ($BridgeFile in @(
     "j2534-bridge-32.exe", "j2534-bridge-64.exe",
@@ -142,7 +142,7 @@ try {
     }
 
     Copy-Item -LiteralPath $ApplicationJar -Destination (Join-Path $InputRoot "RomRaider2.jar")
-    Copy-Item -Path (Join-Path $ComposeRoot "*.jar") -Destination $InputRoot
+    Copy-Item -Path (Join-Path $JavaFxRoot "*.jar") -Destination $InputRoot
     Get-ChildItem -LiteralPath (Join-Path $RepoRoot "lib/common") -Filter "*.jar" -File |
         Where-Object { $_.Name -notin @("Graph3d.jar", "j3dcore.jar", "j3dutils.jar", "vecmath.jar") } |
         Copy-Item -Destination (Join-Path $InputRoot "lib/common")
@@ -160,6 +160,8 @@ try {
         -Destination (Join-Path $InputRoot "plugins")
     Copy-Item -Path (Join-Path $RepoRoot "licenses/*") `
         -Destination (Join-Path $InputRoot "licenses")
+    Copy-Item -LiteralPath (Join-Path $RepoRoot "license.txt") `
+        -Destination (Join-Path $InputRoot "licenses/GPL-2.0.txt")
 
     $ClassPathEntries = @(Get-ChildItem -LiteralPath (Join-Path $RepoRoot "lib/common") `
         -Filter "*.jar" -File | ForEach-Object { $_.FullName })
@@ -205,6 +207,9 @@ try {
         --java-options '-Dromraider2.settings.dir=$APPDIR/../config/user' `
         --java-options '-Dromraider2.customize.dir=$APPDIR/../customize' `
         --java-options '-Dromraider2.log.dir=$APPDIR/../logs' `
+        --java-options '-Dromraider2.desktop.shell=javafx' `
+        --java-options '--module-path=$APPDIR' `
+        --java-options '--add-modules=javafx.controls' `
         --java-options '-Dlog4j.configurationFile=$APPDIR/lib/log4j2.xml' `
         --java-options '-Dawt.useSystemAAFontSettings=lcd' `
         --java-options '-Dswing.aatext=true' `
@@ -278,11 +283,11 @@ foreach ($Customization in @(
         throw "Required customization asset is missing: $Customization"
     }
 }
-foreach ($ComposeNotice in @(
-    "Compose-Desktop-1.12.0.txt", "Apache-2.0.txt", "Skia-BSD-3-Clause.txt"
+foreach ($JavaFxNotice in @(
+    "JavaFX-21.0.10-GPL-2.0-Classpath-Exception.txt"
 )) {
-    if (-not (Test-Path -LiteralPath (Join-Path $Destination "app/licenses/$ComposeNotice") -PathType Leaf)) {
-        throw "Required Compose license file is missing: $ComposeNotice"
+    if (-not (Test-Path -LiteralPath (Join-Path $Destination "app/licenses/$JavaFxNotice") -PathType Leaf)) {
+        throw "Required JavaFX license file is missing: $JavaFxNotice"
     }
 }
 foreach ($RetiredDependency in @(

@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,11 +25,13 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.AlertDialog
 import androidx.compose.material.Button
+import androidx.compose.material.ButtonDefaults
 import androidx.compose.material.Checkbox
 import androidx.compose.material.DropdownMenu
 import androidx.compose.material.DropdownMenuItem
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.OutlinedTextField
+import androidx.compose.material.OutlinedButton
 import androidx.compose.material.Surface
 import androidx.compose.material.Text
 import androidx.compose.material.TextButton
@@ -45,6 +48,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -100,8 +104,8 @@ class ComposeDesktopApplicationProvider : DesktopApplicationProvider {
     override fun getName(): String = "Compose Desktop ECU Studio"
 
     override fun supports(arguments: Array<out String>): Boolean {
-        val requested = System.getProperty("romraider2.desktop.shell", "compose")
-        return !requested.equals("swing", ignoreCase = true)
+        val requested = System.getProperty("romraider2.desktop.shell", "javafx")
+        return requested.equals("compose", ignoreCase = true)
     }
 
     override fun launch(arguments: Array<out String>) {
@@ -729,9 +733,13 @@ private fun launchEditorShell(startupFiles: List<File>) = application {
 
         ComposeEditorShell(snapshot, controller, status, progress, userLevel,
             editorSettingsRevision,
-            ::chooseRoms, { saveActive(false) }, { saveActive(true) }) {
-            definitionManagerOpen = true
-        }
+            ::chooseRoms, { saveActive(false) }, { saveActive(true) },
+            manageDefinitions = { definitionManagerOpen = true },
+            compareRoms = { comparisonOpen = true },
+            openLiveTune = { liveTuneOpen = true },
+            openLogger = ::openLogger,
+            loggerLoading = loggerLoading,
+            loggerOpen = loggerRuntime != null)
 
         LaunchedEffect(requestedFiles) {
             if (requestedFiles.isNotEmpty()) {
@@ -1135,7 +1143,12 @@ internal fun ComposeEditorShell(
     open: () -> Unit,
     saveNow: () -> Unit,
     saveAs: () -> Unit,
-    manageDefinitions: () -> Unit
+    manageDefinitions: () -> Unit,
+    compareRoms: () -> Unit,
+    openLiveTune: () -> Unit,
+    openLogger: () -> Unit,
+    loggerLoading: Boolean,
+    loggerOpen: Boolean
 ) {
     val dark = rememberApplicationDarkTheme()
     val colors = if (dark) darkColors(
@@ -1164,15 +1177,20 @@ internal fun ComposeEditorShell(
             Column(Modifier.fillMaxSize()) {
                 ShellToolbar(snapshot, open, saveNow, saveAs,
                     manageDefinitions)
+                EditorCommandDeck(snapshot, userLevel, compareRoms,
+                    openLiveTune, openLogger, loggerLoading, loggerOpen)
                 Row(Modifier.weight(1f).fillMaxWidth()) {
                     Box(Modifier.width(292.dp).fillMaxHeight()) {
                         EditorNavigationSurface(navigation,
                             snapshot.revision.toInt(), 0,
                             userLevel * 31 + editorSettingsRevision)
                     }
+                    Spacer(Modifier.width(1.dp).fillMaxHeight()
+                        .background(MaterialTheme.colors.onSurface.copy(
+                            alpha = .12f)))
                     Column(Modifier.weight(1f).fillMaxHeight()) {
                         DocumentTabs(snapshot, controller)
-                        ActiveDocument(snapshot)
+                        ActiveDocument(snapshot, open)
                     }
                 }
                 ShellStatus(status, progress, snapshot)
@@ -1233,14 +1251,24 @@ private fun ShellToolbar(
 ) {
     var saveMenuOpen by remember { mutableStateOf(false) }
     Row(
-        Modifier.fillMaxWidth().background(MaterialTheme.colors.surface)
-            .padding(horizontal = 14.dp, vertical = 9.dp),
+        Modifier.fillMaxWidth().height(72.dp).background(shellGraphite)
+            .border(0.dp, Color.Transparent)
+            .padding(horizontal = 15.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Text("ROMRAIDER2", color = MaterialTheme.colors.primary,
-            fontWeight = FontWeight.Bold, fontSize = 14.sp)
-        Spacer(Modifier.width(10.dp))
+        Column(Modifier.width(164.dp)) {
+            Image(romRaiderHorizontalLogo(), "RomRaider2",
+                Modifier.fillMaxWidth().height(40.dp),
+                contentScale = ContentScale.Fit)
+            Text("ECU CALIBRATION STUDIO", color = shellAccent,
+                fontWeight = FontWeight.Bold, fontSize = 8.sp,
+                letterSpacing = 1.15.sp)
+        }
+        Spacer(Modifier.width(4.dp))
+        Box(Modifier.width(1.dp).height(42.dp)
+            .background(Color.White.copy(alpha = .16f)))
+        Spacer(Modifier.width(4.dp))
         Button(open) { Text("Open ROM") }
         Box {
             Button(onClick = { saveMenuOpen = true },
@@ -1259,12 +1287,74 @@ private fun ShellToolbar(
                 }) { Text("Save As…") }
             }
         }
-        TextButton(manageDefinitions) { Text("Definitions Manager") }
+        TextButton(manageDefinitions,
+            colors = ButtonDefaults.textButtonColors(contentColor = shellAccent)) {
+            Text("Definitions Manager")
+        }
         Spacer(Modifier.weight(1f))
-        Text(snapshot.activeRom?.fileName ?: "No ROM open",
-            color = MaterialTheme.colors.onSurface.copy(alpha = .62f),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis)
+        Column(Modifier.width(220.dp), horizontalAlignment = Alignment.End) {
+            Text(if (snapshot.activeRom == null) "WORKSPACE"
+                else "ACTIVE ROM", color = shellAccent, fontSize = 8.sp,
+                fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+            Text(snapshot.activeRom?.fileName ?: "No ROM open",
+                color = Color.White.copy(alpha = .86f), fontSize = 11.sp,
+                maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text("RomRaider2 ${Version.VERSION}",
+                color = Color.White.copy(alpha = .46f), fontSize = 8.sp)
+        }
+    }
+}
+
+@Composable
+private fun EditorCommandDeck(
+    snapshot: EditorDocumentSnapshot,
+    userLevel: Int,
+    compareRoms: () -> Unit,
+    openLiveTune: () -> Unit,
+    openLogger: () -> Unit,
+    loggerLoading: Boolean,
+    loggerOpen: Boolean
+) {
+    val dirtyCount = snapshot.documents.count(EditorDocument::isDirty)
+    Row(Modifier.fillMaxWidth().height(42.dp)
+        .background(MaterialTheme.colors.surface)
+        .border(1.dp, MaterialTheme.colors.onSurface.copy(alpha = .08f))
+        .padding(horizontal = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+        Text("ROM WORKSPACE", color = MaterialTheme.colors.primary,
+            fontSize = 9.sp, fontWeight = FontWeight.Bold,
+            letterSpacing = .85.sp)
+        WorkspaceMetric("${snapshot.documents.size} OPEN")
+        if (dirtyCount > 0) WorkspaceMetric("$dirtyCount UNSAVED", true)
+        WorkspaceMetric("LEVEL $userLevel · ${editorUserLevels
+            .firstOrNull { it.first == userLevel }?.second?.uppercase()
+            ?: "CUSTOM"}")
+        Spacer(Modifier.weight(1f))
+        DeckAction("Compare ROMs", snapshot.documents.size >= 2, compareRoms)
+        DeckAction("Live Tune", snapshot.activeRom != null, openLiveTune)
+        DeckAction(if (loggerLoading) "Opening Logger…"
+            else if (loggerOpen) "Logger Open" else "Logger",
+            !loggerLoading && !loggerOpen, openLogger)
+    }
+}
+
+@Composable
+private fun WorkspaceMetric(label: String, alert: Boolean = false) {
+    Text(label, color = if (alert) Color(0xFFD92632)
+        else MaterialTheme.colors.onSurface.copy(alpha = .6f),
+        fontSize = 8.sp, fontWeight = FontWeight.Bold,
+        modifier = Modifier.background(MaterialTheme.colors.onSurface.copy(
+            alpha = .055f), RoundedCornerShape(4.dp))
+            .padding(horizontal = 7.dp, vertical = 4.dp))
+}
+
+@Composable
+private fun DeckAction(label: String, enabled: Boolean, action: () -> Unit) {
+    OutlinedButton(action, enabled = enabled, modifier = Modifier.height(30.dp),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(
+            horizontal = 10.dp, vertical = 1.dp)) {
+        Text(label, fontSize = 9.sp, fontWeight = FontWeight.SemiBold)
     }
 }
 
@@ -1302,17 +1392,47 @@ private fun DocumentTabs(
 }
 
 @Composable
-private fun ActiveDocument(snapshot: EditorDocumentSnapshot) {
+private fun ActiveDocument(snapshot: EditorDocumentSnapshot, open: () -> Unit) {
     val table = snapshot.activeTable
     if (table == null) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(if (snapshot.activeRom == null) "Open a ROM to begin"
-                    else "Choose a calibration from the left",
-                    fontSize = 22.sp, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(8.dp))
-                Text("Maps open here in the Compose calibration workspace.",
-                    color = MaterialTheme.colors.onSurface.copy(alpha = .62f))
+            Column(Modifier.width(520.dp),
+                horizontalAlignment = Alignment.CenterHorizontally) {
+                if (snapshot.activeRom == null) {
+                    Image(romRaiderHorizontalLogo(), "RomRaider2",
+                        Modifier.width(310.dp).height(104.dp),
+                        contentScale = ContentScale.Fit)
+                    Text("ECU CALIBRATION STUDIO",
+                        color = MaterialTheme.colors.primary,
+                        fontSize = 11.sp, fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.4.sp)
+                    Spacer(Modifier.height(22.dp))
+                    Text("Professional ROM calibration workspace",
+                        fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(8.dp))
+                    Text("Load a ROM to inspect maps, compare revisions, " +
+                        "manage changes, and prepare a calibrated image.",
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        color = MaterialTheme.colors.onSurface.copy(alpha = .64f))
+                    Spacer(Modifier.height(20.dp))
+                    Button(open) { Text("Open ROM") }
+                } else {
+                    Text("ROM LOADED", color = MaterialTheme.colors.primary,
+                        fontSize = 10.sp, fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.1.sp)
+                    Spacer(Modifier.height(8.dp))
+                    Text("Choose a calibration from the map catalog",
+                        fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(8.dp))
+                    Text(snapshot.activeRom.fileName,
+                        color = MaterialTheme.colors.onSurface.copy(alpha = .62f),
+                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Spacer(Modifier.height(18.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                        listOf("TABLE", "GRAPH", "3D SURFACE", "CHANGE HISTORY")
+                            .forEach { WorkspaceMetric(it) }
+                    }
+                }
             }
         }
         return

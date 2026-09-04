@@ -59,7 +59,9 @@ fun main(args: Array<String>) {
             ComposeEditorShell(
                 snapshot, controller, "Ready", 100, 3, 0,
                 open = { }, saveNow = { }, saveAs = { },
-                manageDefinitions = { }
+                manageDefinitions = { }, compareRoms = { },
+                openLiveTune = { }, openLogger = { },
+                loggerLoading = false, loggerOpen = false
             )
         }
         LaunchedEffect(Unit) {

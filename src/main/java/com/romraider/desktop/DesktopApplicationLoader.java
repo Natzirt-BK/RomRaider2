@@ -8,7 +8,7 @@ import java.util.ServiceLoader;
 
 import org.apache.log4j.Logger;
 
-/** Discovers the replacement desktop shell without linking Compose to Ant. */
+/** Discovers the replacement desktop shell without linking a UI toolkit to Ant. */
 public final class DesktopApplicationLoader {
     private static final Logger LOGGER = getLogger(DesktopApplicationLoader.class);
 
