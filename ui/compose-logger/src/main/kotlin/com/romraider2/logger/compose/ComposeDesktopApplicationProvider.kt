@@ -38,6 +38,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -76,12 +77,15 @@ import com.romraider.maps.RomUserInteraction
 import com.romraider.maps.RomUserInteractionService
 import com.romraider.maps.Table
 import com.romraider.swing.IntegratedFileChooser
+import com.romraider.swing.SettingsForm
 import com.romraider.util.SettingsManager
 import com.romraider.ui.ApplicationThemeService
 import com.romraider.ui.RuntimeUiProfile
 import com.romraider.ui.ThemeMode
 import java.awt.EventQueue
 import java.awt.FileDialog
+import java.awt.event.WindowAdapter
+import java.awt.event.WindowEvent
 import java.io.File
 import java.util.concurrent.CompletableFuture
 import java.util.Vector
@@ -450,6 +454,10 @@ private fun launchEditorShell(startupFiles: List<File>) = application {
     var comparisonOpen by remember { mutableStateOf(false) }
     var liveTuneOpen by remember { mutableStateOf(false) }
     var definitionManagerOpen by remember { mutableStateOf(false) }
+    var userLevel by remember {
+        mutableIntStateOf(SettingsManager.getSettings().userLevel)
+    }
+    var editorSettingsRevision by remember { mutableIntStateOf(0) }
     var recoverySnapshots by remember {
         mutableStateOf<List<RecoverySnapshot>>(emptyList())
     }
@@ -625,6 +633,29 @@ private fun launchEditorShell(startupFiles: List<File>) = application {
                 }
         }
 
+        fun selectUserLevel(level: Int, name: String) {
+            val settings = SettingsManager.getSettings()
+            settings.userLevel = level
+            SettingsManager.save(settings)
+            userLevel = settings.userLevel
+            editorSettingsRevision++
+            status = "User level: $name"
+        }
+
+        fun openEditorSettings() {
+            EventQueue.invokeLater {
+                val form = SettingsForm()
+                form.addWindowListener(object : WindowAdapter() {
+                    override fun windowClosed(event: WindowEvent) {
+                        userLevel = SettingsManager.getSettings().userLevel
+                        editorSettingsRevision++
+                    }
+                })
+                form.setLocationRelativeTo(window)
+                form.isVisible = true
+            }
+        }
+
         MenuBar {
             Menu("File") {
                 Item("Open ROM...", onClick = ::chooseRoms)
@@ -672,6 +703,15 @@ private fun launchEditorShell(startupFiles: List<File>) = application {
                     })
                 }
             }
+            Menu("User Level") {
+                editorUserLevels.forEach { (level, name) ->
+                    Item(userLevelMenuLabel(level, name, userLevel),
+                        onClick = { selectUserLevel(level, name) })
+                }
+            }
+            Menu("Settings") {
+                Item("Editor Settings...", onClick = ::openEditorSettings)
+            }
             Menu("Tools") {
                 Item("Compare open ROMs", onClick = {
                     comparisonOpen = true
@@ -687,7 +727,8 @@ private fun launchEditorShell(startupFiles: List<File>) = application {
             }
         }
 
-        ComposeEditorShell(snapshot, controller, status, progress,
+        ComposeEditorShell(snapshot, controller, status, progress, userLevel,
+            editorSettingsRevision,
             ::chooseRoms, { saveActive(false) }, { saveActive(true) }) {
             definitionManagerOpen = true
         }
@@ -1089,6 +1130,8 @@ internal fun ComposeEditorShell(
     controller: EditorDocumentController,
     status: String,
     progress: Int,
+    userLevel: Int,
+    editorSettingsRevision: Int,
     open: () -> Unit,
     saveNow: () -> Unit,
     saveAs: () -> Unit,
@@ -1124,7 +1167,8 @@ internal fun ComposeEditorShell(
                 Row(Modifier.weight(1f).fillMaxWidth()) {
                     Box(Modifier.width(292.dp).fillMaxHeight()) {
                         EditorNavigationSurface(navigation,
-                            snapshot.revision.toInt(), 0)
+                            snapshot.revision.toInt(), 0,
+                            userLevel * 31 + editorSettingsRevision)
                     }
                     Column(Modifier.weight(1f).fillMaxHeight()) {
                         DocumentTabs(snapshot, controller)
@@ -1136,6 +1180,20 @@ internal fun ComposeEditorShell(
         }
     }
 }
+
+private val editorUserLevels = listOf(
+    1 to "Beginner",
+    2 to "Intermediate",
+    3 to "Advanced",
+    4 to "Highest",
+    5 to "Debug Mode"
+)
+
+internal fun userLevelMenuLabel(
+    level: Int,
+    name: String,
+    selectedLevel: Int
+): String = (if (level == selectedLevel) "✓ " else "") + "$level $name"
 
 @Composable
 private fun ShellAlertDialog(

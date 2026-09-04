@@ -57,7 +57,7 @@ fun main(args: Array<String>) {
             state = WindowState(width = width.dp, height = height.dp)
         ) {
             ComposeEditorShell(
-                snapshot, controller, "Ready", 100,
+                snapshot, controller, "Ready", 100, 3, 0,
                 open = { }, saveNow = { }, saveAs = { },
                 manageDefinitions = { }
             )

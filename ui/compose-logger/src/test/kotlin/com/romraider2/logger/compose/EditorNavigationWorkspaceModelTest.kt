@@ -42,6 +42,44 @@ class EditorNavigationWorkspaceModelTest {
     }
 
     @Test
+    fun navigationProjectionHonorsTheCompatibilityUserLevelRule() {
+        val rom = Rom(RomID()).apply {
+            fileName = "road-tune.bin"
+            addTableByName(Table1D().apply {
+                name = "Beginner Fuel"
+                userLevel = 1
+            })
+            addTableByName(Table1D().apply {
+                name = "Advanced Fuel"
+                userLevel = 3
+            })
+        }
+        val session = EditorDocumentSession()
+        try {
+            session.openRom(rom)
+            val context = EditorNavigationWorkspaceContext(session) { }
+
+            assertEquals(listOf("Beginner Fuel"),
+                navigationState(context, userLevel = 1,
+                    listHigherLevels = false).entries.map { it.table.name })
+            assertEquals(listOf("Beginner Fuel", "Advanced Fuel"),
+                navigationState(context, userLevel = 3,
+                    listHigherLevels = false).entries.map { it.table.name })
+            assertEquals(2, navigationState(context, userLevel = 1,
+                listHigherLevels = true).entries.size)
+        } finally {
+            session.close()
+        }
+    }
+
+    @Test
+    fun userLevelMenuMarksThePersistentSelection() {
+        assertEquals("✓ 3 Advanced", userLevelMenuLabel(3, "Advanced", 3))
+        assertEquals("2 Intermediate",
+            userLevelMenuLabel(2, "Intermediate", 3))
+    }
+
+    @Test
     fun composeNavigationProviderIsDiscoverableByDesktopHost() {
         val providers = ServiceLoader.load(
             EditorNavigationWorkspaceProvider::class.java).toList()

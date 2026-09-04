@@ -49,6 +49,7 @@ import com.romraider.editor.workspace.EditorWorkspaceService
 import com.romraider.editor.workspace.TableLocation
 import com.romraider.maps.Rom
 import com.romraider.maps.Table
+import com.romraider.util.SettingsManager
 
 private enum class NavigationSection(val label: String) {
     ALL("All"), FAVORITES("Favorites"), CHANGED("Changed"), RECENT("Recent")
@@ -100,7 +101,8 @@ private val navDanger = Color(0xFFD95B66)
 internal fun EditorNavigationSurface(
     context: EditorNavigationWorkspaceContext,
     refreshRequest: Int,
-    focusRequest: Int
+    focusRequest: Int,
+    settingsRevision: Int = 0
 ) {
     val dark = rememberApplicationDarkTheme()
     val colors = if (dark) darkColors(
@@ -119,7 +121,7 @@ internal fun EditorNavigationSurface(
         onSurface = Color(0xFF1C2228)
     )
     var localRefresh by remember { mutableIntStateOf(0) }
-    val state = remember(refreshRequest, localRefresh) {
+    val state = remember(refreshRequest, settingsRevision, localRefresh) {
         navigationState(context)
     }
     var query by remember { mutableStateOf("") }
@@ -388,7 +390,10 @@ private class MutableCalibrationCategory(
 }
 
 internal fun navigationState(
-    context: EditorNavigationWorkspaceContext
+    context: EditorNavigationWorkspaceContext,
+    userLevel: Int = SettingsManager.getSettings().userLevel,
+    listHigherLevels: Boolean = SettingsManager.getSettings()
+        .isDisplayHighTables
 ): NavigationState {
     val snapshot = context.snapshot
     val changed = context.changedTables
@@ -396,7 +401,9 @@ internal fun navigationState(
         snapshot.documents.forEach { document: EditorDocument ->
             val rom = document.rom
             val romId = EditorWorkspaceService.romIdentity(rom)
-            rom.tableCatalog.forEach { table ->
+            rom.tableCatalog.filter { table ->
+                listHigherLevels || table.userLevel <= userLevel
+            }.forEach { table ->
                 val location = TableLocation(romId, table.name)
                 add(CalibrationEntry(rom, table, romId, document.name,
                     context.isFavorite(rom, table), changed[location] ?: 0,
