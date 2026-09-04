@@ -24,6 +24,8 @@ supporting evidence; none substitutes for the end-to-end user workflow.
 - `DECISION`: product behavior must be agreed before implementation is judged.
 - `INSTALLER PATCH`: a distribution or upgrade defect has a tested local patch
   that is not yet a published installer revision.
+- `LINUX PASS; WINDOWS RETEST`: the user accepted the workflow on the recorded
+  Linux candidate; native Windows remains unqualified.
 
 ## Editor findings
 
@@ -48,9 +50,9 @@ supporting evidence; none substitutes for the end-to-end user workflow.
 | ID | Finding | Current evidence | Required acceptance test | Status |
 | ---: | --- | --- | --- | --- |
 | 2 | A collapsed Channels pane can be reopened but not put away again. | RC4 changed the Logger shell and channel browser; reversible collapse was not accepted. | The same discoverable control expands and collapses the pane repeatedly at wide and narrow sizes without losing selections. | IMPLEMENTED; RETEST |
-| 3 | Loading a Logger definition needs a visible button, not only a menu command. | The local repair adds a visible Logger Definition control to the live workspace while retaining the menu route. | A visible Logger-definition action is available in normal flow and remains available through an appropriate menu/settings path. | IMPLEMENTED; RETEST |
-| 4 | Logger definition files disappear in the Linux chooser, including definitions already loaded. | The local repair routes Compose through the established cross-platform chooser, applies an XML filter supported by KDE, and starts in the current definition's directory. | All appropriate XML files display in the selected folder before and after loading; cancellation and replacement are safe. | IMPLEMENTED; RETEST |
-| 5 | Log output directory needs a directory browser. | The local Logger Setup repair adds a Browse control backed by the cross-platform directory chooser while retaining the path field. | A folder-browser control works on Linux and Windows, shows the current directory, permits text editing only as a secondary path, and persists. | IMPLEMENTED; RETEST |
+| 3 | Loading a Logger definition needs a visible button, not only a menu command. | The local repair adds a visible Logger Definition control to the live workspace while retaining the menu route. | A visible Logger-definition action is available in normal flow and remains available through an appropriate menu/settings path. | LINUX PASS; WINDOWS RETEST |
+| 4 | Logger definition files disappear in the Linux chooser, including definitions already loaded. | The local repair routes Compose through the established cross-platform chooser, applies an XML filter supported by KDE, and starts in the current definition's directory. | All appropriate XML files display in the selected folder before and after loading; cancellation and replacement are safe. | LINUX PASS; WINDOWS RETEST |
+| 5 | Log output directory needs a directory browser. | The local Logger Setup repair adds a Browse control backed by the cross-platform directory chooser while retaining the path field. | A folder-browser control works on Linux and Windows, shows the current directory, permits text editing only as a secondary path, and persists. | LINUX PASS; WINDOWS RETEST |
 | 18 | Logger-definition selection works on Windows but not Linux. | The installed Linux upgrade could omit `config/user/definitions`; a local installer patch now preserves it and its regression test passes. Chooser behavior still needs separate retest. | Test clean install and upgrade install with a preserved definition, then select another XML through the Linux chooser and start Logger. | INSTALLER PATCH |
 | 19 | More than six Overview parameters overwrite tiles instead of reflowing or scrolling. | RC4 added responsive overview/dashboard layouts. | Add at least 12 parameters at wide, medium, and narrow widths; tiles never overlap or overwrite and scrolling appears when required. | IMPLEMENTED; RETEST |
 | 20 | Modernized Dyno is missing. | The specialized Dyno remains in the compatibility shell; migration scope is explicitly undecided. | Decide and implement the desktop Dyno workflow before removing compatibility mode; qualify it with recorded/simulated data before connected claims. | OPEN |
@@ -103,6 +105,9 @@ archive checksum recorded in the qualification record.
   Linux filename filtering. Logger Setup has a directory browser, and the live
   Logger workspace has a visible Logger Definition control. Compose tests pass;
   Linux and Windows packaged visual retests remain required.
+- User visual result, Linux candidate commit `6330e210`, archive SHA-256
+  `1caca616ab879ddf335b44bba34ae21f5e170b9fd810e6e52654c3d97033c3a4`:
+  findings 3, 4, and 5 looked correct and functioned. Windows remains open.
 
 This evidence qualifies only the non-visual baseline. Matrix rows remain
 `NOT RUN` until their complete acceptance tests are performed.
