@@ -12,7 +12,7 @@ import com.romraider.logger.api.LiveDataSample;
 
 class FxDynoPaneTest {
     @Test
-    void acceleratingRunProducesFinitePowerAndTorqueCurve() {
+    void acceleratingRunProducesFiniteEstimatedPowerAndTorqueCurve() {
         List<LiveDataSample> rpm = List.of(
                 sample("rpm", 2500, 0), sample("rpm", 3000, 1000),
                 sample("rpm", 3500, 2000), sample("rpm", 4000, 3000));

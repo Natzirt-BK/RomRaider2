@@ -7,6 +7,7 @@ import java.util.Locale;
 import java.util.regex.Pattern;
 
 import com.romraider.editor.calibration.CalibrationAdjustment;
+import com.romraider.editor.calibration.CalibrationCellEdit;
 import com.romraider.editor.calibration.CalibrationCellSnapshot;
 import com.romraider.editor.calibration.CalibrationEditController;
 import com.romraider.editor.calibration.CalibrationGridSnapshot;
@@ -24,6 +25,7 @@ import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
+import javafx.scene.control.SelectionMode;
 import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
 import javafx.scene.control.TableCell;
@@ -32,6 +34,8 @@ import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
 import javafx.scene.control.ToggleButton;
 import javafx.scene.input.KeyCode;
+import javafx.scene.input.Clipboard;
+import javafx.scene.input.ClipboardContent;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
@@ -111,10 +115,12 @@ final class FxCalibrationPane extends BorderPane implements AutoCloseable {
         return content;
     }
 
+    @SuppressWarnings("rawtypes")
     private TableView<RowValues> createGrid() {
         TableView<RowValues> view = new TableView<>();
         view.setColumnResizePolicy(TableView.UNCONSTRAINED_RESIZE_POLICY);
         view.getSelectionModel().setCellSelectionEnabled(true);
+        view.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
         if (snapshot.getRows() > 1) {
             TableColumn<RowValues, String> axis = new TableColumn<>(
                     snapshot.getRowAxisName().isBlank() ? "Y axis"
@@ -138,13 +144,81 @@ final class FxCalibrationPane extends BorderPane implements AutoCloseable {
             view.getColumns().add(valueColumn);
         }
         view.setItems(FXCollections.observableArrayList(rows(snapshot)));
+        view.getSelectionModel().getSelectedCells().addListener(
+                (javafx.collections.ListChangeListener<
+                        javafx.scene.control.TablePosition>) change -> {
+                    int last = view.getSelectionModel().getSelectedCells().size() - 1;
+                    javafx.scene.control.TablePosition position = last < 0
+                            ? null : view.getSelectionModel().getSelectedCells().get(last);
+                    if (position == null) return;
+                    int valueColumn = position.getColumn()
+                            - (snapshot.getRows() > 1 ? 1 : 0);
+                    if (position.getRow() >= 0 && valueColumn >= 0
+                            && valueColumn < snapshot.getColumns()) {
+                        selectedRow = position.getRow();
+                        selectedColumn = valueColumn;
+                        rebuildInspector();
+                    }
+                });
         view.setOnKeyPressed(event -> {
+            if (event.isShortcutDown() && event.getCode() == KeyCode.C) {
+                copySelection();
+                event.consume();
+                return;
+            }
+            if (event.isShortcutDown() && event.getCode() == KeyCode.V) {
+                pasteSelection();
+                event.consume();
+                return;
+            }
+            if (event.isShortcutDown() && event.getCode() == KeyCode.A) {
+                view.getSelectionModel().selectAll();
+                event.consume();
+                return;
+            }
             if (event.getCode() == KeyCode.ENTER) {
                 inspector.requestFocus();
                 event.consume();
             }
         });
         return view;
+    }
+
+    @SuppressWarnings("rawtypes")
+    private void copySelection() {
+        List<int[]> selected = new ArrayList<>();
+        int axisOffset = snapshot.getRows() > 1 ? 1 : 0;
+        for (Object value : grid.getSelectionModel().getSelectedCells()) {
+            javafx.scene.control.TablePosition position =
+                    (javafx.scene.control.TablePosition) value;
+            int column = position.getColumn() - axisOffset;
+            if (position.getRow() >= 0 && column >= 0
+                    && column < snapshot.getColumns()) {
+                selected.add(new int[] {position.getRow(), column});
+            }
+        }
+        if (selected.isEmpty()) selected.add(new int[] {
+                selectedRow, selectedColumn});
+        String values = FxCalibrationClipboard.serialize(snapshot, selected);
+        ClipboardContent content = new ClipboardContent();
+        content.putString(values);
+        Clipboard.getSystemClipboard().setContent(content);
+        status.setText(selected.size() == 1 ? "Cell value copied"
+                : selected.size() + " values copied as a block");
+    }
+
+    private void pasteSelection() {
+        String values = Clipboard.getSystemClipboard().getString();
+        try {
+            List<CalibrationCellEdit> edits = FxCalibrationClipboard.parse(
+                    snapshot, selectedRow, selectedColumn, values);
+            runEdit(() -> controller.setCellValues(edits).getSnapshot(),
+                    edits.size() == 1 ? "Value pasted as one change"
+                            : edits.size() + " values pasted as one change");
+        } catch (Exception failure) {
+            status.setText(FxDialogs.rootMessage(failure));
+            status.getStyleClass().add("danger");
+        }
     }
 
     private TableCell<RowValues, String> valueCell(int column) {

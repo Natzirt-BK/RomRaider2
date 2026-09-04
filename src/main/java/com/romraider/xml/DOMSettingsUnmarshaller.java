@@ -501,7 +501,10 @@ public final class DOMSettingsUnmarshaller {
                                         LoggerDashboardTileSize.fromName(
                                                 unmarshallAttribute(tile,
                                                         "size", "STANDARD")),
-                                        unmarshallAttribute(tile, "order", 0)));
+                                        unmarshallAttribute(tile, "order", 0),
+                                        unmarshallAttribute(tile, "color", ""),
+                                        optionalDouble(tile, "custom-width"),
+                                        optionalDouble(tile, "custom-height")));
                     } catch (IllegalArgumentException invalid) {
                         // Ignore one corrupt tile without losing settings.
                     }

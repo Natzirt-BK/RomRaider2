@@ -40,8 +40,8 @@ final class FxDynoPane extends BorderPane {
     private final TextField area = new TextField("2.20");
     private final TextField rolling = new TextField("0.015");
     private final TextField loss = new TextField("0");
-    private final Label peakPower = metric("— PEAK WHP");
-    private final Label peakTorque = metric("— PEAK LB-FT");
+    private final Label peakPower = metric("— PEAK EST. HP");
+    private final Label peakTorque = metric("— PEAK EST. LB-FT");
     private final Label runStatus = new Label(
             "Select engine speed and vehicle speed channels.");
     private final LineChart<Number, Number> chart;
@@ -52,11 +52,11 @@ final class FxDynoPane extends BorderPane {
         NumberAxis x = new NumberAxis();
         x.setLabel("Engine speed (RPM)");
         NumberAxis y = new NumberAxis();
-        y.setLabel("Wheel output");
+        y.setLabel("Estimated engine output");
         chart = new LineChart<>(x, y);
         chart.setAnimated(false);
         chart.setCreateSymbols(false);
-        chart.setTitle("Road Dyno · wheel power and torque");
+        chart.setTitle("Road Dyno · estimated engine power and torque");
         setTop(header());
         setLeft(setup());
         setCenter(chart);
@@ -155,9 +155,9 @@ final class FxDynoPane extends BorderPane {
             }
             points.sort(Comparator.comparingDouble(DynoPoint::rpm));
             XYChart.Series<Number, Number> power = new XYChart.Series<>();
-            power.setName("Wheel horsepower");
+            power.setName("Estimated engine horsepower");
             XYChart.Series<Number, Number> torque = new XYChart.Series<>();
-            torque.setName("Wheel torque (lb-ft)");
+            torque.setName("Estimated engine torque (lb-ft)");
             double maxPower = 0;
             double maxTorque = 0;
             double powerRpm = 0;
@@ -175,7 +175,7 @@ final class FxDynoPane extends BorderPane {
                 }
             }
             chart.getData().setAll(power, torque);
-            peakPower.setText(String.format(Locale.ROOT, "%.1f WHP @ %.0f",
+            peakPower.setText(String.format(Locale.ROOT, "%.1f HP @ %.0f",
                     maxPower, powerRpm));
             peakTorque.setText(String.format(Locale.ROOT, "%.1f LB-FT @ %.0f",
                     maxTorque, torqueRpm));

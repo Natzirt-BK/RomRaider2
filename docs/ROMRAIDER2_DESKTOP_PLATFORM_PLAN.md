@@ -1,6 +1,6 @@
 # RomRaider2 Desktop and Mobile Platform Plan
 
-Status: proposed execution plan
+Status: JavaFX selected; implementation and platform qualification in progress
 Origin: AUG2 audit review, 2026-09-02
 
 The item-by-item release gate is recorded in
@@ -9,7 +9,9 @@ visual fixtures, defines desktop acceptance.
 
 ## Objective
 
-Stabilize the desktop ECU editor/logger, prevent desktop and mobile UI concerns from bleeding together, and determine whether JavaFX should replace Compose Desktop for Windows, Linux, and macOS.
+Stabilize the desktop ECU editor/logger, prevent desktop and mobile UI concerns
+from bleeding together, and replace Compose Desktop with JavaFX for Windows
+and Linux. macOS remains a separate, unqualified follow-up.
 
 The goal is not to rewrite the domain layer. ECU protocols, ROM/table models, logging, analysis, persistence, recovery, and shared services should remain UI-neutral and reusable.
 
@@ -17,9 +19,10 @@ The goal is not to rewrite the domain layer. ECU protocols, ROM/table models, lo
 
 ```text
 shared-core and platform-neutral services
-        |-- JavaFX desktop UI: Windows, Linux, macOS
+        |-- JavaFX desktop UI: Windows and Linux
         |-- Compose Android UI
-        `-- SteamOS: an explicit desktop or handheld profile
+        |-- SteamOS: an explicit desktop or handheld profile
+        `-- macOS: separate toolkit decision and qualification
 
 Swing remains only as a temporary compatibility implementation.
 ```
@@ -39,8 +42,8 @@ during an upgrade. A clean install of the exact refreshed public RC4 Linux ZIP
 passed its archive and internal checksum checks. A forced upgrade preserved the
 seeded settings, Logger XML/DTD, ECU definition, logs, ROM content, and
 repository content byte-for-byte and created a recoverable backup. The Editor
-and Logger reached the Compose shell under Xvfb. These changes remain
-uncommitted and unpublished, and the visual workflow audit remains open.
+and Logger reached the Compose shell under Xvfb. The resulting baseline commits
+remain unpublished, and the rebuilt JavaFX visual workflow audit remains open.
 
 The smoke test also found and fixed a production-runtime isolation defect: an
 unconfigured Compose Logger previously read the legacy
@@ -67,7 +70,7 @@ Keep legacy Swing workflows available while their replacements are built. Do not
 
 Exit condition: the desktop audit has explicit pass/fail criteria for every workflow, and no feature is considered migrated merely because a Compose screen exists.
 
-## Phase 2: Time-boxed JavaFX desktop spike
+## Phase 2: JavaFX desktop spike — complete
 
 Build a separate JavaFX desktop module over the existing neutral services. Implement only representative hard cases:
 
@@ -79,11 +82,13 @@ Build a separate JavaFX desktop module over the existing neutral services. Imple
 
 Compare JavaFX with the repaired Compose shell using the same Windows, Linux, and macOS checks. Measure native dialog behavior, HiDPI rendering, accessibility, packaging, startup/recovery, testability, and development complexity.
 
-Decision gate: adopt JavaFX for desktop only if it materially improves desktop reliability and maintainability. Otherwise, continue with Compose Desktop and apply the same module and audit boundaries.
+Decision: JavaFX was selected for the Windows and Linux desktop application.
+The spike demonstrated native file/directory choosers, Editor and Logger
+windows, ROM/calibration tabs, direct table and DTC editing, independent 3D
+pitch/yaw, settings, recovery, responsive Logger views, dashboard gauges,
+Dyno, and offline Log Analysis over the existing neutral services.
 
-## Phase 3: Platform-specific implementation and qualification
-
-If JavaFX wins the spike:
+## Phase 3: Platform-specific implementation and qualification — active
 
 1. Make JavaFX the desktop entry point while retaining Swing as a compatibility mode.
 2. Migrate Editor and Logger by workflow, with parity gates rather than screen-by-screen migration.
@@ -101,14 +106,16 @@ Each platform must pass its own audit before release. A successful Android build
 - Re-run the full platform audit after changes to shared services, persistence, protocols, or packaging.
 - Treat macOS as unqualified until both x64 and ARM64 bundles have been run through the same checks as Windows and Linux.
 
-## Resume checkpoint
+## Current checkpoint
 
-When continuing this work, start with Phase 0:
+JavaFX is the default provider selected by `ECUExec`. The Linux and Windows
+Java 21 packagers stage platform-specific OpenJFX 21.0.10 modules and no longer
+stage Compose/Skia. The Linux app image builds and launches from its packaged
+entry point. A Windows `jpackage` app image has also been produced with the
+Windows JDK under Wine and crossed into the JavaFX provider with Windows
+OpenJFX binaries. These are engineering gates, not user visual approval.
 
-1. inspect and fix the installer definition migration;
-2. reproduce the remaining AUG2 audit failures on a clean and upgraded
-   installation;
-3. record the results in the existing platform audit checklist;
-4. then begin the JavaFX spike without changing the production desktop entry point.
-
-This document is a plan, not an indication that the JavaFX migration has already been started.
+Continue with exact-candidate Linux acceptance, native Windows acceptance,
+high-DPI/keyboard/accessibility checks, clean/upgrade installer checks, and an
+item-by-item AUG2 audit. Keep Swing and Compose available only as explicit
+compatibility selections until those gates pass.

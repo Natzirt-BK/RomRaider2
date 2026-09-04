@@ -1,6 +1,6 @@
 # RomRaider2 implementation status
 
-Last updated: 2026-09-02
+Last updated: 2026-09-04
 
 ## Working now
 
@@ -15,9 +15,21 @@ Last updated: 2026-09-02
   MAF, Injector, Dyno, and Analysis workspaces.
 - Saved desktop dashboard arrangements with Standard, Wide, and Large tiles
   that can present a Gauge, large Value, live Trend, or configured Alarm.
-- First Compose Desktop Logger workspace using the real session, recording,
-  channel-selection, and received-sample services. It includes responsive
-  Overview, Data, Graph, and Dashboard views with light and dark themes.
+- JavaFX is the default Windows and Linux desktop shell. Compose and Swing are
+  retained only as explicit compatibility selections during qualification.
+- The JavaFX Editor owns native definition/ROM selection, ROM and calibration
+  tabs, direct scaled edits, dedicated DTC switches, undo/redo, an independently
+  rotatable 3D surface, recovery, user levels, settings, comparison, and save/
+  save-as workflows.
+- The JavaFX Logger owns definition and output-directory browsing, reversible
+  channel navigation, responsive Overview/Data/Graph/Dashboard views, per-gauge
+  Analog/Digital/Trend/Alarm roles, Standard/Large/Custom sizing, colors, and
+  detachable gauges. Role, size, color, and exact custom dimensions persist.
+- JavaFX Log Analysis includes an in-context Open Log action, linked table and
+  playback cursor, variable-speed playback, time-series and X/Y charts,
+  descriptive statistics, and persistent marker sidecars.
+- The JavaFX Road Dyno calculates estimated engine power and torque from live
+  RPM/speed history plus vehicle, rolling-resistance, and aerodynamic inputs.
 - First editable Compose calibration checkpoint using the active ROM table.
   The opt-in grid renders real values, axes, heatmaps, change state, selection
   details, and narrow scrolling. One-cell edits use the same scaling, range
@@ -26,10 +38,8 @@ Last updated: 2026-09-02
   Shift+click selects a rectangular value range; copied ranges use tab/newline
   spreadsheet format, and pasted value blocks are validated before being
   grouped into one undo step. Ctrl+A selects the full calibration surface.
-- Compose Desktop now owns normal Editor and Logger startup. The Logger has its
-  own UI-neutral ECU runtime rather than a hidden Swing `EcuLogger`, and the
-  application no longer falls back to Swing when Compose is unavailable. The
-  old shell is available only through an explicit compatibility property.
+- The Logger continues to use its UI-neutral ECU runtime rather than a hidden
+  Swing `EcuLogger`; the JavaFX UI does not own protocol or session logic.
 - The Compose Logger can configure its definition, protocol, transport,
   module, serial port, output directory, auto-connect preference, and external
   sensor ports. Captured CSV files can be opened into a Compose-owned offline
@@ -60,8 +70,8 @@ Last updated: 2026-09-02
 - Offline live-tuning plans with identity and capability preflight, bounded
   staged changes, stale-value checks, mock readback verification, and a new
   read-only Editor preview of selected or all changed tables.
-- Light, dark, system, and high-contrast themes plus scalable desktop and touch
-  layouts.
+- Light and dark JavaFX desktop themes. High Contrast is intentionally removed
+  from the new desktop UI in response to the active audit.
 - Shared modern table spacing and alternating row treatment across Logger
   channels, live values, offline analysis, Editor live data, change history,
   ROM comparison, live-tune preview, and ROM-modification details. Specialized
@@ -138,16 +148,18 @@ verification, recovery, and connected test plans are complete.
 
 ## Next work
 
-1. Add essential settings parity to the Compose Editor and decide which
-   specialized MAF, Injector, and Dyno tools must move before deleting the
-   compatibility shell from release builds.
-2. Continue keyboard and screen-reader accessibility work across the Compose
+1. Run the exact JavaFX Linux candidate through the complete AUG2 workflow and
+   visual audit, then rebuild after every failed gate.
+2. Run the Windows JavaFX package natively at normal and high DPI, including
+   definitions, ROM editing, Logger hardware setup, dashboard, Dyno, and Log
+   Analysis.
+3. Continue keyboard and screen-reader accessibility work across the JavaFX
    calibration and Logger workspaces.
-3. Rerun ECU definition table editing, Logger definition/profile import, and
+4. Rerun ECU definition table editing, Logger definition/profile import, and
    the offline logger preview on the Galaxy S25; keep the wired live logger for
    RC5 connected qualification.
-4. Resume OpenPort and external-sensor in-car qualification during RC5 work.
-5. Qualify the Mitsubishi Lancer Evolution MUT-II path on a vehicle before
+5. Resume OpenPort and external-sensor in-car qualification during RC5 work.
+6. Qualify the Mitsubishi Lancer Evolution MUT-II path on a vehicle before
    describing it as supported.
 
 macOS ARM64 and Intel work remains paused while the desktop and Android

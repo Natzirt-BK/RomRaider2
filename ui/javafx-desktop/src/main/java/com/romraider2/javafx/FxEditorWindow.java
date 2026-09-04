@@ -160,15 +160,16 @@ final class FxEditorWindow {
 
     private MenuBar menuBar() {
         Menu file = new Menu("File", null,
-                item("Open ROM…", event -> chooseRom()),
-                item("Save", event -> save(false)),
-                item("Save As…", event -> save(true)),
+                shortcutItem("Open ROM…", "Shortcut+O", event -> chooseRom()),
+                shortcutItem("Save", "Shortcut+S", event -> save(false)),
+                shortcutItem("Save As…", "Shortcut+Shift+S",
+                        event -> save(true)),
                 new SeparatorMenuItem(),
                 item("Close ROM", event -> closeActiveRom()),
                 item("Exit", event -> stage.close()));
         Menu edit = new Menu("Edit", null,
-                item("Undo", event -> history(false)),
-                item("Redo", event -> history(true)));
+                shortcutItem("Undo", "Shortcut+Z", event -> history(false)),
+                shortcutItem("Redo", "Shortcut+Y", event -> history(true)));
 
         Menu view = new Menu("View");
         CheckMenuItem showHigher = new CheckMenuItem(
@@ -275,6 +276,18 @@ final class FxEditorWindow {
                     && snapshot.getActiveRom() != null) {
                 controller.openTable(snapshot.getActiveRom(),
                         selected.getValue().table);
+            }
+        });
+        navigation.setOnKeyPressed(event -> {
+            if (event.getCode() != javafx.scene.input.KeyCode.ENTER
+                    || rebuilding) return;
+            TreeItem<NavigationItem> selected = navigation.getSelectionModel()
+                    .getSelectedItem();
+            if (selected != null && selected.getValue().table != null
+                    && snapshot.getActiveRom() != null) {
+                controller.openTable(snapshot.getActiveRom(),
+                        selected.getValue().table);
+                event.consume();
             }
         });
         search.setPromptText("Search maps, categories, or DTC codes");
@@ -542,10 +555,7 @@ final class FxEditorWindow {
     }
 
     private void settingsApplied() {
-        Scene scene = stage.getScene();
-        scene.getRoot().getStyleClass().removeAll("theme-light", "theme-dark");
-        scene.getRoot().getStyleClass().add(FxTheme.isDark()
-                ? "theme-dark" : "theme-light");
+        FxTheme.refresh(stage.getScene());
         rebuildNavigation();
         updateMetrics();
         setStatus("Editor settings applied", 100);
@@ -695,6 +705,14 @@ final class FxEditorWindow {
             javafx.event.EventHandler<javafx.event.ActionEvent> action) {
         MenuItem item = new MenuItem(text);
         item.setOnAction(action);
+        return item;
+    }
+
+    private static MenuItem shortcutItem(String text, String accelerator,
+            javafx.event.EventHandler<javafx.event.ActionEvent> action) {
+        MenuItem item = item(text, action);
+        item.setAccelerator(javafx.scene.input.KeyCombination
+                .keyCombination(accelerator));
         return item;
     }
 

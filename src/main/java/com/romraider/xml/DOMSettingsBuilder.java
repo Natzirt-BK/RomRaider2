@@ -487,6 +487,11 @@ public final class DOMSettingsBuilder {
             channel.setAttribute("role", tile.getRole().name());
             channel.setAttribute("size", tile.getSize().name());
             channel.setAttribute("order", String.valueOf(tile.getOrder()));
+            if (!tile.getAccentColor().isEmpty()) {
+                channel.setAttribute("color", tile.getAccentColor());
+            }
+            setOptional(channel, "custom-width", tile.getCustomWidth());
+            setOptional(channel, "custom-height", tile.getCustomHeight());
             dashboardLayout.appendChild(channel);
         }
         loggerSettings.appendChild(dashboardLayout);

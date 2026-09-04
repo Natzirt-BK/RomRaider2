@@ -24,7 +24,7 @@ final class FxTheme {
         URL stylesheet = FxTheme.class.getResource("/romraider2-javafx.css");
         if (stylesheet != null) scene.getStylesheets().add(
                 stylesheet.toExternalForm());
-        scene.getRoot().getStyleClass().add(isDark() ? "theme-dark" : "theme-light");
+        refresh(scene);
         try (InputStream stream = FxTheme.class.getResourceAsStream(ICON)) {
             if (stream != null) stage.getIcons().add(new Image(stream));
         } catch (Exception ignored) {
@@ -36,6 +36,12 @@ final class FxTheme {
         if (stylesheet != null) pane.getStylesheets().add(
                 stylesheet.toExternalForm());
         pane.getStyleClass().add(isDark() ? "theme-dark" : "theme-light");
+    }
+
+    static void refresh(Scene scene) {
+        scene.getRoot().getStyleClass().removeAll("theme-light", "theme-dark");
+        scene.getRoot().getStyleClass().add(isDark()
+                ? "theme-dark" : "theme-light");
     }
 
     static Image logo() {

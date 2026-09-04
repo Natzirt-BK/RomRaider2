@@ -21,22 +21,27 @@ same candidate.
 ## Desktop checks
 
 - Package verification script: `PASS`, `FAIL`, or `NOT RUN`
+- JavaFX provider identified in startup log: `PASS`, `FAIL`, or `NOT RUN`
+- Matching OpenJFX platform modules present and Compose/Skia absent: `PASS`,
+  `FAIL`, or `NOT RUN`
 - Clean launch and shutdown: `PASS`, `FAIL`, or `NOT RUN`
 - Package-owned settings used from an unrelated working directory: `PASS`,
   `FAIL`, or `NOT RUN`
 - First-run definition prompt: `PASS`, `FAIL`, or `NOT RUN`
 - Editor load/edit/save/reopen: `PASS`, `FAIL`, or `NOT RUN`
-- New Grid direct edit, fine/coarse adjustment, restore, and Classic Grid
-  round trip: `PASS`, `FAIL`, or `NOT RUN`
-- New Grid arrow keys, Ctrl+C/Ctrl+V, Ctrl+Z/Ctrl+Y, and wide/narrow scrolling:
+- JavaFX calibration direct edit, fine/coarse adjustment, restore, DTC switch,
+  and 3D pitch/yaw: `PASS`, `FAIL`, or `NOT RUN`
+- Calibration arrow keys, Ctrl+C/Ctrl+V, Ctrl+Z/Ctrl+Y, and wide/narrow scrolling:
   `PASS`, `FAIL`, or `NOT RUN`
-- New Grid Shift+arrow/Shift+click range selection, Ctrl+A, block copy/paste,
+- Calibration Shift+arrow/Shift+click range selection, Ctrl+A, block copy/paste,
   rejected oversized block, and one-step block undo: `PASS`, `FAIL`, or
   `NOT RUN`
 - DimeMod, CarBerry, and MerpMod definition-evidence view: `PASS`, `FAIL`, or
   `NOT RUN`
-- Logger Overview/Data/Graph/Dashboard/Analysis: `PASS`, `FAIL`, or `NOT RUN`
+- Logger Overview/Data/Graph/Dashboard/Dyno/Log Analysis: `PASS`, `FAIL`, or
+  `NOT RUN`
 - Logger Light/Dark and normal/narrow layouts: `PASS`, `FAIL`, or `NOT RUN`
+- High Contrast is absent: `PASS`, `FAIL`, or `NOT RUN`
 - Recording controls and offline log analysis: `PASS`, `FAIL`, or `NOT RUN`
 - RC4 version shown in startup log and About screens: `PASS`, `FAIL`, or
   `NOT RUN`

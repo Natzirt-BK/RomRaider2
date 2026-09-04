@@ -10,6 +10,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
+import com.romraider.Settings;
 import com.romraider.Version;
 import com.romraider.logger.analysis.LogChannel;
 import com.romraider.logger.analysis.LogDataset;
@@ -26,6 +27,9 @@ import com.romraider.logger.api.LoggerSessionState;
 import com.romraider.logger.api.LoggerWorkspaceView;
 import com.romraider.logger.ecu.ui.spi.LoggerWorkspaceContext;
 import com.romraider.logger.runtime.LoggerDesktopRuntime;
+import com.romraider.ui.ApplicationThemeService;
+import com.romraider.ui.ThemeMode;
+import com.romraider.util.SettingsManager;
 
 import javafx.application.Platform;
 import javafx.beans.property.ReadOnlyStringWrapper;
@@ -45,6 +49,7 @@ import javafx.scene.control.Label;
 import javafx.scene.control.Menu;
 import javafx.scene.control.MenuBar;
 import javafx.scene.control.MenuItem;
+import javafx.scene.control.RadioMenuItem;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.SeparatorMenuItem;
 import javafx.scene.control.SplitPane;
@@ -185,10 +190,34 @@ final class FxLoggerWindow {
                         event -> context.getSession().startRecording()),
                 item("Stop recording",
                         event -> context.getSession().stopRecording()));
+        ToggleGroup theme = new ToggleGroup();
+        RadioMenuItem light = themeItem("Light", ThemeMode.LIGHT, theme);
+        RadioMenuItem dark = themeItem("Dark", ThemeMode.DARK, theme);
+        ThemeMode active = SettingsManager.getSettings().getThemeMode();
+        (active == ThemeMode.LIGHT ? light : dark).setSelected(true);
         Menu view = new Menu("View", null,
                 item("Toggle channels", event ->
-                        setChannelsVisible(!channels.isSelected())));
+                        setChannelsVisible(!channels.isSelected())),
+                new SeparatorMenuItem(), light, dark);
         return new MenuBar(file, logger, view);
+    }
+
+    private RadioMenuItem themeItem(String name, ThemeMode mode,
+            ToggleGroup group) {
+        RadioMenuItem item = new RadioMenuItem(name);
+        item.setToggleGroup(group);
+        item.setOnAction(event -> applyTheme(mode));
+        return item;
+    }
+
+    private void applyTheme(ThemeMode mode) {
+        Settings settings = SettingsManager.getSettings();
+        settings.setThemeMode(mode);
+        SettingsManager.save(settings);
+        ApplicationThemeService.getInstance().apply(mode);
+        FxTheme.refresh(stage.getScene());
+        refreshViews();
+        status.setText(mode + " theme applied");
     }
 
     private Node header() {
@@ -393,8 +422,8 @@ final class FxLoggerWindow {
     private Node dashboardCard(LiveDataSample sample, int order,
             boolean detached) {
         LoggerDashboardTile tile = tileFor(sample.getParameterId(), order);
-        Color accent = gaugeColors.getOrDefault(sample.getParameterId(),
-                Color.web("#0d948c"));
+        Color accent = gaugeColors.computeIfAbsent(sample.getParameterId(),
+                ignored -> savedGaugeColor(tile));
         Label name = styled(sample.getName(), "section-kicker");
         Label units = styled(sample.getUnits(), "muted");
         Node body = switch (tile.getRole()) {
@@ -430,6 +459,10 @@ final class FxLoggerWindow {
         double height = tile.getSize() == LoggerDashboardTileSize.LARGE
                 ? 270 : 225;
         double[] custom = customGaugeSizes.get(sample.getParameterId());
+        if (custom == null && tile.hasCustomSize()) {
+            custom = new double[] {tile.getCustomWidth(), tile.getCustomHeight()};
+            customGaugeSizes.put(sample.getParameterId(), custom);
+        }
         if (tile.getSize() == LoggerDashboardTileSize.WIDE && custom != null) {
             width = custom[0];
             height = custom[1];
@@ -452,6 +485,16 @@ final class FxLoggerWindow {
             card.setPrefSize(nextWidth, nextHeight);
             customGaugeSizes.put(sample.getParameterId(),
                     new double[] {nextWidth, nextHeight});
+            event.consume();
+        });
+        resize.setOnMouseReleased(event -> {
+            double[] saved = customGaugeSizes.get(sample.getParameterId());
+            if (saved != null) {
+                context.getPreferences().setDashboardTile(
+                        sample.getParameterId(), tileFor(
+                                sample.getParameterId(), order)
+                                .withCustomSize(saved[0], saved[1]));
+            }
             event.consume();
         });
         card.setOnMouseClicked(event -> {
@@ -582,17 +625,22 @@ final class FxLoggerWindow {
         if (selectedDashboardParameter == null) return;
         int order = selectedOrder();
         LoggerDashboardTile current = tileFor(selectedDashboardParameter, order);
+        LoggerDashboardTile updated = role == null
+                ? current : current.withRole(role);
+        if (size != null) updated = updated.withSize(size);
         context.getPreferences().setDashboardTile(selectedDashboardParameter,
-                new LoggerDashboardTile(role == null ? current.getRole() : role,
-                        size == null ? current.getSize() : size,
-                        current.getOrder()));
+                updated);
         refreshViews();
     }
 
     private int selectedOrder() {
+        return orderFor(selectedDashboardParameter);
+    }
+
+    private int orderFor(String parameterId) {
         for (int index = 0; index < channelSnapshot.size(); index++) {
             if (channelSnapshot.get(index).getParameterId()
-                    .equals(selectedDashboardParameter)) return index;
+                    .equals(parameterId)) return index;
         }
         return 0;
     }
@@ -637,8 +685,22 @@ final class FxLoggerWindow {
         if (dialog.showAndWait().orElse(javafx.scene.control.ButtonType.CANCEL)
                 == javafx.scene.control.ButtonType.OK) {
             gaugeColors.put(parameterId, picker.getValue());
+            context.getPreferences().setDashboardTile(parameterId,
+                    tileFor(parameterId, orderFor(parameterId)).withAccentColor(
+                            picker.getValue().toString()));
             refreshViews();
         }
+    }
+
+    private static Color savedGaugeColor(LoggerDashboardTile tile) {
+        if (!tile.getAccentColor().isEmpty()) {
+            try {
+                return Color.web(tile.getAccentColor());
+            } catch (IllegalArgumentException ignored) {
+                // Keep corrupt legacy customization from blocking the dashboard.
+            }
+        }
+        return Color.web("#0d948c");
     }
 
     private void detachGauge(LiveDataSample sample) {

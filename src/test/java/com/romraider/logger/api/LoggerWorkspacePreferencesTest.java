@@ -202,7 +202,8 @@ public class LoggerWorkspacePreferencesTest {
         Settings settings = load("<settings><logger>"
                 + "<dashboard-layout schema=\"1\">"
                 + "<tile id=\"P-RPM\" role=\"TREND\" size=\"WIDE\" "
-                + "order=\"2\"/>"
+                + "order=\"2\" color=\"#17a2b8\" custom-width=\"460\" "
+                + "custom-height=\"280\"/>"
                 + "<tile id=\"BAD\" role=\"GAUGE\" size=\"STANDARD\" "
                 + "order=\"-1\"/>"
                 + "</dashboard-layout></logger></settings>");
@@ -212,6 +213,13 @@ public class LoggerWorkspacePreferencesTest {
         assertEquals(LoggerDashboardTileRole.TREND, rpm.getRole());
         assertEquals(LoggerDashboardTileSize.WIDE, rpm.getSize());
         assertEquals(2, rpm.getOrder());
+        assertEquals("#17a2b8", rpm.getAccentColor());
+        assertEquals(Double.valueOf(460), rpm.getCustomWidth());
+        assertEquals(Double.valueOf(280), rpm.getCustomHeight());
+        LoggerDashboardTile resized = rpm.withRole(
+                LoggerDashboardTileRole.ALARM);
+        assertEquals("#17a2b8", resized.getAccentColor());
+        assertEquals(Double.valueOf(460), resized.getCustomWidth());
         assertFalse(settings.getLoggerDashboardTiles().containsKey("BAD"));
     }
 
