@@ -329,10 +329,14 @@ final class FxEditorWindow {
         Label detail = new Label(snapshot.getActiveRom() == null
                 ? "Open a ROM to inspect maps, compare revisions, manage "
                     + "changes, and prepare a calibrated image."
-                : snapshot.getActiveRom().getFileName());
+                : compactName(snapshot.getActiveRom().getFileName(), 72));
         detail.getStyleClass().add("muted");
         detail.setWrapText(true);
         detail.setMaxWidth(680);
+        if (snapshot.getActiveRom() != null) {
+            detail.setTooltip(new Tooltip(
+                    snapshot.getActiveRom().getFileName()));
+        }
         Button open = new Button(snapshot.getActiveRom() == null
                 ? "Open ROM" : "Open another ROM");
         open.setDefaultButton(true);
