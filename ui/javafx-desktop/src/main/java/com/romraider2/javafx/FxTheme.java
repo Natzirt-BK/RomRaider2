@@ -11,6 +11,8 @@ import javafx.scene.Scene;
 import javafx.scene.control.DialogPane;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
+import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.StackPane;
 import javafx.stage.Stage;
 
@@ -31,6 +33,15 @@ final class FxTheme {
             if (stream != null) stage.getIcons().add(new Image(stream));
         } catch (Exception ignored) {
         }
+    }
+
+    static void closeOnEscape(Stage stage, Scene scene) {
+        scene.addEventFilter(KeyEvent.KEY_PRESSED, event -> {
+            if (event.getCode() == KeyCode.ESCAPE) {
+                stage.close();
+                event.consume();
+            }
+        });
     }
 
     static void applyDialog(DialogPane pane) {

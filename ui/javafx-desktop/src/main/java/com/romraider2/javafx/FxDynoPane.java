@@ -20,7 +20,9 @@ import javafx.scene.chart.XYChart;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
+import javafx.scene.control.ListCell;
 import javafx.scene.control.TextField;
+import javafx.scene.control.Tooltip;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
@@ -49,6 +51,8 @@ final class FxDynoPane extends BorderPane {
 
     FxDynoPane(LoggerWorkspaceContext context) {
         this.context = context;
+        configureChannelChoice(rpm);
+        configureChannelChoice(speed);
         NumberAxis x = new NumberAxis();
         x.setLabel("Engine speed (RPM)");
         NumberAxis y = new NumberAxis();
@@ -105,10 +109,34 @@ final class FxDynoPane extends BorderPane {
         runStatus.setWrapText(true);
         runStatus.getStyleClass().add("muted");
         VBox box = new VBox(12, form, calculate, runStatus);
-        box.setPrefWidth(335);
+        box.setPrefWidth(365);
+        box.setMinWidth(340);
         box.setPadding(new Insets(16));
         box.getStyleClass().add("nav-pane");
         return box;
+    }
+
+    private static void configureChannelChoice(ComboBox<LoggerChannel> choice) {
+        choice.setPrefWidth(190);
+        choice.setCellFactory(ignored -> channelCell());
+        choice.setButtonCell(channelCell());
+    }
+
+    private static ListCell<LoggerChannel> channelCell() {
+        return new ListCell<>() {
+            @Override protected void updateItem(LoggerChannel item,
+                    boolean empty) {
+                super.updateItem(item, empty);
+                String text = empty || item == null ? null : channelText(item);
+                setText(text);
+                setTooltip(text == null ? null : new Tooltip(text));
+            }
+        };
+    }
+
+    private static String channelText(LoggerChannel channel) {
+        return channel.getUnits().isBlank() ? channel.getName()
+                : channel.getName() + "  [" + channel.getUnits() + "]";
     }
 
     void refresh(List<LoggerChannel> channels) {

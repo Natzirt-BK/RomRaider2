@@ -116,6 +116,7 @@ final class FxLoggerSetup {
         BorderPane root = new BorderPane(form, introduction, null, actions, null);
         Scene scene = new Scene(root, 780, 430);
         FxTheme.apply(stage, scene);
+        FxTheme.closeOnEscape(stage, scene);
         stage.setScene(scene);
         stage.show();
     }

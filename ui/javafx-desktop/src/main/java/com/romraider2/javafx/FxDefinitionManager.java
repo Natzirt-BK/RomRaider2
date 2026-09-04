@@ -98,6 +98,7 @@ final class FxDefinitionManager {
         BorderPane root = new BorderPane(files, top, null, actions, null);
         Scene scene = new Scene(root, 820, 520);
         FxTheme.apply(stage, scene);
+        FxTheme.closeOnEscape(stage, scene);
         stage.setScene(scene);
         stage.showAndWait();
     }

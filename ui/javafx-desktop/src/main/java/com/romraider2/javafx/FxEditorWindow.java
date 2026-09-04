@@ -614,6 +614,7 @@ final class FxEditorWindow {
                 + right.getFileName());
         Scene scene = new Scene(content, 680, 620);
         FxTheme.apply(compare, scene);
+        FxTheme.closeOnEscape(compare, scene);
         compare.setScene(scene);
         compare.show();
     }

@@ -89,8 +89,9 @@ final class FxSettingsWindow {
         actions.setPadding(new Insets(10));
         javafx.scene.layout.BorderPane root = new javafx.scene.layout.BorderPane(
                 tabs, null, null, actions, null);
-        Scene scene = new Scene(root, 650, 430);
+        Scene scene = new Scene(root, 620, 320);
         FxTheme.apply(stage, scene);
+        FxTheme.closeOnEscape(stage, scene);
         stage.setScene(scene);
         stage.show();
     }

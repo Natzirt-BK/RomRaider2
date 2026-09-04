@@ -870,6 +870,13 @@ final class FxLoggerWindow {
         chooser.setTitle("Open CSV log");
         chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter(
                 "CSV logs", "*.csv"));
+        String outputPath = runtime.getSettings().getLoggerOutputDirPath();
+        if (outputPath != null) {
+            File outputDirectory = new File(outputPath);
+            if (outputDirectory.isDirectory()) {
+                chooser.setInitialDirectory(outputDirectory);
+            }
+        }
         File file = chooser.showOpenDialog(stage);
         if (file == null) return;
         activeLogFile = file;
