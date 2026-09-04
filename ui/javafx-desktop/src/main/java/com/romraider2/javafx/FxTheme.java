@@ -10,6 +10,8 @@ import com.romraider.util.SettingsManager;
 import javafx.scene.Scene;
 import javafx.scene.control.DialogPane;
 import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
+import javafx.scene.layout.StackPane;
 import javafx.stage.Stage;
 
 final class FxTheme {
@@ -50,6 +52,17 @@ final class FxTheme {
         } catch (Exception ignored) {
             return null;
         }
+    }
+
+    static StackPane brandLogo(double width) {
+        Image image = logo();
+        ImageView view = image == null ? new ImageView() : new ImageView(image);
+        view.setFitWidth(width);
+        view.setPreserveRatio(true);
+        view.setSmooth(true);
+        StackPane plate = new StackPane(view);
+        plate.getStyleClass().add("brand-logo");
+        return plate;
     }
 
     static boolean isDark() {

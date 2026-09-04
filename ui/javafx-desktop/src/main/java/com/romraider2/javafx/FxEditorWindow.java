@@ -46,12 +46,11 @@ import javafx.scene.control.SplitPane;
 import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
 import javafx.scene.control.TextField;
+import javafx.scene.control.Tooltip;
 import javafx.scene.control.ToggleGroup;
 import javafx.scene.control.TreeCell;
 import javafx.scene.control.TreeItem;
 import javafx.scene.control.TreeView;
-import javafx.scene.image.Image;
-import javafx.scene.image.ImageView;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
@@ -216,7 +215,7 @@ final class FxEditorWindow {
     private Node brandHeader() {
         Label studio = new Label("ECU CALIBRATION STUDIO · JAVAFX DESKTOP");
         studio.getStyleClass().add("studio-kicker");
-        VBox brand = new VBox(0, logo(174), studio);
+        VBox brand = new VBox(4, FxTheme.brandLogo(150), studio);
         Button open = new Button("Open ROM");
         open.setDefaultButton(true);
         open.setOnAction(event -> chooseRom());
@@ -231,9 +230,16 @@ final class FxEditorWindow {
         VBox context = new VBox(1,
                 styled("ACTIVE ROM", "studio-kicker"), activeRom,
                 styled("RomRaider2 " + Version.VERSION, "header-version"));
+        activeRom.getStyleClass().add("header-context-title");
         context.setAlignment(Pos.CENTER_RIGHT);
         context.setMaxWidth(320);
-        HBox header = new HBox(10, brand, separator(), open, save,
+        Node brandSeparator = separator();
+        brand.visibleProperty().bind(
+                root.widthProperty().greaterThanOrEqualTo(1050));
+        brand.managedProperty().bind(brand.visibleProperty());
+        brandSeparator.visibleProperty().bind(brand.visibleProperty());
+        brandSeparator.managedProperty().bind(brand.visibleProperty());
+        HBox header = new HBox(10, brand, brandSeparator, open, save,
                 definitions, fill, context);
         header.setAlignment(Pos.CENTER_LEFT);
         header.getStyleClass().add("brand-header");
@@ -263,6 +269,8 @@ final class FxEditorWindow {
                 super.updateItem(item, empty);
                 setText(empty || item == null ? null : item.label);
                 setGraphic(null);
+                setTooltip(empty || item == null ? null
+                        : new Tooltip(item.label));
                 setStyle(item != null && item.table != null
                         && item.table == snapshot.getActiveTable()
                         ? "-fx-font-weight: bold;" : "");
@@ -297,6 +305,7 @@ final class FxEditorWindow {
         VBox nav = new VBox(9, heading, search, navigation);
         VBox.setVgrow(navigation, Priority.ALWAYS);
         nav.setPadding(new Insets(12));
+        nav.setMinWidth(240);
         nav.setPrefWidth(310);
         nav.getStyleClass().add("nav-pane");
 
@@ -322,10 +331,13 @@ final class FxEditorWindow {
                     + "changes, and prepare a calibrated image."
                 : snapshot.getActiveRom().getFileName());
         detail.getStyleClass().add("muted");
-        Button open = new Button("Open ROM");
+        detail.setWrapText(true);
+        detail.setMaxWidth(680);
+        Button open = new Button(snapshot.getActiveRom() == null
+                ? "Open ROM" : "Open another ROM");
         open.setDefaultButton(true);
         open.setOnAction(event -> chooseRom());
-        VBox box = new VBox(14, logo(350), title, detail, open);
+        VBox box = new VBox(14, FxTheme.brandLogo(350), title, detail, open);
         box.setAlignment(Pos.CENTER);
         box.getStyleClass().add("workspace-empty");
         return new StackPane(box);
@@ -433,6 +445,8 @@ final class FxEditorWindow {
         stage.setTitle(editorTitle());
         activeRom.setText(next.getActiveRom() == null ? "No ROM open"
                 : next.getActiveRom().getFileName());
+        activeRom.setTooltip(next.getActiveRom() == null ? null
+                : new Tooltip(next.getActiveRom().getFileName()));
         rebuildRomTabs();
         rebuildCalibrationTabs();
         rebuildNavigation();
@@ -444,8 +458,9 @@ final class FxEditorWindow {
         try {
             romTabs.getTabs().clear();
             for (EditorDocument document : snapshot.getDocuments()) {
-                Tab tab = new Tab(document.getName()
+                Tab tab = new Tab(compactName(document.getName(), 58)
                         + (document.isDirty() ? "  •" : ""));
+                tab.setTooltip(new Tooltip(document.getName()));
                 tab.setUserData(document.getRom());
                 tab.setOnCloseRequest(event -> {
                     event.consume();
@@ -620,15 +635,23 @@ final class FxEditorWindow {
     private String editorTitle() {
         return Version.PRODUCT_NAME + " " + Version.VERSION
                 + " | JavaFX ECU Studio" + (snapshot.getActiveRom() == null
-                ? "" : " — " + snapshot.getActiveRom().getFileName());
+                ? "" : " — " + compactName(
+                        snapshot.getActiveRom().getFileName(), 64));
+    }
+
+    private static String compactName(String value, int limit) {
+        if (value == null || value.length() <= limit) return value;
+        int tail = Math.min(22, limit / 3);
+        return value.substring(0, limit - tail - 1) + "…"
+                + value.substring(value.length() - tail);
     }
 
     void show() {
         stage.show();
         stage.toFront();
         if (SettingsManager.getSettings().getEcuDefinitionFiles().isEmpty()) {
-            FxDefinitionManager.show(stage, () ->
-                    setStatus("ECU definitions configured", 100));
+            Platform.runLater(() -> FxDefinitionManager.show(stage, () ->
+                    setStatus("ECU definitions configured", 100)));
         }
         inspectRecovery();
     }
@@ -740,15 +763,6 @@ final class FxEditorWindow {
         region.setPrefHeight(42);
         region.setStyle("-fx-background-color: rgba(255,255,255,.16);");
         return region;
-    }
-
-    private static ImageView logo(double width) {
-        Image image = FxTheme.logo();
-        ImageView view = image == null ? new ImageView() : new ImageView(image);
-        view.setFitWidth(width);
-        view.setPreserveRatio(true);
-        view.setSmooth(true);
-        return view;
     }
 
     private static void expandParents(TreeItem<?> item) {

@@ -33,6 +33,7 @@ import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
 import javafx.scene.control.ToggleButton;
+import javafx.scene.control.Tooltip;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.Clipboard;
 import javafx.scene.input.ClipboardContent;
@@ -138,7 +139,11 @@ final class FxCalibrationPane extends BorderPane implements AutoCloseable {
             TableColumn<RowValues, String> valueColumn = new TableColumn<>(label);
             valueColumn.setCellValueFactory(value -> new ReadOnlyStringWrapper(
                     value.getValue().values.get(index)));
-            valueColumn.setPrefWidth(92);
+            Label header = new Label(label);
+            header.setTooltip(new Tooltip(label));
+            valueColumn.setText(null);
+            valueColumn.setGraphic(header);
+            valueColumn.setPrefWidth(124);
             valueColumn.setSortable(false);
             valueColumn.setCellFactory(ignored -> valueCell(index));
             view.getColumns().add(valueColumn);
@@ -223,6 +228,7 @@ final class FxCalibrationPane extends BorderPane implements AutoCloseable {
 
     private TableCell<RowValues, String> valueCell(int column) {
         return new TableCell<>() {
+            private final Tooltip fullValue = new Tooltip();
             {
                 getStyleClass().add("calibration-cell");
                 setOnMouseClicked(event -> {
@@ -237,6 +243,8 @@ final class FxCalibrationPane extends BorderPane implements AutoCloseable {
             @Override protected void updateItem(String item, boolean empty) {
                 super.updateItem(item, empty);
                 setText(empty ? null : item);
+                fullValue.setText(empty || item == null ? "" : item);
+                setTooltip(empty || item == null ? null : fullValue);
                 getStyleClass().remove("calibration-cell-changed");
                 if (!empty && getIndex() >= 0 && getIndex() < snapshot.getRows()
                         && snapshot.cellAt(getIndex(), column).isChanged()) {

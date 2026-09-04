@@ -72,6 +72,15 @@ final class FxLoggerSetup {
         GridPane.setHgrow(definition, Priority.ALWAYS);
         GridPane.setHgrow(output, Priority.ALWAYS);
 
+        Label heading = new Label("Logger connection and capture");
+        heading.getStyleClass().add("title");
+        Label detail = new Label("Choose a logger definition and output folder, "
+                + "then confirm the transport settings for this ECU session.");
+        detail.getStyleClass().add("muted");
+        javafx.scene.layout.VBox introduction = new javafx.scene.layout.VBox(
+                4, heading, detail);
+        introduction.getStyleClass().add("dialog-header");
+
         Region fill = new Region();
         HBox.setHgrow(fill, Priority.ALWAYS);
         Button cancel = new Button("Cancel");
@@ -104,8 +113,8 @@ final class FxLoggerSetup {
         });
         HBox actions = new HBox(8, fill, cancel, save);
         actions.setPadding(new Insets(10));
-        BorderPane root = new BorderPane(form, null, null, actions, null);
-        Scene scene = new Scene(root, 780, 500);
+        BorderPane root = new BorderPane(form, introduction, null, actions, null);
+        Scene scene = new Scene(root, 780, 430);
         FxTheme.apply(stage, scene);
         stage.setScene(scene);
         stage.show();

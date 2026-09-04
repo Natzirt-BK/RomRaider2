@@ -16,6 +16,7 @@ import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
+import javafx.scene.control.Tooltip;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
@@ -41,11 +42,16 @@ final class FxDefinitionManager {
                 super.updateItem(item, empty);
                 setText(empty || item == null ? null : item.getName()
                         + "\n" + item.getAbsolutePath());
+                setTooltip(empty || item == null ? null
+                        : new Tooltip(item.getAbsolutePath()));
             }
         });
+        Label empty = new Label("No ECU definitions configured yet.\n"
+                + "Add one or more XML definition files to begin.");
+        empty.getStyleClass().add("muted");
+        files.setPlaceholder(empty);
 
         Button add = new Button("Add definitions…");
-        add.setDefaultButton(true);
         add.setOnAction(event -> {
             List<File> selected = FxDialogs.chooseDefinitions(stage,
                     settings.getLastDefinitionDir());
@@ -88,7 +94,7 @@ final class FxDefinitionManager {
         detail.getStyleClass().add("muted");
         javafx.scene.layout.VBox top = new javafx.scene.layout.VBox(5,
                 heading, detail);
-        top.setPadding(new Insets(14));
+        top.getStyleClass().add("dialog-header");
         BorderPane root = new BorderPane(files, top, null, actions, null);
         Scene scene = new Scene(root, 820, 520);
         FxTheme.apply(stage, scene);

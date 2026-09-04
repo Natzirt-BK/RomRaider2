@@ -60,8 +60,7 @@ import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
 import javafx.scene.control.ToggleButton;
 import javafx.scene.control.ToggleGroup;
-import javafx.scene.image.Image;
-import javafx.scene.image.ImageView;
+import javafx.scene.control.Tooltip;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.HBox;
@@ -94,6 +93,7 @@ final class FxLoggerWindow {
     private final Label sessionState = new Label();
     private final Label status = new Label("Ready");
     private final Label statistics = new Label();
+    private final Label channelsMetric = styled("0 SELECTED", "metric");
     private final Button connect = new Button("Connect");
     private final Button disconnect = new Button("Disconnect");
     private final Button record = new Button("Start recording");
@@ -223,7 +223,7 @@ final class FxLoggerWindow {
     private Node header() {
         Label studio = new Label("REAL-TIME ECU LOGGER · JAVAFX DESKTOP");
         studio.getStyleClass().add("studio-kicker");
-        VBox brand = new VBox(0, logo(174), studio);
+        VBox brand = new VBox(4, FxTheme.brandLogo(150), studio);
         connect.setDefaultButton(true);
         connect.setOnAction(event -> context.getSession().connect());
         disconnect.setOnAction(event -> context.getSession().disconnect());
@@ -242,8 +242,15 @@ final class FxLoggerWindow {
         HBox.setHgrow(fill, Priority.ALWAYS);
         VBox connection = new VBox(1,
                 styled("CONNECTION STATE", "studio-kicker"), sessionState);
+        sessionState.getStyleClass().add("header-context-title");
         connection.setAlignment(Pos.CENTER_RIGHT);
-        HBox header = new HBox(9, brand, separator(), connect, disconnect,
+        Node brandSeparator = separator();
+        brand.visibleProperty().bind(
+                root.widthProperty().greaterThanOrEqualTo(1050));
+        brand.managedProperty().bind(brand.visibleProperty());
+        brandSeparator.visibleProperty().bind(brand.visibleProperty());
+        brandSeparator.managedProperty().bind(brand.visibleProperty());
+        HBox header = new HBox(9, brand, brandSeparator, connect, disconnect,
                 record, loadDefinition, setup, channels, fill, connection);
         header.setAlignment(Pos.CENTER_LEFT);
         header.getStyleClass().add("brand-header");
@@ -252,11 +259,13 @@ final class FxLoggerWindow {
 
     private Node viewBar() {
         Label title = styled("LOGGER WORKSPACE", "section-kicker");
-        Label channelsMetric = styled("LIVE CHANNELS", "metric");
         Region fill = new Region();
         HBox.setHgrow(fill, Priority.ALWAYS);
         Label hint = styled("Overview · Data · Graph · Dashboard · Dyno · Log Analysis",
                 "muted");
+        hint.visibleProperty().bind(
+                root.widthProperty().greaterThanOrEqualTo(1050));
+        hint.managedProperty().bind(hint.visibleProperty());
         HBox bar = new HBox(8, title, channelsMetric, fill, hint);
         bar.setAlignment(Pos.CENTER_LEFT);
         bar.getStyleClass().add("command-deck");
@@ -275,13 +284,16 @@ final class FxLoggerWindow {
                 channelScroll);
         channelRail.setSpacing(9);
         channelRail.setPadding(new Insets(12));
+        channelRail.setMinWidth(230);
         channelRail.setPrefWidth(320);
         channelRail.getStyleClass().add("nav-pane");
 
         overview.setPadding(new Insets(14));
+        overview.setAlignment(Pos.TOP_CENTER);
         ScrollPane overviewScroll = new ScrollPane(overview);
         overviewScroll.setFitToWidth(true);
         dashboard.setPadding(new Insets(14));
+        dashboard.setAlignment(Pos.TOP_CENTER);
         ScrollPane dashboardScroll = new ScrollPane(dashboard);
         dashboardScroll.setFitToWidth(true);
         configureDataTable();
@@ -309,15 +321,22 @@ final class FxLoggerWindow {
 
     private Node dashboardWorkspace(Node cards) {
         dashboardSelection.getStyleClass().add("muted");
-        HBox styles = new HBox(6, styled("SELECTED GAUGE", "section-kicker"),
-                dashboardSelection, separator(),
+        HBox selection = new HBox(6,
+                styled("SELECTED GAUGE", "section-kicker"),
+                dashboardSelection);
+        HBox roles = new HBox(6,
                 roleButton(LoggerDashboardTileRole.GAUGE),
                 roleButton(LoggerDashboardTileRole.VALUE),
                 roleButton(LoggerDashboardTileRole.TREND),
-                roleButton(LoggerDashboardTileRole.ALARM), separator(),
+                roleButton(LoggerDashboardTileRole.ALARM));
+        HBox sizes = new HBox(6,
                 sizeButton("Standard", LoggerDashboardTileSize.STANDARD),
                 sizeButton("Large", LoggerDashboardTileSize.LARGE),
                 sizeButton("Custom", LoggerDashboardTileSize.WIDE));
+        selection.setAlignment(Pos.CENTER_LEFT);
+        roles.setAlignment(Pos.CENTER_LEFT);
+        sizes.setAlignment(Pos.CENTER_LEFT);
+        FlowPane styles = new FlowPane(12, 6, selection, roles, sizes);
         styles.setAlignment(Pos.CENTER_LEFT);
         styles.setPadding(new Insets(8, 12, 8, 12));
         BorderPane pane = new BorderPane(cards);
@@ -368,6 +387,9 @@ final class FxLoggerWindow {
                 sample.getValue().getUnits()));
         units.setPrefWidth(150);
         data.getColumns().addAll(name, value, units);
+        data.setPlaceholder(styled(
+                "Select channels from the rail to populate live data.",
+                "muted"));
     }
 
     private void rebuildChannels() {
@@ -382,6 +404,9 @@ final class FxLoggerWindow {
                     : "  [" + channel.getUnits() + "]"));
             selected.setSelected(channel.isSelected());
             selected.setMaxWidth(Double.MAX_VALUE);
+            selected.setTooltip(new Tooltip(channel.getName()
+                    + (channel.getUnits().isBlank() ? ""
+                    : " [" + channel.getUnits() + "]")));
             selected.setOnAction(event -> context.getChannels().setSelected(
                     channel.getParameterId(), selected.isSelected()));
             channelList.getChildren().add(selected);
@@ -398,6 +423,7 @@ final class FxLoggerWindow {
 
     private void refreshViews() {
         List<LiveDataSample> selected = selectedSamples();
+        channelsMetric.setText(selected.size() + " SELECTED");
         if (selectedDashboardParameter != null && selected.stream().noneMatch(
                 sample -> sample.getParameterId().equals(
                         selectedDashboardParameter))) {
@@ -413,10 +439,27 @@ final class FxLoggerWindow {
             overview.getChildren().add(card);
             dashboard.getChildren().add(dashboardCard(sample, index++, false));
         }
+        if (selected.isEmpty()) {
+            overview.getChildren().add(emptyLoggerState(
+                    "No live channels selected",
+                    "Choose channels from the left rail to build the overview."));
+            dashboard.getChildren().add(emptyLoggerState(
+                    "No dashboard gauges yet",
+                    "Select channels first, then choose each gauge style and size."));
+        }
         updateDashboardControls();
         refreshDetachedGauges(selected);
         graph.setData(context.getLiveData().getRecentSamples(), selected);
         if (dyno != null) dyno.refresh(channelSnapshot);
+    }
+
+    private Node emptyLoggerState(String title, String detail) {
+        Label heading = styled(title, "subtitle");
+        Label message = styled(detail, "muted");
+        message.setWrapText(true);
+        VBox empty = new VBox(7, heading, message);
+        empty.getStyleClass().add("logger-empty");
+        return empty;
     }
 
     private Node dashboardCard(LiveDataSample sample, int order,
@@ -935,22 +978,15 @@ final class FxLoggerWindow {
         return region;
     }
 
-    private static ImageView logo(double width) {
-        Image image = FxTheme.logo();
-        ImageView view = image == null ? new ImageView() : new ImageView(image);
-        view.setFitWidth(width);
-        view.setPreserveRatio(true);
-        view.setSmooth(true);
-        return view;
-    }
-
     private static final class LiveGraph extends StackPane {
         private final Canvas canvas = new Canvas();
+        private final Label empty = styled(
+                "Select live channels to draw the graph.", "muted");
         private Map<String, List<LiveDataSample>> history = Map.of();
         private List<LiveDataSample> selected = List.of();
 
         LiveGraph() {
-            getChildren().add(canvas);
+            getChildren().addAll(canvas, empty);
             canvas.widthProperty().bind(widthProperty());
             canvas.heightProperty().bind(heightProperty());
             widthProperty().addListener((value, oldWidth, newWidth) -> draw());
@@ -961,6 +997,7 @@ final class FxLoggerWindow {
                 List<LiveDataSample> selected) {
             this.history = history;
             this.selected = selected;
+            empty.setVisible(selected.isEmpty());
             draw();
         }
 

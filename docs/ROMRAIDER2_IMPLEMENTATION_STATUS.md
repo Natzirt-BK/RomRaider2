@@ -72,6 +72,13 @@ Last updated: 2026-09-04
   read-only Editor preview of selected or all changed tables.
 - Light and dark JavaFX desktop themes. High Contrast is intentionally removed
   from the new desktop UI in response to the active audit.
+- The JavaFX polish pass now keeps branding and active-session context readable
+  in both themes, collapses decorative branding at narrow desktop widths,
+  preserves usable Editor and Logger navigation rails, wraps Dashboard controls
+  as groups, and gives empty workspaces and definition lists clear guidance.
+- Long ROM, calibration, channel, and definition names retain compact layouts
+  with full-name tooltips. The clean-install definition prompt is deferred until
+  the Editor has painted, avoiding an unrendered first-run window on Linux.
 - Shared modern table spacing and alternating row treatment across Logger
   channels, live values, offline analysis, Editor live data, change history,
   ROM comparison, live-tune preview, and ROM-modification details. Specialized

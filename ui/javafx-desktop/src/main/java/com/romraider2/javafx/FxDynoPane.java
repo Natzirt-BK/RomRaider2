@@ -287,7 +287,7 @@ final class FxDynoPane extends BorderPane {
 
     private static Label metric(String text) {
         Label label = new Label(text);
-        label.getStyleClass().add("metric");
+        label.getStyleClass().addAll("metric", "dyno-metric");
         return label;
     }
 
