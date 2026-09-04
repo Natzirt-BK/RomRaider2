@@ -27,8 +27,6 @@ import com.romraider.logger.api.LoggerWorkspaceView;
 import com.romraider.logger.ecu.ui.spi.LoggerWorkspaceContext;
 import com.romraider.logger.runtime.LoggerDesktopRuntime;
 
-import javafx.animation.KeyFrame;
-import javafx.animation.Timeline;
 import javafx.application.Platform;
 import javafx.beans.property.ReadOnlyStringWrapper;
 import javafx.collections.FXCollections;
@@ -49,7 +47,6 @@ import javafx.scene.control.MenuBar;
 import javafx.scene.control.MenuItem;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.SeparatorMenuItem;
-import javafx.scene.control.Slider;
 import javafx.scene.control.SplitPane;
 import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
@@ -70,7 +67,6 @@ import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
-import javafx.util.Duration;
 
 /** JavaFX Logger backed by the neutral LoggerDesktopRuntime. */
 final class FxLoggerWindow {
@@ -89,6 +85,7 @@ final class FxLoggerWindow {
     private final LiveGraph graph = new LiveGraph();
     private final FlowPane dashboard = new FlowPane(12, 12);
     private final BorderPane analysis = new BorderPane();
+    private FxDynoPane dyno;
     private final Label sessionState = new Label();
     private final Label status = new Label("Ready");
     private final Label statistics = new Label();
@@ -111,6 +108,8 @@ final class FxLoggerWindow {
     private final Consumer<LoggerMessageSnapshot> messageListener;
     private final LoggerLiveDataListener liveListener;
     private boolean disposed;
+    private File activeLogFile;
+    private FxLogAnalysisPane analysisPane;
 
     FxLoggerWindow(Runnable closed) {
         this.closed = closed;
@@ -298,19 +297,8 @@ final class FxLoggerWindow {
     }
 
     private Node dynoWorkspace() {
-        Label title = new Label("Road Dyno");
-        title.getStyleClass().add("title");
-        Label detail = new Label("Select engine speed and vehicle speed "
-                + "channels, then record a full-load run to calculate the curve.");
-        detail.getStyleClass().add("muted");
-        Canvas chart = new Canvas(760, 420);
-        GraphicsContext graphics = chart.getGraphicsContext2D();
-        graphics.setStroke(Color.web("#0d948c"));
-        graphics.strokeLine(50, 370, 730, 370);
-        graphics.strokeLine(50, 30, 50, 370);
-        VBox box = new VBox(10, title, detail, chart);
-        box.setPadding(new Insets(20));
-        return box;
+        dyno = new FxDynoPane(context);
+        return dyno;
     }
 
     private Node analysisWorkspace() {
@@ -399,6 +387,7 @@ final class FxLoggerWindow {
         updateDashboardControls();
         refreshDetachedGauges(selected);
         graph.setData(context.getLiveData().getRecentSamples(), selected);
+        if (dyno != null) dyno.refresh(channelSnapshot);
     }
 
     private Node dashboardCard(LiveDataSample sample, int order,
@@ -778,6 +767,7 @@ final class FxLoggerWindow {
                 "CSV logs", "*.csv"));
         File file = chooser.showOpenDialog(stage);
         if (file == null) return;
+        activeLogFile = file;
         status.setText("Opening " + file.getName() + "…");
         CompletableFuture.supplyAsync(() -> {
             try {
@@ -793,54 +783,9 @@ final class FxLoggerWindow {
     }
 
     private void showDataset(LogDataset dataset) {
-        TableView<Integer> table = new TableView<>();
-        List<Integer> rows = new ArrayList<>();
-        for (int row = 0; row < dataset.getRowCount(); row++) rows.add(row);
-        table.setItems(FXCollections.observableArrayList(rows));
-        for (int column = 0; column < dataset.getChannelCount(); column++) {
-            final int index = column;
-            LogChannel channel = dataset.getChannels().get(column);
-            TableColumn<Integer, String> value = new TableColumn<>(channel.getName());
-            value.setCellValueFactory(row -> new ReadOnlyStringWrapper(
-                    Double.toString(dataset.getValue(row.getValue(), index))));
-            value.setPrefWidth(130);
-            table.getColumns().add(value);
-        }
-        Slider playback = new Slider(0, dataset.getRowCount() - 1, 0);
-        playback.setMaxWidth(Double.MAX_VALUE);
-        HBox.setHgrow(playback, Priority.ALWAYS);
-        Label position = new Label("1 / " + dataset.getRowCount());
-        playback.valueProperty().addListener((value, oldIndex, newIndex) -> {
-            int row = newIndex.intValue();
-            table.getSelectionModel().select(row);
-            table.scrollTo(row);
-            position.setText((row + 1) + " / " + dataset.getRowCount());
-        });
-        Timeline timeline = new Timeline(new KeyFrame(Duration.millis(80), event -> {
-            double next = playback.getValue() + 1;
-            playback.setValue(next > playback.getMax() ? 0 : next);
-        }));
-        timeline.setCycleCount(Timeline.INDEFINITE);
-        Button play = new Button("Play");
-        play.setOnAction(event -> {
-            if (timeline.getStatus() == Timeline.Status.RUNNING) {
-                timeline.pause();
-                play.setText("Play");
-            } else {
-                timeline.play();
-                play.setText("Pause");
-            }
-        });
-        HBox controls = new HBox(9, play, playback, position);
-        controls.setAlignment(Pos.CENTER_LEFT);
-        controls.setPadding(new Insets(9));
-        Label title = new Label("Log Analysis · " + dataset.getSourceName()
-                + " · " + dataset.getRowCount() + " samples · "
-                + dataset.getChannelCount() + " channels");
-        title.getStyleClass().add("subtitle");
-        BorderPane content = new BorderPane(table, title, null, controls, null);
-        content.setPadding(new Insets(12));
-        analysis.setCenter(content);
+        if (analysisPane != null) analysisPane.close();
+        analysisPane = new FxLogAnalysisPane(activeLogFile, dataset);
+        analysis.setCenter(analysisPane);
         views.getSelectionModel().select(5);
         status.setText("Loaded " + dataset.getSourceName());
     }
@@ -866,6 +811,7 @@ final class FxLoggerWindow {
         context.getMessages().removeListener(messageListener);
         context.getLiveData().removeListener(liveListener);
         runtime.close();
+        if (analysisPane != null) analysisPane.close();
         new ArrayList<>(detachedGauges.values()).forEach(Stage::close);
         detachedGauges.clear();
         closed.run();
