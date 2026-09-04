@@ -125,8 +125,8 @@ public class ECUEditorToolBar extends JToolBar implements ActionListener {
         JPanel actions = new JPanel(new FlowLayout(FlowLayout.LEFT, 3, 0));
         actions.setOpaque(false);
         actions.add(openImage);
-        actions.add(definitionManager);
         actions.add(saveImage);
+        actions.add(definitionManager);
         actions.add(fileSeparator);
         actions.add(connect);
         actions.add(readEcu);

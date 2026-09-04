@@ -1184,7 +1184,6 @@ private fun ShellToolbar(
             fontWeight = FontWeight.Bold, fontSize = 14.sp)
         Spacer(Modifier.width(10.dp))
         Button(open) { Text("Open ROM") }
-        TextButton(manageDefinitions) { Text("Definitions Manager") }
         Box {
             Button(onClick = { saveMenuOpen = true },
                 enabled = snapshot.activeRom != null) {
@@ -1202,6 +1201,7 @@ private fun ShellToolbar(
                 }) { Text("Save As…") }
             }
         }
+        TextButton(manageDefinitions) { Text("Definitions Manager") }
         Spacer(Modifier.weight(1f))
         Text(snapshot.activeRom?.fileName ?: "No ROM open",
             color = MaterialTheme.colors.onSurface.copy(alpha = .62f),
