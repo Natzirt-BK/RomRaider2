@@ -26,6 +26,9 @@ Desktop JavaFX cutover
 - Improved native chooser behavior on Linux: loaded definitions stay visible,
   successful checksum updates no longer interrupt Save As, CSV analysis starts
   in the configured log folder, and duplicate ROM extensions are normalized.
+- Replaced the legacy recursive calibration-increment retry with a bounded
+  conversion loop, preventing malformed or unusually scaled definitions from
+  overflowing the desktop UI thread.
 
 Logger
 

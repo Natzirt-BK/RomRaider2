@@ -41,6 +41,7 @@ public class DataCell implements Serializable  {
 
     private static final String STATIC_TEXT_DELIMITER = "\t\n\r\f";
     private static final String VALUE_WHITESPACE_PATTERN = "\u0020|\u00a0";
+    private static final int MAX_INCREMENT_ATTEMPTS = 64;
     private Table table;
 
     //This sounds like a View property, but the manipulation
@@ -508,40 +509,52 @@ public class DataCell implements Serializable  {
     }
 
     public void increment(double increment) throws UserLevelException {
-        double oldValue = getRealValue();
-
         if (table.getCurrentScale().getCoarseIncrement() < 0.0) {
             increment = 0.0 - increment;
         }
 
-        double incResult = 0;
-        if (table.getCurrentScale().getByteExpression() == null) {
-            incResult = table.getCurrentScale().approximateToByteFunction(oldValue + increment, table.getStorageType(), table.isSignedData());
-        }
-        else {
-            incResult = JEPUtil.evaluate(table.getCurrentScale().getByteExpression(), (oldValue + increment));
-        }
-
-        if (table.getStorageType() == Settings.STORAGE_TYPE_FLOAT) {
-            if (binValue != incResult) {
-                this.setBinValue(incResult);
+        for (int attempt = 0; attempt < MAX_INCREMENT_ATTEMPTS; attempt++) {
+            double oldValue = getRealValue();
+            double incResult;
+            if (table.getCurrentScale().getByteExpression() == null) {
+                incResult = table.getCurrentScale().approximateToByteFunction(
+                        oldValue + increment, table.getStorageType(),
+                        table.isSignedData());
             }
-        } else {
+            else {
+                incResult = JEPUtil.evaluate(
+                        table.getCurrentScale().getByteExpression(),
+                        oldValue + increment);
+            }
+
+            if (table.getStorageType() == Settings.STORAGE_TYPE_FLOAT) {
+                if (binValue != incResult) {
+                    this.setBinValue(incResult);
+                }
+                return;
+            }
+
             int roundResult = (int) Math.round(incResult);
             if (binValue != roundResult) {
                 this.setBinValue(roundResult);
             }
+            if (oldValue != getRealValue()) {
+                return;
+            }
+
+            // Preserve the requested direction while widening an increment
+            // that is too small to survive conversion to an integer cell.
+            double widerIncrement = increment * 2.0;
+            if (!Double.isFinite(widerIncrement)
+                    || widerIncrement == increment) {
+                break;
+            }
+            increment = widerIncrement;
         }
 
-        //Make sure we always change something. If the defined increment is too small this triggers
-        //TODO: This should use real values
-        if (table.getStorageType() != Settings.STORAGE_TYPE_FLOAT &&
-                oldValue == getRealValue() &&
-                ((increment > 0 && binValue < maxAllowedBin) || (increment < 0 && binValue > minAllowedBin))) {
-            if (LOGGER.isDebugEnabled())
-                LOGGER.debug(maxAllowedBin + " " + binValue);
-            increment(increment * 2);
-        }
+        LOGGER.warn("Unable to adjust calibration cell with scale "
+                + table.getCurrentScale().getName()
+                + "; the definition did not produce a different value.");
     }
 
     public void undo() throws UserLevelException {

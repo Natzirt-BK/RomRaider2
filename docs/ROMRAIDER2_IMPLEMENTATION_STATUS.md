@@ -79,7 +79,9 @@ Last updated: 2026-09-04
 - Calibration values and axes now honor the active definition format instead
   of exposing binary floating-point noise. The inspector shows engineering
   units and actual X/Y coordinates, while the heatmap and 3D renderer use
-  scaled engineering values.
+  scaled engineering values. Calibration increment conversion is bounded and
+  direction-stable, so a malformed scale cannot recursively overflow the UI
+  thread.
 - JavaFX theme changes propagate to every open Editor and Logger window.
   Successful checksum updates stay in the status bar, custom dialogs close with
   Escape, CSV browsing starts in the configured output folder, and Linux native

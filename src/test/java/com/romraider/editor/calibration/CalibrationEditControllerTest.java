@@ -246,6 +246,42 @@ public final class CalibrationEditControllerTest {
         assertEquals(2, RomEditHistory.getInstance().undoDepth(rom));
     }
 
+    @Test(timeout = 1000)
+    public void malformedScaleCannotOverflowTheEditorThread()
+            throws Exception {
+        Table1D table = line("Malformed scale", 0, 1);
+        rom = rom(table, new byte[] {10});
+        table.getCurrentScale().setByteExpression("10");
+        TableCalibrationEditController controller =
+                new TableCalibrationEditController(table);
+
+        CalibrationEditResult result = controller.adjustCellValue(0, 0,
+                CalibrationAdjustment.FINE_INCREASE);
+
+        assertFalse(result.isChanged());
+        assertEquals(10, rom.getBinary()[0] & 0xFF);
+        assertFalse(controller.canUndo());
+    }
+
+    @Test
+    public void retryKeepsDirectionForNegativeScaleIncrements()
+            throws Exception {
+        Table1D table = line("Descending scale", 0, 1);
+        rom = rom(table, new byte[] {10});
+        table.getCurrentScale().setExpression("x/100");
+        table.getCurrentScale().setByteExpression("x*100");
+        table.getCurrentScale().setFineIncrement(0.001);
+        table.getCurrentScale().setCoarseIncrement(-1.0);
+        TableCalibrationEditController controller =
+                new TableCalibrationEditController(table);
+
+        CalibrationEditResult result = controller.adjustCellValue(0, 0,
+                CalibrationAdjustment.FINE_INCREASE);
+
+        assertTrue(result.isChanged());
+        assertEquals(9, rom.getBinary()[0] & 0xFF);
+    }
+
     @Test
     public void adjustsASelectionAsOneUndoableChange() throws Exception {
         Table1D table = line("Timing", 0, 3);
