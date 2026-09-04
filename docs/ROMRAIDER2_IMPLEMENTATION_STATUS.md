@@ -87,7 +87,8 @@ Last updated: 2026-09-04
   Escape, CSV browsing starts in the configured output folder, and Linux native
   Save As results are protected from duplicate ROM extensions. Theme text
   colors are explicit so Windows system palettes cannot override light-theme
-  labels and menus with low-contrast values.
+  labels and menus with low-contrast values; the Windows launcher also avoids
+  LCD-only text rendering that can disappear in remote or captured sessions.
 - The Road Dyno now presents readable channel names and units and independently
   identifies engine-speed and vehicle-speed inputs as channels are selected.
 - Long ROM, calibration, channel, and definition names retain compact layouts

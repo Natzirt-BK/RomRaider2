@@ -96,6 +96,9 @@ if ($LauncherConfig -notmatch [regex]::Escape('add-modules=javafx.controls')) {
 if ($LauncherConfig -notmatch [regex]::Escape('romraider2.j2534.bridge.dir=$APPDIR/lib/windows/j2534')) {
     throw "The packaged launcher does not locate the J2534 architecture bridges."
 }
+if ($LauncherConfig -notmatch [regex]::Escape('prism.lcdtext=false')) {
+    throw "The packaged launcher does not use capture-safe JavaFX text rendering."
+}
 foreach ($RetiredDependency in @(
     "Graph3d.jar", "j3dcore.jar", "j3dutils.jar", "vecmath.jar",
     "j3dcore-d3d.dll", "j3dcore-ogl-cg.dll", "j3dcore-ogl-chk.dll", "j3dcore-ogl.dll"

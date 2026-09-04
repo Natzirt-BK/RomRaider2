@@ -214,6 +214,7 @@ try {
         --java-options '-Dawt.useSystemAAFontSettings=lcd' `
         --java-options '-Dswing.aatext=true' `
         --java-options '-Dsun.java2d.d3d=true' `
+        --java-options '-Dprism.lcdtext=false' `
         --java-options '-Xms64M' `
         --java-options '-Xmx768M'
     if ($LASTEXITCODE -ne 0) {
@@ -274,6 +275,9 @@ if ($LauncherConfig -notmatch [regex]::Escape('log4j.configurationFile=$APPDIR/l
 }
 if ($LauncherConfig -notmatch [regex]::Escape('romraider2.j2534.bridge.dir=$APPDIR/lib/windows/j2534')) {
     throw "The packaged launcher does not locate the J2534 architecture bridges."
+}
+if ($LauncherConfig -notmatch [regex]::Escape('prism.lcdtext=false')) {
+    throw "The packaged launcher does not use capture-safe JavaFX text rendering."
 }
 foreach ($Customization in @(
     "nameSequences.properties", "ncslearning.properties",
