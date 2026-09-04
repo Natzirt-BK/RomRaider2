@@ -6,14 +6,16 @@ public final class CalibrationCellSnapshot {
     private final int row;
     private final int column;
     private final String displayValue;
+    private final double realValue;
     private final double rawValue;
     private final double originalRawValue;
 
     CalibrationCellSnapshot(int row, int column, String displayValue,
-            double rawValue, double originalRawValue) {
+            double realValue, double rawValue, double originalRawValue) {
         this.row = row;
         this.column = column;
         this.displayValue = displayValue;
+        this.realValue = realValue;
         this.rawValue = rawValue;
         this.originalRawValue = originalRawValue;
     }
@@ -21,6 +23,7 @@ public final class CalibrationCellSnapshot {
     public int getRow() { return row; }
     public int getColumn() { return column; }
     public String getDisplayValue() { return displayValue; }
+    public double getRealValue() { return realValue; }
     public double getRawValue() { return rawValue; }
     public double getOriginalRawValue() { return originalRawValue; }
     public boolean isChanged() {

@@ -33,7 +33,7 @@ public final class CalibrationGridProjectionService {
                 new ArrayList<CalibrationCellSnapshot>(rows * columns);
         for (int row = 0; row < rows; row++) {
             for (int column = 0; column < columns; column++) {
-                cells.add(cell(row, column, values[column][row]));
+                cells.add(cell(row, column, values[column][row], table));
             }
         }
         return snapshot(table, rows, columns,
@@ -41,8 +41,9 @@ public final class CalibrationGridProjectionService {
                 fractionDigits(table.getXAxis()),
                 table.getYAxis().getName(), unit(table.getYAxis()),
                 table.getXAxis().getName(), unit(table.getXAxis()),
-                labels(table.getYAxis().getData(), rows),
-                labels(table.getXAxis().getData(), columns), cells,
+                labels(table.getYAxis(), table.getYAxis().getData(), rows),
+                labels(table.getXAxis(), table.getXAxis().getData(), columns),
+                cells,
                 changed(table.getYAxis().getData())
                         + changed(table.getXAxis().getData()));
     }
@@ -53,11 +54,12 @@ public final class CalibrationGridProjectionService {
         List<CalibrationCellSnapshot> cells =
                 new ArrayList<CalibrationCellSnapshot>(columns);
         for (int column = 0; column < columns; column++) {
-            cells.add(cell(0, column, values[column]));
+            cells.add(cell(0, column, values[column], table));
         }
         List<String> columnLabels;
         if (table instanceof Table2D) {
-            columnLabels = labels(((Table2D) table).getAxis().getData(), columns);
+            Table axis = ((Table2D) table).getAxis();
+            columnLabels = labels(axis, axis.getData(), columns);
         } else {
             columnLabels = ordinalLabels(columns);
         }
@@ -122,26 +124,42 @@ public final class CalibrationGridProjectionService {
     }
 
     private static CalibrationCellSnapshot cell(int row, int column,
-            DataCell cell) {
+            DataCell cell, Table table) {
         if (cell == null) {
-            return new CalibrationCellSnapshot(row, column, "", 0.0, 0.0);
+            return new CalibrationCellSnapshot(row, column, "", 0.0,
+                    0.0, 0.0);
         }
         String display = cell.getStaticText() == null
-                ? NumberUtil.stringValue(cell.getRealValue())
+                ? displayValue(table, cell.getRealValue())
                 : cell.getStaticText();
         return new CalibrationCellSnapshot(row, column, display,
-                cell.getBinValue(), cell.getOriginalValue());
+                cell.getRealValue(), cell.getBinValue(),
+                cell.getOriginalValue());
     }
 
-    private static List<String> labels(DataCell[] cells, int expected) {
+    private static List<String> labels(Table table, DataCell[] cells,
+            int expected) {
         if (cells == null || cells.length != expected) return ordinalLabels(expected);
         List<String> labels = new ArrayList<String>(expected);
         for (DataCell cell : cells) {
             labels.add(cell == null ? "" : cell.getStaticText() == null
-                    ? NumberUtil.stringValue(cell.getRealValue())
+                    ? displayValue(table, cell.getRealValue())
                     : cell.getStaticText());
         }
         return labels;
+    }
+
+    private static String displayValue(Table table, double value) {
+        Scale scale = table == null ? null : table.getCurrentScale();
+        if (scale == null || scale.getFormat() == null
+                || "Raw Value".equalsIgnoreCase(scale.getCategory())) {
+            return NumberUtil.stringValue(value);
+        }
+        try {
+            return new DecimalFormat(scale.getFormat()).format(value);
+        } catch (IllegalArgumentException invalidFormat) {
+            return NumberUtil.stringValue(value);
+        }
     }
 
     private static List<String> ordinalLabels(int count) {

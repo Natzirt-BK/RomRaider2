@@ -54,6 +54,17 @@
 .metric { -fx-background-color: -rr-raised; -fx-background-radius: 4; -fx-padding: 4 7 4 7; -fx-font-size: 10px; -fx-font-weight: bold; }
 .dyno-metric { -fx-min-width: 124; -fx-alignment: center; }
 .calibration-cell { -fx-background-radius: 3; -fx-padding: 7 9 7 9; }
+.axis-strip { -fx-background-color: -rr-raised; -fx-border-color: transparent transparent -rr-border transparent; -fx-padding: 7 11 7 11; }
+.axis-summary { -fx-text-fill: -rr-muted; -fx-font-size: 11px; -fx-font-weight: bold; }
+.calibration-heat-0 { -fx-background-color: rgba(36,123,160,.05); }
+.calibration-heat-1 { -fx-background-color: rgba(32,144,153,.07); }
+.calibration-heat-2 { -fx-background-color: rgba(30,158,135,.09); }
+.calibration-heat-3 { -fx-background-color: rgba(69,171,107,.11); }
+.calibration-heat-4 { -fx-background-color: rgba(143,179,75,.13); }
+.calibration-heat-5 { -fx-background-color: rgba(201,171,63,.15); }
+.calibration-heat-6 { -fx-background-color: rgba(223,132,55,.17); }
+.calibration-heat-7 { -fx-background-color: rgba(217,78,61,.19); }
+.table-row-cell:selected .calibration-cell { -fx-background-color: -rr-accent; -fx-text-fill: white; }
 .calibration-cell-changed { -fx-border-color: -rr-danger; -fx-border-width: 0 0 2 0; }
 .dtc-card { -fx-background-color: -fx-control-inner-background; -fx-border-color: -rr-border; -fx-background-radius: 10; -fx-border-radius: 10; -fx-padding: 30; }
 .dtc-switch { -fx-min-width: 150; -fx-min-height: 44; -fx-font-size: 15px; -fx-font-weight: bold; }

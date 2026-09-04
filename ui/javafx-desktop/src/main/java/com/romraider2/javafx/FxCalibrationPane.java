@@ -40,7 +40,6 @@ import javafx.scene.input.ClipboardContent;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
-import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
@@ -48,6 +47,7 @@ import javafx.scene.paint.Color;
 final class FxCalibrationPane extends BorderPane implements AutoCloseable {
     private static final Pattern DTC = Pattern.compile(
             "^\\s*\\(([PBCU][0-9A-Fa-f]{4})\\)");
+    private static final int HEAT_LEVELS = 8;
 
     private final Table table;
     private final CalibrationEditController controller;
@@ -80,19 +80,22 @@ final class FxCalibrationPane extends BorderPane implements AutoCloseable {
         kind.getStyleClass().add("section-kicker");
         Label title = new Label(snapshot.getTableName());
         title.getStyleClass().add("title");
+        title.setWrapText(true);
+        title.setTooltip(new Tooltip(snapshot.getTableName()));
         Label detail = new Label(String.format(Locale.ROOT,
                 "%d × %d  ·  %s  ·  address 0x%X",
                 snapshot.getColumns(), snapshot.getRows(),
                 snapshot.getUnit().isBlank() ? "raw scale" : snapshot.getUnit(),
                 table.getStorageAddress()));
         detail.getStyleClass().add("muted");
+        detail.setWrapText(true);
         VBox identity = new VBox(1, kind, title, detail);
-        Region fill = new Region();
-        HBox.setHgrow(fill, Priority.ALWAYS);
+        identity.setMinWidth(0);
+        HBox.setHgrow(identity, Priority.ALWAYS);
         changed.getStyleClass().add("metric");
         undo.setOnAction(event -> runEdit(() -> controller.undo(), "Undo applied"));
         redo.setOnAction(event -> runEdit(() -> controller.redo(), "Redo applied"));
-        HBox row = new HBox(9, identity, fill, changed, undo, redo);
+        HBox row = new HBox(9, identity, changed, undo, redo);
         row.setAlignment(Pos.CENTER_LEFT);
         row.setPadding(new Insets(12, 14, 12, 14));
         updateChangedLabel();
@@ -103,7 +106,7 @@ final class FxCalibrationPane extends BorderPane implements AutoCloseable {
         grid = createGrid();
         inspector = createInspector();
         TabPane views = new TabPane();
-        views.getTabs().add(fixedTab("Table", grid));
+        views.getTabs().add(fixedTab("Table", tableWorkspace()));
         if (snapshot.getRows() > 1 && snapshot.getColumns() > 1) {
             surface = new FxSurfaceCanvas(snapshot);
             views.getTabs().add(fixedTab("3D Surface", surface));
@@ -114,6 +117,36 @@ final class FxCalibrationPane extends BorderPane implements AutoCloseable {
         BorderPane.setMargin(inspector, new Insets(0, 0, 0, 10));
         content.setPadding(new Insets(10));
         return content;
+    }
+
+    private Node tableWorkspace() {
+        VBox content = new VBox(axisStrip(), grid);
+        VBox.setVgrow(grid, Priority.ALWAYS);
+        return content;
+    }
+
+    private Node axisStrip() {
+        HBox strip = new HBox(16);
+        strip.setAlignment(Pos.CENTER_LEFT);
+        strip.getStyleClass().add("axis-strip");
+        if (snapshot.getRows() > 1) {
+            strip.getChildren().add(axisSummary("Y", snapshot.getRowAxisName(),
+                    snapshot.getRowAxisUnit()));
+        }
+        if (!snapshot.getColumnAxisName().isBlank()) {
+            strip.getChildren().add(axisSummary("X",
+                    snapshot.getColumnAxisName(), snapshot.getColumnAxisUnit()));
+        }
+        strip.setVisible(!strip.getChildren().isEmpty());
+        strip.setManaged(strip.isVisible());
+        return strip;
+    }
+
+    private static Label axisSummary(String axis, String name, String unit) {
+        Label label = new Label(axis + "  ·  " + axisName(name, unit));
+        label.getStyleClass().add("axis-summary");
+        label.setTooltip(new Tooltip(axis + " axis · " + axisName(name, unit)));
+        return label;
     }
 
     @SuppressWarnings("rawtypes")
@@ -246,6 +279,13 @@ final class FxCalibrationPane extends BorderPane implements AutoCloseable {
                 fullValue.setText(empty || item == null ? "" : item);
                 setTooltip(empty || item == null ? null : fullValue);
                 getStyleClass().remove("calibration-cell-changed");
+                for (int level = 0; level < HEAT_LEVELS; level++) {
+                    getStyleClass().remove("calibration-heat-" + level);
+                }
+                if (!empty && getIndex() >= 0 && getIndex() < snapshot.getRows()) {
+                    getStyleClass().add("calibration-heat-" + heatLevel(
+                            snapshot.cellAt(getIndex(), column).getRealValue()));
+                }
                 if (!empty && getIndex() >= 0 && getIndex() < snapshot.getRows()
                         && snapshot.cellAt(getIndex(), column).isChanged()) {
                     getStyleClass().add("calibration-cell-changed");
@@ -274,9 +314,15 @@ final class FxCalibrationPane extends BorderPane implements AutoCloseable {
         kicker.getStyleClass().add("section-kicker");
         Label value = new Label(cell.getDisplayValue());
         value.getStyleClass().add("title");
-        Label coordinate = new Label("Row " + (selectedRow + 1) + "  ·  Column "
-                + (selectedColumn + 1));
+        Label unit = new Label(snapshot.getUnit().isBlank()
+                ? "Raw value" : snapshot.getUnit());
+        unit.getStyleClass().add("muted");
+        unit.setWrapText(true);
+        Label coordinate = new Label(selectedCoordinate());
         coordinate.getStyleClass().add("muted");
+        coordinate.setWrapText(true);
+        coordinate.setMaxWidth(Double.MAX_VALUE);
+        coordinate.setTooltip(new Tooltip(selectedCoordinate()));
         TextField editor = new TextField(cell.getDisplayValue());
         editor.setPromptText("New value");
         Button apply = new Button("Apply value");
@@ -290,8 +336,10 @@ final class FxCalibrationPane extends BorderPane implements AutoCloseable {
         HBox coarse = adjustmentRow("− Coarse",
                 CalibrationAdjustment.COARSE_DECREASE,
                 "+ Coarse", CalibrationAdjustment.COARSE_INCREASE);
-        box.getChildren().addAll(kicker, value, coordinate, editor, apply,
-                new Label("DEFINITION INCREMENTS"), fine, coarse);
+        Label increments = new Label("DEFINITION INCREMENTS");
+        increments.getStyleClass().add("section-kicker");
+        box.getChildren().addAll(kicker, value, unit, coordinate, editor, apply,
+                increments, fine, coarse);
         if (cell.isChanged()) {
             Button restore = new Button("Restore saved value");
             restore.setMaxWidth(Double.MAX_VALUE);
@@ -303,6 +351,47 @@ final class FxCalibrationPane extends BorderPane implements AutoCloseable {
         status.getStyleClass().add("muted");
         status.setWrapText(true);
         box.getChildren().add(status);
+    }
+
+    private String selectedCoordinate() {
+        List<String> parts = new ArrayList<>();
+        if (snapshot.getRows() > 1 && selectedRow < snapshot.getRowLabels().size()) {
+            parts.add("Y · " + axisValue(snapshot.getRowAxisName(),
+                    snapshot.getRowLabels().get(selectedRow),
+                    snapshot.getRowAxisUnit()));
+        }
+        if (!snapshot.getColumnAxisName().isBlank()
+                && selectedColumn < snapshot.getColumnLabels().size()) {
+            parts.add("X · " + axisValue(snapshot.getColumnAxisName(),
+                    snapshot.getColumnLabels().get(selectedColumn),
+                    snapshot.getColumnAxisUnit()));
+        }
+        return parts.isEmpty() ? "Row " + (selectedRow + 1) + "  ·  Column "
+                + (selectedColumn + 1) : String.join("  ·  ", parts);
+    }
+
+    private static String axisValue(String name, String value, String unit) {
+        StringBuilder result = new StringBuilder();
+        if (!name.isBlank()) result.append(name).append(' ');
+        result.append(value);
+        if (!unit.isBlank()) result.append(' ').append(unit);
+        return result.toString();
+    }
+
+    private static String axisName(String name, String unit) {
+        String normalizedName = name == null || name.isBlank() ? "Axis" : name;
+        return unit == null || unit.isBlank() ? normalizedName
+                : normalizedName + " [" + unit + "]";
+    }
+
+    private int heatLevel(double value) {
+        double min = snapshot.getCells().stream()
+                .mapToDouble(CalibrationCellSnapshot::getRealValue).min().orElse(0);
+        double max = snapshot.getCells().stream()
+                .mapToDouble(CalibrationCellSnapshot::getRealValue).max().orElse(min);
+        if (!Double.isFinite(value) || max <= min) return 0;
+        double fraction = Math.max(0, Math.min(1, (value - min) / (max - min)));
+        return Math.min(HEAT_LEVELS - 1, (int) Math.floor(fraction * HEAT_LEVELS));
     }
 
     private HBox adjustmentRow(String leftText, CalibrationAdjustment left,
@@ -459,6 +548,13 @@ final class FxCalibrationPane extends BorderPane implements AutoCloseable {
                 previousY = event.getY();
                 draw();
             });
+            setOnMouseClicked(event -> {
+                if (event.getClickCount() == 2) {
+                    yaw = -.68;
+                    pitch = .62;
+                    draw();
+                }
+            });
         }
 
         void setSnapshot(CalibrationGridSnapshot value) {
@@ -476,14 +572,14 @@ final class FxCalibrationPane extends BorderPane implements AutoCloseable {
                     : Color.web("#f4f7f9"));
             graphics.fillRect(0, 0, width, height);
             double min = snapshot.getCells().stream()
-                    .mapToDouble(CalibrationCellSnapshot::getRawValue).min().orElse(0);
+                    .mapToDouble(CalibrationCellSnapshot::getRealValue).min().orElse(0);
             double max = snapshot.getCells().stream()
-                    .mapToDouble(CalibrationCellSnapshot::getRawValue).max().orElse(min + 1);
+                    .mapToDouble(CalibrationCellSnapshot::getRealValue).max().orElse(min + 1);
             if (max == min) max = min + 1;
             Point[][] points = new Point[snapshot.getRows()][snapshot.getColumns()];
             for (int row = 0; row < snapshot.getRows(); row++) {
                 for (int column = 0; column < snapshot.getColumns(); column++) {
-                    double value = snapshot.cellAt(row, column).getRawValue();
+                    double value = snapshot.cellAt(row, column).getRealValue();
                     points[row][column] = project(column, row,
                             (value - min) / (max - min), width, height);
                 }
@@ -492,7 +588,7 @@ final class FxCalibrationPane extends BorderPane implements AutoCloseable {
             for (int row = 0; row < snapshot.getRows(); row++) {
                 for (int column = 0; column < snapshot.getColumns(); column++) {
                     Point point = points[row][column];
-                    double value = snapshot.cellAt(row, column).getRawValue();
+                    double value = snapshot.cellAt(row, column).getRealValue();
                     double fraction = (value - min) / (max - min);
                     graphics.setStroke(Color.color(.08 + .75 * fraction,
                             .38 + .25 * (1 - fraction), .56 - .34 * fraction));
@@ -507,7 +603,7 @@ final class FxCalibrationPane extends BorderPane implements AutoCloseable {
                 }
             }
             graphics.setFill(FxTheme.isDark() ? Color.LIGHTGRAY : Color.DARKSLATEGRAY);
-            graphics.fillText("Drag horizontally to yaw · vertically to pitch",
+            graphics.fillText("Drag to rotate · double-click to reset",
                     16, height - 16);
         }
 
