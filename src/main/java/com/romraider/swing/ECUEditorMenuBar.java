@@ -21,7 +21,6 @@ package com.romraider.swing;
 
 import static com.romraider.Version.ABOUT_ICON;
 import static com.romraider.Version.BUILDNUMBER;
-import static com.romraider.Version.ECU_DEFS_URL;
 import static com.romraider.Version.PRODUCT_NAME;
 import static com.romraider.Version.SUPPORT_URL;
 import static com.romraider.Version.VERSION;
@@ -59,7 +58,6 @@ import com.romraider.editor.recovery.RomRecoveryService;
 import com.romraider.dataflowSimulation.DataflowSimulation;
 import com.romraider.maps.Rom;
 import com.romraider.maps.Table;
-import com.romraider.net.BrowserControl;
 import com.romraider.platform.PlatformContext;
 import com.romraider.platform.PlatformContextListener;
 import com.romraider.platform.VehiclePlatform;
@@ -86,10 +84,7 @@ public class ECUEditorMenuBar extends JMenuBar implements ActionListener,
 	private final JMenuItem exit = new JMenuItem(rb.getString("EXIT"));
 	private final JMenuItem exportDef = new JMenuItem(rb.getString("EXPORTDEF"));
 
-	private final JMenu definitionMenu = new JMenu(rb.getString("ECUDEF"));
-	private final JMenuItem defManager = new JMenuItem(rb.getString("ECUDEFMAN"));
 	private final JMenuItem editDefinition = new JMenuItem(rb.getString("EDITDEF"));
-	private final JMenuItem updateDefinition = new JMenuItem(rb.getString("GETDEF"));
 
 	private final JMenu editMenu = new JMenu(rb.getString("EDIT"));
 	private final JMenuItem settings = new JMenuItem(MessageFormat.format(rb.getString("SETTINGS"), PRODUCT_NAME));
@@ -191,22 +186,6 @@ public class ECUEditorMenuBar extends JMenuBar implements ActionListener,
 
 		convertGroup.add(convertIncrease);
 		convertGroup.add(convertDecrease);
-
-		// ecu def menu items
-		add(definitionMenu);
-		definitionMenu.setMnemonic('D');
-
-		definitionMenu.add(defManager);
-		defManager.addActionListener(this);
-		defManager.setMnemonic('D');
-
-		definitionMenu.add(updateDefinition);
-		updateDefinition.addActionListener(this);
-		updateDefinition.setMnemonic('U');
-
-		// definitionMenu.add(editDefinition);
-		// editDefinition.setMnemonic('E');
-		// editDefinition.addActionListener(this);
 
 		// view menu items
 		add(viewMenu);
@@ -339,8 +318,6 @@ public class ECUEditorMenuBar extends JMenuBar implements ActionListener,
 		closeImage.setIcon(ModernIconFactory.icon(Action.CLOSE));
 		exit.setIcon(ModernIconFactory.icon(Action.EXIT));
 		exportDef.setIcon(ModernIconFactory.icon(Action.EXPORT));
-		defManager.setIcon(ModernIconFactory.icon(Action.DEFINITION));
-		updateDefinition.setIcon(ModernIconFactory.icon(Action.DOWNLOAD));
 		settings.setIcon(ModernIconFactory.icon(Action.SETTINGS));
 		compareImages.setIcon(ModernIconFactory.icon(Action.COMPARE));
 		romProperties.setIcon(ModernIconFactory.icon(Action.PROPERTIES));
@@ -491,11 +468,6 @@ public class ECUEditorMenuBar extends JMenuBar implements ActionListener,
 						ERROR_MESSAGE);
 			}
 
-		} else if (e.getSource() == defManager) {
-			DefinitionManager form = new DefinitionManager();
-			form.setLocationRelativeTo(parent);
-			form.setVisible(true);
-
 		} else if (e.getSource() == level1) {
 			parent.setUserLevel(1);
 
@@ -513,9 +485,6 @@ public class ECUEditorMenuBar extends JMenuBar implements ActionListener,
 
 		} else if (e.getSource() == openLogger) {
 			parent.launchLogger();
-		} else if (e.getSource() == updateDefinition) {
-			BrowserControl.displayURL(ECU_DEFS_URL);
-
 		} else if (e.getSource() == launchRamTuneTestApp) {
 			RamTuneTestApp.startTestApp(DISPOSE_ON_CLOSE);
 		} else if (e.getSource() == about) {

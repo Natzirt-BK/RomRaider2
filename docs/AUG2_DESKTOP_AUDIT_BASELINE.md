@@ -34,9 +34,9 @@ supporting evidence; none substitutes for the end-to-end user workflow.
 | 1 | 3D rotation has insufficient Y-axis movement. | RC4 has a Compose surface, but source presence does not establish usable orbit controls. | On representative 3D maps, rotate through a useful pitch and yaw range with mouse and touchpad; selection and labels remain usable. | OPEN |
 | 6 | Cancelling the ECU-definition file chooser freezes or locks the Editor. | The local repair replaces the Compose shell's direct AWT dialog path with the established KDE/native/Swing chooser boundary. | Open the chooser, cancel from several directories, then open a ROM and reopen the manager without delay or deadlock. | LINUX PASS; WINDOWS RETEST |
 | 7 | Existing Editor definition XML files do not appear in the chooser. | The local repair routes Compose through the established cross-platform chooser and no longer relies on AWT's Linux filename filter. | Existing, already-added, and new XML files remain visible on Linux and Windows; selecting, cancelling, and re-adding are safe. | LINUX PASS; WINDOWS RETEST |
-| 8 | Calibration tabs are missing. | RC4 contains a Compose document session and calibration workspace, but the user rejected the stripped-down workflow. | Multiple ROMs/tables can remain open as obvious tabs; switching preserves selection, edits, undo history, and layout. | OPEN |
-| 9 | Save wording and behavior are wrong. | No accepted desktop behavior has been recorded. | Present a clear Save action and a Save As path without ambiguous wording; dirty-state and overwrite confirmation behave predictably. | DECISION |
-| 10 | ECU Definitions menu wastes space; Definition Manager should be beside Open ROM and own Add Definition. | RC4 has Compose-owned definition management, but placement and menu removal need direct approval. | A visible Definition Manager command sits beside Open ROM; adding/reordering/removing occurs inside it; redundant menu is absent. | DECISION |
+| 8 | Calibration tabs are missing. | The repaired Editor workspace hosts open calibration tables in scrollable, closable tabs and has automated open/select/close coverage. Packaged visual and state-retention approval remain required. | Multiple ROMs/tables can remain open as obvious tabs; switching preserves selection, edits, undo history, and layout. | IMPLEMENTED; RETEST |
+| 9 | Save wording and behavior are wrong. | The local Editor app bar now presents `Save As` as a menu control with explicit `Save Now` and `Save As…` choices; the standard save path and overwrite checks remain shared with the File menu. | Present a clear Save action and a Save As path without ambiguous wording; dirty-state and overwrite confirmation behave predictably. | IMPLEMENTED; RETEST |
+| 10 | ECU Definitions menu wastes space; Definition Manager should be beside Open ROM and own Add Definition. | The local Editor app bar now places `Definitions Manager` beside `Open ROM`; the redundant top menu is removed, and Add/Remove/Reorder/Get Definitions actions live in the manager. | A visible Definition Manager command sits beside Open ROM; adding/reordering/removing occurs inside it; redundant menu is absent. | IMPLEMENTED; RETEST |
 | 11 | User Level menu is missing. | Essential settings parity is explicitly still open. | User level is visible and persistent, and changes expose/hide the same calibration scope as the compatibility application. | OPEN |
 | 12 | Settings menu is missing. | Essential settings parity is explicitly still open. | All retained desktop settings are reachable, understandable, persistent, and separated from Logger connection setup. | OPEN |
 | 13 | The Editor looks stripped down, lacks branding, and lost its advanced desktop character. | RC4 added window branding and richer surfaces, but aesthetic acceptance was not obtained. | First launch and loaded-ROM workspaces visibly read as a capable desktop tuning application, with approved logo, hierarchy, density, and tools. | IMPLEMENTED; RETEST |
@@ -109,6 +109,13 @@ archive checksum recorded in the qualification record.
   `1caca616ab879ddf335b44bba34ae21f5e170b9fd810e6e52654c3d97033c3a4`:
   findings 3, 4, 5, 6, and 7 looked correct and functioned. Windows remains
   open.
+- Second Editor repair slice: the existing closable calibration-tab workspace
+  is retained; the app-bar save control now exposes explicit Save Now and Save
+  As choices; Definitions Manager is beside Open ROM; definition addition and
+  download are consolidated inside the manager; and the redundant Definitions
+  menu is removed. The complete Java 21 suite, production Linux build, Compose
+  tests/staging, and Linux application-image build pass. Packaged user approval
+  for findings 8–10 remains open.
 
 This evidence qualifies only the non-visual baseline. Matrix rows remain
 `NOT RUN` until their complete acceptance tests are performed.

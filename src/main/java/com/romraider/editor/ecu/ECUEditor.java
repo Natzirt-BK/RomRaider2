@@ -546,11 +546,16 @@ public class ECUEditor extends AbstractFrame {
                     options,
                     options[0]);
             if (answer == 0) {
-                DefinitionManager form = new DefinitionManager();
-                form.setLocationRelativeTo(this);
-                form.setVisible(true);
+                showDefinitionManager();
             }
         }
+    }
+
+    /** Opens the single editor surface for adding and prioritizing definitions. */
+    public void showDefinitionManager() {
+        DefinitionManager form = new DefinitionManager();
+        form.setLocationRelativeTo(this);
+        form.setVisible(true);
     }
 
     /** Reviews recoverable work from abnormal exits without touching source ROMs. */

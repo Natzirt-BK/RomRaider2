@@ -39,6 +39,8 @@ import javax.swing.*;
 import org.apache.log4j.Logger;
 
 import com.romraider.Settings;
+import com.romraider.Version;
+import com.romraider.net.BrowserControl;
 import com.romraider.ui.BrandImages;
 import com.romraider.ui.ModernIconFactory;
 import com.romraider.ui.ModernIconFactory.Action;
@@ -96,6 +98,7 @@ public class DefinitionManager extends AbstractFrame implements ActionListener {
         btnMoveTop.addActionListener(this);
         btnMoveBottom.addActionListener(this);
         btnOpenFolder.addActionListener(this);
+        btnGetDefinitions.addActionListener(this);
         updateSelectionState();
     }
 
@@ -126,6 +129,7 @@ public class DefinitionManager extends AbstractFrame implements ActionListener {
         btnMoveTop = new javax.swing.JButton("⇈ Top");
         btnMoveBottom = new javax.swing.JButton("⇊ Bottom");
         btnOpenFolder = new javax.swing.JButton("Open Definitions Folder");
+        btnGetDefinitions = new javax.swing.JButton("Get Definitions…");
         searchField = new javax.swing.JTextField();
 
         setDefaultCloseOperation(javax.swing.WindowConstants.DISPOSE_ON_CLOSE);
@@ -162,6 +166,9 @@ public class DefinitionManager extends AbstractFrame implements ActionListener {
         btnMoveTop.setToolTipText("Move selected definition to highest priority");
         btnMoveBottom.setToolTipText("Move selected definition to lowest priority");
         btnOpenFolder.setIcon(ModernIconFactory.icon(Action.CATEGORY));
+        btnGetDefinitions.setIcon(ModernIconFactory.icon(Action.DOWNLOAD));
+        btnGetDefinitions.setToolTipText(
+                "Open the RomRaider ECU definitions download page");
         searchField.setName("DEFINITION SEARCH");
         searchField.setToolTipText("Filter definitions by name or path");
 
@@ -172,7 +179,10 @@ public class DefinitionManager extends AbstractFrame implements ActionListener {
         headingText.add(new JLabel(
                 "Definitions are loaded from top to bottom; higher files override lower files."));
         heading.add(headingText, BorderLayout.CENTER);
-        heading.add(btnOpenFolder, BorderLayout.EAST);
+        JPanel headingActions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
+        headingActions.add(btnGetDefinitions);
+        headingActions.add(btnOpenFolder);
+        heading.add(headingActions, BorderLayout.EAST);
 
         JPanel filter = new JPanel(new BorderLayout(8, 0));
         filter.add(new JLabel("Search"), BorderLayout.WEST);
@@ -300,6 +310,9 @@ public class DefinitionManager extends AbstractFrame implements ActionListener {
 
         } else if (e.getSource() == btnOpenFolder) {
             openDefinitionsFolder();
+
+        } else if (e.getSource() == btnGetDefinitions) {
+            BrowserControl.displayURL(Version.ECU_DEFS_URL);
 
         }
 
@@ -561,6 +574,7 @@ public class DefinitionManager extends AbstractFrame implements ActionListener {
     private javax.swing.JButton btnMoveTop;
     private javax.swing.JButton btnMoveBottom;
     private javax.swing.JButton btnOpenFolder;
+    private javax.swing.JButton btnGetDefinitions;
     private javax.swing.JLabel defLabel;
     private javax.swing.JList<String> definitionList;
     private javax.swing.JScrollPane jScrollPane1;

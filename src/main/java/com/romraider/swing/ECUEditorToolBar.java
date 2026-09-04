@@ -64,7 +64,11 @@ public class ECUEditorToolBar extends JToolBar implements ActionListener {
     private static final ResourceBundle rb = new ResourceUtil().getBundle(
             ECUEditorToolBar.class.getName());
     private final JButton openImage = new JButton("Open ROM");
-    private final JButton saveImage = new JButton("Save ROM");
+    private final JButton definitionManager = new JButton("Definitions Manager");
+    private final JButton saveImage = new JButton("Save As \u25be");
+    private final JPopupMenu saveActions = new JPopupMenu();
+    private final JMenuItem saveNow = new JMenuItem("Save Now");
+    private final JMenuItem saveAs = new JMenuItem("Save As…");
     private final JButton connect = new JButton("Connect");
     private final JButton readEcu = new JButton("Read ECU");
     private final JButton writeEcu = new JButton("Write ECU");
@@ -121,6 +125,7 @@ public class ECUEditorToolBar extends JToolBar implements ActionListener {
         JPanel actions = new JPanel(new FlowLayout(FlowLayout.LEFT, 3, 0));
         actions.setOpaque(false);
         actions.add(openImage);
+        actions.add(definitionManager);
         actions.add(saveImage);
         actions.add(fileSeparator);
         actions.add(connect);
@@ -152,6 +157,7 @@ public class ECUEditorToolBar extends JToolBar implements ActionListener {
         this.add(context, BorderLayout.EAST);
 
         configureActionButton(openImage);
+        configureActionButton(definitionManager);
         configureActionButton(saveImage);
         configureActionButton(connect);
         configureActionButton(readEcu);
@@ -197,6 +203,19 @@ public class ECUEditorToolBar extends JToolBar implements ActionListener {
         writeEcu.setForeground(UiThemeService.getInstance().color(
                 ThemeToken.DANGER));
 
+        openImage.setName("OPEN ROM");
+        definitionManager.setName("OPEN DEFINITION MANAGER");
+        definitionManager.setToolTipText(
+                "Add, remove, reorder, and inspect ECU definition files");
+        saveImage.setName("SAVE ROM OPTIONS");
+        saveImage.getAccessibleContext().setAccessibleName("Save ROM options");
+        saveNow.setName("SAVE ROM NOW");
+        saveAs.setName("SAVE ROM AS");
+        saveActions.setName("SAVE ROM OPTIONS POPUP");
+        saveActions.add(saveNow);
+        saveActions.add(saveAs);
+        saveImage.putClientProperty("SAVE_OPTIONS_POPUP", saveActions);
+
         addComponentListener(new ComponentAdapter() {
             @Override public void componentResized(ComponentEvent event) {
                 updateResponsiveContext();
@@ -206,7 +225,10 @@ public class ECUEditorToolBar extends JToolBar implements ActionListener {
         this.updateButtons();
 
         openImage.addActionListener(this);
+        definitionManager.addActionListener(this);
         saveImage.addActionListener(this);
+        saveNow.addActionListener(event -> saveRom(true));
+        saveAs.addActionListener(event -> saveRom(false));
         connect.addActionListener(this);
         liveData.addActionListener(this);
         dashboard.addActionListener(this);
@@ -315,7 +337,10 @@ public class ECUEditorToolBar extends JToolBar implements ActionListener {
 
     public void updateIcons() {
         openImage.setIcon(ModernIconFactory.icon(Action.OPEN));
-        saveImage.setIcon(ModernIconFactory.icon(Action.SAVE));
+        definitionManager.setIcon(ModernIconFactory.icon(Action.DEFINITION));
+        saveImage.setIcon(ModernIconFactory.icon(Action.SAVE_AS));
+        saveNow.setIcon(ModernIconFactory.icon(Action.SAVE));
+        saveAs.setIcon(ModernIconFactory.icon(Action.SAVE_AS));
         connect.setIcon(ModernIconFactory.icon(Action.CONNECT));
         readEcu.setIcon(ModernIconFactory.icon(Action.DOWNLOAD));
         writeEcu.setIcon(ModernIconFactory.icon(Action.EXPORT));
@@ -333,7 +358,8 @@ public class ECUEditorToolBar extends JToolBar implements ActionListener {
 
         openImage.setToolTipText(rb.getString("OPEN"));
         saveImage.setToolTipText(MessageFormat.format(
-                rb.getString("SAVEAS"), file));
+                rb.getString("SAVEAS"), file)
+                + " Choose Save Now to overwrite the open file.");
         liveData.setToolTipText("Open integrated live data");
         dashboard.setToolTipText("Open the live dashboard");
         connect.setToolTipText("Open ECU connection and capability workspace");
@@ -346,8 +372,12 @@ public class ECUEditorToolBar extends JToolBar implements ActionListener {
 
         if ("".equals(file)) {
             saveImage.setEnabled(false);
+            saveNow.setEnabled(false);
+            saveAs.setEnabled(false);
         } else {
             saveImage.setEnabled(true);
+            saveNow.setEnabled(true);
+            saveAs.setEnabled(true);
         }
         readEcu.setEnabled(false);
         writeEcu.setEnabled(false);
@@ -366,15 +396,10 @@ public class ECUEditorToolBar extends JToolBar implements ActionListener {
                         getSettings().getSupportURL()),
                         rb.getString("EXCEPTION"), JOptionPane.ERROR_MESSAGE);
             }
+        } else if (e.getSource() == definitionManager) {
+            getEditor().showDefinitionManager();
         } else if (e.getSource() == saveImage) {
-            try {
-                ((ECUEditorMenuBar) getEditor().getJMenuBar()).saveImage(false);
-                getEditor().refreshUI();
-            } catch (Exception ex) {
-                JOptionPane.showMessageDialog(getEditor(), new DebugPanel(ex,
-                        getSettings().getSupportURL()),
-                        rb.getString("EXCEPTION"), JOptionPane.ERROR_MESSAGE);
-            }
+            saveActions.show(saveImage, 0, saveImage.getHeight());
         } else if (e.getSource() == connect) {
             getEditor().showConnectionCenter();
         } else if (e.getSource() == liveData) {
@@ -394,6 +419,17 @@ public class ECUEditorToolBar extends JToolBar implements ActionListener {
             getEditor().toggleNavigationPanel();
         } else if (e.getSource() == search) {
             getEditor().showUnifiedSearch();
+        }
+    }
+
+    private void saveRom(boolean now) {
+        try {
+            ((ECUEditorMenuBar) getEditor().getJMenuBar()).saveImage(now);
+            getEditor().refreshUI();
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(getEditor(), new DebugPanel(ex,
+                    getSettings().getSupportURL()),
+                    rb.getString("EXCEPTION"), JOptionPane.ERROR_MESSAGE);
         }
     }
 

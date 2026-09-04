@@ -431,6 +431,20 @@ public class EditorWorkbenchComponentsTest {
         assertNull(ECUEditorManager.getECUEditorWithoutCreation());
         assertEquals(0, count(editorToolbar, JComboBox.class));
         assertEquals(5, count(full, JComboBox.class));
+        JButton definitions = findNamed(editorToolbar, JButton.class,
+                "OPEN DEFINITION MANAGER");
+        assertNotNull(definitions);
+        assertEquals("Definitions Manager", definitions.getText());
+        JButton save = findNamed(editorToolbar, JButton.class,
+                "SAVE ROM OPTIONS");
+        assertNotNull(save);
+        assertEquals("Save As \u25be", save.getText());
+        JPopupMenu saveOptions = (JPopupMenu) save.getClientProperty(
+                "SAVE_OPTIONS_POPUP");
+        assertNotNull(saveOptions);
+        assertEquals(2, saveOptions.getComponentCount());
+        assertEquals("Save Now", ((JMenuItem) saveOptions.getComponent(0)).getText());
+        assertEquals("Save As…", ((JMenuItem) saveOptions.getComponent(1)).getText());
         JToggleButton navigation = findNamed(editorToolbar,
                 JToggleButton.class, "TOGGLE NAVIGATION");
         assertNotNull(navigation);
