@@ -76,6 +76,16 @@ Last updated: 2026-09-04
   in both themes, collapses decorative branding at narrow desktop widths,
   preserves usable Editor and Logger navigation rails, wraps Dashboard controls
   as groups, and gives empty workspaces and definition lists clear guidance.
+- Calibration values and axes now honor the active definition format instead
+  of exposing binary floating-point noise. The inspector shows engineering
+  units and actual X/Y coordinates, while the heatmap and 3D renderer use
+  scaled engineering values.
+- JavaFX theme changes propagate to every open Editor and Logger window.
+  Successful checksum updates stay in the status bar, custom dialogs close with
+  Escape, CSV browsing starts in the configured output folder, and Linux native
+  Save As results are protected from duplicate ROM extensions.
+- The Road Dyno now presents readable channel names and units and independently
+  identifies engine-speed and vehicle-speed inputs as channels are selected.
 - Long ROM, calibration, channel, and definition names retain compact layouts
   with full-name tooltips. The clean-install definition prompt is deferred until
   the Editor has painted, avoiding an unrendered first-run window on Linux.
@@ -155,18 +165,16 @@ verification, recovery, and connected test plans are complete.
 
 ## Next work
 
-1. Run the exact JavaFX Linux candidate through the complete AUG2 workflow and
-   visual audit, then rebuild after every failed gate.
-2. Run the Windows JavaFX package natively at normal and high DPI, including
+1. Run the Windows JavaFX package natively at normal and high DPI, including
    definitions, ROM editing, Logger hardware setup, dashboard, Dyno, and Log
    Analysis.
-3. Continue keyboard and screen-reader accessibility work across the JavaFX
+2. Continue keyboard and screen-reader accessibility work across the JavaFX
    calibration and Logger workspaces.
-4. Rerun ECU definition table editing, Logger definition/profile import, and
+3. Rerun ECU definition table editing, Logger definition/profile import, and
    the offline logger preview on the Galaxy S25; keep the wired live logger for
    RC5 connected qualification.
-5. Resume OpenPort and external-sensor in-car qualification during RC5 work.
-6. Qualify the Mitsubishi Lancer Evolution MUT-II path on a vehicle before
+4. Resume OpenPort and external-sensor in-car qualification during RC5 work.
+5. Qualify the Mitsubishi Lancer Evolution MUT-II path on a vehicle before
    describing it as supported.
 
 macOS ARM64 and Intel work remains paused while the desktop and Android

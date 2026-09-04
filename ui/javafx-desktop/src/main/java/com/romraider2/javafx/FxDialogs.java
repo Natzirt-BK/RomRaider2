@@ -99,7 +99,23 @@ final class FxDialogs {
         chooser.setInitialFileName(name);
         chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter(
                 "ROM images", "*.bin", "*.hex", "*.srf"));
-        return chooser.showSaveDialog(owner);
+        return normalizeRomSaveTarget(chooser.showSaveDialog(owner));
+    }
+
+    static File normalizeRomSaveTarget(File selected) {
+        if (selected == null) return null;
+        String name = selected.getName();
+        String lowerName = name.toLowerCase(java.util.Locale.ROOT);
+        for (String extension : new String[] {".bin", ".hex", ".srf"}) {
+            if (lowerName.endsWith(extension + extension)) {
+                String normalizedName = name.substring(
+                        0, name.length() - extension.length());
+                File parent = selected.getParentFile();
+                return parent == null ? new File(normalizedName)
+                        : new File(parent, normalizedName);
+            }
+        }
+        return selected;
     }
 
     static File chooseDefinition(Window owner, File directory) {

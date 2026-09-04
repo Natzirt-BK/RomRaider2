@@ -156,7 +156,7 @@ final class FxEditorWindow {
             }
 
             @Override public void checksumUpdated(Rom rom, String message) {
-                FxDialogs.info(stage, "Checksum updated", message);
+                setStatus(message, 100);
             }
         };
     }
@@ -609,7 +609,19 @@ final class FxEditorWindow {
                 new javafx.scene.control.TableColumn<>("Result");
         outcome.setCellValueFactory(value -> new javafx.beans.property
                 .ReadOnlyStringWrapper(value.getValue().getStatus().toString()));
+        outcome.setCellFactory(ignored -> new javafx.scene.control.TableCell<>() {
+            @Override protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                setText(empty ? null : item);
+                getStyleClass().remove("comparison-different");
+                if (!empty && item != null && !"EQUAL".equals(item)) {
+                    getStyleClass().add("comparison-different");
+                }
+            }
+        });
         table.getColumns().addAll(name, outcome);
+        table.setColumnResizePolicy(javafx.scene.control.TableView
+                .CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
         name.setPrefWidth(430);
         outcome.setPrefWidth(170);
         Label summary = new Label(result.getEqualCount() + " equal  ·  "

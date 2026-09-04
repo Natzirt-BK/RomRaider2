@@ -66,6 +66,7 @@
 .calibration-heat-7 { -fx-background-color: rgba(217,78,61,.19); }
 .table-row-cell:selected .calibration-cell { -fx-background-color: -rr-accent; -fx-text-fill: white; }
 .calibration-cell-changed { -fx-border-color: -rr-danger; -fx-border-width: 0 0 2 0; }
+.comparison-different { -fx-text-fill: #d26a22; -fx-font-weight: bold; }
 .dtc-card { -fx-background-color: -fx-control-inner-background; -fx-border-color: -rr-border; -fx-background-radius: 10; -fx-border-radius: 10; -fx-padding: 30; }
 .dtc-switch { -fx-min-width: 150; -fx-min-height: 44; -fx-font-size: 15px; -fx-font-weight: bold; }
 .dtc-switch:selected { -fx-background-color: -rr-accent; -fx-text-fill: white; }

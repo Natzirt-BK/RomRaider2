@@ -8,16 +8,35 @@ still required before it can be treated as a stable release.
 What changed since RC3
 ----------------------
 
+Desktop JavaFX cutover
+
+- Made JavaFX the default Editor and Logger shell in the Windows and Linux
+  desktop launchers and release workflows. Swing and Compose remain explicit
+  compatibility choices during qualification; neither is required by the
+  default desktop package.
+- Restored the complete desktop command surface around the new shell: Open
+  ROM, Save As, Definitions Manager, comparison, user levels, settings, Logger
+  definition loading, output-folder browsing, and reversible channel access.
+- Added calibration tabs, definition-formatted values and axes, engineering
+  units, selected-cell coordinates, a restrained heatmap, direct edits,
+  definition increments, undo/redo, restore, and a freely rotatable 3D view.
+- Added one shared Light/Dark theme state across every open Editor, Logger,
+  dialog, detached gauge, chart, and calibration surface. High Contrast is no
+  longer exposed by the JavaFX desktop.
+- Improved native chooser behavior on Linux: loaded definitions stay visible,
+  successful checksum updates no longer interrupt Save As, CSV analysis starts
+  in the configured log folder, and duplicate ROM extensions are normalized.
+
 Logger
 
-- Rebuilt the main Logger workspace around five views: Overview, Data, Graph,
-  Dashboard, and Analysis. They all use the same connection, selected-channel
-  list, recording state, and live data.
+- Rebuilt the main Logger workspace around six views: Overview, Data, Graph,
+  Dashboard, Dyno, and Log Analysis. They use the same connection,
+  selected-channel list, recording state, and live data.
 - Added a faster channel browser with search, grouped counts, current values,
   colour-coded parameter names, touch scrolling, and a visible scrollbar.
-- Added five original gauge styles with stable scales, measured minimum and
-  maximum values, peak recall, consistent number formatting, and saved Compact,
-  Standard, or Large dashboard density.
+- Added Analog, Digital, Trend, and Alarm gauge roles with stable scales,
+  consistent number formatting, Standard/Large/Custom sizing, per-gauge color,
+  and detachable desktop windows.
 - Added per-channel gauge settings. Custom scales and low or high warnings are
   optional, saved between sessions, and use hysteresis to prevent flicker near
   a limit. RomRaider2 never guesses a safety limit for the user.
@@ -115,17 +134,17 @@ Android and SteamOS
 Checks completed
 ----------------
 
-- The shared Java 21 suite and Compose Logger tests pass.
+- The shared Java 21 suite and JavaFX desktop tests pass.
 - The Android APK and shared portable core build successfully.
-- The Linux Java 21 image and SteamOS bundle pass their package checks with the
-  correct native Compose renderer and without ROMs, definitions, or private
-  vehicle files.
+- The Linux Java 21 image passes its package checks with the correct platform
+  JavaFX modules, no Compose/Skia artifacts, and no ROMs, definitions, or
+  private vehicle files. The separate SteamOS bundle also passes its package
+  checks.
 - Logger views, gauge styles, warning states, first-run definition prompt, and
   the refreshed Editor shell have passed isolated Linux rendering checks.
-- The matching Windows source passed the Java and Compose suites in the VM. Its
-  portable image also passed a native launch and first-run visual check.
-- The public RC4 replacement was approved after the Linux and Android review
-  builds were exercised and the Windows parity pass was completed.
+- The Windows launcher and release workflow now select JavaFX, and the shared
+  source passes the Java and JavaFX suites. A fresh native Windows JavaFX image
+  still needs its normal/high-DPI visual qualification before release.
 
 Known limits
 ------------
