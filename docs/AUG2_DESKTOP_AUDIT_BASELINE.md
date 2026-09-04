@@ -116,6 +116,12 @@ archive checksum recorded in the qualification record.
   menu is removed. The complete Java 21 suite, production Linux build, Compose
   tests/staging, and Linux application-image build pass. Packaged user approval
   for findings 8–10 remains open.
+- User check of candidate commit `bec00724`, archive SHA-256
+  `27393e397b05430191dd71e37fe621b4e61dd4130e8df0da296242e267675585`,
+  correctly found that the packaged Compose startup surface still showed
+  `Definitions`, retained the redundant ECU Definitions/Add Definitions menu,
+  and had no `Save As` toolbar control. This candidate does not pass findings
+  9 or 10. The correction is being applied to the Compose startup surface.
 
 This evidence qualifies only the non-visual baseline. Matrix rows remain
 `NOT RUN` until their complete acceptance tests are performed.

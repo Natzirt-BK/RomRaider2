@@ -25,6 +25,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.AlertDialog
 import androidx.compose.material.Button
 import androidx.compose.material.Checkbox
+import androidx.compose.material.DropdownMenu
+import androidx.compose.material.DropdownMenuItem
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.OutlinedTextField
 import androidx.compose.material.Surface
@@ -670,15 +672,6 @@ private fun launchEditorShell(startupFiles: List<File>) = application {
                     })
                 }
             }
-            Menu("ECU Definitions") {
-                Item("Add Definitions...", onClick = {
-                    addDefinitions(window, SettingsManager.getSettings(),
-                        { status = it }, { notice = it })
-                })
-                Item("Manage Definitions...", onClick = {
-                    definitionManagerOpen = true
-                })
-            }
             Menu("Tools") {
                 Item("Compare open ROMs", onClick = {
                     comparisonOpen = true
@@ -695,9 +688,8 @@ private fun launchEditorShell(startupFiles: List<File>) = application {
         }
 
         ComposeEditorShell(snapshot, controller, status, progress,
-            ::chooseRoms, { saveActive(false) }) {
-            addDefinitions(window, SettingsManager.getSettings(),
-                { status = it }, { notice = it })
+            ::chooseRoms, { saveActive(false) }, { saveActive(true) }) {
+            definitionManagerOpen = true
         }
 
         LaunchedEffect(requestedFiles) {
@@ -1098,8 +1090,9 @@ internal fun ComposeEditorShell(
     status: String,
     progress: Int,
     open: () -> Unit,
-    save: () -> Unit,
-    addDefinitions: () -> Unit
+    saveNow: () -> Unit,
+    saveAs: () -> Unit,
+    manageDefinitions: () -> Unit
 ) {
     val dark = rememberApplicationDarkTheme()
     val colors = if (dark) darkColors(
@@ -1126,7 +1119,8 @@ internal fun ComposeEditorShell(
     MaterialTheme(colors = colors) {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colors.background) {
             Column(Modifier.fillMaxSize()) {
-                ShellToolbar(snapshot, open, save, addDefinitions)
+                ShellToolbar(snapshot, open, saveNow, saveAs,
+                    manageDefinitions)
                 Row(Modifier.weight(1f).fillMaxWidth()) {
                     Box(Modifier.width(292.dp).fillMaxHeight()) {
                         EditorNavigationSurface(navigation,
@@ -1175,9 +1169,11 @@ private fun ShellAlertDialog(
 private fun ShellToolbar(
     snapshot: EditorDocumentSnapshot,
     open: () -> Unit,
-    save: () -> Unit,
-    addDefinitions: () -> Unit
+    saveNow: () -> Unit,
+    saveAs: () -> Unit,
+    manageDefinitions: () -> Unit
 ) {
+    var saveMenuOpen by remember { mutableStateOf(false) }
     Row(
         Modifier.fillMaxWidth().background(MaterialTheme.colors.surface)
             .padding(horizontal = 14.dp, vertical = 9.dp),
@@ -1188,8 +1184,24 @@ private fun ShellToolbar(
             fontWeight = FontWeight.Bold, fontSize = 14.sp)
         Spacer(Modifier.width(10.dp))
         Button(open) { Text("Open ROM") }
-        Button(save, enabled = snapshot.activeRom != null) { Text("Save") }
-        TextButton(addDefinitions) { Text("Definitions") }
+        TextButton(manageDefinitions) { Text("Definitions Manager") }
+        Box {
+            Button(onClick = { saveMenuOpen = true },
+                enabled = snapshot.activeRom != null) {
+                Text("Save As \u25be")
+            }
+            DropdownMenu(expanded = saveMenuOpen,
+                onDismissRequest = { saveMenuOpen = false }) {
+                DropdownMenuItem(onClick = {
+                    saveMenuOpen = false
+                    saveNow()
+                }) { Text("Save Now") }
+                DropdownMenuItem(onClick = {
+                    saveMenuOpen = false
+                    saveAs()
+                }) { Text("Save As…") }
+            }
+        }
         Spacer(Modifier.weight(1f))
         Text(snapshot.activeRom?.fileName ?: "No ROM open",
             color = MaterialTheme.colors.onSurface.copy(alpha = .62f),

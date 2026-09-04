@@ -58,7 +58,8 @@ fun main(args: Array<String>) {
         ) {
             ComposeEditorShell(
                 snapshot, controller, "Ready", 100,
-                open = { }, save = { }, addDefinitions = { }
+                open = { }, saveNow = { }, saveAs = { },
+                manageDefinitions = { }
             )
         }
         LaunchedEffect(Unit) {
