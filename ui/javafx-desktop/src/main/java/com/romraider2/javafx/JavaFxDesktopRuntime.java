@@ -61,6 +61,10 @@ final class JavaFxDesktopRuntime {
         private void route(String[] arguments) {
             if (isLoggerLaunch(arguments)) {
                 openLogger();
+                if (Arrays.stream(arguments).anyMatch(value -> value.equalsIgnoreCase("-logger.touch")))
+                    logger.setTouchMode();
+                if (Arrays.stream(arguments).anyMatch(value -> value.equalsIgnoreCase("-logger.fullscreen")))
+                    logger.maximize();
             } else {
                 List<File> files = Arrays.stream(arguments)
                         .map(File::new).filter(File::isFile).toList();

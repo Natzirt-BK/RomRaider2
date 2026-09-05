@@ -116,6 +116,7 @@ final class FxLoggerWindow {
     private boolean disposed;
     private File activeLogFile;
     private FxLogAnalysisPane analysisPane;
+    private final FxLoggerStartup startup = new FxLoggerStartup();
 
     FxLoggerWindow(Runnable closed) {
         this.closed = closed;
@@ -772,7 +773,7 @@ final class FxLoggerWindow {
         detached.setOnHidden(event -> detachedGauges.remove(
                 sample.getParameterId()));
         detachedGauges.put(sample.getParameterId(), detached);
-        detached.show();
+        FxWindowPlacement.show(detached);
     }
 
     private void refreshDetachedGauges(List<LiveDataSample> selected) {
@@ -849,6 +850,7 @@ final class FxLoggerWindow {
         FxLoggerSetup.show(stage, runtime, () -> {
             status.setText("Logger configuration loaded");
             rebuildChannels();
+            considerAutoConnect();
         });
     }
 
@@ -868,6 +870,7 @@ final class FxLoggerWindow {
             com.romraider.util.SettingsManager.save(runtime.getSettings());
             status.setText("Loaded Logger definition: " + selected.getName());
             rebuildChannels();
+            considerAutoConnect();
         } catch (RuntimeException failure) {
             FxDialogs.error(stage, "Logger definition could not be loaded",
                     FxDialogs.rootMessage(failure));
@@ -917,7 +920,22 @@ final class FxLoggerWindow {
         String definition = runtime.getSettings().getLoggerDefinitionFilePath();
         if (definition == null || definition.isBlank()) {
             showSetup();
-        }
+        } else considerAutoConnect();
+    }
+
+    void setTouchMode() {
+        root.getProperties().put("rr-touch-override", true);
+        FxTheme.refresh(stage.getScene());
+    }
+
+    void maximize() { stage.setMaximized(true); }
+
+    private void considerAutoConnect() {
+        if (disposed) return;
+        String definition = runtime.getSettings().getLoggerDefinitionFilePath();
+        startup.consider(runtime.getSettings().getAutoConnectOnStartup(),
+                definition != null && !definition.isBlank() && new File(definition).isFile(),
+                context.getSession().getState(), () -> context.getSession().connect());
     }
 
     void close() {

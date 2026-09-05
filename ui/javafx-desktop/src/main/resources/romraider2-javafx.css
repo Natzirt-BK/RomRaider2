@@ -81,17 +81,29 @@
 .axis-summary { -fx-text-fill: -rr-muted; -fx-font-size: 11px; -fx-font-weight: bold; }
 .table-size-controls { -fx-alignment: center-right; }
 .compact-button { -fx-min-width: 32; -fx-padding: 4 8 4 8; }
+.touch-controls .button, .touch-controls .toggle-button,
+.touch-controls .combo-box, .touch-controls .text-field,
+.touch-controls .check-box, .touch-controls .menu-item {
+    -fx-min-height: 48px;
+}
+.touch-controls .button, .touch-controls .toggle-button { -fx-min-width: 48px; }
+.touch-controls .tab { -fx-padding: 12 16 12 16; }
+.touch-controls .table-row-cell { -fx-cell-size: 48px; }
 .table-scale-reset { -fx-min-width: 58; }
-.calibration-heat-0 { -fx-background-color: rgba(36,123,160,.05); }
-.calibration-heat-1 { -fx-background-color: rgba(32,144,153,.07); }
-.calibration-heat-2 { -fx-background-color: rgba(30,158,135,.09); }
-.calibration-heat-3 { -fx-background-color: rgba(69,171,107,.11); }
-.calibration-heat-4 { -fx-background-color: rgba(143,179,75,.13); }
-.calibration-heat-5 { -fx-background-color: rgba(201,171,63,.15); }
-.calibration-heat-6 { -fx-background-color: rgba(223,132,55,.17); }
-.calibration-heat-7 { -fx-background-color: rgba(217,78,61,.19); }
-.table-row-cell:selected .calibration-cell { -fx-background-color: -rr-accent; -fx-text-fill: white; }
+.calibration-heat-0 { -fx-background-color: -rr-heat-0; }
+.calibration-heat-1 { -fx-background-color: -rr-heat-1; }
+.calibration-heat-2 { -fx-background-color: -rr-heat-2; }
+.calibration-heat-3 { -fx-background-color: -rr-heat-3; }
+.calibration-heat-4 { -fx-background-color: -rr-heat-4; }
+.calibration-heat-5 { -fx-background-color: -rr-heat-5; }
+.calibration-heat-6 { -fx-background-color: -rr-heat-6; }
+.calibration-heat-7 { -fx-background-color: -rr-heat-7; }
+.table-row-cell:selected .calibration-cell, .calibration-cell:selected { -fx-background-color: -rr-calibration-select; -fx-text-fill: white; }
 .calibration-cell-changed { -fx-border-color: -rr-danger; -fx-border-width: 0 0 2 0; }
+.calibration-increased { -fx-border-color: -rr-increase; }
+.calibration-decreased { -fx-border-color: -rr-decrease; }
+.calibration-row-headers .table-cell { -fx-background-color: -rr-axis; }
+.table-view.calibration-grid .column-header { -fx-background-color: -rr-axis; }
 .comparison-different { -fx-text-fill: #d26a22; -fx-font-weight: bold; }
 .dtc-card { -fx-background-color: -fx-control-inner-background; -fx-border-color: -rr-border; -fx-background-radius: 10; -fx-border-radius: 10; -fx-padding: 30; }
 .dtc-switch { -fx-min-width: 150; -fx-min-height: 44; -fx-font-size: 15px; -fx-font-weight: bold; }

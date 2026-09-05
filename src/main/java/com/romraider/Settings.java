@@ -203,6 +203,7 @@ public class Settings implements Serializable {
 
     private Font tableFont = new Font("Arial", Font.BOLD, 11);
     private Dimension cellSize = new Dimension(42, 18);
+    private Dimension javaFxCellSize = new Dimension(124, 34);
     private Color maxColor = new Color(255, 102, 102);
     private Color minColor = new Color(153, 153, 255);
 
@@ -438,6 +439,15 @@ public class Settings implements Serializable {
 
     public void setCellSize(Dimension cellSize) {
         this.cellSize = cellSize;
+    }
+
+    public Dimension getJavaFxCellSize() {
+        return javaFxCellSize == null ? new Dimension(124, 34) : new Dimension(javaFxCellSize);
+    }
+
+    public void setJavaFxCellSize(Dimension size) {
+        javaFxCellSize = new Dimension(Math.max(60, Math.min(500, size.width)),
+                Math.max(26, Math.min(120, size.height)));
     }
 
     public Color getMaxColor() {

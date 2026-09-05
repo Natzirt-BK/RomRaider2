@@ -331,6 +331,8 @@ public final class DOMSettingsBuilder {
         IIOMetadataNode cellSize = new IIOMetadataNode("cellsize");
         cellSize.setAttribute("height", String.valueOf((int) settings.getCellSize().getHeight()));
         cellSize.setAttribute("width", String.valueOf(((int) settings.getCellSize().getWidth())));
+        cellSize.setAttribute("fx-width", String.valueOf(settings.getJavaFxCellSize().width));
+        cellSize.setAttribute("fx-height", String.valueOf(settings.getJavaFxCellSize().height));
         tableDisplay.appendChild(cellSize);
 
         // colors

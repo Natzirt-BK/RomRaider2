@@ -281,13 +281,17 @@ final class FxEditorWindow {
             }
         });
         navigation.setOnMouseClicked(event -> {
-            if (rebuilding) return;
+            if (rebuilding || event.getClickCount() != SettingsManager.getSettings().getTableClickCount()) return;
             TreeItem<NavigationItem> selected = navigation.getSelectionModel()
                     .getSelectedItem();
             if (selected != null && selected.getValue().table != null
                     && snapshot.getActiveRom() != null) {
-                controller.openTable(snapshot.getActiveRom(),
-                        selected.getValue().table);
+                Table table = selected.getValue().table;
+                EditorDocument document = controller.getSession().snapshot().getActiveDocument();
+                if (document != null && SettingsManager.getSettings().getTableClickBehavior() == 0
+                        && document.getOpenTables().contains(table)) {
+                    controller.closeTable(document.getRom(), table);
+                } else controller.openTable(snapshot.getActiveRom(), table);
             }
         });
         navigation.setOnKeyPressed(event -> {
@@ -578,7 +582,8 @@ final class FxEditorWindow {
                     parent.getChildren().add(entry);
                     if (table == snapshot.getActiveTable()) expandParents(entry);
                 }
-                if (!query.isEmpty()) expandAll(rootItem);
+                if (!query.isEmpty() || settings.isOpenExpanded()) expandAll(rootItem);
+                if (settings.isTableTreeSorted()) sortNavigation(rootItem);
             }
             navigation.setRoot(rootItem);
         } finally {
@@ -602,9 +607,16 @@ final class FxEditorWindow {
 
     private void settingsApplied() {
         refreshTheme();
+        calibrationPanes.values().forEach(FxCalibrationPane::refreshSettings);
         rebuildNavigation();
         updateMetrics();
         setStatus("Editor settings applied", 100);
+    }
+
+    private static void sortNavigation(TreeItem<NavigationItem> parent) {
+        parent.getChildren().sort(java.util.Comparator.comparing(value -> value.getValue().label,
+                String.CASE_INSENSITIVE_ORDER));
+        parent.getChildren().forEach(FxEditorWindow::sortNavigation);
     }
 
     private void refreshTheme() {
@@ -660,13 +672,11 @@ final class FxEditorWindow {
         FxTheme.apply(compare, scene);
         FxTheme.closeOnEscape(compare, scene);
         compare.setScene(scene);
-        compare.show();
+        FxWindowPlacement.show(compare);
     }
 
     private void showLiveTunePreview() {
-        FxDialogs.info(stage, "Live Tune preview",
-                "Live Tune remains a staged, read-only preview until a "
-                        + "verified ECU connection and preflight are available.");
+        FxLiveTunePreview.show(stage, controller.getSession());
     }
 
     private void setStatus(String text, Integer percent) {

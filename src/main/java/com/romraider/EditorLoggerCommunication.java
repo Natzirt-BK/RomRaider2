@@ -27,6 +27,12 @@ import java.io.PrintWriter;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 
 public final class EditorLoggerCommunication {
 
@@ -34,6 +40,8 @@ public final class EditorLoggerCommunication {
     
     private static final InetAddress LOOPBACK = InetAddress.getLoopbackAddress();
     private static final int PORT = 23272;
+    private static final String ARGUMENT_PREFIX = "RR2ARGS1:";
+    private static final int MAX_MESSAGE = 1024 * 1024;
     
     private static Exec_type currentExecType;
     private static String[] currentArgs;
@@ -67,14 +75,18 @@ public final class EditorLoggerCommunication {
     }
 
     public static ExecutableInstance waitForOtherExec() throws IOException {
-        ServerSocket sock = new ServerSocket(PORT, 1, LOOPBACK);
-        
-        try {
-            Socket client = sock.accept();
+        try (ServerSocket sock = new ServerSocket(PORT, 1, LOOPBACK)) {
+            return receive(sock);
+        }
+    }
+
+    static ExecutableInstance receive(ServerSocket sock) throws IOException {
+        try (Socket client = sock.accept()) {
+            client.setSoTimeout(3000);
             
-            BufferedReader br = new BufferedReader(new InputStreamReader(client.getInputStream()));
-            String type_String =  br.readLine();
-            String args_String =  br.readLine();
+            BufferedReader br = new BufferedReader(new InputStreamReader(client.getInputStream(), StandardCharsets.UTF_8));
+            String type_String = readLine(br);
+            String args_String = readLine(br);
             
             ExecutableInstance instance = new ExecutableInstance();
                       
@@ -88,11 +100,9 @@ public final class EditorLoggerCommunication {
             	instance.execType =  Exec_type.UNKNOWN;
             }
             
-            instance.currentArgs = args_String.split(" ");           
+            instance.currentArgs = decodeArguments(args_String);
             return instance;
             
-        } finally {
-            sock.close();
         }
     }
     
@@ -102,21 +112,63 @@ public final class EditorLoggerCommunication {
             OutputStream os = socket.getOutputStream();
             
             try {
-                PrintWriter pw = new PrintWriter(os, true);
+                PrintWriter pw = new PrintWriter(os, true, StandardCharsets.UTF_8);
                 pw.println(getExecutableType().toString());
                 
-                String argsSend = "";
-                
-                for (String arg: args) {
-                	argsSend += arg + " ";
-                }
-                
-                pw.println(argsSend);
+                pw.println(encodeArguments(args));
             } finally {
                 socket.close();
             }
         } catch (IOException e) {
             e.printStackTrace();
         }
+    }
+
+    static String encodeArguments(String[] args) throws IOException {
+        if (args.length > 4096) throw new IOException("Too many launch arguments");
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        try (DataOutputStream data = new DataOutputStream(bytes)) {
+            data.writeInt(args.length);
+            for (String arg : args) {
+                byte[] value = arg.getBytes(StandardCharsets.UTF_8);
+                if (value.length > MAX_MESSAGE || bytes.size() + value.length > MAX_MESSAGE / 2)
+                    throw new IOException("Launch arguments are too long");
+                data.writeInt(value.length);
+                data.write(value);
+            }
+        }
+        return ARGUMENT_PREFIX + Base64.getEncoder().encodeToString(bytes.toByteArray());
+    }
+
+    static String[] decodeArguments(String message) throws IOException {
+        if (message == null || message.length() > MAX_MESSAGE) throw new IOException("Invalid launch message");
+        // Accept older senders; only the versioned protocol can preserve spaces.
+        if (!message.startsWith(ARGUMENT_PREFIX))
+            return message.isBlank() ? new String[0] : message.split(" ");
+        try (DataInputStream data = new DataInputStream(new ByteArrayInputStream(
+                Base64.getDecoder().decode(message.substring(ARGUMENT_PREFIX.length()))))) {
+            int count = data.readInt();
+            if (count < 0 || count > 4096) throw new IOException("Invalid argument count");
+            String[] result = new String[count];
+            for (int i = 0; i < count; i++) {
+                int length = data.readInt();
+                if (length < 0 || length > data.available()) throw new IOException("Invalid argument length");
+                result[i] = new String(data.readNBytes(length), StandardCharsets.UTF_8);
+            }
+            if (data.available() != 0) throw new IOException("Trailing launch data");
+            return result;
+        } catch (IllegalArgumentException invalid) {
+            throw new IOException("Invalid encoded launch arguments", invalid);
+        }
+    }
+
+    private static String readLine(BufferedReader reader) throws IOException {
+        StringBuilder line = new StringBuilder();
+        for (int value; (value = reader.read()) != -1;) {
+            if (value == '\n') return line.toString();
+            if (value != '\r') line.append((char) value);
+            if (line.length() > MAX_MESSAGE) throw new IOException("Launch message is too long");
+        }
+        throw new IOException("Incomplete launch message");
     }
 }

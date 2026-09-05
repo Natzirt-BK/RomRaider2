@@ -15,6 +15,22 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 /** Opt-in native-window test: run with a desktop or under xvfb-run. */
 @EnabledIfEnvironmentVariable(named = "RR2_FX_WINDOW_SMOKE", matches = "1")
 class FxWindowPlacementSmokeTest {
+    @Test void modalWindowFitsAfterNativeDecorationIsKnown() throws Exception {
+        FxTestRuntime.run(() -> {
+            Stage stage = new Stage();
+            Rectangle2D work = Screen.getPrimary().getVisualBounds();
+            stage.setScene(new Scene(new StackPane(), work.getWidth() + 200, work.getHeight() + 200));
+            stage.setOnShown(event -> javafx.application.Platform.runLater(stage::close));
+            try {
+                FxWindowPlacement.showAndWait(stage);
+                assertTrue(stage.getX() >= work.getMinX() - 1);
+                assertTrue(stage.getY() >= work.getMinY() - 1);
+                assertTrue(stage.getX() + stage.getWidth() <= work.getMaxX() + 1);
+                assertTrue(stage.getY() + stage.getHeight() <= work.getMaxY() + 1);
+            } finally { stage.close(); }
+        });
+    }
+
     @Test
     void nativeWindowFitsAndRepeatedShowPreservesUserPlacement() throws Exception {
         FxTestRuntime.run(() -> {

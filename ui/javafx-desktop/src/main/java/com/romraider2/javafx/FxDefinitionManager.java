@@ -18,9 +18,6 @@ import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
 import javafx.scene.control.Tooltip;
 import javafx.scene.layout.BorderPane;
-import javafx.scene.layout.HBox;
-import javafx.scene.layout.Priority;
-import javafx.scene.layout.Region;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 import javafx.stage.Window;
@@ -72,8 +69,6 @@ final class FxDefinitionManager {
         Button down = new Button("Move down");
         up.setOnAction(event -> move(files, -1));
         down.setOnAction(event -> move(files, 1));
-        Region fill = new Region();
-        HBox.setHgrow(fill, Priority.ALWAYS);
         Button cancel = new Button("Cancel");
         cancel.setOnAction(event -> stage.close());
         Button save = new Button("Save definitions");
@@ -84,7 +79,8 @@ final class FxDefinitionManager {
             saved.run();
             stage.close();
         });
-        HBox actions = new HBox(8, add, remove, up, down, fill, cancel, save);
+        javafx.scene.layout.FlowPane actions = new javafx.scene.layout.FlowPane(8, 8,
+                add, remove, up, down, cancel, save);
         actions.setPadding(new Insets(10));
 
         Label heading = new Label("Definition priority");
@@ -92,6 +88,7 @@ final class FxDefinitionManager {
         Label detail = new Label("Definitions are tried from top to bottom. "
                 + "Already loaded files remain visible and can be reordered.");
         detail.getStyleClass().add("muted");
+        detail.setWrapText(true);
         javafx.scene.layout.VBox top = new javafx.scene.layout.VBox(5,
                 heading, detail);
         top.getStyleClass().add("dialog-header");
@@ -100,7 +97,7 @@ final class FxDefinitionManager {
         FxTheme.apply(stage, scene);
         FxTheme.closeOnEscape(stage, scene);
         stage.setScene(scene);
-        stage.showAndWait();
+        FxWindowPlacement.showAndWait(stage);
     }
 
     private static void move(ListView<File> list, int offset) {

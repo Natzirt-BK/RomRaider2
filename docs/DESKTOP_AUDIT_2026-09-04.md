@@ -2,6 +2,47 @@
 
 ## Verdict
 
+### Repair follow-up (current work)
+
+The original findings below are retained as historical evidence. A1–A3 were
+repaired in `b587c6c5`; both native CI jobs passed. Diagnostic copies of that
+candidate's Linux and Windows packages passed ten synthetic save/close cases
+using their packaged JVM/application classes. Original archives were unchanged;
+the diagnostic copies added a probe JAR and changed their launcher entry point.
+This is not native file-chooser, real-definition/checksum, or hardware acceptance.
+
+The A4–A9 follow-up now implements:
+
+- Numeric source-sample sorting and linked table/chart/statistics/playback ranges.
+- Scrollable calibration and Dyno controls, wrapped Dyno header and definition
+  actions, bounded owned windows, and post-native-show modal fitting.
+- Axis editing and rectangular interpolation through shared undo/redo history,
+  configurable full-table clipboard headers, and a read-only Live Tune draft
+  with before/after bytes and explicit unqualified-runtime evidence.
+- Editor behavior/warning, font, cell size, color, clipboard, UI scale and touch
+  preferences. Swing-only floating-frame/icon/overlay preferences are explicitly
+  labeled compatibility settings, not claimed as active JavaFX functionality.
+  Legacy cell dimensions do not silently shrink the JavaFX table defaults.
+- Once-only Logger startup auto-connect through the existing guarded session
+  lifecycle; tests use a stub and never connect hardware.
+- Length-framed UTF-8 launch arguments, bounded socket reads and compatibility
+  with older senders. An isolated ephemeral-port test covers paths with spaces
+  and Unicode without contacting the user's existing application instance.
+
+Local verification: 344 core tests (341 passed, three optional skips), 29 JavaFX
+tests with native Xvfb smoke enabled, 34 Compose tests, portable-core check, eight
+pinned dependency hashes, and a synthetic repair probe. Settings cancel/apply,
+legacy click semantics, numeric sorting/ranges, actual axis/interpolation button
+actions, reversible touch styling, small scroll recovery and modal placement
+have focused regression coverage. Matched native CI/package follow-up is pending.
+
+**Release remains HOLD.** A complete physical-display, hardware, clean/upgrade,
+native file-dialog, recorded-data and user-acceptance matrix is not implied by
+these automated repairs. The final follow-up will distinguish implemented fixes
+from those external qualification gates; no release assets or pins are promoted.
+
+### Original audit verdict
+
 **HOLD: not release-qualified.** The startup sizing correction is implemented,
 tested, pushed, and verified on fresh native Windows launches. The wider audit
 found reproducible document-safety and analysis defects plus incomplete parity

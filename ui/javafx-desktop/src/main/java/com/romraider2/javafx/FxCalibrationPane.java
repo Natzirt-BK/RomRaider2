@@ -7,6 +7,8 @@ import java.util.Locale;
 import java.util.regex.Pattern;
 
 import com.romraider.editor.calibration.CalibrationAdjustment;
+import com.romraider.editor.calibration.CalibrationAxis;
+import com.romraider.editor.calibration.CalibrationInterpolation;
 import com.romraider.editor.calibration.CalibrationCellEdit;
 import com.romraider.editor.calibration.CalibrationCellSnapshot;
 import com.romraider.editor.calibration.CalibrationEditController;
@@ -24,6 +26,7 @@ import javafx.scene.Node;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.control.Button;
+import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.ScrollBar;
@@ -56,8 +59,6 @@ final class FxCalibrationPane extends BorderPane implements AutoCloseable {
     private static final double TABLE_SCALE_STEP = .1;
     private static final double AXIS_COLUMN_WIDTH = 100;
     private static final double VALUE_COLUMN_WIDTH = 124;
-    private static final double TABLE_ROW_HEIGHT = 34;
-    private static final double TABLE_FONT_SIZE = 13;
 
     private final Table table;
     private final CalibrationEditController controller;
@@ -92,6 +93,7 @@ final class FxCalibrationPane extends BorderPane implements AutoCloseable {
         setCenter(isDiagnosticTroubleCode(snapshot)
                 ? diagnosticControl() : calibrationWorkspace());
         controller.addListener(next -> Platform.runLater(() -> refresh(next)));
+        refreshSettings();
     }
 
     private Node header() {
@@ -132,8 +134,12 @@ final class FxCalibrationPane extends BorderPane implements AutoCloseable {
         }
         BorderPane content = new BorderPane();
         content.setCenter(views);
-        content.setRight(inspector);
-        BorderPane.setMargin(inspector, new Insets(0, 0, 0, 10));
+        ScrollPane inspectorScroll = new ScrollPane(inspector);
+        inspectorScroll.setFitToWidth(true);
+        inspectorScroll.setPrefViewportWidth(275);
+        inspectorScroll.setMinHeight(0);
+        content.setRight(inspectorScroll);
+        BorderPane.setMargin(inspectorScroll, new Insets(0, 0, 0, 10));
         content.setPadding(new Insets(10));
         return content;
     }
@@ -217,6 +223,7 @@ final class FxCalibrationPane extends BorderPane implements AutoCloseable {
     @SuppressWarnings("rawtypes")
     private TableView<RowValues> createGrid() {
         TableView<RowValues> view = new TableView<>();
+        view.getStyleClass().add("calibration-grid");
         view.setColumnResizePolicy(TableView.UNCONSTRAINED_RESIZE_POLICY);
         view.getSelectionModel().setCellSelectionEnabled(true);
         view.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
@@ -390,12 +397,12 @@ final class FxCalibrationPane extends BorderPane implements AutoCloseable {
     }
 
     private void applyTableScale(TableView<RowValues> view) {
+        var settings = com.romraider.util.SettingsManager.getSettings();
         for (TableColumn<RowValues, ?> column : view.getColumns()) {
-            column.setPrefWidth(VALUE_COLUMN_WIDTH * tableScale);
+            column.setPrefWidth(settings.getJavaFxCellSize().width * tableScale);
         }
-        view.setFixedCellSize(Math.max(26, TABLE_ROW_HEIGHT * tableScale));
-        view.setStyle(String.format(Locale.ROOT, "-fx-font-size: %.1fpx;",
-                Math.max(11, TABLE_FONT_SIZE * tableScale)));
+        view.setFixedCellSize(Math.max(26, settings.getJavaFxCellSize().height * tableScale));
+        view.setStyle(tableFontStyle(tableScale));
     }
 
     private void applyRowHeaderScale(TableView<RowValues> view) {
@@ -404,9 +411,39 @@ final class FxCalibrationPane extends BorderPane implements AutoCloseable {
         view.setMinWidth(width);
         view.setPrefWidth(width);
         view.setMaxWidth(width);
-        view.setFixedCellSize(Math.max(26, TABLE_ROW_HEIGHT * tableScale));
-        view.setStyle(String.format(Locale.ROOT, "-fx-font-size: %.1fpx;",
-                Math.max(11, TABLE_FONT_SIZE * tableScale)));
+        var settings = com.romraider.util.SettingsManager.getSettings();
+        view.setFixedCellSize(Math.max(26, settings.getJavaFxCellSize().height * tableScale));
+        view.setStyle(tableFontStyle(settings.isScaleHeadersAndData() ? tableScale : 1));
+    }
+
+    private static String tableFontStyle(double scale) {
+        var font = com.romraider.util.SettingsManager.getSettings().getTableFont();
+        return String.format(Locale.ROOT, "-fx-font-family: '%s'; -fx-font-size: %.1fpx; -fx-font-weight: %s; -fx-font-style: %s;",
+                font.getName().replace("\\", "\\\\").replace("'", "\\'"), Math.max(8, font.getSize() * scale),
+                font.isBold() ? "bold" : "normal", font.isItalic() ? "italic" : "normal");
+    }
+
+    void refreshSettings() {
+        var settings = com.romraider.util.SettingsManager.getSettings();
+        StringBuilder style = new StringBuilder("-rr-calibration-select: " + color(settings.getSelectColor()) + ";");
+        style.append("-rr-axis: ").append(settings.isColorAxis() ? color(settings.getAxisColor()) : "transparent").append(';');
+        style.append("-rr-increase: ").append(color(settings.getIncreaseBorder())).append(';');
+        style.append("-rr-decrease: ").append(color(settings.getDecreaseBorder())).append(';');
+        for (int level = 0; level < HEAT_LEVELS; level++) {
+            double mix = level / (double) (HEAT_LEVELS - 1);
+            var low = settings.getMinColor(); var high = settings.getMaxColor();
+            style.append(String.format(Locale.ROOT, "-rr-heat-%d: rgba(%d,%d,%d,0.18);", level,
+                    (int) (low.getRed() * (1 - mix) + high.getRed() * mix),
+                    (int) (low.getGreen() * (1 - mix) + high.getGreen() * mix),
+                    (int) (low.getBlue() * (1 - mix) + high.getBlue() * mix)));
+        }
+        setStyle(style.toString());
+        if (grid != null) { applyTableScale(grid); grid.refresh(); }
+        if (rowHeaders != null) { applyRowHeaderScale(rowHeaders); rowHeaders.refresh(); }
+    }
+
+    private static String color(java.awt.Color value) {
+        return String.format("#%02x%02x%02x", value.getRed(), value.getGreen(), value.getBlue());
     }
 
     static double normalizeTableScale(double requestedScale) {
@@ -475,16 +512,28 @@ final class FxCalibrationPane extends BorderPane implements AutoCloseable {
                 fullValue.setText(empty || item == null ? "" : item);
                 setTooltip(empty || item == null ? null : fullValue);
                 getStyleClass().remove("calibration-cell-changed");
+                getStyleClass().removeAll("calibration-increased", "calibration-decreased");
+                setStyle("");
                 for (int level = 0; level < HEAT_LEVELS; level++) {
                     getStyleClass().remove("calibration-heat-" + level);
                 }
                 if (!empty && getIndex() >= 0 && getIndex() < snapshot.getRows()) {
+                    var settings = com.romraider.util.SettingsManager.getSettings();
+                    double real = snapshot.cellAt(getIndex(), column).getRealValue();
+                    if (settings.isValueLimitWarning() && table.getCurrentScale() != null
+                            && table.getCurrentScale().getMax() > table.getCurrentScale().getMin()
+                            && (real < table.getCurrentScale().getMin() || real > table.getCurrentScale().getMax())) {
+                        setStyle("-fx-text-fill: " + color(settings.getWarningColor()) + ";");
+                    }
                     getStyleClass().add("calibration-heat-" + heatLevel(
                             snapshot.cellAt(getIndex(), column).getRealValue()));
                 }
                 if (!empty && getIndex() >= 0 && getIndex() < snapshot.getRows()
                         && snapshot.cellAt(getIndex(), column).isChanged()) {
                     getStyleClass().add("calibration-cell-changed");
+                    var cell = snapshot.cellAt(getIndex(), column);
+                    getStyleClass().add(cell.getRawValue() > cell.getOriginalRawValue()
+                            ? "calibration-increased" : "calibration-decreased");
                 }
             }
         };
@@ -536,6 +585,36 @@ final class FxCalibrationPane extends BorderPane implements AutoCloseable {
         increments.getStyleClass().add("section-kicker");
         box.getChildren().addAll(kicker, value, unit, coordinate, editor, apply,
                 increments, fine, coarse);
+        if (table instanceof com.romraider.maps.Table2D || table instanceof com.romraider.maps.Table3D) {
+            box.getChildren().add(axisEditor(CalibrationAxis.COLUMN, selectedColumn,
+                    snapshot.getColumnLabels().get(selectedColumn), "X axis"));
+        }
+        if (table instanceof com.romraider.maps.Table3D) {
+            box.getChildren().add(axisEditor(CalibrationAxis.ROW, selectedRow,
+                    snapshot.getRowLabels().get(selectedRow), "Y axis"));
+        }
+        ComboBox<CalibrationInterpolation> direction = new ComboBox<>(FXCollections.observableArrayList(
+                CalibrationInterpolation.values()));
+        direction.getSelectionModel().selectFirst();
+        direction.setMaxWidth(Double.MAX_VALUE);
+        direction.setAccessibleText("Interpolation direction");
+        Button interpolate = new Button("Interpolate selected rectangle");
+        interpolate.setMaxWidth(Double.MAX_VALUE);
+        interpolate.setOnAction(event -> interpolateSelection(direction.getValue()));
+        box.getChildren().addAll(new Label("Interpolation"), direction, interpolate);
+        Button copyTable = new Button("Copy full table (with axes)");
+        copyTable.setMaxWidth(Double.MAX_VALUE);
+        copyTable.setOnAction(event -> {
+            var settings = com.romraider.util.SettingsManager.getSettings();
+            String header = table instanceof com.romraider.maps.Table3D ? settings.getTable3DHeader()
+                    : table instanceof com.romraider.maps.Table2D ? settings.getTable2DHeader()
+                    : table instanceof com.romraider.maps.Table1D ? settings.getTable1DHeader() : settings.getTableHeader();
+            ClipboardContent copied = new ClipboardContent();
+            copied.putString(header + table.getTableAsString());
+            Clipboard.getSystemClipboard().setContent(copied);
+            status.setText("Full table and axes copied using the configured header");
+        });
+        box.getChildren().add(copyTable);
         if (cell.isChanged()) {
             Button restore = new Button("Restore saved value");
             restore.setMaxWidth(Double.MAX_VALUE);
@@ -547,6 +626,37 @@ final class FxCalibrationPane extends BorderPane implements AutoCloseable {
         status.getStyleClass().add("muted");
         status.setWrapText(true);
         box.getChildren().add(status);
+    }
+
+    private Node axisEditor(CalibrationAxis axis, int index, String current, String label) {
+        TextField value = new TextField(current);
+        value.setPrefColumnCount(6);
+        value.setAccessibleText(label + " value at selected cell");
+        Button apply = new Button("Apply " + label);
+        apply.setMinWidth(Region.USE_PREF_SIZE);
+        apply.setOnAction(event -> runEdit(() -> controller.setAxisValue(axis, index,
+                value.getText()).getSnapshot(), label + " updated in ROM history"));
+        value.setOnAction(event -> apply.fire());
+        HBox.setHgrow(value, Priority.ALWAYS);
+        return new VBox(4, new Label(label + " · selected breakpoint"), new HBox(6, value, apply));
+    }
+
+    @SuppressWarnings("rawtypes")
+    private void interpolateSelection(CalibrationInterpolation direction) {
+        var selected = grid.getSelectionModel().getSelectedCells();
+        if (selected.isEmpty()) { status.setText("Select a complete rectangular range first."); return; }
+        int firstRow = Integer.MAX_VALUE, firstColumn = Integer.MAX_VALUE, lastRow = -1, lastColumn = -1;
+        for (Object value : selected) {
+            javafx.scene.control.TablePosition position = (javafx.scene.control.TablePosition) value;
+            firstRow = Math.min(firstRow, position.getRow()); lastRow = Math.max(lastRow, position.getRow());
+            firstColumn = Math.min(firstColumn, position.getColumn()); lastColumn = Math.max(lastColumn, position.getColumn());
+        }
+        if (selected.size() != (lastRow - firstRow + 1) * (lastColumn - firstColumn + 1)) {
+            status.setText("Interpolation requires a complete rectangular selection."); return;
+        }
+        final int startRow = firstRow, startColumn = firstColumn, endRow = lastRow, endColumn = lastColumn;
+        runEdit(() -> controller.interpolate(startRow, startColumn, endRow, endColumn, direction).getSnapshot(),
+                "Selected rectangle interpolated; Undo restores the previous values");
     }
 
     private String selectedCoordinate() {
@@ -660,6 +770,11 @@ final class FxCalibrationPane extends BorderPane implements AutoCloseable {
         if (grid != null) {
             var nextRows = FXCollections.observableArrayList(rows(snapshot));
             grid.setItems(nextRows);
+            for (int column = 0; column < grid.getColumns().size(); column++) {
+                Label header = (Label) grid.getColumns().get(column).getGraphic();
+                String label = snapshot.getColumnLabels().size() > column ? snapshot.getColumnLabels().get(column) : Integer.toString(column);
+                header.setText(label); header.setTooltip(new Tooltip(label));
+            }
             if (rowHeaders != null) rowHeaders.setItems(nextRows);
             grid.refresh();
             if (rowHeaders != null) rowHeaders.refresh();

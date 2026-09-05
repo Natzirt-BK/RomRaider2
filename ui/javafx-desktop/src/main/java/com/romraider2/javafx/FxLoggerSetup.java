@@ -118,7 +118,7 @@ final class FxLoggerSetup {
         FxTheme.apply(stage, scene);
         FxTheme.closeOnEscape(stage, scene);
         stage.setScene(scene);
-        stage.show();
+        FxWindowPlacement.show(stage);
     }
 
     private static TextField field(String value) {

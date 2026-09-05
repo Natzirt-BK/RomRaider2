@@ -5,6 +5,8 @@ import java.io.InputStream;
 import java.net.URL;
 
 import com.romraider.ui.ThemeMode;
+import com.romraider.ui.DisplayMode;
+import com.romraider.ui.RuntimeUiProfile;
 import com.romraider.util.SettingsManager;
 
 import javafx.scene.Scene;
@@ -49,12 +51,31 @@ final class FxTheme {
         if (stylesheet != null) pane.getStylesheets().add(
                 stylesheet.toExternalForm());
         pane.getStyleClass().add(isDark() ? "theme-dark" : "theme-light");
+        applyDisplay(pane);
     }
 
     static void refresh(Scene scene) {
         scene.getRoot().getStyleClass().removeAll("theme-light", "theme-dark");
         scene.getRoot().getStyleClass().add(isDark()
                 ? "theme-dark" : "theme-light");
+        applyDisplay(scene.getRoot());
+    }
+
+    private static void applyDisplay(javafx.scene.Parent root) {
+        var settings = SettingsManager.getSettings();
+        DisplayMode mode = Boolean.TRUE.equals(root.getProperties().get("rr-touch-override"))
+                ? DisplayMode.TOUCH : RuntimeUiProfile.displayMode(settings.getDisplayMode());
+        root.getStyleClass().remove("touch-controls");
+        if (mode.isTouchOptimized()) root.getStyleClass().add("touch-controls");
+        double scale = settings.getUiScale().isAutomatic() ? 1 : settings.getUiScale().getConfiguredFactor();
+        String previous = (String) root.getProperties().getOrDefault("rr-display-style", "");
+        String style = root.getStyle();
+        if (!previous.isEmpty() && style.endsWith(previous))
+            style = style.substring(0, style.length() - previous.length());
+        String displayStyle = String.format(java.util.Locale.ROOT, ";-fx-font-size: %.2fpx;",
+                13 * scale * mode.getFontDensity());
+        root.setStyle(style + displayStyle);
+        root.getProperties().put("rr-display-style", displayStyle);
     }
 
     static Image logo() {
@@ -77,7 +98,7 @@ final class FxTheme {
     }
 
     static boolean isDark() {
-        ThemeMode mode = SettingsManager.getSettings().getThemeMode();
+        ThemeMode mode = RuntimeUiProfile.theme(SettingsManager.getSettings().getThemeMode());
         return mode == ThemeMode.DARK || mode == ThemeMode.HIGH_CONTRAST;
     }
 }

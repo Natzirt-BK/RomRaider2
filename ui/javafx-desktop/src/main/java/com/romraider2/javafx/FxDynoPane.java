@@ -23,6 +23,8 @@ import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.TextField;
 import javafx.scene.control.Tooltip;
+import javafx.scene.control.ScrollPane;
+import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
@@ -62,7 +64,12 @@ final class FxDynoPane extends BorderPane {
         chart.setCreateSymbols(false);
         chart.setTitle("Road Dyno · estimated engine power and torque");
         setTop(header());
-        setLeft(setup());
+        ScrollPane setupScroll = new ScrollPane(setup());
+        setupScroll.setFitToWidth(true);
+        setupScroll.setPrefViewportWidth(365);
+        setupScroll.setMinHeight(0);
+        setLeft(setupScroll);
+        chart.setMinSize(0, 0);
         setCenter(chart);
         BorderPane.setMargin(chart, new Insets(12));
     }
@@ -72,18 +79,14 @@ final class FxDynoPane extends BorderPane {
         kicker.getStyleClass().add("section-kicker");
         Label title = new Label("Calculate a pull from live Logger history");
         title.getStyleClass().add("title");
+        title.setWrapText(true);
         Label detail = new Label("Uses vehicle speed acceleration, mass, "
                 + "rolling resistance, and aerodynamic drag. Results are "
                 + "estimates for tuning comparison, not certified measurements.");
         detail.getStyleClass().add("muted");
         detail.setWrapText(true);
-        Region fill = new Region();
-        HBox.setHgrow(fill, Priority.ALWAYS);
-        HBox metrics = new HBox(8, peakPower, peakTorque);
-        metrics.setAlignment(Pos.CENTER_RIGHT);
-        HBox row = new HBox(14, new VBox(2, kicker, title, detail), fill, metrics);
-        row.setAlignment(Pos.CENTER_LEFT);
-        VBox box = new VBox(row);
+        FlowPane metrics = new FlowPane(8, 6, peakPower, peakTorque);
+        VBox box = new VBox(8, new VBox(2, kicker, title, detail), metrics);
         box.setPadding(new Insets(16));
         box.getStyleClass().add("command-deck");
         return box;

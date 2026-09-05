@@ -13,7 +13,19 @@ final class FxWindowPlacement {
         boolean firstShow = !stage.isShowing();
         stage.show();
         if (!firstShow) return;
+        fitVisible(stage);
+    }
 
+    static void showAndWait(Stage stage) {
+        // WINDOW_SHOWN fires before native geometry has settled on GTK. Queue
+        // the fit into showAndWait's nested loop, after show() has completed.
+        javafx.application.Platform.runLater(() -> {
+            if (stage.isShowing()) fitVisible(stage);
+        });
+        stage.showAndWait();
+    }
+
+    private static void fitVisible(Stage stage) {
         // Native decorations are known after show(). Apply synchronously before
         // callers open owned dialogs; do not resize an already-visible window.
         Screen screen = Screen.getScreensForRectangle(stage.getX(), stage.getY(),

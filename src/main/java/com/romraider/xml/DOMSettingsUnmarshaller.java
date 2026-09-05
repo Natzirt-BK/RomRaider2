@@ -351,6 +351,8 @@ public final class DOMSettingsUnmarshaller {
             } else if (n.getNodeType() == ELEMENT_NODE && n.getNodeName().equalsIgnoreCase("cellsize")) {
                 settings.setCellSize(new Dimension(unmarshallAttribute(n, "width", 42),
                         unmarshallAttribute(n, "height", 18)));
+                settings.setJavaFxCellSize(new Dimension(unmarshallAttribute(n, "fx-width", 124),
+                        unmarshallAttribute(n, "fx-height", 34)));
 
             } else if (n.getNodeType() == ELEMENT_NODE && n.getNodeName().equalsIgnoreCase("colors")) {
                 settings = unmarshallColors(n, settings);
