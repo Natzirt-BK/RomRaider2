@@ -33,11 +33,22 @@ chmod +x "$bundle/Launch RomRaider2.sh" \
 
 [[ -f "$bundle/RomRaider2/lib/runtime/release" ]]
 grep -q '^JAVA_VERSION="21\.' "$bundle/RomRaider2/lib/runtime/release"
-[[ -f "$bundle/RomRaider2/lib/app/romraider2-compose-logger-1.1.0-rc4.jar" ]]
-[[ -f "$bundle/RomRaider2/lib/app/org-jetbrains-skiko-skiko-awt-runtime-linux-x64-0.150.1.jar" ]]
-[[ ! -e "$bundle/RomRaider2/lib/app/org-jetbrains-skiko-skiko-awt-runtime-windows-x64-0.150.1.jar" ]]
-[[ ! -e "$bundle/RomRaider2/lib/app/org-jetbrains-skiko-skiko-awt-runtime-macos-arm64-0.150.1.jar" ]]
-[[ ! -e "$bundle/RomRaider2/lib/app/org-jetbrains-skiko-skiko-awt-runtime-macos-x64-0.150.1.jar" ]]
+[[ -f "$bundle/RomRaider2/lib/app/romraider2-javafx-desktop-1.1.0-rc4.jar" ]] || {
+    echo "The SteamOS bundle requires the current JavaFX desktop workspace." >&2
+    exit 1
+}
+for module in base graphics controls; do
+    [[ -f "$bundle/RomRaider2/lib/app/javafx-$module-21.0.10-linux.jar" ]] || {
+        echo "Missing Linux JavaFX module: $module" >&2
+        exit 1
+    }
+    for foreign_platform in win mac mac-aarch64; do
+        [[ ! -e "$bundle/RomRaider2/lib/app/javafx-$module-21.0.10-$foreign_platform.jar" ]] || {
+            echo "Non-Linux JavaFX runtime found in SteamOS bundle." >&2
+            exit 1
+        }
+    done
+done
 grep -Fq 'GenericName=ECU Tools' \
     "$bundle/romraider2-steamos.desktop.in"
 grep -Fq 'romraider2.ui.profile=steamos' \

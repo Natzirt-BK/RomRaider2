@@ -59,8 +59,17 @@ follows the [Android USB host guide](https://developer.android.com/develop/conne
   both passed.
 - Broader preview CI found an existing SteamOS workflow omission: portable/core
   and Compose tests passed, then the Linux packager required a JavaFX stage the
-  workflow did not run. The workflow now includes `stageJavaFxLinux`; follow-up
-  preview CI is pending. Android production code is unchanged by that fix.
+  workflow did not run. The workflow now includes `stageJavaFxLinux`. Its rerun
+  built the Linux image, then exposed an obsolete Compose/Skiko bundle assertion.
+  The bundle now checks the current JavaFX workspace and Linux native modules
+  instead. `bash -n` and a local bundle build against the previously qualified
+  stock Linux image passed without modifying that source image. Follow-up CI is
+  pending; Android production code is unchanged by these packaging fixes.
+- Both macOS architectures passed on the original source run. The downloaded
+  Android artifact's SHA256 sidecar and APK v2 signature verified; metadata is
+  application ID `com.romraider.mobile.preview`, versionCode110403, minSdk26,
+  targetSdk36. Local APK SHA256:
+  `c43279bc37614ea9291b24ad04c068658d824073560000d73412ace71d67dd76`.
 
 ## Remaining gates / audit findings
 
