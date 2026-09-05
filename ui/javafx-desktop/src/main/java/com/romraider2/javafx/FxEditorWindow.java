@@ -673,7 +673,7 @@ final class FxEditorWindow {
     }
 
     void show() {
-        stage.show();
+        FxWindowPlacement.show(stage);
         stage.toFront();
         if (SettingsManager.getSettings().getEcuDefinitionFiles().isEmpty()) {
             Platform.runLater(() -> FxDefinitionManager.show(stage, () ->

@@ -174,3 +174,9 @@ and notices. Its main upstream sources are:
 - https://github.com/RomRaider/RomRaider
 - https://github.com/DimeSPb/RomRaider
 - https://www.romraider.com/
+JavaFX startup sizing follow-up (2026-09-04)
+- Fit initial Editor and Logger windows inside the selected screen work area,
+  including taskbar/panel space and high-DPI logical dimensions.
+- Preserve size and position when bringing an already-open window forward.
+- Add placement regressions and a Linux CI native-window smoke test.
+- Full native Windows and high-DPI workflow qualification remains required.

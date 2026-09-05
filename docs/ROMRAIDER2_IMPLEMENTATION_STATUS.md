@@ -4,6 +4,11 @@ Last updated: 2026-09-04
 
 ## Working now
 
+- JavaFX Editor/Logger initial decorated windows are bounded and centered in
+  the selected screen's visual work area. Smaller logical displays reduce the
+  usual minimum size; repeated presentation of a visible window preserves its
+  placement. Geometry regressions and an opt-in native-window smoke test cover
+  this correction; exact-package native Windows/DPI qualification is separate.
 - Java 21 builds and self-contained Windows/Linux application images.
 - Modern Editor workspace with tabs, search, favorites, recent and changed
   maps, comparison, undo/redo, notes, recovery, integrated 3D, and live data.

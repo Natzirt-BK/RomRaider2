@@ -912,7 +912,7 @@ final class FxLoggerWindow {
     }
 
     void show() {
-        stage.show();
+        FxWindowPlacement.show(stage);
         stage.toFront();
         String definition = runtime.getSettings().getLoggerDefinitionFilePath();
         if (definition == null || definition.isBlank()) {

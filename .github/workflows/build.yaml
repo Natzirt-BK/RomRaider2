@@ -31,7 +31,7 @@ jobs:
           cp packaging/default/settings.xml settings.xml
           timeout 10m xvfb-run -a ant clean unittest
           ant clean build-linux
-          gradle --no-daemon :ui:javafx-desktop:test :ui:javafx-desktop:stageJavaFxLinux
+          xvfb-run -a env RR2_FX_WINDOW_SMOKE=1 gradle --no-daemon :ui:javafx-desktop:test :ui:javafx-desktop:stageJavaFxLinux
           packaging/java21/audit-runtime-modules.sh build/linux/lib/RomRaider2.jar
           packaging/java21/build-linux-app-image.sh build/release-candidate-1.1.0
           packaging/java21/build-linux-release.sh

@@ -25,6 +25,9 @@ same candidate.
 - Matching OpenJFX platform modules present and Compose/Skia absent: `PASS`,
   `FAIL`, or `NOT RUN`
 - Clean launch and shutdown: `PASS`, `FAIL`, or `NOT RUN`
+- Initial Editor/Logger decorated windows fit the screen work area (including
+  taskbar/panels) at normal/high DPI; showing an existing window preserves its
+  position and size: `PASS`, `FAIL`, or `NOT RUN`
 - Package-owned settings used from an unrelated working directory: `PASS`,
   `FAIL`, or `NOT RUN`
 - First-run definition prompt: `PASS`, `FAIL`, or `NOT RUN`
