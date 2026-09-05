@@ -107,6 +107,16 @@ public final class PortableLogSession {
         }
     }
 
+    /** Export all recorded values in the normal desktop RomRaider column layout. */
+    public synchronized void writeRomRaiderCsv(Writer writer) throws IOException {
+        if (spoolFile == null || sampleCount == 0) {
+            PortableRomRaiderCsvWriter.writeSamples(snapshot(), writer);
+        } else {
+            if (spoolWriter != null) spoolWriter.flush();
+            PortableRomRaiderCsvWriter.writeSpool(spoolFile, writer);
+        }
+    }
+
     public synchronized void discard() throws IOException {
         IOException failure = null;
         if (spoolWriter != null) {

@@ -24,18 +24,18 @@ android {
         applicationId = "com.romraider.mobile"
         minSdk = 26
         targetSdk = 36
-        versionCode = 110404
-        versionName = "1.1.0-rc4-preview3.1"
+        versionCode = 110405
+        versionName = "1.1.1"
     }
 
     buildTypes {
         debug {
+            // Retain the installed package identity; this is not a version label.
             applicationIdSuffix = ".preview"
         }
         create("openportDiagnostic") {
             initWith(getByName("debug"))
             applicationIdSuffix = ".preview.openporttest"
-            versionNameSuffix = "-side-by-side"
             resValue("string", "app_name", "RomRaider2 OpenPort Test")
             signingConfig = signingConfigs.getByName("debug")
             matchingFallbacks += listOf("debug")

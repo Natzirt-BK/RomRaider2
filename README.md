@@ -12,46 +12,51 @@ logging and unfinished ECU-write research.
 
 ## Downloads
 
-The latest public desktop build is **RomRaider2 1.1.0 RC4**. It is a development
-prerelease while the remaining desktop acceptance and connected vehicle checks
-are completed. Only the current desktop RC and Android preview are kept on the
-Releases page; older source tags remain in Git history.
+The current release is **RomRaider2 1.1.1** for desktop and Android. Version
+numbers use patch increments for routine updates, minor increments for milestones,
+and rare major increments for substantial changes. Only the latest release is
+kept on the Releases page; older source tags remain in Git history. See the
+[versioning policy](docs/RELEASE_VERSIONING.md). Hardware qualification remains
+platform-specific; a version number is not a claim of completed vehicle testing.
 
 | Platform | Package |
 | --- | --- |
-| Windows 10/11 x64 | [Download the portable Windows ZIP](https://github.com/Natzirt-BK/RomRaider2/releases/download/romraider2-1.1.0-rc4/RomRaider2_ECU_Studio_1.1.0_Windows_x64.zip) |
-| Linux x64 | [Download the portable Linux ZIP](https://github.com/Natzirt-BK/RomRaider2/releases/download/romraider2-1.1.0-rc4/RomRaider2_ECU_Studio_1.1.0_Linux_x64.zip) |
-| SteamOS Desktop Mode x64 | [Download the SteamOS ZIP](https://github.com/Natzirt-BK/RomRaider2/releases/download/romraider2-1.1.0-rc4/RomRaider2_SteamOS_1.1.0_RC4_x64.zip) |
-| macOS Apple silicon | [Download the unsigned ARM64 preview](https://github.com/Natzirt-BK/RomRaider2/releases/download/romraider2-1.1.0-rc4/RomRaider2_1.1.0_RC4_macOS_arm64.zip) |
-| macOS Intel | [Download the unsigned x64 preview](https://github.com/Natzirt-BK/RomRaider2/releases/download/romraider2-1.1.0-rc4/RomRaider2_1.1.0_RC4_macOS_x64.zip) |
+| Windows 10/11 x64 | [Download the portable Windows ZIP](https://github.com/Natzirt-BK/RomRaider2/releases/download/romraider2-1.1.1/RomRaider2_ECU_Studio_1.1.1_Windows_x64.zip) |
+| Linux x64 | [Download the portable Linux ZIP](https://github.com/Natzirt-BK/RomRaider2/releases/download/romraider2-1.1.1/RomRaider2_ECU_Studio_1.1.1_Linux_x64.zip) |
+| SteamOS Desktop Mode x64 | [Download the SteamOS ZIP](https://github.com/Natzirt-BK/RomRaider2/releases/download/romraider2-1.1.1/RomRaider2_SteamOS_1.1.1_x64.zip) |
+| macOS Apple silicon | [Download the unsigned ARM64 package](https://github.com/Natzirt-BK/RomRaider2/releases/download/romraider2-1.1.1/RomRaider2_1.1.1_macOS_arm64.zip) |
+| macOS Intel | [Download the unsigned x64 package](https://github.com/Natzirt-BK/RomRaider2/releases/download/romraider2-1.1.1/RomRaider2_1.1.1_macOS_x64.zip) |
 
 Java 21 is included in every desktop package. Extract the ZIP before running
 it. On Windows, open `RomRaider2.exe`. On Linux, open `bin/RomRaider2`. The Mac
-previews are unsigned and have not completed physical Mac testing.
+packages are unsigned and have not completed physical Mac testing.
 
-[Release notes, checksums, and every RC4 desktop download](https://github.com/Natzirt-BK/RomRaider2/releases/tag/romraider2-1.1.0-rc4)
+[Release notes, checksums, and all downloads](https://github.com/Natzirt-BK/RomRaider2/releases/tag/romraider2-1.1.1)
 
-### Experimental Android preview
+### Android
 
 Android 8.0 and newer users can also
-[download RC4 Android Preview 3.1](https://github.com/Natzirt-BK/RomRaider2/releases/download/romraider2-1.1.0-rc4-android-preview3.1/RomRaider2_1.1.0_RC4_Android_preview3.1-debug.apk).
+[download Android 1.1.1](https://github.com/Natzirt-BK/RomRaider2/releases/download/romraider2-1.1.1/RomRaider2_1.1.1_Android-debug.apk).
 
-Preview 3.1 fixes OpenPort receive-filter acknowledgement handling that could
-prevent live logging from starting. The [same release](https://github.com/Natzirt-BK/RomRaider2/releases/tag/romraider2-1.1.0-rc4-android-preview3.1)
+Version 1.1.1 preserves imported channel selections when reloading definitions
+and exports recordings in the normal RomRaider CSV layout. It includes the
+OpenPort receive-filter repair. The [same release](https://github.com/Natzirt-BK/RomRaider2/releases/tag/romraider2-1.1.1)
 also provides a **side-by-side test APK**, labeled **RomRaider2 OpenPort Test**,
-which leaves an installed Preview 3 and its recordings untouched. Debug signing
+which leaves the standard app and its recordings untouched. Debug signing
 keys can differ between builds: export recordings before any uninstall, and
-use the side-by-side option if an in-place update is refused.
-This is an early, debug-signed test build rather than the desktop RC4 release.
+use the side-by-side option if it is not already installed. Either package may
+refuse an update if its existing installation has a different signing key.
+The Android package remains debug-signed and is installed by sideloading.
 It supports exact definition-backed calibration table editing, advanced ROM
 byte editing, RomRaider CSV review, Logger definition and profile import,
 simulated logging, and read-only OpenPort 2.0 SSM K-Line and Mitsubishi MUT-II
-logging through a USB host/OTG adapter. Preview 3 adds MUT-II configuration import,
-recording, recovery and CSV export. Physical phone/adapter/vehicle qualification
-is still open for both protocols; software and emulator tests do not establish
-on-car reliability. ECU writing and flashing are not present.
+logging through a USB host/OTG adapter, with recording, recovery and CSV export.
+Basic Forester Android logging was reported working in the in-car test; larger
+channel sets, sustained sessions, and MUT-II vehicle qualification remain open.
+Software and emulator tests do not establish on-car reliability. ECU writing
+and flashing are not present.
 
-Read the [Android preview test guide](docs/ANDROID_PREVIEW_TESTING.md) before
+Read the [Android test guide](docs/ANDROID_PREVIEW_TESTING.md) before
 sideloading it or connecting an adapter.
 
 ## Where it stands
@@ -62,10 +67,10 @@ sideloading it or connecting an adapter.
 | Subaru SSM Logger | Linux OpenPort 2.0 identification and sustained logging tested in car |
 | Windows J2534 | Portable build and automatic 32/64-bit routing implemented; connected qualification is still open |
 | Mitsubishi Lancer Evolution MUT-II | Read-only logger foundation implemented; vehicle qualification is still open |
-| Android | Preview 3.1 repairs OpenPort filter replies; read-only SSM/MUT-II connected qualification is still open |
+| Android | Basic Forester logging reported working; profile retention and desktop-format CSV fixed; broader qualification remains open |
 | DimeMod | Discovery, diagnostics, and Logger parameters retained; RAM writing stays hidden and disabled |
 | ROM mod recognition | DimeMod, CarBerry, and MerpMod recognized from explicit loaded-definition evidence |
-| ECU flashing | Not available in RomRaider2 1.1.0 |
+| ECU flashing | Not available in RomRaider2 1.1.1 |
 
 Do not disable Windows driver-signing protection. Install the normal signed
 driver for the interface. RomRaider2 chooses the direct or bundled J2534 bridge

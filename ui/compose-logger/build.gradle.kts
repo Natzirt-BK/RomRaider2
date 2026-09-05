@@ -7,7 +7,7 @@ plugins {
 }
 
 group = "com.romraider2"
-version = "1.1.0-rc4"
+version = "1.1.1"
 
 val hostOs = when {
     System.getProperty("os.name").lowercase().contains("win") -> "windows"

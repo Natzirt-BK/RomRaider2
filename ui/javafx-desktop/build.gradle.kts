@@ -3,7 +3,7 @@ plugins {
 }
 
 group = "com.romraider2"
-version = "1.1.0-rc4"
+version = "1.1.1"
 
 val javafxVersion = "21.0.10"
 val hostPlatform = when {

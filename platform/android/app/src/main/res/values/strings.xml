@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">RomRaider2 Preview</string>
+    <string name="app_name">RomRaider2</string>
     <string name="rom_summary">%1$s  /  %2$s  /  %3$s</string>
     <plurals name="rom_bytes">
         <item quantity="one">%d byte</item>

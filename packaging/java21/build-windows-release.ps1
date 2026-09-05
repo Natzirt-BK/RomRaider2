@@ -2,8 +2,7 @@
 param(
     [string]$ApplicationImage,
     [string]$OutputRoot,
-    [string]$ReleaseName = "RomRaider2_ECU_Studio_1.1.0_Windows_x64",
-    [string]$ReleaseLabel = "Release Candidate 4",
+    [string]$ReleaseName = "RomRaider2_ECU_Studio_1.1.1_Windows_x64",
     [string]$SourceRevision
 )
 
@@ -84,11 +83,11 @@ try {
     Copy-Item -LiteralPath (Join-Path $RepoRoot "packaging/java21/VERIFY_RELEASE_WINDOWS.ps1") -Destination $Release
 
     @(
-        "RomRaider2 ECU Studio 1.1.0 $ReleaseLabel"
+        "RomRaider2 ECU Studio 1.1.1"
         "Source commit: $SourceRevision"
         "Built: $([DateTimeOffset]::Now.ToString('o'))"
         "Runtime: Java 21 Windows x64 application image"
-        "Qualification: Preview; Windows hardware validation pending"
+        "Qualification: Windows hardware validation pending"
     ) | Set-Content -LiteralPath (Join-Path $Release "VERSION.txt") -Encoding utf8
 
     $ChecksumFile = Join-Path $Release "checksums/SHA256SUMS.txt"

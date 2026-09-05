@@ -1,20 +1,19 @@
-# Android preview testing
+# Android testing
 
-The Android build is an experimental RomRaider2 preview for early feedback. It
-is not a replacement for the desktop release yet. The APK is debug-signed and
-is installed by sideloading, so Android or Play Protect may warn that it is an
-unknown application. Its preview-only application ID keeps it separate from a
-future signed release. Because debug signing keys can change between preview
-builds, an in-place update may be refused. **Export your recordings before
-uninstalling or clearing app data.** Preview 3.1 also includes a side-by-side test
-APK named **RomRaider2 OpenPort Test** that does not replace Preview 3. Choose
-that app for USB access, close the other app, and import the logger setup again.
-It contains the same logger repair as the standard Preview 3.1 APK.
+The current Android version is **1.1.1**. The APK remains debug-signed and is
+installed by sideloading, so Android or Play Protect may warn that it is an
+unknown application. Existing application IDs are unchanged. Debug signing keys
+can change between builds, so an in-place update may be refused. **Export your
+recordings before uninstalling or clearing app data.** A side-by-side APK named
+**RomRaider2 OpenPort Test** leaves the standard app untouched. An existing test
+app may also refuse updates from a different signing key. Choose only one app
+for USB access and import the logger setup separately when using the test app.
 
-Preview 3.1 corrects the channel-qualified OpenPort filter reply (`arf3 0 0`)
-that Preview 3 rejected as an adapter-command timeout. If setup fails, the new
-message identifies the command and whether any USB response bytes arrived.
-This repair does not close the physical phone/vehicle qualification gate.
+Version 1.1.1 includes the OpenPort filter-response repair, retains imported
+profile selections when definitions are reloaded, and exports normal wide-column
+RomRaider CSV files. Loading a definition alone selects no channels. Basic
+Forester logging was reported working; larger profiles, sustained sessions, and
+MUT-II vehicle qualification remain open.
 
 ## What is ready to try
 

@@ -100,14 +100,16 @@ gradle :shared-core:check :app:testDebugUnitTest :app:assembleOpenportDiagnostic
 ```
 
 It appears as **RomRaider2 OpenPort Test**, with application ID
-`com.romraider.mobile.preview.openporttest` and version suffix `-side-by-side`.
-It uses a local debug signature and installs beside Preview 3, leaving that
+`com.romraider.mobile.preview.openporttest`, with version name `1.1.1`.
+It uses a local debug signature and installs beside the standard app, leaving that
 app's settings and retained recordings untouched. Import the logger definition
 and profile into the test app separately and grant it USB access. If Android
 offers both apps for the OpenPort, choose the test app and close the other one.
-Do not uninstall Preview 3 to install this test build.
+Do not uninstall the standard app to install this test build. An existing test
+app signed with a different key may also refuse an in-place update; retain and
+export recordings before considering uninstalling either application.
 
-Preview 3.1 uses versionCode 110404. The normal debug/release application IDs
+Version 1.1.1 uses versionCode 110405. The normal debug/release application IDs
 are unchanged; the side-by-side variant has its own application ID.
 No ECU writing, reset, programming-voltage or automatic reconnect operation is
 added by this repair. Physical phone/adapter/vehicle logging still requires the

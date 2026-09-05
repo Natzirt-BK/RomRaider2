@@ -8,7 +8,7 @@ cd "$release_root"
 [[ -f lib/runtime/release ]]
 grep -q '^JAVA_VERSION="21\.' lib/runtime/release
 [[ -f lib/app/RomRaider2.jar ]]
-[[ -f lib/app/romraider2-javafx-desktop-1.1.0-rc4.jar ]]
+[[ -f lib/app/romraider2-javafx-desktop-1.1.1.jar ]]
 [[ -f lib/app/javafx-base-21.0.10-linux.jar ]]
 [[ -f lib/app/javafx-controls-21.0.10-linux.jar ]]
 [[ -f lib/app/javafx-graphics-21.0.10-linux.jar ]]
@@ -38,7 +38,7 @@ cmp -s config/settings.default.xml config/user/settings.xml
 grep -Eq '<display-preferences[^>]+theme="LIGHT"' \
     config/settings.default.xml
 grep -Fq 'linux=j2534.so' customize/j2534Libraries.properties
-grep -Fxq 'RomRaider2 ECU Studio 1.1.0 Release Candidate 4' VERSION.txt
+grep -Fxq 'RomRaider2 ECU Studio 1.1.1' VERSION.txt
 grep -Eq '^Source commit: [0-9a-f]{40}$' VERSION.txt
 
 grep -Fq 'romraider2.settings.dir=$APPDIR/../../config/user' \

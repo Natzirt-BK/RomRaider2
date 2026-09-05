@@ -29,7 +29,7 @@ public final class Version {
     public static final String PRODUCT_NAME = "@name.package@";
     public static final String FULL_PRODUCT_NAME = "@name.full@";
     public static final String TAGLINE = "@tagline@";
-    public static final String VERSION = "@version.major@.@version.minor@.@version.patch@ @version.extra@ @version.extra1@";
+    public static final String VERSION = "@version.major@.@version.minor@.@version.patch@";
     public static final String BUILDNUMBER = "@version.buildnumber@";
     public static final String SUPPORT_URL = "@supporturl@";
     public static final String ROM_REVISION_URL = "@romrevisionurl@";

@@ -42,7 +42,7 @@ done
     echo "Build the macOS application jar first: $application_jar" >&2
     exit 1
 }
-[[ -f "$compose_root/romraider2-compose-logger-1.1.0-rc4.jar" && \
+[[ -f "$compose_root/romraider2-compose-logger-1.1.1.jar" && \
    -f "$compose_root/$renderer" ]] || {
     echo "Stage the Compose workspace on this Mac before packaging." >&2
     exit 1
@@ -100,7 +100,7 @@ detected_modules=$(JAVA_HOME="$jdk_root" \
     --input "$input" \
     --main-jar RomRaider2.jar \
     --main-class com.romraider.ECUExec \
-    --app-version 1.1.0 \
+    --app-version 1.1.1 \
     --vendor NatZirt \
     --description "RomRaider2 ECU Studio" \
     --icon "$repo_root/packaging/branding/macos/RomRaider2.icns" \

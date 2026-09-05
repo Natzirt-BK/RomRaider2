@@ -42,12 +42,14 @@ import android.widget.Toast;
 import com.romraider.portable.PortableLogCsvReader;
 import com.romraider.portable.PortableLogSample;
 import com.romraider.portable.PortableLogSession;
+import com.romraider.portable.PortableRomRaiderCsvWriter;
 import com.romraider.portable.PortableRomDocument;
 import com.romraider.portable.editor.PortableEcuDefinition;
 import com.romraider.portable.editor.PortableEcuDefinitionReader;
 import com.romraider.portable.editor.PortableRomTable;
 import com.romraider.mobile.usb.OpenPortUsbTransport;
 import com.romraider.mobile.logger.ReadOnlyLoggerSession;
+import com.romraider.mobile.logger.LoggerImportState;
 import com.romraider.portable.logger.definition.PortableLoggerDefinition;
 import com.romraider.portable.logger.definition.PortableLoggerDefinitionReader;
 import com.romraider.portable.logger.definition.PortableLoggerProfile;
@@ -152,7 +154,7 @@ public final class MainActivity extends Activity {
     private volatile ReadOnlyLoggerSession liveLogger;
     private volatile PortableLogSession liveLog;
     private PortableLoggerProtocol loggerProtocol = PortableLoggerProtocol.SSM;
-    private int loggerImportGeneration;
+    private final LoggerImportState loggerImports = new LoggerImportState();
     private int liveSessionGeneration;
     private File archiveToExport;
     private boolean loggerVisible;
@@ -376,7 +378,7 @@ public final class MainActivity extends Activity {
                                     ? PortableLoggerProtocol.SSM : PortableLoggerProtocol.MUT2;
                             if (next == loggerProtocol) return;
                             stopLiveLogger(null);
-                            loggerImportGeneration++;
+                            loggerImports.reset();
                             loggerProtocol = next;
                             loggerDefinition = null;
                             loggerProfile = null;
@@ -474,6 +476,7 @@ public final class MainActivity extends Activity {
         PortableLoggerProfile profile = loggerProfile;
         StringBuilder result = new StringBuilder("Protocol: ").append(loggerProtocol)
                 .append('\n').append(loggerSetupState);
+        if (loggerImports.isLoading()) result.append("\nImport still in progress; wait before starting logging.");
         if (loggerProtocol == PortableLoggerProtocol.MUT2) {
             result.append("\nMUT2_GENERIC confirms a response, not a calibration ID. "
                     + "Use definitions verified for your vehicle. All selected PIDs "
@@ -870,15 +873,10 @@ public final class MainActivity extends Activity {
             File source = archiveToExport;
             archiveToExport = null;
             workerExecutor.execute(() -> {
-                try (InputStream input = new java.io.FileInputStream(source);
-                     OutputStream output = getContentResolver().openOutputStream(uri, "w")) {
-                    if (output == null) throw new java.io.IOException("Export destination is unavailable");
-                    output.write("timestamp_ms,channel_id,channel_name,value,units\n"
-                            .getBytes(StandardCharsets.UTF_8));
-                    byte[] bytes = new byte[8192];
-                    int count;
-                    while ((count = input.read(bytes)) != -1) output.write(bytes, 0, count);
-                    output.flush();
+                try {
+                    try (OutputStreamWriter writer = openCsvWriter(uri)) {
+                        PortableRomRaiderCsvWriter.writeSpool(source, writer);
+                    }
                     runOnUiThread(() -> notice("Recording exported; the recovery copy is retained."));
                 } catch (Exception ex) {
                     fileFailure(ex, "The recording could not be exported.");
@@ -890,16 +888,21 @@ public final class MainActivity extends Activity {
     private void saveLogAsync(Uri uri, PortableLogSession session,
             String successMessage) {
         workerExecutor.execute(() -> {
-            try (OutputStream output = getContentResolver()
-                         .openOutputStream(uri, "w");
-                 OutputStreamWriter writer = new OutputStreamWriter(
-                         output, StandardCharsets.UTF_8)) {
-                session.writeLongFormCsv(writer);
+            try {
+                try (OutputStreamWriter writer = openCsvWriter(uri)) {
+                    session.writeRomRaiderCsv(writer);
+                }
                 runOnUiThread(() -> notice(successMessage));
             } catch (Exception ex) {
                 fileFailure(ex, "The log could not be saved.");
             }
         });
+    }
+
+    private OutputStreamWriter openCsvWriter(Uri uri) throws java.io.IOException {
+        OutputStream output = getContentResolver().openOutputStream(uri, "w");
+        if (output == null) throw new java.io.IOException("Export destination is unavailable");
+        return new OutputStreamWriter(output, StandardCharsets.UTF_8);
     }
 
     private void fileFailure(Exception failure, String fallback) {
@@ -1119,9 +1122,7 @@ public final class MainActivity extends Activity {
         stopLiveLogger(null);
         loggerDefinition = null;
         loggerDefinitionName = "";
-        loggerProfile = null;
-        loggerProfileName = "";
-        final int generation = ++loggerImportGeneration;
+        final int generation = loggerImports.beginDefinition();
         final PortableLoggerProtocol protocol = loggerProtocol;
         loggerSetupState = "Reading logger definition...";
         refreshLoggerSetupStatus();
@@ -1142,23 +1143,20 @@ public final class MainActivity extends Activity {
                                 ? PortableMut2LogConfigReader.read(buffered) : null;
                 if (parsed == null) throw new IllegalArgumentException("SSM requires a logger XML definition");
                 runOnUiThread(() -> {
-                    if (isDestroyed() || generation != loggerImportGeneration) return;
+                    if (isDestroyed() || !loggerImports.finishDefinition(generation)) return;
                     loggerDefinition = parsed;
                     loggerDefinitionName = name;
-                    List<PortableLoggerProfile.Selection> defaults = new ArrayList<>();
-                    for (PortableLoggerParameter parameter : parsed.parameters()) {
-                        if (!parameter.getConversions().isEmpty()) defaults.add(
-                                new PortableLoggerProfile.Selection(parameter.getId(),
-                                        parameter.getConversions().get(0).getUnits()));
-                    }
-                    loggerProfile = new PortableLoggerProfile(protocol.name(), defaults, Collections.emptyList());
-                    loggerProfileName = "All defined channels (customizable)";
-                    loggerSetupState = "Logger definition loaded.";
+                    PortableLoggerProfile previous = loggerProfile;
+                    loggerProfile = LoggerImportState.afterDefinition(previous, protocol.name());
+                    if (previous != loggerProfile) loggerProfileName = "No channels selected";
+                    loggerSetupState = previous == loggerProfile
+                            ? "Logger definition loaded; channel selection retained."
+                            : "Logger definition loaded. Import a profile or choose channels.";
                     refreshLoggerSetupStatus();
                 });
             } catch (Exception ex) {
                 runOnUiThread(() -> {
-                    if (isDestroyed() || generation != loggerImportGeneration) return;
+                    if (isDestroyed() || !loggerImports.finishDefinition(generation)) return;
                     loggerSetupState = ex.getMessage() == null
                             ? "Logger definition could not be opened." : ex.getMessage();
                     refreshLoggerSetupStatus();
@@ -1172,7 +1170,7 @@ public final class MainActivity extends Activity {
         stopLiveLogger(null);
         loggerProfile = null;
         loggerProfileName = "";
-        final int generation = ++loggerImportGeneration;
+        final int generation = loggerImports.beginProfile();
         final PortableLoggerProtocol protocol = loggerProtocol;
         loggerSetupState = "Reading logger profile...";
         refreshLoggerSetupStatus();
@@ -1184,7 +1182,7 @@ public final class MainActivity extends Activity {
                     throw new IllegalArgumentException("Profile protocol does not match " + protocol);
                 }
                 runOnUiThread(() -> {
-                    if (isDestroyed() || generation != loggerImportGeneration) return;
+                    if (isDestroyed() || !loggerImports.finishProfile(generation)) return;
                     loggerProfile = new PortableLoggerProfile(protocol.name(),
                             parsed.selections(), parsed.unsupported());
                     loggerProfileName = name;
@@ -1193,7 +1191,7 @@ public final class MainActivity extends Activity {
                 });
             } catch (Exception ex) {
                 runOnUiThread(() -> {
-                    if (isDestroyed() || generation != loggerImportGeneration) return;
+                    if (isDestroyed() || !loggerImports.finishProfile(generation)) return;
                     loggerSetupState = ex.getMessage() == null
                             ? "Logger profile could not be opened." : ex.getMessage();
                     refreshLoggerSetupStatus();
@@ -1203,7 +1201,9 @@ public final class MainActivity extends Activity {
     }
 
     private void chooseLoggerChannels() {
+        if (loggerImportPending()) return;
         PortableLoggerDefinition definition = loggerDefinition;
+        PortableLoggerProfile originalProfile = loggerProfile;
         if (definition == null) {
             notice("Load a logger definition first.");
             return;
@@ -1223,6 +1223,8 @@ public final class MainActivity extends Activity {
                 .setMultiChoiceItems(names, checked, (dialog, which, selected) -> checked[which] = selected)
                 .setNegativeButton("Cancel", null)
                 .setNeutralButton("Clear all", (dialog, which) -> {
+                    if (loggerImports.isLoading() || loggerDefinition != definition
+                            || loggerProfile != originalProfile) return;
                     stopLoggerPreview(null);
                     stopLiveLogger(null);
                     loggerProfile = new PortableLoggerProfile(loggerProtocol.name(), Collections.emptyList(), Collections.emptyList());
@@ -1230,7 +1232,8 @@ public final class MainActivity extends Activity {
                     refreshLoggerSetupStatus();
                 })
                 .setPositiveButton("Use channels", (dialog, which) -> {
-                    if (loggerDefinition != definition) return;
+                    if (loggerImports.isLoading() || loggerDefinition != definition
+                            || loggerProfile != originalProfile) return;
                     stopLoggerPreview(null);
                     stopLiveLogger(null);
                     List<PortableLoggerProfile.Selection> selections = new ArrayList<>();
@@ -1293,6 +1296,12 @@ public final class MainActivity extends Activity {
         content.addView(card, 3, cardParams(dp(10)));
     }
 
+    private boolean loggerImportPending() {
+        if (!loggerImports.isLoading()) return false;
+        notice("Wait for the logger definition and profile to finish loading.");
+        return true;
+    }
+
     private void toggleLoggerPreview() {
         if (previewRunning) {
             stopLoggerPreview("Offline preview stopped. The recorded values can be saved as CSV.");
@@ -1302,6 +1311,7 @@ public final class MainActivity extends Activity {
             notice("Stop the live logger before starting simulated data.");
             return;
         }
+        if (loggerImportPending()) return;
         PortableLoggerDefinition definition = loggerDefinition;
         PortableLoggerProfile profile = loggerProfile;
         if (definition == null || profile == null) {
@@ -1360,6 +1370,7 @@ public final class MainActivity extends Activity {
             stopLiveLogger("Stopping after the current read...");
             return;
         }
+        if (loggerImportPending()) return;
         OpenPortUsbTransport transport = openPort;
         PortableLoggerDefinition definition = loggerDefinition;
         PortableLoggerProfile profile = loggerProfile;

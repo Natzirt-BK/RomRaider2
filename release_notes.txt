@@ -1,11 +1,27 @@
-RomRaider2 ECU Studio 1.1.0 RC4
+RomRaider2 ECU Studio 1.1.1
 ================================
 
-RC4 is a development preview of the new RomRaider2 interface. It is ready for
-desktop and portable-platform feedback, but the remaining hardware checks are
-still required before it can be treated as a stable release.
+Desktop and Android now share numeric patch releases without stage suffixes.
+Platform-specific hardware checks remain open; numbering does not change those
+qualification limits.
 
-What changed since RC3
+What changed in 1.1.1
+--------------------
+
+- Android definition imports preserve the selected profile instead of selecting
+  every catalog channel. Independent import guards support either import order.
+- Live, simulated, and retained-recording exports use normal RomRaider CSV:
+  Time (msec), then one column per channel with units in the headers.
+- Complete recovery spools export without the recent-sample memory limit.
+  Export does not modify or delete the recovery recording.
+- Includes the OpenPort channel-qualified filter acknowledgement repair.
+- Standard and side-by-side Android packages remain debug-signed. Existing
+  installations with different keys may refuse updates; export recordings first
+  and do not uninstall or clear app data without backing up retained logs.
+- Basic Android Forester logging was reported working. Larger channel sets,
+  sustained sessions, and Mitsubishi MUT-II vehicle qualification remain open.
+
+Previously delivered desktop changes
 ----------------------
 
 Desktop JavaFX cutover
@@ -66,7 +82,7 @@ Editor and live tuning
 - Refreshed the Editor toolbar, calibration browser, search field, inspector,
   empty workspace, buttons, tabs, and scrollbars so the desktop interface uses
   one visual system on Linux and Windows.
-- Replaced the dense legacy startup notes box with a larger themed RC4 welcome
+- Replaced the dense legacy startup notes box with a larger themed welcome
   surface that is easier to scan and scroll.
 - Moved the unsaved-ROM confirmation into the same integrated desktop dialog
   style used by startup and definition setup.
@@ -158,10 +174,9 @@ Checks completed
 Known limits
 ------------
 
-- RC4 remains a development preview.
-- No new in-car qualification is planned until RC5.
-- Android background logging, reconnect handling, and connected SSM testing are
-  not complete.
+- Hardware qualification is incomplete on some platforms.
+- Android stops when backgrounded and does not automatically reconnect.
+- Sustained Android SSM testing and broader profile qualification remain open.
 - Mitsubishi Lancer Evolution MUT-II still needs vehicle qualification.
 - ECU flashing and production ECU memory writing are not available.
 
