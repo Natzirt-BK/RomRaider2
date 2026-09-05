@@ -116,7 +116,7 @@ jobs:
           cp packaging/default/settings.xml settings.xml
           timeout 10m xvfb-run -a ant clean unittest
           ant clean build-linux
-          gradle --no-daemon :platform:shared-core:check :ui:compose-logger:test :ui:compose-logger:stageLoggerWorkspace
+          gradle --no-daemon :platform:shared-core:check :ui:compose-logger:test :ui:compose-logger:stageLoggerWorkspace :ui:javafx-desktop:stageJavaFxLinux
           packaging/java21/build-linux-app-image.sh build/java21
           packaging/steamos/build-steamos-bundle.sh
           cd build/steamos

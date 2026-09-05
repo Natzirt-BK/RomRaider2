@@ -40,7 +40,27 @@ follows the [Android USB host guide](https://developer.android.com/develop/conne
   memory; it is **not an eight-hour elapsed-time or hardware soak**.
 - `:shared-core:check :app:testDebugUnitTest :app:assembleDebug :app:lintDebug`
   is the local gate and is included in the platform-preview workflow.
-- Final build, emulator and GitHub CI results will be recorded below once complete.
+- Final local gate passed: **14 Android session tests**, portable checks, debug
+  APK assembly and lint. Lint has no errors and two existing SDK-version warnings
+  (compile/target 36 versus newer 37); no API-level increase was made here.
+- Android 16 / API36 x86_64 emulator: preview3 launches, MUT2 selection persists
+  across app restart/update, the synthetic text fixture imports through the
+  native picker, both channels appear in the chooser, and simulated values
+  update. Native CSV export produced a header plus **366 samples**.
+- Recovery UI: a seeded two-row app-private recording remained listed after
+  force-stop/relaunch; native export produced the expected header and both rows,
+  leaving the source intact. This tests recovery/export UI, not crash recovery
+  of a hardware session. Exact final APK was reinstalled and text import and
+  recovery export rechecked. No `AndroidRuntime` errors appeared in logcat.
+- Source commit `1e2de2af1b8d2a84b8142e30bee589a76312d770` is pushed. Android job
+  [101273801076](https://github.com/Natzirt-BK/RomRaider2/actions/runs/33953973921/job/101273801076)
+  passed and uploaded preview3. Linux and Windows
+  [native CI 33953974102](https://github.com/Natzirt-BK/RomRaider2/actions/runs/33953974102)
+  both passed.
+- Broader preview CI found an existing SteamOS workflow omission: portable/core
+  and Compose tests passed, then the Linux packager required a JavaFX stage the
+  workflow did not run. The workflow now includes `stageJavaFxLinux`; follow-up
+  preview CI is pending. Android production code is unchanged by that fix.
 
 ## Remaining gates / audit findings
 
@@ -66,6 +86,9 @@ follows the [Android USB host guide](https://developer.android.com/develop/conne
 8. Physical UI/accessibility, document providers, debug-key upgrades and actual
    Android USB I/O are not certified by the JVM tests. The production transport
    is not exercised against a mocked Android `UsbDeviceConnection` in that suite.
+9. Emulator screenshot shows the existing footer partially under the Android
+   three-button navigation area. Tested setup/export controls remain reachable;
+   system-bar insets need a separate layout pass.
 
 Next acceptance procedure: [Android preview testing](ANDROID_PREVIEW_TESTING.md).
 Desktop B1/B2 findings from the prior desktop audit remain deferred, unchanged.
