@@ -63,8 +63,11 @@ follows the [Android USB host guide](https://developer.android.com/develop/conne
   built the Linux image, then exposed an obsolete Compose/Skiko bundle assertion.
   The bundle now checks the current JavaFX workspace and Linux native modules
   instead. `bash -n` and a local bundle build against the previously qualified
-  stock Linux image passed without modifying that source image. Follow-up CI is
-  pending; Android production code is unchanged by these packaging fixes.
+  stock Linux image passed without modifying that source image. Final
+  [preview CI 33954484900](https://github.com/Natzirt-BK/RomRaider2/actions/runs/33954484900)
+  on `3af9bd357a181e86289a16b6dbee86de8ff137b4` passed **all four jobs**:
+  Android, SteamOS, macOS arm64 and macOS x64. Android production code is
+  unchanged by these packaging fixes. No release/pin promotion was performed.
 - Both macOS architectures passed on the original source run. The downloaded
   Android artifact's SHA256 sidecar and APK v2 signature verified; metadata is
   application ID `com.romraider.mobile.preview`, versionCode110403, minSdk26,
