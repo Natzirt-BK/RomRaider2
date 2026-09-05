@@ -13,7 +13,9 @@ logging and unfinished ECU-write research.
 ## Downloads
 
 The latest public desktop build is **RomRaider2 1.1.0 RC4**. It is a development
-prerelease while the remaining Mac hardware and vehicle checks are completed.
+prerelease while the remaining desktop acceptance and connected vehicle checks
+are completed. Only the current desktop RC and Android preview are kept on the
+Releases page; older source tags remain in Git history.
 
 | Platform | Package |
 | --- | --- |
@@ -32,13 +34,15 @@ previews are unsigned and have not completed physical Mac testing.
 ### Experimental Android preview
 
 Android 8.0 and newer users can also
-[download RC4 Android Preview 2](https://github.com/Natzirt-BK/RomRaider2/releases/download/romraider2-1.1.0-rc4-android-preview2/RomRaider2_1.1.0_RC4_Android_preview2-debug.apk).
+[download RC4 Android Preview 3](https://github.com/Natzirt-BK/RomRaider2/releases/download/romraider2-1.1.0-rc4-android-preview3/RomRaider2_1.1.0_RC4_Android_preview3-debug.apk).
 This is an early, debug-signed test build rather than the desktop RC4 release.
 It supports exact definition-backed calibration table editing, advanced ROM
 byte editing, RomRaider CSV review, Logger definition and profile import,
-simulated logging, and early OpenPort 2.0 preparation. The
-read-only Subaru SSM K-Line Logger still awaits RC5 vehicle qualification. ECU
-writing and flashing are not present.
+simulated logging, and read-only OpenPort 2.0 SSM K-Line and Mitsubishi MUT-II
+logging through a USB host/OTG adapter. Preview 3 adds MUT-II configuration import,
+recording, recovery and CSV export. Physical phone/adapter/vehicle qualification
+is still open for both protocols; software and emulator tests do not establish
+on-car reliability. ECU writing and flashing are not present.
 
 Read the [Android preview test guide](docs/ANDROID_PREVIEW_TESTING.md) before
 sideloading it or connecting an adapter.
@@ -51,7 +55,7 @@ sideloading it or connecting an adapter.
 | Subaru SSM Logger | Linux OpenPort 2.0 identification and sustained logging tested in car |
 | Windows J2534 | Portable build and automatic 32/64-bit routing implemented; connected qualification is still open |
 | Mitsubishi Lancer Evolution MUT-II | Read-only logger foundation implemented; vehicle qualification is still open |
-| Android | Experimental editing and Logger preview available; connected SSM qualification is still open |
+| Android | Preview 3 with read-only SSM/MUT-II logging; connected qualification is still open |
 | DimeMod | Discovery, diagnostics, and Logger parameters retained; RAM writing stays hidden and disabled |
 | ROM mod recognition | DimeMod, CarBerry, and MerpMod recognized from explicit loaded-definition evidence |
 | ECU flashing | Not available in RomRaider2 1.1.0 |
