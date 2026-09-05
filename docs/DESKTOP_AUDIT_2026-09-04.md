@@ -1,5 +1,9 @@
 # Desktop audit — September 4, 2026
 
+Current results and next priorities: [completed repair re-audit](DESKTOP_REPAIR_AUDIT_2026-09-04.md).
+The original findings below are historical; the linked report identifies the
+exact repaired candidate, package hashes and remaining gates.
+
 ## Verdict
 
 ### Repair follow-up (current work)
@@ -29,16 +33,17 @@ The A4–A9 follow-up now implements:
   with older senders. An isolated ephemeral-port test covers paths with spaces
   and Unicode without contacting the user's existing application instance.
 
-Local verification: 344 core tests (341 passed, three optional skips), 29 JavaFX
+Local verification: 344 core tests (341 passed, three optional skips), 30 JavaFX
 tests with native Xvfb smoke enabled, 34 Compose tests, portable-core check, eight
 pinned dependency hashes, and a synthetic repair probe. Settings cancel/apply,
 legacy click semantics, numeric sorting/ranges, actual axis/interpolation button
 actions, reversible touch styling, small scroll recovery and modal placement
-have focused regression coverage. Matched native CI/package follow-up is pending.
+have focused regression coverage. Matched Linux/Windows CI and packaged probes
+passed; see the linked re-audit for their scope and the next CSV-load finding.
 
 **Release remains HOLD.** A complete physical-display, hardware, clean/upgrade,
 native file-dialog, recorded-data and user-acceptance matrix is not implied by
-these automated repairs. The final follow-up will distinguish implemented fixes
+these automated repairs. The linked follow-up distinguishes implemented fixes
 from those external qualification gates; no release assets or pins are promoted.
 
 ### Original audit verdict

@@ -14,7 +14,8 @@ The repair probe also checks Logger touch/full-screen presentation with startup
 auto-connect disabled and Definition Manager's native work-area bounds.
 
 Compile with a full JDK 21 against the candidate's `app/*` and `app/lib/common/*`
-JARs, then package the resulting classes in a diagnostic JAR. The runtime images
+JARs on Windows (`lib/app/*` and `lib/app/lib/common/*` on Linux), then package
+the resulting classes in a diagnostic JAR. The runtime images
 intentionally omit the standalone `java` command. Make a **separate copy** of the
 verified image, add the diagnostic JAR in its `app` directory, and change only
 that copy's launcher `.cfg` main class to the probe's fully qualified class name.

@@ -4,10 +4,11 @@ Status: active release-blocking audit
 Source: user review of the Linux installer build and Windows RC4 build
 Recorded: 2026-09-03
 
-Latest item-by-item review: [September 4 desktop audit](DESKTOP_AUDIT_2026-09-04.md).
-Candidate `80ae9db2` passes native package construction, but close/save defects,
-analysis selection errors, small-screen clipping, and parity gaps keep the
-release blocked. Earlier source-implementation statuses below are not approvals.
+Latest item-by-item review: [September 4 repair re-audit](DESKTOP_REPAIR_AUDIT_2026-09-04.md).
+Candidate `4d4fae1c` repairs the close/save, analysis sorting/range and desktop
+control defects. Matched native CI and synthetic package checks pass, but an
+overlapping-CSV-load finding and external acceptance gates keep release blocked.
+Earlier source-implementation statuses below are not approvals.
 
 ## Why this audit exists
 
