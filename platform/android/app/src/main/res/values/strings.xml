@@ -11,6 +11,7 @@
     <string name="logger_preview_stop">STOP OFFLINE PREVIEW</string>
     <string name="logger_live_start">START READ-ONLY LOGGER</string>
     <string name="logger_live_stop">STOP LIVE LOGGER</string>
+    <string name="logger_live_opening">READ-ONLY LOGGER\nOpening %1$s K-line…</string>
     <string name="logger_simulated_gauge_demo">SIMULATED GAUGE DEMO  /  no ECU data</string>
     <string name="logger_live_identified">READ-ONLY LOGGER\nECU %1$s\nReady: %2$d  /  unavailable: %3$d\nWaiting for the first values…</string>
     <string name="logger_live_stopped">%1$s\n%2$s</string>

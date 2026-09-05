@@ -3,6 +3,7 @@ package com.romraider.mobile;
 
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -57,6 +58,9 @@ import com.romraider.portable.logger.definition.PortableSelectedParameter;
 import com.romraider.portable.logger.PortableLoggerQueryBatch;
 import com.romraider.portable.logger.PortableLoggerQueryPlan;
 import com.romraider.portable.logger.PortableLoggerValue;
+import com.romraider.portable.logger.PortableLoggerProtocol;
+import com.romraider.portable.logger.definition.PortableLoggerParameter;
+import com.romraider.portable.logger.definition.PortableMut2LogConfigReader;
 
 import java.io.InputStream;
 import java.io.File;
@@ -69,6 +73,7 @@ import java.nio.charset.StandardCharsets;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -88,6 +93,7 @@ public final class MainActivity extends Activity {
     private static final int SAVE_PREVIEW_LOG = 15;
     private static final int SAVE_LIVE_LOG = 16;
     private static final int OPEN_ECU_DEFINITION = 17;
+    private static final int SAVE_ARCHIVED_LOG = 18;
     private static final String ACTION_USB_PERMISSION =
             "com.romraider.mobile.USB_PERMISSION";
     private static final int BACKGROUND = Color.rgb(15, 21, 27);
@@ -140,8 +146,15 @@ public final class MainActivity extends Activity {
     private final ExecutorService workerExecutor = Executors.newSingleThreadExecutor();
     private final AtomicInteger recoveryGeneration = new AtomicInteger();
     private volatile OpenPortUsbTransport openPort;
+    private final Object usbLock = new Object();
+    private int usbGeneration;
+    private boolean activityDestroyed;
     private volatile ReadOnlyLoggerSession liveLogger;
     private volatile PortableLogSession liveLog;
+    private PortableLoggerProtocol loggerProtocol = PortableLoggerProtocol.SSM;
+    private int loggerImportGeneration;
+    private int liveSessionGeneration;
+    private File archiveToExport;
     private boolean loggerVisible;
     private volatile String usbState = "OpenPort not prepared.";
     private volatile PortableLoggerDefinition loggerDefinition;
@@ -186,6 +199,11 @@ public final class MainActivity extends Activity {
             new BroadcastReceiver() {
                 @Override
                 public void onReceive(Context context, Intent intent) {
+                    if (UsbManager.ACTION_USB_DEVICE_DETACHED.equals(intent.getAction())) {
+                        closeMissingOpenPort();
+                        refreshUsbStatus();
+                        return;
+                    }
                     if (!ACTION_USB_PERMISSION.equals(intent.getAction())) return;
                     UsbDevice device = Build.VERSION.SDK_INT >= 33
                             ? intent.getParcelableExtra(UsbManager.EXTRA_DEVICE,
@@ -206,7 +224,10 @@ public final class MainActivity extends Activity {
     @SuppressLint("InlinedApi") // The receiver flag is inlined and safe on API 26-32.
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        loggerProtocol = PortableLoggerProtocol.fromId(getPreferences(MODE_PRIVATE)
+                .getString("logger_protocol", "SSM"));
         IntentFilter permissionFilter = new IntentFilter(ACTION_USB_PERMISSION);
+        permissionFilter.addAction(UsbManager.ACTION_USB_DEVICE_DETACHED);
         registerReceiver(usbPermissionReceiver, permissionFilter,
                 RECEIVER_NOT_EXPORTED);
         showWorkspace();
@@ -234,8 +255,13 @@ public final class MainActivity extends Activity {
         stopLoggerPreview(null);
         stopLiveLogger(null);
         unregisterReceiver(usbPermissionReceiver);
-        OpenPortUsbTransport transport = openPort;
-        openPort = null;
+        final OpenPortUsbTransport transport;
+        synchronized (usbLock) {
+            activityDestroyed = true;
+            usbGeneration++;
+            transport = openPort;
+            openPort = null;
+        }
         if (transport != null) workerExecutor.execute(transport::close);
         workerExecutor.shutdown();
         super.onDestroy();
@@ -243,6 +269,7 @@ public final class MainActivity extends Activity {
 
     @Override
     protected void onStop() {
+        stopLoggerPreview(null);
         stopLiveLogger("Live logging stopped when RomRaider2 left the foreground.");
         scheduleWorkspaceRecovery();
         super.onStop();
@@ -338,13 +365,37 @@ public final class MainActivity extends Activity {
         content.addView(reviewCard, cardParams(dp(10)));
 
         LinearLayout setupCard = sectionCard("LOGGER SETUP",
-                "Use an existing logger definition and profile. Extended "
-                        + "addresses remain unavailable until the ECU ID matches.");
+                "Select the vehicle protocol, then load logger XML or a MUT2 "
+                        + "OpenPort logcfg.txt. Choose channels here or import a profile.");
+        Button protocolChoice = button("PROTOCOL: " + loggerProtocol);
+        protocolChoice.setOnClickListener(view -> new AlertDialog.Builder(this)
+                .setTitle("Read-only vehicle protocol")
+                .setItems(new String[] {"Subaru SSM (4800 baud)", "Mitsubishi MUT-II (15625 baud)"},
+                        (dialog, which) -> {
+                            PortableLoggerProtocol next = which == 0
+                                    ? PortableLoggerProtocol.SSM : PortableLoggerProtocol.MUT2;
+                            if (next == loggerProtocol) return;
+                            stopLiveLogger(null);
+                            loggerImportGeneration++;
+                            loggerProtocol = next;
+                            loggerDefinition = null;
+                            loggerProfile = null;
+                            loggerDefinitionName = "";
+                            loggerProfileName = "";
+                            loggerSetupState = "Load a " + next + " logger definition.";
+                            getPreferences(MODE_PRIVATE).edit()
+                                    .putString("logger_protocol", next.name()).apply();
+                            showLogger();
+                        }).show());
+        setupCard.addView(protocolChoice, matchWrap(dp(9)));
         Button definition = button("OPEN LOGGER DEFINITION");
         definition.setOnClickListener(view -> openLoggerDefinition());
         Button profile = button("OPEN LOGGER PROFILE");
         profile.setOnClickListener(view -> openLoggerProfile());
         setupCard.addView(actionRow(definition, profile), matchWrap(dp(9)));
+        Button channels = button("CHOOSE CHANNELS");
+        channels.setOnClickListener(view -> chooseLoggerChannels());
+        setupCard.addView(channels, matchWrap(dp(9)));
         loggerSetupView = statusText(loggerSetupSummary());
         setupCard.addView(loggerSetupView, matchWrap());
         content.addView(setupCard, cardParams(dp(10)));
@@ -360,7 +411,7 @@ public final class MainActivity extends Activity {
         previewCard.addView(actionRow(loggerPreviewButton, savePreview),
                 matchWrap(dp(9)));
         loggerPreviewView = statusText(
-                "Load a definition and profile to run the offline preview.");
+                "Load a logger definition, then choose channels or import a profile.");
         previewCard.addView(loggerPreviewView, matchWrap());
         content.addView(previewCard, cardParams(dp(10)));
 
@@ -388,6 +439,9 @@ public final class MainActivity extends Activity {
         saveLive.setOnClickListener(view -> saveLiveLog());
         liveCard.addView(actionRow(liveLoggerButton, saveLive),
                 matchWrap(dp(9)));
+        Button archive = button("RECOVER / EXPORT RECORDINGS");
+        archive.setOnClickListener(view -> chooseArchivedLog());
+        liveCard.addView(archive, matchWrap(dp(9)));
         liveLoggerView = statusText("RC5 QUALIFICATION PENDING\nPrepare the "
                 + "OpenPort and load a definition and profile before a future "
                 + "connected test.");
@@ -418,7 +472,13 @@ public final class MainActivity extends Activity {
     private String loggerSetupSummary() {
         PortableLoggerDefinition definition = loggerDefinition;
         PortableLoggerProfile profile = loggerProfile;
-        StringBuilder result = new StringBuilder(loggerSetupState);
+        StringBuilder result = new StringBuilder("Protocol: ").append(loggerProtocol)
+                .append('\n').append(loggerSetupState);
+        if (loggerProtocol == PortableLoggerProtocol.MUT2) {
+            result.append("\nMUT2_GENERIC confirms a response, not a calibration ID. "
+                    + "Use definitions verified for your vehicle. All selected PIDs "
+                    + "are polled each cycle; fewer channels means faster updates.");
+        }
         if (definition != null) {
             result.append("\nDefinition: ").append(loggerDefinitionName)
                     .append("  /  v").append(definition.getVersion())
@@ -521,16 +581,31 @@ public final class MainActivity extends Activity {
 
     private void openOpenPort(UsbDevice device) {
         stopLiveLogger(null);
+        final int generation;
+        final OpenPortUsbTransport previous;
+        synchronized (usbLock) {
+            if (activityDestroyed) return;
+            generation = ++usbGeneration;
+            previous = openPort;
+            openPort = null;
+        }
         usbState = "Preparing OpenPort 2.0...";
         refreshUsbStatus();
         workerExecutor.execute(() -> {
-            OpenPortUsbTransport previous = openPort;
             if (previous != null) previous.close();
             try {
                 UsbManager manager = (UsbManager) getSystemService(USB_SERVICE);
                 OpenPortUsbTransport prepared = OpenPortUsbTransport.open(
                         manager, device);
-                openPort = prepared;
+                final boolean obsolete;
+                synchronized (usbLock) {
+                    obsolete = activityDestroyed || generation != usbGeneration;
+                    if (!obsolete) openPort = prepared;
+                }
+                if (obsolete) {
+                    prepared.close();
+                    return;
+                }
                 Integer voltage = prepared.getBatteryMillivolts();
                 usbState = "OpenPort ready  /  firmware "
                         + prepared.getFirmwareVersion()
@@ -538,7 +613,10 @@ public final class MainActivity extends Activity {
                         : String.format(Locale.ROOT, "  /  %.2f V",
                                 voltage / 1000.0));
             } catch (Exception ex) {
-                openPort = null;
+                synchronized (usbLock) {
+                    if (activityDestroyed || generation != usbGeneration) return;
+                    openPort = null;
+                }
                 usbState = ex.getMessage() == null
                         ? "OpenPort preparation failed." : ex.getMessage();
             }
@@ -560,17 +638,23 @@ public final class MainActivity extends Activity {
         UsbDevice attached = findOpenPort(
                 (UsbManager) getSystemService(USB_SERVICE));
         if (transport.matches(attached)) return;
-        openPort = null;
+        synchronized (usbLock) {
+            if (openPort != transport) return;
+            usbGeneration++;
+            openPort = null;
+        }
         usbState = "OpenPort disconnected.";
         stopLiveLogger("Live logging stopped because the OpenPort disconnected.");
         workerExecutor.execute(transport::close);
     }
 
     private void refreshUsbStatus() {
+        if (isDestroyed()) return;
         if (loggerVisible && content != null) showUsbDevices();
     }
 
     private void refreshLoggerSetupStatus() {
+        if (isDestroyed()) return;
         if (loggerVisible && content != null) showLoggerSetupStatus();
     }
 
@@ -782,6 +866,24 @@ public final class MainActivity extends Activity {
             saveLogAsync(uri, previewSession, "Saved the offline preview log.");
         } else if (requestCode == SAVE_LIVE_LOG && liveLog != null) {
             saveLogAsync(uri, liveLog, "Saved the read-only live log.");
+        } else if (requestCode == SAVE_ARCHIVED_LOG && archiveToExport != null) {
+            File source = archiveToExport;
+            archiveToExport = null;
+            workerExecutor.execute(() -> {
+                try (InputStream input = new java.io.FileInputStream(source);
+                     OutputStream output = getContentResolver().openOutputStream(uri, "w")) {
+                    if (output == null) throw new java.io.IOException("Export destination is unavailable");
+                    output.write("timestamp_ms,channel_id,channel_name,value,units\n"
+                            .getBytes(StandardCharsets.UTF_8));
+                    byte[] bytes = new byte[8192];
+                    int count;
+                    while ((count = input.read(bytes)) != -1) output.write(bytes, 0, count);
+                    output.flush();
+                    runOnUiThread(() -> notice("Recording exported; the recovery copy is retained."));
+                } catch (Exception ex) {
+                    fileFailure(ex, "The recording could not be exported.");
+                }
+            });
         }
     }
 
@@ -1017,20 +1119,51 @@ public final class MainActivity extends Activity {
         stopLiveLogger(null);
         loggerDefinition = null;
         loggerDefinitionName = "";
+        loggerProfile = null;
+        loggerProfileName = "";
+        final int generation = ++loggerImportGeneration;
+        final PortableLoggerProtocol protocol = loggerProtocol;
         loggerSetupState = "Reading logger definition...";
         refreshLoggerSetupStatus();
         workerExecutor.execute(() -> {
             try (InputStream input = getContentResolver().openInputStream(uri)) {
-                PortableLoggerDefinition parsed =
-                        PortableLoggerDefinitionReader.read(input, "SSM");
-                loggerDefinition = parsed;
-                loggerDefinitionName = name;
-                loggerSetupState = "Logger definition loaded.";
+                java.io.BufferedInputStream buffered = new java.io.BufferedInputStream(input);
+                buffered.mark(4096);
+                int first;
+                do { first = buffered.read(); } while (first >= 0 && Character.isWhitespace(first));
+                if (first == 0xEF) { // UTF-8 BOM
+                    buffered.read(); buffered.read();
+                    do { first = buffered.read(); } while (first >= 0 && Character.isWhitespace(first));
+                }
+                buffered.reset();
+                PortableLoggerDefinition parsed = first == '<'
+                        ? PortableLoggerDefinitionReader.read(buffered, protocol.name())
+                        : protocol == PortableLoggerProtocol.MUT2
+                                ? PortableMut2LogConfigReader.read(buffered) : null;
+                if (parsed == null) throw new IllegalArgumentException("SSM requires a logger XML definition");
+                runOnUiThread(() -> {
+                    if (isDestroyed() || generation != loggerImportGeneration) return;
+                    loggerDefinition = parsed;
+                    loggerDefinitionName = name;
+                    List<PortableLoggerProfile.Selection> defaults = new ArrayList<>();
+                    for (PortableLoggerParameter parameter : parsed.parameters()) {
+                        if (!parameter.getConversions().isEmpty()) defaults.add(
+                                new PortableLoggerProfile.Selection(parameter.getId(),
+                                        parameter.getConversions().get(0).getUnits()));
+                    }
+                    loggerProfile = new PortableLoggerProfile(protocol.name(), defaults, Collections.emptyList());
+                    loggerProfileName = "All defined channels (customizable)";
+                    loggerSetupState = "Logger definition loaded.";
+                    refreshLoggerSetupStatus();
+                });
             } catch (Exception ex) {
-                loggerSetupState = ex.getMessage() == null
-                        ? "Logger definition could not be opened." : ex.getMessage();
+                runOnUiThread(() -> {
+                    if (isDestroyed() || generation != loggerImportGeneration) return;
+                    loggerSetupState = ex.getMessage() == null
+                            ? "Logger definition could not be opened." : ex.getMessage();
+                    refreshLoggerSetupStatus();
+                });
             }
-            runOnUiThread(this::refreshLoggerSetupStatus);
         });
     }
 
@@ -1039,20 +1172,106 @@ public final class MainActivity extends Activity {
         stopLiveLogger(null);
         loggerProfile = null;
         loggerProfileName = "";
+        final int generation = ++loggerImportGeneration;
+        final PortableLoggerProtocol protocol = loggerProtocol;
         loggerSetupState = "Reading logger profile...";
         refreshLoggerSetupStatus();
         workerExecutor.execute(() -> {
             try (InputStream input = getContentResolver().openInputStream(uri)) {
                 PortableLoggerProfile parsed = PortableLoggerProfileReader.read(input);
-                loggerProfile = parsed;
-                loggerProfileName = name;
-                loggerSetupState = "Logger profile loaded.";
+                if (!parsed.getProtocol().isEmpty()
+                        && PortableLoggerProtocol.fromId(parsed.getProtocol()) != protocol) {
+                    throw new IllegalArgumentException("Profile protocol does not match " + protocol);
+                }
+                runOnUiThread(() -> {
+                    if (isDestroyed() || generation != loggerImportGeneration) return;
+                    loggerProfile = new PortableLoggerProfile(protocol.name(),
+                            parsed.selections(), parsed.unsupported());
+                    loggerProfileName = name;
+                    loggerSetupState = "Logger profile loaded.";
+                    refreshLoggerSetupStatus();
+                });
             } catch (Exception ex) {
-                loggerSetupState = ex.getMessage() == null
-                        ? "Logger profile could not be opened." : ex.getMessage();
+                runOnUiThread(() -> {
+                    if (isDestroyed() || generation != loggerImportGeneration) return;
+                    loggerSetupState = ex.getMessage() == null
+                            ? "Logger profile could not be opened." : ex.getMessage();
+                    refreshLoggerSetupStatus();
+                });
             }
-            runOnUiThread(this::refreshLoggerSetupStatus);
         });
+    }
+
+    private void chooseLoggerChannels() {
+        PortableLoggerDefinition definition = loggerDefinition;
+        if (definition == null) {
+            notice("Load a logger definition first.");
+            return;
+        }
+        List<PortableLoggerParameter> parameters = definition.parameters();
+        String[] names = new String[parameters.size()];
+        boolean[] checked = new boolean[names.length];
+        Map<String, String> previousUnits = new HashMap<>();
+        if (loggerProfile != null) for (PortableLoggerProfile.Selection selection : loggerProfile.selections()) {
+            previousUnits.put(selection.getId(), selection.getUnits());
+        }
+        for (int index = 0; index < names.length; index++) {
+            names[index] = parameters.get(index).getName();
+            checked[index] = previousUnits.containsKey(parameters.get(index).getId());
+        }
+        new AlertDialog.Builder(this).setTitle("Channels (fewer = faster cycles)")
+                .setMultiChoiceItems(names, checked, (dialog, which, selected) -> checked[which] = selected)
+                .setNegativeButton("Cancel", null)
+                .setNeutralButton("Clear all", (dialog, which) -> {
+                    stopLoggerPreview(null);
+                    stopLiveLogger(null);
+                    loggerProfile = new PortableLoggerProfile(loggerProtocol.name(), Collections.emptyList(), Collections.emptyList());
+                    loggerProfileName = "Custom channels";
+                    refreshLoggerSetupStatus();
+                })
+                .setPositiveButton("Use channels", (dialog, which) -> {
+                    if (loggerDefinition != definition) return;
+                    stopLoggerPreview(null);
+                    stopLiveLogger(null);
+                    List<PortableLoggerProfile.Selection> selections = new ArrayList<>();
+                    for (int index = 0; index < checked.length; index++) {
+                        PortableLoggerParameter parameter = parameters.get(index);
+                        if (checked[index] && !parameter.getConversions().isEmpty()) selections.add(
+                                new PortableLoggerProfile.Selection(parameter.getId(),
+                                        previousUnits.getOrDefault(parameter.getId(),
+                                                parameter.getConversions().get(0).getUnits())));
+                    }
+                    loggerProfile = new PortableLoggerProfile(loggerProtocol.name(), selections, Collections.emptyList());
+                    loggerProfileName = "Custom channels";
+                    refreshLoggerSetupStatus();
+                }).show();
+    }
+
+    private void chooseArchivedLog() {
+        if (liveLogger != null) {
+            notice("Stop logging and wait for the recording to finish first.");
+            return;
+        }
+        File[] files = new File(getFilesDir(), "recordings").listFiles(
+                file -> file.isFile() && file.getName().endsWith(".csv.part") && file.length() > 0);
+        if (files == null || files.length == 0) {
+            notice("No saved recovery recordings yet.");
+            return;
+        }
+        java.util.Arrays.sort(files, (left, right) -> Long.compare(right.lastModified(), left.lastModified()));
+        String[] names = new String[files.length];
+        for (int index = 0; index < files.length; index++) {
+            names[index] = files[index].getName() + " (" + files[index].length() + " bytes)";
+        }
+        new AlertDialog.Builder(this).setTitle("Export a retained recording")
+                .setItems(names, (dialog, which) -> {
+                    archiveToExport = files[which];
+                    Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+                    intent.addCategory(Intent.CATEGORY_OPENABLE);
+                    intent.setType("text/csv");
+                    intent.putExtra(Intent.EXTRA_TITLE, files[which].getName().replace(".part", ""));
+                    startActivityForResult(intent, SAVE_ARCHIVED_LOG);
+                }).setNegativeButton("Cancel", null).show();
     }
 
     private void showLogSummary(String name, PortableLogSession session) {
@@ -1079,6 +1298,10 @@ public final class MainActivity extends Activity {
             stopLoggerPreview("Offline preview stopped. The recorded values can be saved as CSV.");
             return;
         }
+        if (liveLogger != null) {
+            notice("Stop the live logger before starting simulated data.");
+            return;
+        }
         PortableLoggerDefinition definition = loggerDefinition;
         PortableLoggerProfile profile = loggerProfile;
         if (definition == null || profile == null) {
@@ -1093,7 +1316,8 @@ public final class MainActivity extends Activity {
                         "No selected parameters are available before ECU identification.");
             }
             previewSelections = selection.ready();
-            previewPlan = PortableLoggerQueryPlan.create(previewSelections);
+            previewPlan = PortableLoggerQueryPlan.create(previewSelections, loggerProtocol);
+            clearLoggerGauges();
             previewSession = new PortableLogSession();
             previewCycle = 0;
             previewStartedAt = SystemClock.elapsedRealtime();
@@ -1147,41 +1371,42 @@ public final class MainActivity extends Activity {
             notice("Open a logger definition and profile first.");
             return;
         }
+        stopLoggerPreview(null);
 
-        PortableLogSession previousLog = liveLog;
-        liveLog = null;
-        if (previousLog != null) {
-            try {
-                previousLog.discard();
-            } catch (Exception ignored) {
-                // The cache directory will remove abandoned preview files.
-            }
-        }
         if (liveLoggerButton != null) {
             liveLoggerButton.setText(R.string.logger_live_stop);
         }
         if (liveLoggerView != null) {
-            liveLoggerView.setText("READ-ONLY LOGGER\nOpening SSM K-Line and identifying the ECU...");
+            liveLoggerView.setText(getString(R.string.logger_live_opening, loggerProtocol.name()));
         }
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         final PortableLogSession recording;
         try {
-            recording = PortableLogSession.streaming(new File(getCacheDir(),
-                    "romraider2-live-log.csv.part"), 10_000);
+            File folder = new File(getFilesDir(), "recordings");
+            if (!folder.isDirectory() && !folder.mkdirs()) {
+                throw new java.io.IOException("Recording folder is unavailable");
+            }
+            recording = PortableLogSession.streaming(File.createTempFile(
+                    "live-" + System.currentTimeMillis() + "-", ".csv.part", folder), 10_000);
         } catch (Exception failure) {
             notice(failure.getMessage() == null
                     ? "Live-log storage could not be prepared."
                     : failure.getMessage());
             getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+            if (liveLoggerButton != null) liveLoggerButton.setText(R.string.logger_live_start);
             return;
         }
+        final int generation = ++liveSessionGeneration;
+        clearLoggerGauges();
         ReadOnlyLoggerSession session = new ReadOnlyLoggerSession(transport,
                 definition, profile, recording,
                 new ReadOnlyLoggerSession.Listener() {
+                    private long lastDisplayTimestamp = -100;
                     @Override
                     public void onIdentified(String ecuId, int ready,
                             int unavailable) {
                         runOnUiThread(() -> {
+                            if (isDestroyed() || generation != liveSessionGeneration) return;
                             if (liveLoggerView != null) {
                                 liveLoggerView.setText(getString(
                                         R.string.logger_live_identified,
@@ -1193,9 +1418,13 @@ public final class MainActivity extends Activity {
                     @Override
                     public void onValues(String ecuId, long timestamp,
                             List<PortableLoggerValue> values, int samples) {
+                        // Record every cycle; cap display work to 10 updates/sec.
+                        if (timestamp - lastDisplayTimestamp < 100) return;
+                        lastDisplayTimestamp = timestamp;
                         String display = liveValueSummary(ecuId, timestamp,
                                 values, samples);
                         runOnUiThread(() -> {
+                            if (isDestroyed() || generation != liveSessionGeneration) return;
                             if (liveLoggerView != null) {
                                 liveLoggerView.setText(display);
                             }
@@ -1205,9 +1434,10 @@ public final class MainActivity extends Activity {
 
                     @Override
                     public void onStopped(String message) {
-                        liveLog = sessionLog();
-                        liveLogger = null;
                         runOnUiThread(() -> {
+                            if (isDestroyed() || generation != liveSessionGeneration) return;
+                            liveLog = recording;
+                            liveLogger = null;
                             getWindow().clearFlags(
                                     WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
                             if (liveLoggerButton != null) {
@@ -1215,7 +1445,7 @@ public final class MainActivity extends Activity {
                                         R.string.logger_live_start);
                             }
                             if (liveLoggerView != null) {
-                                int recorded = liveLog.size();
+                                int recorded = recording.size();
                                 String recordedSummary = getResources()
                                         .getQuantityString(
                                                 R.plurals.logger_live_recorded,
@@ -1225,12 +1455,6 @@ public final class MainActivity extends Activity {
                                         message, recordedSummary));
                             }
                         });
-                    }
-
-                    private PortableLogSession sessionLog() {
-                        ReadOnlyLoggerSession active = liveLogger;
-                        return active == null
-                                ? new PortableLogSession() : active.getLog();
                     }
                 });
         liveLogger = session;
@@ -1286,7 +1510,7 @@ public final class MainActivity extends Activity {
         if (loggerPreviewView == null) return;
         StringBuilder summary = new StringBuilder("SIMULATED DATA  /  ")
                 .append(timestamp).append(" ms  /  ")
-                .append(previewPlan.batches().size()).append(" SSM batch");
+                .append(previewPlan.batches().size()).append(" ").append(loggerProtocol).append(" batch");
         if (previewPlan.batches().size() != 1) summary.append("es");
         for (PortableLoggerValue value : values) {
             summary.append("\n")
@@ -1418,6 +1642,11 @@ public final class MainActivity extends Activity {
     }
 
     private void showLoggerGaugeDemo() {
+        if (liveLogger != null) {
+            notice("Stop the live logger before showing simulated gauges.");
+            return;
+        }
+        stopLoggerPreview(null);
         clearLoggerGauges();
         demoGauge("P-RPM", "Engine Speed", "rpm", "0", 720, 6650, 4210);
         demoGauge("P-BOOST", "Boost Pressure", "psi", "0.0", -8.6, 18.4, 12.7);

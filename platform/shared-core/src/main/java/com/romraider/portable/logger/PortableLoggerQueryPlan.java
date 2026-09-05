@@ -32,19 +32,26 @@ public final class PortableLoggerQueryPlan {
 
     public static PortableLoggerQueryPlan create(
             List<PortableSelectedParameter> selections) {
+        return create(selections, PortableLoggerProtocol.SSM);
+    }
+
+    public static PortableLoggerQueryPlan create(List<PortableSelectedParameter> selections,
+            PortableLoggerProtocol protocol) {
+        if (protocol == null) throw new IllegalArgumentException("Logger protocol is required");
         if (selections == null || selections.isEmpty()) {
             throw new IllegalArgumentException("At least one logger parameter is required");
         }
         List<Group> groups = connectedGroups(selections);
+        int maxAddresses = protocol == PortableLoggerProtocol.MUT2 ? 256 : MAX_ADDRESSES;
         List<LinkedHashSet<Integer>> packed = new ArrayList<>();
         for (Group group : groups) {
-            if (group.addresses.size() > MAX_ADDRESSES) {
+            if (group.addresses.size() > maxAddresses) {
                 throw new IllegalArgumentException(
-                        "Overlapping logger parameters exceed one SSM request");
+                        "Overlapping logger parameters exceed the " + protocol + " address limit");
             }
             LinkedHashSet<Integer> destination = null;
             for (LinkedHashSet<Integer> candidate : packed) {
-                if (candidate.size() + group.addresses.size() <= MAX_ADDRESSES) {
+                if (candidate.size() + group.addresses.size() <= maxAddresses) {
                     destination = candidate;
                     break;
                 }
@@ -57,7 +64,12 @@ public final class PortableLoggerQueryPlan {
         }
         List<PortableLoggerQueryBatch> batches = new ArrayList<>();
         for (LinkedHashSet<Integer> addresses : packed) {
-            batches.add(new PortableLoggerQueryBatch(toArray(addresses)));
+            if (protocol == PortableLoggerProtocol.MUT2) {
+                for (int pid : addresses) {
+                    ReadOnlyMut2Protocol.request(pid);
+                    batches.add(new PortableLoggerQueryBatch(new int[] {pid}, protocol));
+                }
+            } else batches.add(new PortableLoggerQueryBatch(toArray(addresses), protocol));
         }
         List<PortableParameterConverter> converters = new ArrayList<>();
         for (PortableSelectedParameter selection : selections) {

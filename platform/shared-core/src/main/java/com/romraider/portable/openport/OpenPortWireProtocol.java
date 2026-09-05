@@ -7,6 +7,7 @@ package com.romraider.portable.openport;
 
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
+import com.romraider.portable.logger.PortableLoggerProtocol;
 
 /** Platform-neutral command and response framing for a Tactrix OpenPort 2.0. */
 public final class OpenPortWireProtocol {
@@ -38,8 +39,40 @@ public final class OpenPortWireProtocol {
 
     /** Opens the OpenPort's ISO9141 channel without adapter checksumming. */
     public static byte[] openSsmKLineRequest() {
+        return openKLineRequest(PortableLoggerProtocol.SSM);
+    }
+
+    public static byte[] openKLineRequest(PortableLoggerProtocol protocol) {
+        if (protocol == null) throw new IllegalArgumentException("Protocol required");
         return ascii("ato" + ISO9141_CHANNEL + " "
-                + ISO9141_NO_CHECKSUM + " " + SSM_BAUD + " 0\r\n");
+                + ISO9141_NO_CHECKSUM + " " + protocol.baud() + " 0\r\n");
+    }
+
+    /** Fixed read-only K-line timing and 8N1; no pin voltage or init commands. */
+    public static byte[][] kLineConfigurationRequests() {
+        return new byte[][] {ascii("ats3 7 1\r\n"), ascii("ats3 10 1\r\n"),
+                ascii("ats3 12 0\r\n"), ascii("ats3 3 0\r\n"),
+                ascii("ats3 32 0\r\n"), ascii("ats3 22 0\r\n")};
+    }
+
+    public static byte[] kLinePassFilterRequest() {
+        byte[] header = ascii("atf3 1 0 1\r\n");
+        return java.util.Arrays.copyOf(header, header.length + 2);
+    }
+
+    /** A command prefix alone is not a complete USB response. */
+    public static boolean hasCompleteResponse(byte[] response, int length,
+            String prefix) {
+        if (response == null || length <= 0 || prefix == null) return false;
+        String text = new String(response, 0, Math.min(length, response.length),
+                StandardCharsets.ISO_8859_1);
+        String[] lines = text.split("\n", -1);
+        for (int index = 0; index < lines.length - 1; index++) {
+            String line = lines[index];
+            // Only CRLF-terminated lines can acknowledge a command.
+            if (line.endsWith("\r") && (line + "\n").startsWith(prefix)) return true;
+        }
+        return false;
     }
 
     public static byte[] closeSsmKLineRequest() {
@@ -120,7 +153,7 @@ public final class OpenPortWireProtocol {
                     "OpenPort response did not contain " + prefix.trim());
         }
         int end = text.indexOf('\n', start);
-        if (end < 0) end = text.length();
+        if (end < 0) throw new IllegalArgumentException("OpenPort response is incomplete");
         return text.substring(start, end).replace("\r", "");
     }
 

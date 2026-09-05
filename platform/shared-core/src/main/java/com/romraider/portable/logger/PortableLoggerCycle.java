@@ -18,11 +18,17 @@ public final class PortableLoggerCycle {
 
     public List<PortableLoggerValue> read(PortableLoggerDataSource source)
             throws IOException {
+        return read(source, () -> false);
+    }
+
+    public List<PortableLoggerValue> read(PortableLoggerDataSource source,
+            java.util.function.BooleanSupplier cancelled) throws IOException {
         if (source == null) {
             throw new IllegalArgumentException("Logger data source is required");
         }
         List<byte[]> values = new ArrayList<byte[]>();
         for (PortableLoggerQueryBatch batch : plan.batches()) {
+            if (cancelled.getAsBoolean()) throw new java.io.InterruptedIOException("Logger stopped");
             byte[] response = source.read(batch);
             int expected = batch.getAddresses().length;
             if (response == null || response.length != expected) {
@@ -32,6 +38,7 @@ public final class PortableLoggerCycle {
             }
             values.add(response);
         }
+        if (cancelled.getAsBoolean()) throw new java.io.InterruptedIOException("Logger stopped");
         return plan.decode(values);
     }
 }

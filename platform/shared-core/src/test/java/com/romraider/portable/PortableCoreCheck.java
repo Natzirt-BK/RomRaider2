@@ -31,6 +31,7 @@ import com.romraider.portable.logger.definition.PortableLoggerSelectionService;
 
 public final class PortableCoreCheck {
     public static void main(String[] args) throws Exception {
+        PortableMut2Check.main(new String[0]);
         PortableRomDocument rom = new PortableRomDocument("sample.bin",
                 new byte[] {1, 2, 3, 4});
         rom.replace(1, new byte[] {8, 9});

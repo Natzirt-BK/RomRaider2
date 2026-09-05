@@ -33,10 +33,22 @@ Implemented:
 - open a foreground-only 4800-baud SSM K-Line session, identify the engine ECU,
   exclude transmission-only parameters, execute the selected read batches,
   display converted values, and record a live CSV.
+- select Mitsubishi MUT-II explicitly and use the OpenPort 2.0 ISO9141 channel
+  at 15625 baud, 8N1, with read-only single-PID requests;
+- import the read-only `type=mut2` subset of an OpenPort `logcfg.txt` directly,
+  including arithmetic RPN scaling, or load a MUT2 RomRaider logger XML;
+- select channels on the phone without requiring a separate logger profile;
+- flush each completed cycle and retain separate app-private recording files,
+  available from **Recover / export recordings** after restart. Normal stop
+  closes the writer; new sessions do not discard older recordings.
 
 Current preview limits:
 
 - calculated logger-parameter dependency evaluation;
+- MUT2 standalone `priority` is documented but not scheduled: every selected
+  PID is polled once per full cycle; choose fewer channels for faster updates;
+- setup definitions/channel selections must be reloaded after Activity/process
+  recreation; protocol and gauge theme persist;
 - qualify the wired read-only OpenPort logger on a supported car during RC5;
 - responsive large-screen and landscape layouts;
 - release signing, Play Store packaging, and broader physical-device checks.
@@ -44,7 +56,7 @@ Current preview limits:
 The first debug APK launched successfully on a Galaxy S25, and the traditional
 logger CSV that exposed the original header gap now opens correctly. The newer
 definition/profile import and offline logger preview still need a phone rerun.
-The OpenPort preparation and live logger paths still need connected-device
+The OpenPort preparation and SSM/MUT2 live logger paths still need connected-device
 checks. The live button is labeled as awaiting RC5 qualification, stops when
 the app leaves the foreground, and keeps ECU writing absent.
 
@@ -61,3 +73,13 @@ The Android SDK is intentionally separate from the desktop build. With a Java
 cd platform/android
 gradle :app:assembleDebug
 ```
+
+Regression/build gate for preview3:
+
+```bash
+gradle :shared-core:check :app:testDebugUnitTest :app:assembleDebug :app:lintDebug
+```
+
+The portable checks and Android session tests use synthetic responses, not an
+ECU. See [MUT-II implementation audit](../../docs/ANDROID_MUT2_AUDIT_2026-09-05.md)
+for evidence and the remaining hardware gate.

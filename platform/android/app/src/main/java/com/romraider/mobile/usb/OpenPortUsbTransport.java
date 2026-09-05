@@ -14,7 +14,9 @@ import android.hardware.usb.UsbManager;
 
 import com.romraider.portable.openport.OpenPortWireProtocol;
 import com.romraider.portable.openport.OpenPortKLineFrameDecoder;
-import com.romraider.portable.logger.PortableLoggerDataSource;
+import com.romraider.portable.logger.ReadOnlyLoggerTransport;
+import com.romraider.portable.logger.PortableLoggerProtocol;
+import com.romraider.portable.logger.ReadOnlyMut2Protocol;
 import com.romraider.portable.logger.PortableLoggerQueryBatch;
 import com.romraider.portable.logger.ReadOnlySsmProtocol;
 
@@ -25,7 +27,7 @@ import java.util.List;
 
 /** Owns one Android USB host session with an OpenPort 2.0 adapter. */
 public final class OpenPortUsbTransport implements Closeable,
-        PortableLoggerDataSource {
+        ReadOnlyLoggerTransport {
     private static final int CONTROL_TIMEOUT_MS = 2000;
     private static final int VEHICLE_TIMEOUT_MS = 2500;
     private static final int READ_SLICE_MS = 250;
@@ -42,6 +44,8 @@ public final class OpenPortUsbTransport implements Closeable,
     private final OpenPortKLineFrameDecoder kLineDecoder =
             new OpenPortKLineFrameDecoder();
     private boolean kLineOpen;
+    private PortableLoggerProtocol activeProtocol;
+    private java.util.function.BooleanSupplier cancelled = () -> false;
     private boolean closed;
 
     private OpenPortUsbTransport(UsbDevice device,
@@ -127,20 +131,45 @@ public final class OpenPortUsbTransport implements Closeable,
                 && device.getDeviceId() == candidate.getDeviceId();
     }
 
-    /** Opens only the 4800-baud, read-only SSM K-line transport. */
-    public synchronized void openReadOnlyKLine() throws IOException {
+    /** Opens only an explicitly selected read-only K-line transport. */
+    public synchronized void openReadOnlyKLine(PortableLoggerProtocol protocol) throws IOException {
         ensureOpen();
-        if (kLineOpen) return;
-        exchange(OpenPortWireProtocol.openSsmKLineRequest(), "aro\r\n");
+        checkCancelled();
+        if (kLineOpen && activeProtocol == protocol) return;
+        closeReadOnlyKLine();
+        exchange(OpenPortWireProtocol.openKLineRequest(protocol), "aro\r\n");
         kLineDecoder.reset();
         kLineOpen = true;
+        try {
+            for (byte[] config : OpenPortWireProtocol.kLineConfigurationRequests()) {
+                checkCancelled();
+                exchange(config, "aro\r\n");
+            }
+            checkCancelled();
+            exchange(OpenPortWireProtocol.kLinePassFilterRequest(), "arf ");
+            activeProtocol = protocol;
+        } catch (IOException ex) {
+            closeReadOnlyKLine();
+            throw ex;
+        }
     }
 
-    /** Identifies the connected Subaru ECU without changing ECU memory. */
-    public synchronized String identifyEcu() throws IOException {
-        openReadOnlyKLine();
-        byte[] response = transceiveSsm(ReadOnlySsmProtocol.ecuInitRequest());
+    /** Identifies SSM or confirms a generic MUT2 responder; never changes ECU memory. */
+    public synchronized String identifyEcu(PortableLoggerProtocol protocol) throws IOException {
+        return identifyEcu(protocol, () -> false);
+    }
+
+    @Override
+    public synchronized String identifyEcu(PortableLoggerProtocol protocol,
+            java.util.function.BooleanSupplier cancelled) throws IOException {
+        this.cancelled = cancelled;
+        openReadOnlyKLine(protocol);
         try {
+            if (protocol == PortableLoggerProtocol.MUT2) {
+                return ReadOnlyMut2Protocol.probeIdentity(transceiveSsm(
+                        ReadOnlyMut2Protocol.request(ReadOnlyMut2Protocol.PROBE_PID)));
+            }
+            byte[] response = transceiveSsm(ReadOnlySsmProtocol.ecuInitRequest());
             return ReadOnlySsmProtocol.ecuId(response);
         } catch (IllegalArgumentException ex) {
             throw new IOException("The ECU identification response was invalid.", ex);
@@ -152,10 +181,14 @@ public final class OpenPortUsbTransport implements Closeable,
     public synchronized byte[] read(PortableLoggerQueryBatch batch)
             throws IOException {
         if (batch == null) throw new IOException("Logger query batch is missing.");
-        openReadOnlyKLine();
+        openReadOnlyKLine(batch.getProtocol());
         int expected = batch.getAddresses().length;
         byte[] response = transceiveSsm(batch.request());
         try {
+            if (batch.getProtocol() == PortableLoggerProtocol.MUT2) {
+                return new byte[] {(byte) ReadOnlyMut2Protocol.value(
+                        batch.getAddresses()[0], response)};
+            }
             return ReadOnlySsmProtocol.readAddressValues(response, expected);
         } catch (IllegalArgumentException ex) {
             throw new IOException("The ECU logger response was invalid.", ex);
@@ -170,6 +203,7 @@ public final class OpenPortUsbTransport implements Closeable,
             // A timeout or detach is a normal channel-close path.
         } finally {
             kLineOpen = false;
+            activeProtocol = null;
             kLineDecoder.reset();
         }
     }
@@ -211,7 +245,7 @@ public final class OpenPortUsbTransport implements Closeable,
             if (OpenPortWireProtocol.contains(response, response.length, "are ")) {
                 throw new IOException("The OpenPort reported a command error.");
             }
-            if (OpenPortWireProtocol.contains(response, response.length,
+            if (OpenPortWireProtocol.hasCompleteResponse(response, response.length,
                     expected)) return response;
         }
         throw new IOException("OpenPort did not answer the adapter command.");
@@ -219,10 +253,12 @@ public final class OpenPortUsbTransport implements Closeable,
 
     private byte[] transceiveSsm(byte[] frame) throws IOException {
         ensureOpen();
+        checkCancelled();
         if (!kLineOpen) {
-            throw new IOException("The OpenPort SSM channel is not open.");
+            throw new IOException("The OpenPort K-line channel is not open.");
         }
         drainInput();
+        checkCancelled();
         kLineDecoder.reset();
         write(OpenPortWireProtocol.transmitSsmKLineRequest(frame),
                 CONTROL_TIMEOUT_MS);
@@ -230,9 +266,9 @@ public final class OpenPortUsbTransport implements Closeable,
         long deadline = android.os.SystemClock.elapsedRealtime()
                 + VEHICLE_TIMEOUT_MS;
         int receivedBytes = 0;
-        ByteArrayOutputStream responseWindow = new ByteArrayOutputStream();
         byte[] chunk = new byte[Math.max(64, input.getMaxPacketSize())];
         while (android.os.SystemClock.elapsedRealtime() < deadline) {
+            checkCancelled();
             int count = connection.bulkTransfer(input, chunk, chunk.length,
                     READ_SLICE_MS);
             if (count <= 0) continue;
@@ -240,11 +276,8 @@ public final class OpenPortUsbTransport implements Closeable,
             if (receivedBytes > MAX_VEHICLE_RESPONSE_BYTES) {
                 throw new IOException("OpenPort vehicle response is too large.");
             }
-            responseWindow.write(chunk, 0, count);
-            byte[] raw = responseWindow.toByteArray();
-            if (OpenPortWireProtocol.contains(raw, raw.length, "are ")) {
-                throw new IOException("The OpenPort rejected the SSM request.");
-            }
+            // Binary ECU bytes can spell ASCII command markers. Decode packet
+            // framing here; do not scan vehicle payloads as control responses.
             final List<byte[]> frames;
             try {
                 frames = kLineDecoder.accept(
@@ -254,7 +287,7 @@ public final class OpenPortUsbTransport implements Closeable,
             }
             if (!frames.isEmpty()) return frames.get(0);
         }
-        throw new IOException("The ECU did not answer the read-only SSM request.");
+        throw new IOException("The ECU did not answer the read-only " + activeProtocol + " request.");
     }
 
     private void drainInput() {
@@ -264,6 +297,10 @@ public final class OpenPortUsbTransport implements Closeable,
                     DRAIN_SLICE_MS);
             if (count <= 0) return;
         }
+    }
+
+    private void checkCancelled() throws java.io.InterruptedIOException {
+        if (cancelled.getAsBoolean()) throw new java.io.InterruptedIOException("Logger stopped");
     }
 
     private void write(byte[] request, int timeoutMs) throws IOException {

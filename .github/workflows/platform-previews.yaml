@@ -75,24 +75,24 @@ jobs:
       - name: Check portable core and build Android preview
         run: |
           gradle --no-daemon -p platform/android \
-            :shared-core:check :app:assembleDebug :app:lintDebug
+            :shared-core:check :app:testDebugUnitTest :app:assembleDebug :app:lintDebug
           mkdir -p build/platform-previews
           cp platform/android/app/build/outputs/apk/debug/app-debug.apk \
-            build/platform-previews/RomRaider2_1.1.0_RC4_Android_preview2-debug.apk
+            build/platform-previews/RomRaider2_1.1.0_RC4_Android_preview3-debug.apk
           (
             cd build/platform-previews
-            sha256sum RomRaider2_1.1.0_RC4_Android_preview2-debug.apk \
-              >RomRaider2_1.1.0_RC4_Android_preview2-debug.apk.sha256
+            sha256sum RomRaider2_1.1.0_RC4_Android_preview3-debug.apk \
+              >RomRaider2_1.1.0_RC4_Android_preview3-debug.apk.sha256
           )
       - name: Check whitespace
         run: git diff --check
       - name: Upload Android debug preview
         uses: actions/upload-artifact@v4
         with:
-          name: RomRaider2-1.1.0-RC4-Android-preview2-debug
+          name: RomRaider2-1.1.0-RC4-Android-preview3-debug
           path: |
-            build/platform-previews/RomRaider2_1.1.0_RC4_Android_preview2-debug.apk
-            build/platform-previews/RomRaider2_1.1.0_RC4_Android_preview2-debug.apk.sha256
+            build/platform-previews/RomRaider2_1.1.0_RC4_Android_preview3-debug.apk
+            build/platform-previews/RomRaider2_1.1.0_RC4_Android_preview3-debug.apk.sha256
           if-no-files-found: error
 
   steamos-package:

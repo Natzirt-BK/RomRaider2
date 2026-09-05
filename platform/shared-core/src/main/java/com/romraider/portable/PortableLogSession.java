@@ -26,6 +26,7 @@ public final class PortableLogSession {
     private final int retainedSamples;
     private Writer spoolWriter;
     private int sampleCount;
+    private boolean finished;
 
     public PortableLogSession() {
         this(null, MAX_SAMPLES);
@@ -58,6 +59,7 @@ public final class PortableLogSession {
     }
 
     public synchronized void append(PortableLogSample sample) {
+        if (finished) throw new IllegalStateException("The recording is finished");
         if (sample == null) throw new IllegalArgumentException(
                 "A logger sample is required");
         if (spoolFile == null && sampleCount >= MAX_SAMPLES) {
@@ -120,6 +122,19 @@ public final class PortableLogSession {
             failure = new IOException("Log spool could not be removed");
         }
         if (failure != null) throw failure;
+    }
+
+    /** Flush and release the recording without deleting its data. */
+    public synchronized void finish() throws IOException {
+        finished = true;
+        if (spoolWriter != null) {
+            spoolWriter.close();
+            spoolWriter = null;
+        }
+    }
+
+    public synchronized void flush() throws IOException {
+        if (spoolWriter != null) spoolWriter.flush();
     }
 
     private void ensureSpoolWriter() throws IOException {

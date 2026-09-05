@@ -1,7 +1,8 @@
 /* RomRaider2 ECU Studio - GPL 2.0 or later. */
 package com.romraider.mobile.logger;
 
-import com.romraider.mobile.usb.OpenPortUsbTransport;
+import com.romraider.portable.logger.ReadOnlyLoggerTransport;
+import com.romraider.portable.logger.PortableLoggerProtocol;
 import com.romraider.portable.PortableLogSample;
 import com.romraider.portable.PortableLogSession;
 import com.romraider.portable.logger.PortableLoggerCycle;
@@ -26,21 +27,22 @@ public final class ReadOnlyLoggerSession {
         void onStopped(String message);
     }
 
-    private final OpenPortUsbTransport transport;
+    private final ReadOnlyLoggerTransport transport;
     private final PortableLoggerDefinition definition;
     private final PortableLoggerProfile profile;
     private final Listener listener;
     private final PortableLogSession log;
     private final AtomicBoolean running = new AtomicBoolean();
+    private final AtomicBoolean started = new AtomicBoolean();
     private volatile boolean stopRequested;
 
-    public ReadOnlyLoggerSession(OpenPortUsbTransport transport,
+    public ReadOnlyLoggerSession(ReadOnlyLoggerTransport transport,
             PortableLoggerDefinition definition, PortableLoggerProfile profile,
             Listener listener) {
         this(transport, definition, profile, new PortableLogSession(), listener);
     }
 
-    public ReadOnlyLoggerSession(OpenPortUsbTransport transport,
+    public ReadOnlyLoggerSession(ReadOnlyLoggerTransport transport,
             PortableLoggerDefinition definition, PortableLoggerProfile profile,
             PortableLogSession log, Listener listener) {
         if (transport == null || definition == null || profile == null
@@ -57,17 +59,19 @@ public final class ReadOnlyLoggerSession {
 
     /** Blocks on the calling worker thread until stopped or a read fails. */
     public void run() {
-        if (stopRequested) {
-            listener.onStopped("Read-only logger stopped.");
-            return;
+        if (!started.compareAndSet(false, true)) {
+            throw new IllegalStateException("Logger sessions can only be run once");
         }
-        if (!running.compareAndSet(false, true)) {
-            throw new IllegalStateException("Logger session is already running");
-        }
+        running.set(true);
         String stopMessage = "Read-only logger stopped.";
         try {
             if (stopRequested) return;
-            String ecuId = transport.identifyEcu();
+            PortableLoggerProtocol protocol = PortableLoggerProtocol.fromId(definition.getProtocol());
+            if (!profile.getProtocol().isEmpty()
+                    && PortableLoggerProtocol.fromId(profile.getProtocol()) != protocol) {
+                throw new IllegalArgumentException("Logger profile protocol does not match the definition");
+            }
+            String ecuId = transport.identifyEcu(protocol, () -> stopRequested);
             PortableLoggerSelection selection =
                     PortableLoggerSelectionService.resolve(
                             definition, profile, ecuId, 1);
@@ -76,16 +80,16 @@ public final class ReadOnlyLoggerSession {
                         "The profile has no parameters for ECU " + ecuId + ".");
             }
             PortableLoggerQueryPlan plan = PortableLoggerQueryPlan.create(
-                    selection.ready());
+                    selection.ready(), protocol);
             PortableLoggerCycle cycle = new PortableLoggerCycle(plan);
             listener.onIdentified(ecuId, selection.ready().size(),
                     selection.unavailable().size());
             if (stopRequested) return;
-            long started = android.os.SystemClock.elapsedRealtime();
+            long startedAt = System.nanoTime();
             while (running.get() && !stopRequested) {
-                List<PortableLoggerValue> values = cycle.read(transport);
-                long timestamp = android.os.SystemClock.elapsedRealtime()
-                        - started;
+                List<PortableLoggerValue> values = cycle.read(transport, () -> stopRequested);
+                if (stopRequested) break;
+                long timestamp = (System.nanoTime() - startedAt) / 1_000_000L;
                 for (PortableLoggerValue value : values) {
                     PortableSelectedParameter selected = value.getSelection();
                     log.append(new PortableLogSample(timestamp,
@@ -93,15 +97,25 @@ public final class ReadOnlyLoggerSession {
                             selected.getParameter().getName(), value.getValue(),
                             selected.getConversion().getUnits()));
                 }
+                log.flush();
                 listener.onValues(ecuId, timestamp, values, log.size());
             }
         } catch (Exception ex) {
-            stopMessage = ex.getMessage() == null
+            if (!stopRequested) stopMessage = ex.getMessage() == null
                     ? "Read-only logger stopped after a connection error."
                     : ex.getMessage();
         } finally {
             running.set(false);
-            transport.closeReadOnlyKLine();
+            try {
+                transport.closeReadOnlyKLine();
+            } catch (RuntimeException ex) {
+                stopMessage = "Adapter cleanup failed: " + ex.getMessage();
+            }
+            try {
+                log.finish();
+            } catch (java.io.IOException ex) {
+                stopMessage = "Log storage could not be flushed: " + ex.getMessage();
+            }
             listener.onStopped(stopMessage);
         }
     }
