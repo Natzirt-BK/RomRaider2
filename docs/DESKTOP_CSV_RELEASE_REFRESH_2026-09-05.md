@@ -77,12 +77,17 @@ and verified against GitHub's SHA-256 asset digests first. All four source tags
 remain. GitHub Releases now retains only desktop RC4 and Android preview3.
 
 The Linux installer pin and its checksum assertion now match the public Linux
-ZIP. Its README no longer points to the removed RC3 release. All 12 repository
+ZIP. Its README no longer points to the removed RC3 release. All 11 repository
 test scripts passed locally, including the 14 silent music-lifetime cases. A
 clean isolated installation from the actual downloaded public ZIP and an
 idempotent second invocation passed. No real installation or vehicle data was
 changed. This narrowly updates the pin/links; it does not publish the previously
 separate definition-preservation work or qualify complete upgrade migration.
+Installer commit `9139a35eb55b5ad774b9cf652c2106067b68407a` is pushed; both
+[installer CI jobs](https://github.com/Natzirt-BK/subaru-ecu-tools-linux/actions/runs/33978286587)
+passed, including the Debian 13 bridge build and repository tests. RomRaider2's
+GitHub default `master` branch was fast-forwarded to the current source/audits,
+so its front-page README now exposes preview3, not the removed preview2.
 
 ## Release boundaries
 
