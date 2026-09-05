@@ -2,6 +2,12 @@
 
 Last updated: 2026-09-04
 
+Latest qualification verdict: **HOLD**. The
+[September 4 desktop audit](DESKTOP_AUDIT_2026-09-04.md) records reproducible
+close/save/analysis defects and incomplete JavaFX parity. The capabilities below
+span multiple retained shells; they are not a feature-parity or release approval
+for the default JavaFX desktop.
+
 ## Working now
 
 - JavaFX Editor/Logger initial decorated windows are bounded and centered in
