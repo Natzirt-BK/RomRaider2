@@ -17,19 +17,28 @@ android {
 
     buildFeatures {
         buildConfig = true
+        resValues = true
     }
 
     defaultConfig {
         applicationId = "com.romraider.mobile"
         minSdk = 26
         targetSdk = 36
-        versionCode = 110403
-        versionName = "1.1.0-rc4-preview3"
+        versionCode = 110404
+        versionName = "1.1.0-rc4-preview3.1"
     }
 
     buildTypes {
         debug {
             applicationIdSuffix = ".preview"
+        }
+        create("openportDiagnostic") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".preview.openporttest"
+            versionNameSuffix = "-side-by-side"
+            resValue("string", "app_name", "RomRaider2 OpenPort Test")
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("debug")
         }
         release {
             isMinifyEnabled = false

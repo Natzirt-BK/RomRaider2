@@ -60,6 +60,29 @@ public final class OpenPortWireProtocol {
         return java.util.Arrays.copyOf(header, header.length + 2);
     }
 
+    /**
+     * Channel-qualified filter acknowledgement observed on OpenPort 1.17.4955.
+     * The existing driver reads the first number after arf3 as the filter ID.
+     * Only the observed zero trailing field is supported here; do not infer
+     * success for an unknown reply format, another channel, or a bare prefix.
+     */
+    public static boolean hasCompleteKLineFilterResponse(byte[] response,
+            int length) {
+        if (response == null || length <= 0
+                || length > response.length
+                || length > MAX_CONTROL_RESPONSE_BYTES) return false;
+        String text = new String(response, 0, length,
+                StandardCharsets.ISO_8859_1);
+        for (String line : text.split("(?<=\\r\\n)", -1)) {
+            if (!line.matches("arf" + ISO9141_CHANNEL
+                    + " (0|[1-9][0-9]{0,9}) 0\\r\\n")) continue;
+            String filter = line.substring(line.indexOf(' ') + 1,
+                    line.lastIndexOf(' '));
+            if (Long.parseLong(filter) <= 0xffff_ffffL) return true;
+        }
+        return false;
+    }
+
     /** A command prefix alone is not a complete USB response. */
     public static boolean hasCompleteResponse(byte[] response, int length,
             String prefix) {

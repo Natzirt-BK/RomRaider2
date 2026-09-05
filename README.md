@@ -34,7 +34,14 @@ previews are unsigned and have not completed physical Mac testing.
 ### Experimental Android preview
 
 Android 8.0 and newer users can also
-[download RC4 Android Preview 3](https://github.com/Natzirt-BK/RomRaider2/releases/download/romraider2-1.1.0-rc4-android-preview3/RomRaider2_1.1.0_RC4_Android_preview3-debug.apk).
+[download RC4 Android Preview 3.1](https://github.com/Natzirt-BK/RomRaider2/releases/download/romraider2-1.1.0-rc4-android-preview3.1/RomRaider2_1.1.0_RC4_Android_preview3.1-debug.apk).
+
+Preview 3.1 fixes OpenPort receive-filter acknowledgement handling that could
+prevent live logging from starting. The [same release](https://github.com/Natzirt-BK/RomRaider2/releases/tag/romraider2-1.1.0-rc4-android-preview3.1)
+also provides a **side-by-side test APK**, labeled **RomRaider2 OpenPort Test**,
+which leaves an installed Preview 3 and its recordings untouched. Debug signing
+keys can differ between builds: export recordings before any uninstall, and
+use the side-by-side option if an in-place update is refused.
 This is an early, debug-signed test build rather than the desktop RC4 release.
 It supports exact definition-backed calibration table editing, advanced ROM
 byte editing, RomRaider CSV review, Logger definition and profile import,
@@ -55,7 +62,7 @@ sideloading it or connecting an adapter.
 | Subaru SSM Logger | Linux OpenPort 2.0 identification and sustained logging tested in car |
 | Windows J2534 | Portable build and automatic 32/64-bit routing implemented; connected qualification is still open |
 | Mitsubishi Lancer Evolution MUT-II | Read-only logger foundation implemented; vehicle qualification is still open |
-| Android | Preview 3 with read-only SSM/MUT-II logging; connected qualification is still open |
+| Android | Preview 3.1 repairs OpenPort filter replies; read-only SSM/MUT-II connected qualification is still open |
 | DimeMod | Discovery, diagnostics, and Logger parameters retained; RAM writing stays hidden and disabled |
 | ROM mod recognition | DimeMod, CarBerry, and MerpMod recognized from explicit loaded-definition evidence |
 | ECU flashing | Not available in RomRaider2 1.1.0 |

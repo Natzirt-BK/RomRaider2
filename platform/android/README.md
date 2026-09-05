@@ -74,7 +74,7 @@ cd platform/android
 gradle :app:assembleDebug
 ```
 
-Regression/build gate for preview3:
+Regression/build gate for the standard preview:
 
 ```bash
 gradle :shared-core:check :app:testDebugUnitTest :app:assembleDebug :app:lintDebug
@@ -83,3 +83,32 @@ gradle :shared-core:check :app:testDebugUnitTest :app:assembleDebug :app:lintDeb
 The portable checks and Android session tests use synthetic responses, not an
 ECU. See [MUT-II implementation audit](../../docs/ANDROID_MUT2_AUDIT_2026-09-05.md)
 for evidence and the remaining hardware gate.
+
+## OpenPort acknowledgement repair test build
+
+The receive-filter reply is channel-qualified (`arf3 0 0` on the tested
+adapter firmware), not `arf ` followed by a space. The control-response checks
+cover the captured reply, fragmentation, wrong channels, malformed fields,
+bounded input and complete adapter errors. Timeout messages identify the setup
+operation and distinguish no reply from an unrecognized reply without exposing
+raw payloads. This repairs adapter setup, not proof of connected ECU logging.
+
+To build the separately installed phone test application:
+
+```bash
+gradle :shared-core:check :app:testDebugUnitTest :app:assembleOpenportDiagnostic :app:lintOpenportDiagnostic
+```
+
+It appears as **RomRaider2 OpenPort Test**, with application ID
+`com.romraider.mobile.preview.openporttest` and version suffix `-side-by-side`.
+It uses a local debug signature and installs beside Preview 3, leaving that
+app's settings and retained recordings untouched. Import the logger definition
+and profile into the test app separately and grant it USB access. If Android
+offers both apps for the OpenPort, choose the test app and close the other one.
+Do not uninstall Preview 3 to install this test build.
+
+Preview 3.1 uses versionCode 110404. The normal debug/release application IDs
+are unchanged; the side-by-side variant has its own application ID.
+No ECU writing, reset, programming-voltage or automatic reconnect operation is
+added by this repair. Physical phone/adapter/vehicle logging still requires the
+parked, ignition-on/engine-off acceptance procedure.

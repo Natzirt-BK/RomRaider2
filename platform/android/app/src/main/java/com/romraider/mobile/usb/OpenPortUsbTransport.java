@@ -14,13 +14,13 @@ import android.hardware.usb.UsbManager;
 
 import com.romraider.portable.openport.OpenPortWireProtocol;
 import com.romraider.portable.openport.OpenPortKLineFrameDecoder;
+import com.romraider.portable.openport.OpenPortControlResponse;
 import com.romraider.portable.logger.ReadOnlyLoggerTransport;
 import com.romraider.portable.logger.PortableLoggerProtocol;
 import com.romraider.portable.logger.ReadOnlyMut2Protocol;
 import com.romraider.portable.logger.PortableLoggerQueryBatch;
 import com.romraider.portable.logger.ReadOnlySsmProtocol;
 
-import java.io.ByteArrayOutputStream;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.List;
@@ -91,14 +91,14 @@ public final class OpenPortUsbTransport implements Closeable,
                     connection, endpoints.usbInterface, endpoints.input,
                     endpoints.output, "", null);
             byte[] identify = opening.exchange(
-                    OpenPortWireProtocol.identifyRequest(), "ari ");
+                    OpenPortWireProtocol.identifyRequest(), "ari ", "firmware identification");
             String firmware = OpenPortWireProtocol.parseFirmwareVersion(
                     identify, identify.length);
-            opening.exchange(OpenPortWireProtocol.openRequest(), "aro\r\n");
+            opening.exchange(OpenPortWireProtocol.openRequest(), "aro\r\n", "adapter preparation");
             Integer voltage = null;
             try {
                 byte[] battery = opening.exchange(
-                        OpenPortWireProtocol.batteryVoltageRequest(), "arr ");
+                        OpenPortWireProtocol.batteryVoltageRequest(), "arr ", "battery measurement");
                 voltage = OpenPortWireProtocol.parseBatteryMillivolts(
                         battery, battery.length);
             } catch (IOException | IllegalArgumentException ignored) {
@@ -137,16 +137,20 @@ public final class OpenPortUsbTransport implements Closeable,
         checkCancelled();
         if (kLineOpen && activeProtocol == protocol) return;
         closeReadOnlyKLine();
-        exchange(OpenPortWireProtocol.openKLineRequest(protocol), "aro\r\n");
+        exchange(OpenPortWireProtocol.openKLineRequest(protocol), "aro\r\n",
+                protocol.name() + " channel open");
         kLineDecoder.reset();
         kLineOpen = true;
         try {
+            int setting = 0;
             for (byte[] config : OpenPortWireProtocol.kLineConfigurationRequests()) {
                 checkCancelled();
-                exchange(config, "aro\r\n");
+                exchange(config, "aro\r\n", protocol.name()
+                        + " timing/format setting " + (++setting));
             }
             checkCancelled();
-            exchange(OpenPortWireProtocol.kLinePassFilterRequest(), "arf ");
+            exchange(OpenPortWireProtocol.kLinePassFilterRequest(),
+                    OpenPortControlResponse.forKLineFilter(protocol));
             activeProtocol = protocol;
         } catch (IOException ex) {
             closeReadOnlyKLine();
@@ -198,7 +202,7 @@ public final class OpenPortUsbTransport implements Closeable,
     public synchronized void closeReadOnlyKLine() {
         if (closed || !kLineOpen) return;
         try {
-            exchange(OpenPortWireProtocol.closeSsmKLineRequest(), "aro\r\n");
+            exchange(OpenPortWireProtocol.closeSsmKLineRequest(), "aro\r\n", "channel close");
         } catch (IOException ignored) {
             // A timeout or detach is a normal channel-close path.
         } finally {
@@ -213,7 +217,7 @@ public final class OpenPortUsbTransport implements Closeable,
         if (closed) return;
         try {
             closeReadOnlyKLine();
-            exchange(OpenPortWireProtocol.closeRequest(), "aro\r\n");
+            exchange(OpenPortWireProtocol.closeRequest(), "aro\r\n", "adapter close");
         } catch (IOException ignored) {
             // Detach and timeout are normal close paths.
         } finally {
@@ -223,32 +227,26 @@ public final class OpenPortUsbTransport implements Closeable,
         }
     }
 
-    private synchronized byte[] exchange(byte[] request, String expected)
+    private byte[] exchange(byte[] request, String expected, String operation)
+            throws IOException {
+        return exchange(request, OpenPortControlResponse.forPrefix(operation, expected));
+    }
+
+    private synchronized byte[] exchange(byte[] request, OpenPortControlResponse reply)
             throws IOException {
         ensureOpen();
         write(request, CONTROL_TIMEOUT_MS);
 
         long deadline = android.os.SystemClock.elapsedRealtime()
                 + CONTROL_TIMEOUT_MS;
-        ByteArrayOutputStream received = new ByteArrayOutputStream();
         byte[] chunk = new byte[Math.max(64, input.getMaxPacketSize())];
         while (android.os.SystemClock.elapsedRealtime() < deadline) {
             int count = connection.bulkTransfer(input, chunk, chunk.length,
                     READ_SLICE_MS);
             if (count <= 0) continue;
-            if (received.size() + count
-                    > OpenPortWireProtocol.MAX_CONTROL_RESPONSE_BYTES) {
-                throw new IOException("OpenPort control response is too large.");
-            }
-            received.write(chunk, 0, count);
-            byte[] response = received.toByteArray();
-            if (OpenPortWireProtocol.contains(response, response.length, "are ")) {
-                throw new IOException("The OpenPort reported a command error.");
-            }
-            if (OpenPortWireProtocol.hasCompleteResponse(response, response.length,
-                    expected)) return response;
+            if (reply.accept(chunk, count)) return reply.bytes();
         }
-        throw new IOException("OpenPort did not answer the adapter command.");
+        throw new IOException(reply.timeoutMessage());
     }
 
     private byte[] transceiveSsm(byte[] frame) throws IOException {

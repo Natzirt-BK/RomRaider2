@@ -5,7 +5,16 @@ is not a replacement for the desktop release yet. The APK is debug-signed and
 is installed by sideloading, so Android or Play Protect may warn that it is an
 unknown application. Its preview-only application ID keeps it separate from a
 future signed release. Because debug signing keys can change between preview
-builds, an update may require uninstalling an older preview first.
+builds, an in-place update may be refused. **Export your recordings before
+uninstalling or clearing app data.** Preview 3.1 also includes a side-by-side test
+APK named **RomRaider2 OpenPort Test** that does not replace Preview 3. Choose
+that app for USB access, close the other app, and import the logger setup again.
+It contains the same logger repair as the standard Preview 3.1 APK.
+
+Preview 3.1 corrects the channel-qualified OpenPort filter reply (`arf3 0 0`)
+that Preview 3 rejected as an adapter-command timeout. If setup fails, the new
+message identifies the command and whether any USB response bytes arrived.
+This repair does not close the physical phone/vehicle qualification gate.
 
 ## What is ready to try
 
