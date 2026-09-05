@@ -24,6 +24,7 @@ import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 
 import javax.swing.UIManager;
+import javax.swing.SwingUtilities;
 import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JComboBox;
@@ -310,7 +311,12 @@ public class UiDisplayServicesTest {
     }
 
     @Test
-    public void mainWindowUsesPlatformAppropriateChrome() {
+    public void mainWindowUsesPlatformAppropriateChrome() throws Exception {
+        // Realized Swing hierarchy changes must not race native/EDT updates.
+        SwingUtilities.invokeAndWait(this::assertMainWindowChrome);
+    }
+
+    private void assertMainWindowChrome() {
         AbstractFrame frame = new AbstractFrame() { };
         try {
             frame.setTitle("RomRaider2 Test");
