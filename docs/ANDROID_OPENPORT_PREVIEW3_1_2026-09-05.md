@@ -71,3 +71,33 @@ gauge demo values are simulated and do not count as vehicle evidence.
 
 Foreground-only logging and all other [Android qualification limits](ANDROID_MUT2_AUDIT_2026-09-05.md)
 remain. Production ECU memory writing, resetting and flashing are unavailable.
+
+## Publication — September 5
+
+The user authorized updating GitHub and requested the **Preview 3.1** repair
+number rather than a new Preview 4 milestone. The
+[Preview 3.1 release](https://github.com/Natzirt-BK/RomRaider2/releases/tag/romraider2-1.1.0-rc4-android-preview3.1)
+is public and remains marked prerelease. Its source tag points exactly to
+`bfdc5d43670a712867071e8f72ee9c2d21f9cdf3`.
+
+Both APKs come from the successful
+[Android job](https://github.com/Natzirt-BK/RomRaider2/actions/runs/33995903321/job/101386291070).
+All four jobs in that platform-preview run passed (Android, SteamOS and both
+macOS architectures). Public anonymous downloads of both APKs and sidecars
+matched the CI artifacts and GitHub asset digests; both APK v2 signatures
+verified. Desktop release assets and the Linux installer pin were not changed.
+
+| APK | SHA-256 |
+| --- | --- |
+| Standard Preview 3.1 | `6f7818d2d3e638e845aa720356189b94d4086d8831fcf78ec33bbf4e6a10fc9d` |
+| Optional side-by-side test | `a086bd68b9480e78fe9b603cdf031af2d6c62c041dd89920e6a11d85f32cae3b` |
+
+The CI signing certificate differs from published Preview 3's certificate.
+Android will refuse a direct update over that APK; the release notes explicitly
+recommend exporting recordings before any uninstall, or using the separate
+side-by-side APK without removing the old app.
+
+The superseded Preview 3 release metadata and both assets were backed up and
+verified before removing that release entry. Its source tag remains. GitHub
+Releases keeps desktop RC4 and the current Android Preview 3.1 only. None of
+these publication checks closes the physical phone/vehicle acceptance gate.

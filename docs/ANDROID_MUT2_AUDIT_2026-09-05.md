@@ -1,5 +1,10 @@
 # Android MUT-II / OpenPort audit — 2026-09-05
 
+**Current Android release:** [Preview 3.1](ANDROID_OPENPORT_PREVIEW3_1_2026-09-05.md)
+repairs a hardware-reproduced receive-filter acknowledgement mismatch and
+supersedes Preview 3. The historical results below remain bounded by their
+stated evidence; physical phone/vehicle qualification is still open.
+
 Scope: Android preview3, the portable logger core, OpenPort USB transport,
 foreground session lifecycle, and CSV retention. No ECU writing, release/pin
 promotion, or private definition publication. This is implementation and
