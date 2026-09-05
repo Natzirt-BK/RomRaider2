@@ -16,6 +16,7 @@ import com.romraider.maps.Table;
 
 import javafx.application.Platform;
 import javafx.beans.property.ReadOnlyStringWrapper;
+import javafx.beans.binding.Bindings;
 import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -25,6 +26,7 @@ import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
+import javafx.scene.control.ScrollBar;
 import javafx.scene.control.SelectionMode;
 import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
@@ -71,6 +73,10 @@ final class FxCalibrationPane extends BorderPane implements AutoCloseable {
     private final Button tableScaleReset = new Button("100%");
     private final Button tableScaleLarger = new Button("+");
     private TableView<RowValues> grid;
+    private TableView<RowValues> rowHeaders;
+    private final Region rowHeaderScrollSpacer = new Region();
+    private ScrollBar gridVerticalScroll;
+    private ScrollBar rowHeaderVerticalScroll;
     private VBox inspector;
     private FxSurfaceCanvas surface;
     private ToggleButton dtcToggle;
@@ -133,8 +139,22 @@ final class FxCalibrationPane extends BorderPane implements AutoCloseable {
     }
 
     private Node tableWorkspace() {
-        VBox content = new VBox(axisStrip(), grid);
-        VBox.setVgrow(grid, Priority.ALWAYS);
+        Node tableArea = grid;
+        if (snapshot.getRows() > 1) {
+            rowHeaders = createRowHeaders();
+            VBox pinnedAxis = new VBox(rowHeaders, rowHeaderScrollSpacer);
+            VBox.setVgrow(rowHeaders, Priority.ALWAYS);
+            rowHeaders.setMinHeight(0);
+            rowHeaderScrollSpacer.setMinHeight(Region.USE_PREF_SIZE);
+            rowHeaderScrollSpacer.setMaxHeight(Region.USE_PREF_SIZE);
+            HBox synchronizedGrid = new HBox(pinnedAxis, grid);
+            grid.setMinWidth(0);
+            HBox.setHgrow(grid, Priority.ALWAYS);
+            tableArea = synchronizedGrid;
+            scheduleVerticalScrollBinding();
+        }
+        VBox content = new VBox(axisStrip(), tableArea);
+        VBox.setVgrow(tableArea, Priority.ALWAYS);
         return content;
     }
 
@@ -200,16 +220,6 @@ final class FxCalibrationPane extends BorderPane implements AutoCloseable {
         view.setColumnResizePolicy(TableView.UNCONSTRAINED_RESIZE_POLICY);
         view.getSelectionModel().setCellSelectionEnabled(true);
         view.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
-        if (snapshot.getRows() > 1) {
-            TableColumn<RowValues, String> axis = new TableColumn<>(
-                    snapshot.getRowAxisName().isBlank() ? "Y axis"
-                            : snapshot.getRowAxisName());
-            axis.setCellValueFactory(value -> new ReadOnlyStringWrapper(
-                    snapshot.getRowLabels().get(value.getValue().row)));
-            axis.setPrefWidth(AXIS_COLUMN_WIDTH);
-            axis.setSortable(false);
-            view.getColumns().add(axis);
-        }
         for (int column = 0; column < snapshot.getColumns(); column++) {
             final int index = column;
             String label = snapshot.getColumnLabels().size() > column
@@ -234,8 +244,7 @@ final class FxCalibrationPane extends BorderPane implements AutoCloseable {
                     javafx.scene.control.TablePosition position = last < 0
                             ? null : view.getSelectionModel().getSelectedCells().get(last);
                     if (position == null) return;
-                    int valueColumn = position.getColumn()
-                            - (snapshot.getRows() > 1 ? 1 : 0);
+                    int valueColumn = position.getColumn();
                     if (position.getRow() >= 0 && valueColumn >= 0
                             && valueColumn < snapshot.getColumns()) {
                         selectedRow = position.getRow();
@@ -294,6 +303,75 @@ final class FxCalibrationPane extends BorderPane implements AutoCloseable {
         return view;
     }
 
+    @SuppressWarnings("rawtypes")
+    private TableView<RowValues> createRowHeaders() {
+        TableView<RowValues> view = new TableView<>();
+        view.getStyleClass().add("calibration-row-headers");
+        view.setColumnResizePolicy(TableView.UNCONSTRAINED_RESIZE_POLICY);
+        TableColumn<RowValues, String> axis = new TableColumn<>(
+                snapshot.getRowAxisName().isBlank() ? "Y axis"
+                        : snapshot.getRowAxisName());
+        axis.setCellValueFactory(value -> new ReadOnlyStringWrapper(
+                snapshot.getRowLabels().get(value.getValue().row)));
+        axis.setSortable(false);
+        axis.setResizable(false);
+        view.getColumns().add(axis);
+        view.setItems(grid.getItems());
+        applyRowHeaderScale(view);
+        return view;
+    }
+
+    private void scheduleVerticalScrollBinding() {
+        Platform.runLater(this::bindVerticalScrolling);
+        grid.skinProperty().addListener((value, oldSkin, newSkin) ->
+                Platform.runLater(this::bindVerticalScrolling));
+        rowHeaders.skinProperty().addListener((value, oldSkin, newSkin) ->
+                Platform.runLater(this::bindVerticalScrolling));
+    }
+
+    private void bindVerticalScrolling() {
+        ScrollBar nextGrid = verticalScrollBar(grid);
+        ScrollBar nextHeaders = verticalScrollBar(rowHeaders);
+        if (nextGrid == null || nextHeaders == null
+                || nextGrid == gridVerticalScroll
+                && nextHeaders == rowHeaderVerticalScroll) return;
+        unbindVerticalScrolling();
+        gridVerticalScroll = nextGrid;
+        rowHeaderVerticalScroll = nextHeaders;
+        gridVerticalScroll.valueProperty().bindBidirectional(
+                rowHeaderVerticalScroll.valueProperty());
+        for (Node node : grid.lookupAll(".scroll-bar")) {
+            if (node instanceof ScrollBar bar && bar.getOrientation()
+                    == javafx.geometry.Orientation.HORIZONTAL) {
+                rowHeaderScrollSpacer.prefHeightProperty().bind(
+                        Bindings.when(bar.visibleProperty())
+                                .then(bar.heightProperty()).otherwise(0));
+            }
+        }
+    }
+
+    private static ScrollBar verticalScrollBar(TableView<?> view) {
+        if (view == null) return null;
+        for (Node node : view.lookupAll(".scroll-bar")) {
+            if (node instanceof ScrollBar scrollBar
+                    && scrollBar.getOrientation()
+                            == javafx.geometry.Orientation.VERTICAL) {
+                return scrollBar;
+            }
+        }
+        return null;
+    }
+
+    private void unbindVerticalScrolling() {
+        rowHeaderScrollSpacer.prefHeightProperty().unbind();
+        if (gridVerticalScroll != null && rowHeaderVerticalScroll != null) {
+            gridVerticalScroll.valueProperty().unbindBidirectional(
+                    rowHeaderVerticalScroll.valueProperty());
+        }
+        gridVerticalScroll = null;
+        rowHeaderVerticalScroll = null;
+    }
+
     private void changeTableScale(double difference) {
         setTableScale(tableScale + difference);
     }
@@ -301,6 +379,7 @@ final class FxCalibrationPane extends BorderPane implements AutoCloseable {
     private void setTableScale(double requestedScale) {
         tableScale = normalizeTableScale(requestedScale);
         if (grid != null) applyTableScale(grid);
+        if (rowHeaders != null) applyRowHeaderScale(rowHeaders);
         updateTableScaleControls();
     }
 
@@ -311,12 +390,20 @@ final class FxCalibrationPane extends BorderPane implements AutoCloseable {
     }
 
     private void applyTableScale(TableView<RowValues> view) {
-        int axisOffset = snapshot.getRows() > 1 ? 1 : 0;
-        for (int index = 0; index < view.getColumns().size(); index++) {
-            double baseWidth = index < axisOffset
-                    ? AXIS_COLUMN_WIDTH : VALUE_COLUMN_WIDTH;
-            view.getColumns().get(index).setPrefWidth(baseWidth * tableScale);
+        for (TableColumn<RowValues, ?> column : view.getColumns()) {
+            column.setPrefWidth(VALUE_COLUMN_WIDTH * tableScale);
         }
+        view.setFixedCellSize(Math.max(26, TABLE_ROW_HEIGHT * tableScale));
+        view.setStyle(String.format(Locale.ROOT, "-fx-font-size: %.1fpx;",
+                Math.max(11, TABLE_FONT_SIZE * tableScale)));
+    }
+
+    private void applyRowHeaderScale(TableView<RowValues> view) {
+        double width = Math.max(64, AXIS_COLUMN_WIDTH * tableScale);
+        view.getColumns().get(0).setPrefWidth(width);
+        view.setMinWidth(width);
+        view.setPrefWidth(width);
+        view.setMaxWidth(width);
         view.setFixedCellSize(Math.max(26, TABLE_ROW_HEIGHT * tableScale));
         view.setStyle(String.format(Locale.ROOT, "-fx-font-size: %.1fpx;",
                 Math.max(11, TABLE_FONT_SIZE * tableScale)));
@@ -335,11 +422,10 @@ final class FxCalibrationPane extends BorderPane implements AutoCloseable {
     @SuppressWarnings("rawtypes")
     private void copySelection() {
         List<int[]> selected = new ArrayList<>();
-        int axisOffset = snapshot.getRows() > 1 ? 1 : 0;
         for (Object value : grid.getSelectionModel().getSelectedCells()) {
             javafx.scene.control.TablePosition position =
                     (javafx.scene.control.TablePosition) value;
-            int column = position.getColumn() - axisOffset;
+            int column = position.getColumn();
             if (position.getRow() >= 0 && column >= 0
                     && column < snapshot.getColumns()) {
                 selected.add(new int[] {position.getRow(), column});
@@ -572,8 +658,11 @@ final class FxCalibrationPane extends BorderPane implements AutoCloseable {
         snapshot = next;
         updateChangedLabel();
         if (grid != null) {
-            grid.setItems(FXCollections.observableArrayList(rows(snapshot)));
+            var nextRows = FXCollections.observableArrayList(rows(snapshot));
+            grid.setItems(nextRows);
+            if (rowHeaders != null) rowHeaders.setItems(nextRows);
             grid.refresh();
+            if (rowHeaders != null) rowHeaders.refresh();
         }
         if (surface != null) surface.setSnapshot(snapshot);
         rebuildInspector();
@@ -621,6 +710,7 @@ final class FxCalibrationPane extends BorderPane implements AutoCloseable {
     }
 
     @Override public void close() {
+        unbindVerticalScrolling();
         controller.close();
     }
 

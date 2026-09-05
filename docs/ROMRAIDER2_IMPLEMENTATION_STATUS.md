@@ -84,6 +84,10 @@ Last updated: 2026-09-04
   thread. Each calibration table can be resized from 60% to 160% with visible
   controls, Ctrl+plus/minus/zero, or Ctrl+mouse-wheel; the controls retain their
   readable percentage reset at narrow window sizes.
+  Pinned row-axis labels scroll vertically with the values, including at the
+  bottom of a map, while remaining visible during horizontal scrolling.
+  Compact cell padding prevents text clipping at small table sizes. The Linux
+  Polish 10 review received user acceptance; Windows package retest is open.
 - JavaFX theme changes propagate to every open Editor and Logger window.
   Successful checksum updates stay in the status bar, custom dialogs close with
   Escape, CSV browsing starts in the configured output folder, and Linux native

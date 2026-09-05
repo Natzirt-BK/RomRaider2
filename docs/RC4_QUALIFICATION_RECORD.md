@@ -35,6 +35,8 @@ same candidate.
   `PASS`, `FAIL`, or `NOT RUN`
 - Calibration 60%/100%/160% table sizing, Ctrl+plus/minus/zero, and
   Ctrl+mouse-wheel: `PASS`, `FAIL`, or `NOT RUN`
+- Pinned row-axis alignment at 70%, horizontal scroll, and the bottom row;
+  readable cell text at 60% and 160%: `PASS`, `FAIL`, or `NOT RUN`
 - Calibration Shift+arrow/Shift+click range selection, Ctrl+A, block copy/paste,
   rejected oversized block, and one-step block undo: `PASS`, `FAIL`, or
   `NOT RUN`
