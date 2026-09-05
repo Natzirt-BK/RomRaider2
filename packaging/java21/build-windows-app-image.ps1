@@ -42,12 +42,25 @@ $JavaSettingsProcess.StartInfo.Arguments = "-XshowSettings:properties -version"
 $JavaSettingsProcess.StartInfo.UseShellExecute = $false
 $JavaSettingsProcess.StartInfo.RedirectStandardOutput = $true
 $JavaSettingsProcess.StartInfo.RedirectStandardError = $true
-[void]$JavaSettingsProcess.Start()
-$JavaSettingsOutput = $JavaSettingsProcess.StandardOutput.ReadToEnd()
-$JavaSettingsError = $JavaSettingsProcess.StandardError.ReadToEnd()
-$JavaSettingsProcess.WaitForExit()
-if ($JavaSettingsProcess.ExitCode -ne 0) {
-    throw "Unable to inspect the Java runtime: $JavaSettingsError"
+Write-Host "Inspecting the Java 21 Windows runtime."
+try {
+    [void]$JavaSettingsProcess.Start()
+    # Drain both pipes concurrently: Java writes its properties to stderr,
+    # which can fill before stdout closes on a runner with a long native PATH.
+    $JavaSettingsOutputTask = $JavaSettingsProcess.StandardOutput.ReadToEndAsync()
+    $JavaSettingsErrorTask = $JavaSettingsProcess.StandardError.ReadToEndAsync()
+    if (-not $JavaSettingsProcess.WaitForExit(60000)) {
+        $JavaSettingsProcess.Kill($true)
+        $JavaSettingsProcess.WaitForExit()
+        throw "Java runtime inspection exceeded 60 seconds."
+    }
+    $JavaSettingsOutput = $JavaSettingsOutputTask.GetAwaiter().GetResult()
+    $JavaSettingsError = $JavaSettingsErrorTask.GetAwaiter().GetResult()
+    if ($JavaSettingsProcess.ExitCode -ne 0) {
+        throw "Unable to inspect the Java runtime: $JavaSettingsError"
+    }
+} finally {
+    $JavaSettingsProcess.Dispose()
 }
 $JavaSettings = $JavaSettingsOutput + "`n" + $JavaSettingsError
 if ($JavaSettings -notmatch "java\.specification\.version\s*=\s*21(?:\s|$)") {
@@ -71,6 +84,7 @@ foreach ($BridgeFile in @(
     }
 }
 
+Write-Host "Auditing Java bytecode and retired graph references."
 $ClassVersion = (& $Javap -verbose -classpath $ApplicationJar com.romraider.ECUExec |
     Select-String -Pattern "major version:\s*(\d+)" |
     Select-Object -First 1).Matches.Groups[1].Value
@@ -188,6 +202,7 @@ try {
         "icon=$WindowsIcon"
     ) | Set-Content -LiteralPath $LoggerProperties -Encoding utf8
 
+    Write-Host "Creating the Windows application image with jpackage."
     & $Jpackage `
         --type app-image `
         --name RomRaider2 `

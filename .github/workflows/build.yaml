@@ -66,7 +66,8 @@ jobs:
       - name: Install Ant
         shell: pwsh
         run: choco install ant --no-progress -y
-      - name: Build Windows application
+      - name: Test and compile Windows application
+        timeout-minutes: 10
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
@@ -75,8 +76,26 @@ jobs:
           ant clean unittest
           ant clean build-windows
           gradle --no-daemon :ui:javafx-desktop:test :ui:javafx-desktop:stageJavaFxWindows
+      - name: Build J2534 architecture helpers
+        timeout-minutes: 10
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $PSNativeCommandUseErrorActionPreference = $true
           ./packaging/java21/build-j2534-bridges.ps1
+      - name: Build Windows application image
+        timeout-minutes: 10
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $PSNativeCommandUseErrorActionPreference = $true
           ./packaging/java21/build-windows-app-image.ps1
+      - name: Verify and archive Windows candidate
+        timeout-minutes: 10
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $PSNativeCommandUseErrorActionPreference = $true
           ./packaging/java21/build-windows-release.ps1
       - name: Upload Windows x64 candidate
         uses: actions/upload-artifact@v4
