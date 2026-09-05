@@ -9,12 +9,12 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 import com.romraider.Settings;
 import com.romraider.Version;
 import com.romraider.logger.analysis.LogChannel;
 import com.romraider.logger.analysis.LogDataset;
-import com.romraider.logger.analysis.RomRaiderCsvLogParser;
 import com.romraider.logger.api.LiveDataSample;
 import com.romraider.logger.api.LoggerChannel;
 import com.romraider.logger.api.LoggerDashboardTile;
@@ -114,12 +114,23 @@ final class FxLoggerWindow {
     private final LoggerLiveDataListener liveListener;
     private final ApplicationThemeService.Listener themeListener;
     private boolean disposed;
-    private File activeLogFile;
+    private final FxLogLoadCoordinator logLoads;
     private FxLogAnalysisPane analysisPane;
     private final FxLoggerStartup startup = new FxLoggerStartup();
 
     FxLoggerWindow(Runnable closed) {
+        this(closed, FxLogLoadCoordinator::parseAsync);
+    }
+
+    FxLoggerWindow(Runnable closed,
+            Function<File, CompletableFuture<LogDataset>> logParser) {
         this.closed = closed;
+        logLoads = new FxLogLoadCoordinator(logParser, Platform::runLater,
+                this::showDataset, (file, failure) -> {
+                    status.setText("Unable to open " + file.getName());
+                    FxDialogs.error(stage, "Unable to open log",
+                            FxDialogs.rootMessage(failure));
+                });
         runtime = new LoggerDesktopRuntime();
         context = runtime.getWorkspaceContext();
 
@@ -890,25 +901,19 @@ final class FxLoggerWindow {
             }
         }
         File file = chooser.showOpenDialog(stage);
-        if (file == null) return;
-        activeLogFile = file;
-        status.setText("Opening " + file.getName() + "…");
-        CompletableFuture.supplyAsync(() -> {
-            try {
-                return new RomRaiderCsvLogParser().parse(file);
-            } catch (Exception failure) {
-                throw new java.util.concurrent.CompletionException(failure);
-            }
-        }).whenComplete((dataset, failure) -> Platform.runLater(() -> {
-            if (failure != null) FxDialogs.error(stage, "Unable to open log",
-                    FxDialogs.rootMessage(failure));
-            else showDataset(dataset);
-        }));
+        openLog(file);
     }
 
-    private void showDataset(LogDataset dataset) {
+    void openLog(File file) {
+        if (disposed || file == null) return;
+        status.setText("Opening " + file.getName() + "…");
+        logLoads.open(file);
+    }
+
+    private void showDataset(File source, LogDataset dataset) {
+        FxLogAnalysisPane replacement = new FxLogAnalysisPane(source, dataset);
         if (analysisPane != null) analysisPane.close();
-        analysisPane = new FxLogAnalysisPane(activeLogFile, dataset);
+        analysisPane = replacement;
         analysis.setCenter(analysisPane);
         views.getSelectionModel().select(5);
         status.setText("Loaded " + dataset.getSourceName());
@@ -945,6 +950,7 @@ final class FxLoggerWindow {
     private void dispose() {
         if (disposed) return;
         disposed = true;
+        logLoads.close();
         context.getChannels().removeListener(channelListener);
         context.getSession().removeStateListener(stateListener);
         context.getMessages().removeListener(messageListener);
