@@ -184,7 +184,7 @@ final class FxLoggerWindow {
                 item("Open CSV log…", event -> openLog()),
                 new SeparatorMenuItem(),
                 item("Logger Setup…", event -> showSetup()),
-                item("Close", event -> stage.close()));
+                item("Close", event -> close()));
         Menu logger = new Menu("Logger", null,
                 item("Connect", event -> context.getSession().connect()),
                 item("Disconnect", event -> context.getSession().disconnect()),
@@ -921,7 +921,7 @@ final class FxLoggerWindow {
     }
 
     void close() {
-        stage.close();
+        FxCloseRequest.request(stage);
     }
 
     private void dispose() {

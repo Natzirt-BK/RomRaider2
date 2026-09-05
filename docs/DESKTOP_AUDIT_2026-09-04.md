@@ -45,6 +45,35 @@ was attempted. Real vehicle files were not edited or published.
 
 ## Confirmed defects and source gaps
 
+### Follow-up — A1–A3 safety repair
+
+The subsequent safety repair changes the default JavaFX desktop as follows:
+
+- File/menu/runtime closes now dispatch the same vetoable close request as the
+  native window button. Cancel leaves the document and recovery state intact;
+  Logger menu close uses the same request helper.
+- Closing a ROM tab targets that ROM explicitly and reads current session state.
+- JavaFX saves capture output bytes and cell/axis revert values on the document
+  thread, write a private snapshot in the background, then publish the saved
+  baseline on the JavaFX thread. Edits made after capture remain dirty, and
+  failed writes do not publish a new filename or saved baseline.
+- Pending saves prevent duplicate saves and document/application disposal until
+  publication finishes. Cancelling an observer future cannot bypass cleanup.
+- The retained Compose compatibility entry point keeps its existing worker-side
+  checksum preparation: its question handler blocks that worker while the UI
+  answers. This repair does not claim event-thread snapshot capture for Compose.
+
+Local verification: 337 shared Java tests (334 passed, three optional skips),
+21 JavaFX tests including native Xvfb close/cancel/tab smoke tests, 34 retained
+Compose tests, portable shared-core check, Linux compilation and JavaFX staging.
+New coverage includes delayed completion, edits during I/O, failed writes,
+Save As, undo/redo against the saved baseline, axes, pending-close rejection,
+cancelled save observers, and legacy checksum preparation threading.
+
+These are source/regression-test results, not native Windows or hardware
+qualification. The original candidate evidence below remains historical;
+A4–A9 and the broader acceptance gates remain open. **Release verdict: HOLD.**
+
 ### A1 — P1: File → Exit bypasses unsaved-change confirmation
 
 `FxEditorWindow.java:172` invokes `stage.close()` directly, whereas the warning

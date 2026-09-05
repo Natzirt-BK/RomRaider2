@@ -5,6 +5,9 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
+import java.util.HashSet;
+import java.util.concurrent.Executor;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -39,6 +42,7 @@ public final class EditorDocumentController implements AutoCloseable {
     private final ExecutorService work;
     private final EditHistoryListener recoveryHistoryListener;
     private boolean closed;
+    private final Set<Rom> pendingSaves = new HashSet<Rom>();
 
     public EditorDocumentController() {
         this(new EditorDocumentSession(), new RomLoadService(),
@@ -157,20 +161,71 @@ public final class EditorDocumentController implements AutoCloseable {
     }
 
     public CompletableFuture<File> save(Rom rom, File target) {
+        // Legacy Compose checksum prompts block their worker while the UI answers.
+        // Keep that preparation off the event thread until that UI is migrated.
+        return save(rom, target, Runnable::run, false);
+    }
+
+    /** Capture on the caller's document thread and publish on its executor. */
+    public synchronized CompletableFuture<File> save(Rom rom, File target,
+            Executor completionExecutor) {
+        return save(rom, target, completionExecutor, true);
+    }
+
+    private synchronized CompletableFuture<File> save(Rom rom, File target,
+            Executor completionExecutor, boolean captureOnCaller) {
         requireOpen();
-        return CompletableFuture.supplyAsync(() -> {
+        if (!owns(rom)) throw new IllegalArgumentException("ROM is not open");
+        java.util.Objects.requireNonNull(completionExecutor);
+        if (!pendingSaves.add(rom)) {
+            return CompletableFuture.failedFuture(
+                    new IllegalStateException("This ROM is already saving"));
+        }
+        final CompletableFuture<RomFileService.PreparedSave> preparation;
+        try {
+            preparation = captureOnCaller
+                    ? CompletableFuture.completedFuture(files.prepare(rom, target))
+                    : CompletableFuture.supplyAsync(() -> files.prepare(rom, target), work);
+        } catch (Exception failure) {
+            pendingSaves.remove(rom);
+            RomRecoveryService.getInstance().schedule(rom);
+            return CompletableFuture.failedFuture(failure);
+        }
+        CompletableFuture<File> operation = preparation.thenApplyAsync(prepared -> {
             try {
-                files.save(rom, target);
-                return target;
+                files.writePrepared(prepared);
+                return prepared;
             } catch (Exception failure) {
                 throw new java.util.concurrent.CompletionException(failure);
             }
-        }, work);
+        }, work).handleAsync((prepared, failure) -> {
+            if (failure != null) throw new java.util.concurrent.CompletionException(failure);
+            files.complete(prepared);
+            return target;
+        }, completionExecutor).whenComplete((saved, failure) -> {
+            try {
+                if (failure != null) RomRecoveryService.getInstance().schedule(rom);
+                session.refresh(rom);
+            } finally {
+                synchronized (this) { pendingSaves.remove(rom); }
+            }
+        });
+        // Cancelling an observer must not cancel cleanup or unlock a live save.
+        return operation.copy();
     }
 
-    public void closeRom(Rom rom) {
+    public synchronized boolean isSaving(Rom rom) {
+        return pendingSaves.contains(rom);
+    }
+
+    public synchronized boolean hasPendingSaves() {
+        return !pendingSaves.isEmpty();
+    }
+
+    public synchronized void closeRom(Rom rom) {
         if (rom == null) return;
         requireOpen();
+        if (isSaving(rom)) throw new IllegalStateException("Wait for this ROM to finish saving");
         EditorWorkspaceService.getInstance().removeRomFromIndex(rom);
         RomEditHistory.getInstance().clear(rom);
         RomChangeService.forget(rom);
@@ -205,6 +260,7 @@ public final class EditorDocumentController implements AutoCloseable {
     public void close() {
         synchronized (this) {
             if (closed) return;
+            if (hasPendingSaves()) throw new IllegalStateException("Wait for ROM saves to finish");
             closed = true;
         }
         RomEditHistory.getInstance().removeListener(recoveryHistoryListener);

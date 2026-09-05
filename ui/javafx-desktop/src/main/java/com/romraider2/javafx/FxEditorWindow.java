@@ -169,7 +169,7 @@ final class FxEditorWindow {
                         event -> save(true)),
                 new SeparatorMenuItem(),
                 item("Close ROM", event -> closeActiveRom()),
-                item("Exit", event -> stage.close()));
+                item("Exit", event -> close()));
         Menu edit = new Menu("Edit", null,
                 shortcutItem("Undo", "Shortcut+Z", event -> history(false)),
                 shortcutItem("Redo", "Shortcut+Y", event -> history(true)));
@@ -397,8 +397,12 @@ final class FxEditorWindow {
     }
 
     private void save(boolean saveAs) {
-        Rom rom = snapshot.getActiveRom();
+        Rom rom = controller.getSession().snapshot().getActiveRom();
         if (rom == null) return;
+        if (controller.isSaving(rom)) {
+            setStatus("This ROM is already saving; please wait.", 0);
+            return;
+        }
         File target = saveAs || rom.getFullFileName() == null
                 ? FxDialogs.saveRom(stage,
                     rom.getFullFileName() == null
@@ -411,8 +415,9 @@ final class FxEditorWindow {
                         + " already exists. Replace it with the current ROM?",
                 "Replace file")) return;
         setStatus("Saving " + target.getName() + "…", 0);
-        controller.save(rom, target).whenComplete((saved, failure) ->
+        controller.save(rom, target, Platform::runLater).whenComplete((saved, failure) ->
                 Platform.runLater(() -> {
+                    if (closing) return;
                     if (failure == null) setStatus("Saved " + saved.getName(), 100);
                     else FxDialogs.error(stage, "Unable to save ROM",
                             FxDialogs.rootMessage(failure));
@@ -430,17 +435,36 @@ final class FxEditorWindow {
     }
 
     private void closeActiveRom() {
-        EditorDocument document = snapshot.getActiveDocument();
+        closeRom(controller.getSession().snapshot().getActiveRom());
+    }
+
+    private void closeRom(Rom rom) {
+        EditorDocument document = controller.getSession().snapshot().getDocuments()
+                .stream().filter(value -> value.getRom() == rom).findFirst().orElse(null);
         if (document == null) return;
+        if (controller.isSaving(rom)) {
+            setStatus("Wait for this ROM to finish saving before closing it.", 0);
+            return;
+        }
         if (document.isDirty() && !FxDialogs.confirm(stage,
                 "Unsaved ROM changes", document.getName()
                         + " has unsaved changes. Close without saving?",
                 "Discard changes")) return;
-        controller.closeRom(document.getRom());
+        // Clean up cached panes/listeners for the explicitly requested document.
+        calibrationPanes.entrySet().removeIf(entry -> {
+            if (entry.getKey().getRom() != rom) return false;
+            entry.getValue().close();
+            return true;
+        });
+        controller.closeRom(rom);
     }
 
     private boolean confirmClose() {
-        long dirty = snapshot.getDocuments().stream()
+        if (controller.hasPendingSaves()) {
+            setStatus("Wait for ROM saves to finish before exiting.", 0);
+            return false;
+        }
+        long dirty = controller.getSession().snapshot().getDocuments().stream()
                 .filter(EditorDocument::isDirty).count();
         return dirty == 0 || FxDialogs.confirm(stage, "Unsaved ROM changes",
                 dirty + " ROM workspace" + (dirty == 1 ? " has" : "s have")
@@ -472,8 +496,7 @@ final class FxEditorWindow {
                 tab.setUserData(document.getRom());
                 tab.setOnCloseRequest(event -> {
                     event.consume();
-                    controller.activateRom(document.getRom());
-                    closeActiveRom();
+                    closeRom(document.getRom());
                 });
                 romTabs.getTabs().add(tab);
                 if (document.getRom() == snapshot.getActiveRom()) {
@@ -736,8 +759,7 @@ final class FxEditorWindow {
     }
 
     void close() {
-        closing = true;
-        stage.close();
+        FxCloseRequest.request(stage);
     }
 
     private void dispose() {

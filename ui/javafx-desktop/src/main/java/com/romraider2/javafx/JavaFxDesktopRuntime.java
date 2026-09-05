@@ -104,8 +104,7 @@ final class JavaFxDesktopRuntime {
         void closeAll() {
             if (editor != null) editor.close();
             if (logger != null) logger.close();
-            editor = null;
-            logger = null;
+            // Window callbacks clear only windows whose guarded close succeeded.
             stopIfEmpty();
         }
 

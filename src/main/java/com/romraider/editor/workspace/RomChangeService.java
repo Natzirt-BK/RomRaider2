@@ -4,11 +4,15 @@ package com.romraider.editor.workspace;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Map;
+import java.util.IdentityHashMap;
 import java.util.Set;
 import java.util.WeakHashMap;
 
 import com.romraider.maps.Rom;
+import com.romraider.maps.DataCell;
 import com.romraider.maps.Table;
+import com.romraider.maps.Table2D;
+import com.romraider.maps.Table3D;
 import com.romraider.maps.UserLevelException;
 import com.romraider.maps.history.EditTransaction;
 import com.romraider.maps.history.RomEditHistory;
@@ -35,6 +39,52 @@ public final class RomChangeService {
         if (rom == null) return;
         for (Table table : rom.getTables()) table.setRevertPoint();
         rememberSavedBinary(rom);
+    }
+
+    /** Capture on the document-owning thread, before starting background I/O. */
+    public static SavedState captureSavedState(Rom rom, byte[] output) {
+        Map<DataCell, Double> cells = new IdentityHashMap<DataCell, Double>();
+        for (Table table : rom.getTables()) captureCells(table, cells);
+        return new SavedState(output.clone(), cells);
+    }
+
+    private static void captureCells(Table table, Map<DataCell, Double> cells) {
+        if (table == null) return;
+        if (table instanceof Table3D) {
+            Table3D surface = (Table3D) table;
+            for (DataCell[] row : surface.get3dData()) captureCells(row, cells);
+            captureCells(surface.getXAxis(), cells);
+            captureCells(surface.getYAxis(), cells);
+        } else {
+            captureCells(table.getData(), cells);
+            if (table instanceof Table2D) captureCells(((Table2D) table).getAxis(), cells);
+        }
+    }
+
+    private static void captureCells(DataCell[] values, Map<DataCell, Double> cells) {
+        if (values == null) return;
+        for (DataCell cell : values) {
+            if (cell != null) cells.put(cell, cell.getBinValue());
+        }
+    }
+
+    /** Complete on the document-owning thread; later edits remain dirty. */
+    public static void markSaved(Rom rom, SavedState saved) {
+        saved.cells.forEach(DataCell::setRevertPoint);
+        synchronized (RomChangeService.class) {
+            savedBinary.put(rom, saved.binary.clone());
+            forcedUnsaved.remove(rom);
+        }
+    }
+
+    public static final class SavedState {
+        private final byte[] binary;
+        private final Map<DataCell, Double> cells;
+
+        private SavedState(byte[] binary, Map<DataCell, Double> cells) {
+            this.binary = binary;
+            this.cells = cells;
+        }
     }
 
     /** Keeps a recovered workspace dirty until it is explicitly saved. */

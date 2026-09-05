@@ -4,9 +4,6 @@ package com.romraider2.javafx;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
-import javafx.application.Platform;
 import javafx.geometry.Rectangle2D;
 import javafx.scene.Scene;
 import javafx.scene.layout.StackPane;
@@ -20,9 +17,7 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 class FxWindowPlacementSmokeTest {
     @Test
     void nativeWindowFitsAndRepeatedShowPreservesUserPlacement() throws Exception {
-        CompletableFuture<Void> result = new CompletableFuture<>();
-        Platform.startup(() -> {
-            Platform.setImplicitExit(false);
+        FxTestRuntime.run(() -> {
             Stage stage = new Stage();
             try {
                 Rectangle2D work = Screen.getPrimary().getVisualBounds();
@@ -48,17 +43,9 @@ class FxWindowPlacementSmokeTest {
                 assertEquals(300, stage.getHeight());
                 assertEquals(work.getMinX() + 20, stage.getX());
                 assertEquals(work.getMinY() + 30, stage.getY());
-                result.complete(null);
-            } catch (Throwable failure) {
-                result.completeExceptionally(failure);
             } finally {
                 stage.close();
             }
         });
-        try {
-            result.get(20, TimeUnit.SECONDS);
-        } finally {
-            Platform.exit();
-        }
     }
 }

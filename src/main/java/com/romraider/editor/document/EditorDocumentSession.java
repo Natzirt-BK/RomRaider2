@@ -171,6 +171,11 @@ public final class EditorDocumentSession implements AutoCloseable {
         listeners.remove(listener);
     }
 
+    /** Publish a save's new name/baseline even when no edit-history event fires. */
+    public void refresh(Rom rom) {
+        changed(rom);
+    }
+
     private void changed(Rom rom) {
         synchronized (this) {
             if (closed || !documents.containsKey(rom)) return;

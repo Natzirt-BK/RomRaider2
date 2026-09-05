@@ -562,7 +562,12 @@ public class DataCell implements Serializable  {
     }
 
     public void setRevertPoint() {
-        this.setOriginalValue(binValue);
+        setRevertPoint(binValue);
+    }
+
+    /** Sets the saved baseline without replacing a newer in-memory edit. */
+    public void setRevertPoint(double savedValue) {
+        this.setOriginalValue(savedValue);
         updateView();
     }
 
