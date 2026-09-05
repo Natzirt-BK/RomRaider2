@@ -103,4 +103,18 @@ follows the [Android USB host guide](https://developer.android.com/develop/conne
    system-bar insets need a separate layout pass.
 
 Next acceptance procedure: [Android preview testing](ANDROID_PREVIEW_TESTING.md).
-Desktop B1/B2 findings from the prior desktop audit remain deferred, unchanged.
+At this audit's implementation cutoff, desktop B1/B2 remained deferred. The later
+[desktop refresh](DESKTOP_CSV_RELEASE_REFRESH_2026-09-05.md) repairs B1; B2 remains open.
+
+## Subsequent publication — September 5
+
+The user authorized publishing preview3 and keeping only the current previews.
+The APK had previously existed only as a CI artifact, not a public release.
+[Android Preview 3](https://github.com/Natzirt-BK/RomRaider2/releases/tag/romraider2-1.1.0-rc4-android-preview3)
+is now public and marked prerelease, using the APK from run33954484900 at
+`3af9bd357a181e86289a16b6dbee86de8ff137b4`. Its sidecar and APK v2 signature passed;
+an anonymous public download matched SHA-256
+`a70c7b6889cd4e2fbfbdd490667db434b178da3152bd40c7dbb807451bd48187`.
+The README now links preview3. Superseded preview1/preview2 release entries were
+backed up and removed; source tags remain. No hardware gate above is closed by
+this publication.

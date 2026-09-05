@@ -1,5 +1,10 @@
 # Desktop repair audit — September 4, 2026 (Pacific)
 
+September 5 follow-up: [B1 repair and prerelease refresh](DESKTOP_CSV_RELEASE_REFRESH_2026-09-05.md)
+supersedes this report's B1 and publication-HOLD status. The user authorized the
+current RC4 prerelease refresh; B2 and the uncompleted acceptance/hardware gates
+remain open. The evidence below records the September 4 candidate, not the new ZIPs.
+
 ## Outcome
 
 The requested A1–A9 repair sequence is implemented and pushed. **Release HOLD
