@@ -20,6 +20,8 @@ Desktop JavaFX cutover
 - Added calibration tabs, definition-formatted values and axes, engineering
   units, selected-cell coordinates, a restrained heatmap, direct edits,
   definition increments, undo/redo, restore, and a freely rotatable 3D view.
+  Calibration tables can be resized from 60% through 160% using visible
+  controls, keyboard shortcuts, or Ctrl+mouse-wheel without changing values.
 - Added one shared Light/Dark theme state across every open Editor, Logger,
   dialog, detached gauge, chart, and calibration surface. High Contrast is no
   longer exposed by the JavaFX desktop. Explicit JavaFX text colors prevent

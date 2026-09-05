@@ -33,6 +33,8 @@ same candidate.
   and 3D pitch/yaw: `PASS`, `FAIL`, or `NOT RUN`
 - Calibration arrow keys, Ctrl+C/Ctrl+V, Ctrl+Z/Ctrl+Y, and wide/narrow scrolling:
   `PASS`, `FAIL`, or `NOT RUN`
+- Calibration 60%/100%/160% table sizing, Ctrl+plus/minus/zero, and
+  Ctrl+mouse-wheel: `PASS`, `FAIL`, or `NOT RUN`
 - Calibration Shift+arrow/Shift+click range selection, Ctrl+A, block copy/paste,
   rejected oversized block, and one-step block undo: `PASS`, `FAIL`, or
   `NOT RUN`

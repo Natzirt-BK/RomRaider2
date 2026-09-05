@@ -40,6 +40,7 @@ import javafx.scene.input.ClipboardContent;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
@@ -48,6 +49,13 @@ final class FxCalibrationPane extends BorderPane implements AutoCloseable {
     private static final Pattern DTC = Pattern.compile(
             "^\\s*\\(([PBCU][0-9A-Fa-f]{4})\\)");
     private static final int HEAT_LEVELS = 8;
+    private static final double MIN_TABLE_SCALE = .6;
+    private static final double MAX_TABLE_SCALE = 1.6;
+    private static final double TABLE_SCALE_STEP = .1;
+    private static final double AXIS_COLUMN_WIDTH = 100;
+    private static final double VALUE_COLUMN_WIDTH = 124;
+    private static final double TABLE_ROW_HEIGHT = 34;
+    private static final double TABLE_FONT_SIZE = 13;
 
     private final Table table;
     private final CalibrationEditController controller;
@@ -58,11 +66,16 @@ final class FxCalibrationPane extends BorderPane implements AutoCloseable {
     private final Label status = new Label();
     private final Button undo = new Button("Undo");
     private final Button redo = new Button("Redo");
+    private final Label tableSizeLabel = new Label("Table size");
+    private final Button tableScaleSmaller = new Button("−");
+    private final Button tableScaleReset = new Button("100%");
+    private final Button tableScaleLarger = new Button("+");
     private TableView<RowValues> grid;
     private VBox inspector;
     private FxSurfaceCanvas surface;
     private ToggleButton dtcToggle;
     private Label dtcState;
+    private double tableScale = 1.0;
 
     FxCalibrationPane(Table table) {
         this.table = table;
@@ -137,14 +150,46 @@ final class FxCalibrationPane extends BorderPane implements AutoCloseable {
             strip.getChildren().add(axisSummary("X",
                     snapshot.getColumnAxisName(), snapshot.getColumnAxisUnit()));
         }
-        strip.setVisible(!strip.getChildren().isEmpty());
-        strip.setManaged(strip.isVisible());
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+        strip.getChildren().addAll(spacer, tableSizeControls());
+        tableSizeLabel.visibleProperty().bind(strip.widthProperty()
+                .greaterThanOrEqualTo(520));
+        tableSizeLabel.managedProperty().bind(
+                tableSizeLabel.visibleProperty());
         return strip;
+    }
+
+    private Node tableSizeControls() {
+        tableSizeLabel.getStyleClass().add("axis-summary");
+        tableScaleSmaller.getStyleClass().add("compact-button");
+        tableScaleLarger.getStyleClass().add("compact-button");
+        tableScaleReset.getStyleClass().add("compact-button");
+        tableScaleReset.getStyleClass().add("table-scale-reset");
+        tableScaleSmaller.setAccessibleText("Shrink calibration table");
+        tableScaleLarger.setAccessibleText("Expand calibration table");
+        tableScaleReset.setAccessibleText("Reset calibration table size");
+        tableScaleSmaller.setTooltip(new Tooltip("Shrink table  ·  Ctrl+−"));
+        tableScaleLarger.setTooltip(new Tooltip("Expand table  ·  Ctrl++"));
+        tableScaleReset.setTooltip(new Tooltip(
+                "Reset table to its default size  ·  Ctrl+0"));
+        tableScaleSmaller.setOnAction(
+                event -> changeTableScale(-TABLE_SCALE_STEP));
+        tableScaleLarger.setOnAction(
+                event -> changeTableScale(TABLE_SCALE_STEP));
+        tableScaleReset.setOnAction(event -> setTableScale(1.0));
+        HBox controls = new HBox(5, tableSizeLabel, tableScaleSmaller,
+                tableScaleReset, tableScaleLarger);
+        controls.setAlignment(Pos.CENTER_RIGHT);
+        controls.getStyleClass().add("table-size-controls");
+        updateTableScaleControls();
+        return controls;
     }
 
     private static Label axisSummary(String axis, String name, String unit) {
         Label label = new Label(axis + "  ·  " + axisName(name, unit));
         label.getStyleClass().add("axis-summary");
+        label.setMinWidth(0);
         label.setTooltip(new Tooltip(axis + " axis · " + axisName(name, unit)));
         return label;
     }
@@ -161,7 +206,7 @@ final class FxCalibrationPane extends BorderPane implements AutoCloseable {
                             : snapshot.getRowAxisName());
             axis.setCellValueFactory(value -> new ReadOnlyStringWrapper(
                     snapshot.getRowLabels().get(value.getValue().row)));
-            axis.setPrefWidth(100);
+            axis.setPrefWidth(AXIS_COLUMN_WIDTH);
             axis.setSortable(false);
             view.getColumns().add(axis);
         }
@@ -176,7 +221,7 @@ final class FxCalibrationPane extends BorderPane implements AutoCloseable {
             header.setTooltip(new Tooltip(label));
             valueColumn.setText(null);
             valueColumn.setGraphic(header);
-            valueColumn.setPrefWidth(124);
+            valueColumn.setPrefWidth(VALUE_COLUMN_WIDTH);
             valueColumn.setSortable(false);
             valueColumn.setCellFactory(ignored -> valueCell(index));
             view.getColumns().add(valueColumn);
@@ -214,12 +259,77 @@ final class FxCalibrationPane extends BorderPane implements AutoCloseable {
                 event.consume();
                 return;
             }
+            if (event.isShortcutDown() && (event.getCode() == KeyCode.PLUS
+                    || event.getCode() == KeyCode.EQUALS
+                    || event.getCode() == KeyCode.ADD)) {
+                changeTableScale(TABLE_SCALE_STEP);
+                event.consume();
+                return;
+            }
+            if (event.isShortcutDown() && (event.getCode() == KeyCode.MINUS
+                    || event.getCode() == KeyCode.SUBTRACT)) {
+                changeTableScale(-TABLE_SCALE_STEP);
+                event.consume();
+                return;
+            }
+            if (event.isShortcutDown() && (event.getCode() == KeyCode.DIGIT0
+                    || event.getCode() == KeyCode.NUMPAD0)) {
+                setTableScale(1.0);
+                event.consume();
+                return;
+            }
             if (event.getCode() == KeyCode.ENTER) {
                 inspector.requestFocus();
                 event.consume();
             }
         });
+        view.addEventFilter(javafx.scene.input.ScrollEvent.SCROLL, event -> {
+            if (event.isShortcutDown() && event.getDeltaY() != 0) {
+                changeTableScale(event.getDeltaY() > 0
+                        ? TABLE_SCALE_STEP : -TABLE_SCALE_STEP);
+                event.consume();
+            }
+        });
+        applyTableScale(view);
         return view;
+    }
+
+    private void changeTableScale(double difference) {
+        setTableScale(tableScale + difference);
+    }
+
+    private void setTableScale(double requestedScale) {
+        tableScale = normalizeTableScale(requestedScale);
+        if (grid != null) applyTableScale(grid);
+        updateTableScaleControls();
+    }
+
+    private void updateTableScaleControls() {
+        tableScaleReset.setText(formatTableScale(tableScale));
+        tableScaleSmaller.setDisable(tableScale <= MIN_TABLE_SCALE);
+        tableScaleLarger.setDisable(tableScale >= MAX_TABLE_SCALE);
+    }
+
+    private void applyTableScale(TableView<RowValues> view) {
+        int axisOffset = snapshot.getRows() > 1 ? 1 : 0;
+        for (int index = 0; index < view.getColumns().size(); index++) {
+            double baseWidth = index < axisOffset
+                    ? AXIS_COLUMN_WIDTH : VALUE_COLUMN_WIDTH;
+            view.getColumns().get(index).setPrefWidth(baseWidth * tableScale);
+        }
+        view.setFixedCellSize(Math.max(26, TABLE_ROW_HEIGHT * tableScale));
+        view.setStyle(String.format(Locale.ROOT, "-fx-font-size: %.1fpx;",
+                Math.max(11, TABLE_FONT_SIZE * tableScale)));
+    }
+
+    static double normalizeTableScale(double requestedScale) {
+        double clamped = Math.max(MIN_TABLE_SCALE,
+                Math.min(MAX_TABLE_SCALE, requestedScale));
+        return Math.round(clamped * 10.0) / 10.0;
+    }
+
+    static String formatTableScale(double scale) {
+        return Math.round(scale * 100) + "%";
     }
 
     @SuppressWarnings("rawtypes")
