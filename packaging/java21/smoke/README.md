@@ -10,6 +10,9 @@ small inspector and Dyno scroll recovery, settings cancellation, and analysis
 numeric sorting/ranges. Both must terminate successfully with their `..._PASS`
 sentinel; a launched process alone is not a pass.
 
+The repair probe also checks Logger touch/full-screen presentation with startup
+auto-connect disabled and Definition Manager's native work-area bounds.
+
 Compile with a full JDK 21 against the candidate's `app/*` and `app/lib/common/*`
 JARs, then package the resulting classes in a diagnostic JAR. The runtime images
 intentionally omit the standalone `java` command. Make a **separate copy** of the

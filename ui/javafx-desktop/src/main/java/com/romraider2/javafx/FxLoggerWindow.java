@@ -928,7 +928,7 @@ final class FxLoggerWindow {
         FxTheme.refresh(stage.getScene());
     }
 
-    void maximize() { stage.setMaximized(true); }
+    void enterFullScreen() { stage.setFullScreen(true); }
 
     private void considerAutoConnect() {
         if (disposed) return;

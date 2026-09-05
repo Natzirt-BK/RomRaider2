@@ -64,7 +64,7 @@ final class JavaFxDesktopRuntime {
                 if (Arrays.stream(arguments).anyMatch(value -> value.equalsIgnoreCase("-logger.touch")))
                     logger.setTouchMode();
                 if (Arrays.stream(arguments).anyMatch(value -> value.equalsIgnoreCase("-logger.fullscreen")))
-                    logger.maximize();
+                    logger.enterFullScreen();
             } else {
                 List<File> files = Arrays.stream(arguments)
                         .map(File::new).filter(File::isFile).toList();

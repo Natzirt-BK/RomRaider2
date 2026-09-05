@@ -59,6 +59,7 @@ public final class PackagedDesktopRepair {
             verify(output);
             controls(output);
             analysis(output);
+            presentation(output);
             System.out.println("PACKAGED_DESKTOP_REPAIR_PASS");
         } finally { Platform.exit(); }
     }
@@ -121,5 +122,38 @@ public final class PackagedDesktopRepair {
                 capture(stage[0], output.resolve("analysis-range.png"));
             });
         } finally { fx(() -> { if (pane[0] != null) pane[0].close(); if (stage[0] != null) stage[0].close(); }); }
+    }
+
+    static void presentation(Path output) throws Exception {
+        fx(() -> {
+            FxLoggerWindow window = new FxLoggerWindow(() -> {});
+            Stage stage = field(window, "stage");
+            try {
+                FxWindowPlacement.show(stage); // Bypass setup/startup, never connect.
+                window.setTouchMode();
+                check(stage.getScene().getRoot().getStyleClass().contains("touch-controls"), "Logger touch launch profile applies");
+                window.enterFullScreen(); check(stage.isFullScreen(), "Logger actual full-screen mode");
+                stage.setFullScreen(false);
+            } finally { window.close(); }
+        });
+        fx(() -> {
+            Throwable[] failure = {null};
+            Platform.runLater(() -> Platform.runLater(() -> {
+                Stage dialog = (Stage) javafx.stage.Window.getWindows().stream()
+                        .filter(window -> window instanceof Stage candidate && "ECU Definitions Manager".equals(candidate.getTitle()))
+                        .findFirst().orElseThrow();
+                try {
+                    var bounds = javafx.stage.Screen.getPrimary().getVisualBounds();
+                    check(dialog.getX() >= bounds.getMinX() - 1 && dialog.getY() >= bounds.getMinY() - 1
+                            && dialog.getX() + dialog.getWidth() <= bounds.getMaxX() + 1
+                            && dialog.getY() + dialog.getHeight() <= bounds.getMaxY() + 1,
+                            "owned Definition Manager fits native work area");
+                    capture(dialog, output.resolve("definitions.png"));
+                } catch (Throwable problem) { failure[0] = problem; }
+                finally { dialog.close(); }
+            }));
+            FxDefinitionManager.show(null, () -> { throw new AssertionError("Diagnostic must not save definitions"); });
+            if (failure[0] != null) throw new AssertionError(failure[0]);
+        });
     }
 }
