@@ -62,9 +62,10 @@ sideloading it or connecting an adapter.
 ## Where it stands
 
 The [full-project audit](docs/PROJECT_AUDIT_2026-09-06.md) separates current
-`master` from the published 1.1.1 packages. Fresh platform checks passed, but
-installer migration and Android ROM-save failure handling need repair before
-the next release. New source work is not yet in the public downloads.
+`master` from the published 1.1.1 packages. Source repairs for
+[installer migration and Android ROM-save failure handling](docs/DATA_PRESERVATION_FIXES.md)
+are documented separately; XML and gauge-warning findings remain open. New
+Android source work is not yet in the public downloads.
 
 | Area | Current status |
 | --- | --- |

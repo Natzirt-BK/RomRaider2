@@ -839,11 +839,11 @@ public final class MainActivity extends Activity {
             PortableRomDocument saving = rom;
             byte[] savedBytes = saving.snapshot();
             workerExecutor.execute(() -> {
-                try (OutputStream output = getContentResolver()
-                        .openOutputStream(uri, "w")) {
-                    output.write(savedBytes);
-                    boolean clean = saving.markSavedIfCurrent(savedBytes);
+                try {
+                    boolean clean = MobileRomSave.save(saving, savedBytes,
+                            () -> getContentResolver().openOutputStream(uri, "w"));
                     runOnUiThread(() -> {
+                        if (activityDestroyed) return;
                         if (rom == saving) refreshRom();
                         notice(clean ? "Saved a separate ROM copy."
                                 : "ROM copy saved; newer edits remain unsaved.");

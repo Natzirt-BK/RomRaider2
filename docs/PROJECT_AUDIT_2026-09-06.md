@@ -1,5 +1,10 @@
 # Full-project audit — September 6, 2026 UTC
 
+Subsequent work: [data-preservation repairs](DATA_PRESERVATION_FIXES.md) addresses
+A1 and A2. The findings and evidence below describe the audited `7c2f0ce4`
+snapshot and remain historical evidence, not a claim that those source fixes
+are already in the public Android APK. Other findings remain open.
+
 ## Outcome
 
 GitHub `master` now includes the tested Android update/setup work and JavaFX

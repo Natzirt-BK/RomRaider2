@@ -10,6 +10,7 @@ import android.os.SystemClock;
 import android.view.accessibility.AccessibilityNodeInfo;
 import com.romraider.mobile.logger.LoggerImportState;
 import com.romraider.portable.PortableRomRaiderCsvWriter;
+import com.romraider.portable.PortableRomDocument;
 import com.romraider.portable.logger.definition.PortableLoggerDefinition;
 import com.romraider.portable.logger.definition.PortableLoggerProfile;
 import java.io.*;
@@ -89,6 +90,7 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
         }
     }
     private void seed() throws Exception {
+        verifyRomSaveRecovery();
         File folder = getTargetContext().getFilesDir();
         File definition = new File(folder, "automation-definition.xml");
         File profile = new File(folder, "automation-profile.xml");
@@ -112,6 +114,33 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
                 + "600,P8,Engine Speed,800.0,rpm\n600,P1,Battery Voltage,13.24,V\n")
                         .getBytes(StandardCharsets.UTF_8));
         verify(2);
+    }
+    private void verifyRomSaveRecovery() throws Exception {
+        File directory = new File(getTargetContext().getFilesDir(), "automation-rom-save");
+        check(directory.isDirectory() || directory.mkdir(), "Cannot create isolated ROM-save fixture");
+        PortableRomDocument document = new PortableRomDocument("Synthetic ROM", new byte[] {0, 0});
+        document.replace(0, new byte[] {1});
+        MobileRomRecoveryStore.save(directory, document);
+        File recovery = new File(directory, "unsaved-rom.workspace");
+        byte[] before = Files.readAllBytes(recovery.toPath());
+        boolean failed = false;
+        try {
+            MobileRomSave.save(document, document.snapshot(), () -> new ByteArrayOutputStream() {
+                @Override public void close() throws IOException { throw new IOException("Synthetic close failure"); }
+            });
+        } catch (IOException expected) { failed = true; }
+        check(failed && document.hasChanges(), "Failed ROM save cleared dirty state");
+        MobileRomRecoveryStore.save(directory, document);
+        check(java.util.Arrays.equals(before, Files.readAllBytes(recovery.toPath())),
+                "Failed ROM save changed the Android recovery file");
+        check(java.util.Arrays.equals(document.snapshot(), MobileRomRecoveryStore.restore(directory).snapshot()),
+                "Failed-save edits did not restore on Android");
+        ByteArrayOutputStream saved = new ByteArrayOutputStream();
+        check(MobileRomSave.save(document, document.snapshot(), () -> saved), "Successful save stayed dirty");
+        check(java.util.Arrays.equals(saved.toByteArray(), new byte[] {1, 0}), "Wrong saved bytes");
+        MobileRomRecoveryStore.save(directory, document);
+        check(!recovery.exists(), "Successful save did not resolve its isolated recovery snapshot");
+        System.out.println("PASS: Android ROM save close-failure recovery and successful save publication.");
     }
     private void verify(int channels) throws Exception {
         verifySelection(channels);
