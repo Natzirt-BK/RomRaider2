@@ -8,8 +8,8 @@ apk_signer=${APKSIGNER:-apksigner}
 for apk in "$@"; do
     result=$("$apk_signer" verify --verbose --print-certs "$apk")
     fingerprint=$(printf '%s\n' "$result" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')
-    [[ "$fingerprint" == "$expected" ]] && \
-        [[ "$result" == *'Number of signers: 1'* ]] || {
+    signer_count=$(printf '%s\n' "$result" | sed -n 's/^Number of signers: //p')
+    [[ "$fingerprint" == "$expected" && "$signer_count" == 1 ]] || {
         echo "Unexpected signing identity: $apk" >&2; exit 1;
     }
     printf 'Verified distribution signing: %s\n' "$apk"

@@ -52,11 +52,15 @@ jobs:
           printf 'no\n' | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd \
             --name rr2-automation --package 'system-images;android-36;default;x86_64'
           nohup "$ANDROID_HOME/emulator/emulator" -avd rr2-automation -no-window -no-audio \
-            -no-snapshot -no-boot-anim -gpu swiftshader_indirect > "$RUNNER_TEMP/emulator.log" 2>&1 &
+            -no-snapshot -no-boot-anim -gpu swiftshader_indirect -memory 2048 -cores 2 -port 5554 \
+            > "$RUNNER_TEMP/emulator.log" 2>&1 &
+          emulator_pid=$!
           for attempt in $(seq 1 120); do
-            if [[ $(adb -s emulator-5554 shell getprop sys.boot_completed 2>/dev/null | tr -d '\r') == 1 ]]; then exit 0; fi
+            if ! kill -0 "$emulator_pid" 2>/dev/null; then cat "$RUNNER_TEMP/emulator.log"; exit 1; fi
+            if [[ $(timeout 10 adb -s emulator-5554 shell getprop sys.boot_completed 2>/dev/null | tr -d '\r') == 1 ]]; then exit 0; fi
             sleep 2
           done
+          cat "$RUNNER_TEMP/emulator.log"
           echo 'Android emulator boot timed out.' >&2
           exit 1
       - name: Restart, upgrade, and recording-preservation checks
@@ -78,4 +82,12 @@ jobs:
           java -cp "$RUNNER_TEMP/csv-check" DesktopCsvCompatibilityCheck "$RUNNER_TEMP/android-export.csv"
       - name: Stop emulator
         if: always()
-        run: adb -s emulator-5554 emu kill || true
+        run: timeout 10 adb -s emulator-5554 emu kill || true
+      - name: Retain emulator diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-emulator-diagnostics
+          path: ${{ runner.temp }}/emulator.log
+          retention-days: 3
+          if-no-files-found: ignore

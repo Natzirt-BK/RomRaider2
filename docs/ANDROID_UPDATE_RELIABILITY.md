@@ -70,7 +70,7 @@ the existing recordings. Uninstalling or clearing data still removes that data.
 
 - 12 store unit tests cover both protocols, exact selections/units, unsupported
   inputs, missing/corrupt/truncated files, definition bounds, empty selection,
-  profile-before-definition, atomic replacement failure, and defensive copies.
+  profile-before-definition, failed-save preservation, and defensive copies.
 - Existing six import-state and 14 read-only-session tests remain in place.
 - `LoggerSetupInstrumentation` exercises the actual Activity import and channel
   selection callbacks, process restart, original-file removal, same-key APK
