@@ -47,6 +47,19 @@ existing restart, upgrade, clear/corrupt-state and desktop CSV compatibility
 checks. All fixtures are synthetic; no vehicle connection or private definition
 is involved.
 
-Hosted verification is recorded after the source checks complete. Gauge
-hysteresis/unit identity (A3/A4), next-release version/signing migration and
-physical hardware qualification remain separate work.
+## Verification
+
+Source `36339446` passes 190 XML regression assertions, alongside the existing
+portable checks. Fresh local JavaFX (56), Compose (34), and Android automation
+unit (40) tests pass with zero failures or skips. Android standard/diagnostic
+APK builds and lint, plus automation and instrumentation APK builds/lint, pass.
+
+The [Android emulator regression run](https://github.com/Natzirt-BK/RomRaider2/actions/runs/34011120364)
+passes at that exact source, including the new XML checks and existing save,
+restart, upgrade, clear/corrupt-state and desktop CSV compatibility phases.
+The same source passes [Linux and Windows tests/package verification](https://github.com/Natzirt-BK/RomRaider2/actions/runs/34011120384).
+The subsequent verification-recording commit changes documentation only.
+
+Gauge hysteresis/unit identity (A3/A4), next-release version/signing migration
+and physical hardware qualification remain separate work. No new public
+application release was published.
