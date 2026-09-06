@@ -109,6 +109,8 @@ public final class MainActivity extends Activity {
     private static final int POSITIVE = Color.rgb(36, 120, 75);
     private static final String PREF_GAUGE_THEME = "logger_gauge_theme";
     private static final int MOBILE_GAUGE_LIMIT = 8;
+    // Process-wide ordering keeps a closing Activity's save ahead of the next restore.
+    private static final ExecutorService LOGGER_SETUP_IO = Executors.newSingleThreadExecutor();
 
     private LinearLayout content;
     private Button loggerTab;
@@ -1284,7 +1286,9 @@ public final class MainActivity extends Activity {
         refreshLoggerSetupStatus();
         workerExecutor.execute(() -> {
             try {
-                LoggerSetupStore.Setup saved = LoggerSetupStore.restore(getFilesDir());
+                LoggerSetupStore.Setup saved = LOGGER_SETUP_IO.submit(
+                        () -> LoggerSetupStore.restore(getFilesDir()))
+                        .get(15, java.util.concurrent.TimeUnit.SECONDS);
                 byte[] bytes = saved == null ? new byte[0] : saved.definitionBytes();
                 PortableLoggerDefinition definition = bytes.length == 0 ? null
                         : parseLoggerDefinition(bytes, saved.protocol);
@@ -1326,8 +1330,9 @@ public final class MainActivity extends Activity {
         final int revision = loggerSetupRevision;
         LoggerSetupStore.Setup setup = new LoggerSetupStore.Setup(loggerProtocol,
                 loggerDefinitionName, loggerDefinitionBytes, loggerProfileName, loggerProfile);
-        // The single worker preserves write order. Never persist USB or running state.
-        workerExecutor.execute(() -> {
+        // Preserve write order across Activity instances, independently of long CSV exports.
+        // Never persist USB or running state. This process-wide executor survives onDestroy.
+        LOGGER_SETUP_IO.execute(() -> {
             try { LoggerSetupStore.save(getFilesDir(), setup); }
             catch (Exception failure) {
                 runOnUiThread(() -> {

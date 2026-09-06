@@ -61,7 +61,10 @@ Import failures clear the corresponding active setup rather than silently
 restoring a previously selected definition/profile after restart.
 
 Restore callbacks cannot replace a newer user import or protocol choice. Restoring
-setup does not restore a USB connection, permission, ECU identity, running state,
+and saving use process-wide storage ordering, so closing and reopening an Activity
+cannot let an older pending save overwrite a newer setup. Long CSV exports do
+not delay setup storage. Restoring setup does not restore a USB connection,
+permission, ECU identity, running state,
 or simulated/live logger session. Logging always requires an explicit start.
 The snapshot stays inside app-private storage with Android backup disabled, like
 the existing recordings. Uninstalling or clearing data still removes that data.
@@ -74,7 +77,8 @@ the existing recordings. Uninstalling or clearing data still removes that data.
 - Existing six import-state and 14 read-only-session tests remain in place.
 - `LoggerSetupInstrumentation` exercises the actual Activity import and channel
   selection callbacks, process restart, original-file removal, same-key APK
-  upgrade, empty selection, corrupt restore, and retained CSV export.
+  upgrade, reopening an Activity during a pending save, empty selection, corrupt
+  restore, and retained CSV export.
 - `packaging/android/check-lifecycle.sh` requires an emulator and the distinct
   `com.romraider.mobile.automation` package. It refuses physical-device targets
   and normal/test user packages. It never uninstalls an app or clears app data.

@@ -50,9 +50,23 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
             else if (phase.equals("verify")) verify(2);
             else if (phase.equals("clear")) {
                 verify(2);
-                invoke("chooseLoggerChannels", new Class<?>[0]);
-                clickDialogText("Clear all");
-                settle();
+                // Hold a save pending while the Activity is closed and reopened.
+                CountDownLatch releaseSave = new CountDownLatch(1);
+                Future<?> blocker = ((ExecutorService) field("LOGGER_SETUP_IO")).submit(() -> {
+                    if (!releaseSave.await(15, TimeUnit.SECONDS)) throw new AssertionError("Save gate timed out");
+                    return null;
+                });
+                try {
+                    invoke("chooseLoggerChannels", new Class<?>[0]);
+                    clickDialogText("Clear all");
+                    Activity closing = activity;
+                    runOnMainSync(closing::finish);
+                    waitForIdleSync();
+                    activity = startActivitySync(new Intent().setClassName(getTargetContext(), MainActivity.class.getName())
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+                } finally { releaseSave.countDown(); }
+                blocker.get(15, TimeUnit.SECONDS);
+                awaitImports();
                 verify(0);
             } else if (phase.equals("verify-empty")) verify(0);
             else if (phase.equals("corrupt")) {
@@ -137,6 +151,8 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
     private void settle() throws Exception {
         waitForIdleSync();
         ((ExecutorService) field("workerExecutor")).submit(() -> { }).get(15, TimeUnit.SECONDS);
+        waitForIdleSync();
+        ((ExecutorService) field("LOGGER_SETUP_IO")).submit(() -> { }).get(15, TimeUnit.SECONDS);
         waitForIdleSync();
     }
     private Object field(String name) throws Exception {
