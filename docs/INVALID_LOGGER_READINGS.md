@@ -70,9 +70,22 @@ tests cover cross-mode calls, removed/new/null bindings, standard functions and
 eviction. The full core suite passes with these tests and the dataflow/logger
 tests in one process, not only when run independently.
 
+## Legacy editor logger overlays
+
+Overlay updates are now marshalled to Swing's event thread with captured values,
+and registration changes discard queued readings for closed/replaced bindings.
+A non-finite bound channel clears its entire table's overlay and displays
+`NO VALID DATA`; finite sibling-axis updates cannot reactivate that table until
+the invalid channel recovers. Unrelated tables remain usable, and unbound logger
+channels do not block overlays. Reset clears missing-state memory and traces.
+Three tests cover the real handler/registry boundary with instrumented synthetic
+views, including invalid-axis persistence, recovery with zero, unrelated tables,
+reset, UI-thread confinement and queued deregistration. The complete core suite
+and Linux build pass with these tests.
+
 These checks do not detect every semantically wrong definition or establish
-vehicle-specific conversion correctness. Legacy editor logger table-overlay
-behavior still needs separate missing-data review; it is not gauge/CSV evidence.
+vehicle-specific conversion correctness. Missing-data handling does not certify
+table overlays as synchronized ECU execution traces or qualify real tuning.
 
 ## Android lifecycle evidence
 
@@ -84,4 +97,6 @@ instance, retries only a superseded/destroyed worker (not a live-worker failure)
 and explicitly recreates an Activity before importing fixtures. It also draws
 actual Android gauges through invalid/recovered samples and checks their
 accessibility status. Local automation assembly, all 44 unit tests, portable
-checks and lint pass; hosted recreation qualification is tracked separately.
+checks and lint pass. Hosted [recreation regression run](https://github.com/Natzirt-BK/RomRaider2/actions/runs/34014259076)
+at `41138aad` passes, including the explicit recreation and actual gauge-drawing
+checks, restart/upgrade/recording preservation, and desktop CSV compatibility.
