@@ -137,6 +137,11 @@ discovery-origin/ECU-identity contract for importing those addresses.
 
 ## Remaining work
 
+The [cache/lifecycle audit](DIMEMOD_CACHE_LIFECYCLE.md) repairs late callbacks
+from closed modern desktop owners and documents the retained ECU-ID-only cache,
+Swing/read-codes boundaries and the risk of triggering additional discovery
+writes by simply clearing cached data. It does not claim complete ECU binding.
+
 - Define and verify a genuinely read-only discovery source, or a separately
   authorized handshake with accurate UI wording; do not silently reuse the
   legacy write sequence under a read-only label.

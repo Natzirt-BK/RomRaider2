@@ -378,7 +378,7 @@ public final class LoggerDesktopRuntime implements EcuRelatedMessageListener,
     }
 
     private synchronized void handleEcuInit(EcuInit next) {
-        if (next == null) return;
+        if (closed || next == null) return;
         String oldId = ecuInit == null ? null : ecuInit.getEcuId();
         ecuInit = next;
         if (oldId == null || !oldId.equals(next.getEcuId())) {
@@ -392,6 +392,7 @@ public final class LoggerDesktopRuntime implements EcuRelatedMessageListener,
 
     private synchronized void handleDimeModInit(DmInit next,
             boolean forceUpdate) {
+        if (closed) return;
         PlatformContext.getInstance().setDimeModRuntime(
                 next == null ? DimeModState.NOT_PRESENT : DimeModState.ACTIVE,
                 next != null && next.isRamTuneEnabled(),

@@ -70,6 +70,12 @@ aligns DM02C's version gate with its parsed address. Other channel/RAM-tune span
 ECU-bound cache identity and negotiation cleanup remain; none of these checks
 qualifies the legacy write handshake for Android's read-only logger.
 
+The [cache/lifecycle follow-up](DIMEMOD_CACHE_LIFECYCLE.md) rejects late ECU and
+DimeMod callbacks from closed modern desktop workspaces, including after a new
+workspace opens. Full cache identity and retained Swing/read-codes ownership
+remain separate work; invalidating a cache must not silently increase discovery
+writes.
+
 ## Then
 
 Implemented in 1.1.3 development source: [linked, reviewed conditions](FUEL_LOG_ANALYSIS.md#linked-maf--injector-conditions-113-development-source) between MAF and Injector:

@@ -62,6 +62,14 @@ tests (24 native cases/repetitions and five geometry cases). The shared version
 check remains 1.1.3 / Android 110407. These results supersede the earlier failed
 window-placement run, not its recorded historical evidence.
 
+A subsequent [closed-runtime lifecycle audit](DIMEMOD_CACHE_LIFECYCLE.md) found
+another intermittent failure in the added user-resize test: at its observation
+point the native width was still 1,920 rather than the requested 500. The
+first-show and settled initial-fit checks passed. The successful runs above
+therefore do not establish reliable later-resize behavior under the local KDE
+session; native acknowledgements and the deferred modal fit need further
+investigation. No boundary assertion was removed or relaxed.
+
 Physical multi-monitor, Windows and macOS window-manager acceptance remains
 separate from local source qualification and hosted build/package checks.
 No adapter or vehicle access is involved.

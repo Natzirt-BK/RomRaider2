@@ -7,6 +7,11 @@ import com.romraider.util.SettingsManager;
 import com.romraider.logger.api.*;
 import com.romraider.logger.runtime.*;
 import com.romraider.logger.ecu.definition.*;
+import com.romraider.logger.ecu.comms.query.EcuInit;
+import com.romraider.logger.ecu.comms.query.EcuInitCallback;
+import com.romraider.logger.ecu.comms.query.dimemod.DmInit;
+import com.romraider.logger.ecu.comms.query.dimemod.DmInitCallback;
+import com.romraider.platform.*;
 import com.romraider.portable.logger.PortableLoggerProtocol;
 import com.romraider.portable.logger.definition.*;
 import java.io.*;
@@ -223,6 +228,96 @@ class FxLoggerSetupTransferTest {
             assertTrue(fixture.selected().isEmpty());
             assertEquals(LoggerSessionState.STOPPED, fixture.runtime.getWorkspaceContext().getSession().getState());
         }
+    }
+
+    @Test void closedRuntimeIgnoresLateEcuIdentification() throws Exception {
+        try (Fixture fixture = new Fixture(); DimeStateSnapshot ignored = new DimeStateSnapshot()) {
+            EcuInitCallback callback = ecuCallback(fixture.runtime);
+            EcuInit original = syntheticEcu("1111111111");
+            callback.callback(original);
+            fixture.runtime.close();
+            PlatformContext.getInstance().setDimeModRuntime(DimeModState.NOT_PRESENT, false);
+            callback.callback(syntheticEcu("2222222222"));
+            assertSame(original, fixture.runtime.getEcuInit(), "Closed owner accepted a late ECU identity");
+            assertEquals(DimeModState.NOT_PRESENT, PlatformContext.getInstance().getDimeModState());
+            assertEquals(LoggerSessionState.STOPPED, fixture.runtime.getWorkspaceContext().getSession().getState());
+        }
+    }
+
+    @Test void closedRuntimeIgnoresLateDimeMetadataAndForcedUpdates() throws Exception {
+        try (Fixture fixture = new Fixture(); DimeStateSnapshot ignored = new DimeStateSnapshot()) {
+            DmInitCallback callback = dmCallback(fixture.runtime);
+            fixture.runtime.close();
+            PlatformContext.getInstance().setDimeModRuntime(DimeModState.NOT_PRESENT, false);
+            callback.callback(syntheticDime(), true);
+            assertNull(callback.getDmInit(), "Closed owner accepted late discovery metadata");
+            assertEquals(DimeModState.NOT_PRESENT, PlatformContext.getInstance().getDimeModState());
+            assertFalse(PlatformContext.getInstance().isRamTuneRuntimeAvailable());
+            assertTrue(PlatformContext.getInstance().getRamTuneRuntimeMetadata().isEmpty());
+        }
+    }
+
+    @Test void previousRuntimeCallbacksCannotOverwriteReopenedWorkspace() throws Exception {
+        try (Fixture fixture = new Fixture(); DimeStateSnapshot ignored = new DimeStateSnapshot()) {
+            EcuInitCallback oldEcu = ecuCallback(fixture.runtime);
+            DmInitCallback oldDm = dmCallback(fixture.runtime);
+            fixture.reopen();
+            EcuInit current = syntheticEcu("2222222222");
+            DmInit metadata = syntheticDime();
+            ecuCallback(fixture.runtime).callback(current);
+            dmCallback(fixture.runtime).callback(metadata, true);
+            assertEquals(DimeModState.ACTIVE, PlatformContext.getInstance().getDimeModState());
+            oldEcu.callback(syntheticEcu("1111111111"));
+            oldDm.callback(null, true);
+            assertSame(current, fixture.runtime.getEcuInit());
+            assertSame(metadata, dmCallback(fixture.runtime).getDmInit());
+            assertEquals(DimeModState.ACTIVE, PlatformContext.getInstance().getDimeModState(),
+                    "An old workspace overwrote the new owner's platform state");
+        }
+    }
+
+    @Test void activeRuntimeRetainsSameIdCacheAndInvalidatesChangedEcuId() throws Exception {
+        try (Fixture fixture = new Fixture(); DimeStateSnapshot ignored = new DimeStateSnapshot()) {
+            EcuInitCallback ecu = ecuCallback(fixture.runtime);
+            DmInitCallback dm = dmCallback(fixture.runtime);
+            ecu.callback(syntheticEcu("1111111111"));
+            DmInit metadata = syntheticDime();
+            dm.callback(metadata, true);
+            ecu.callback(syntheticEcu("1111111111"));
+            assertSame(metadata, dm.getDmInit(), "Existing same-ID cache behavior changed");
+            ecu.callback(syntheticEcu("2222222222"));
+            assertNull(dm.getDmInit());
+            assertEquals(DimeModState.UNKNOWN, PlatformContext.getInstance().getDimeModState());
+            assertFalse(((com.romraider.logger.ecu.comms.controller.LoggerController) field(fixture.runtime, "controller")).isStarted());
+        }
+    }
+
+    private static EcuInitCallback ecuCallback(LoggerDesktopRuntime runtime) throws Exception {
+        return field(field(field(runtime, "controller"), "queryManager"), "ecuInitCallback");
+    }
+    private static DmInitCallback dmCallback(LoggerDesktopRuntime runtime) throws Exception {
+        return field(field(field(runtime, "controller"), "queryManager"), "dmInitCallback");
+    }
+    private static EcuInit syntheticEcu(String id) {
+        return new EcuInit() {
+            public String getEcuId() { return id; }
+            public byte[] getEcuInitBytes() { return new byte[128]; }
+        };
+    }
+    private static DmInit syntheticDime() {
+        java.nio.ByteBuffer data = java.nio.ByteBuffer.allocate(112);
+        data.put((byte) 2).put((byte) 3).putShort((short) 100).putInt(0x20000).putInt(0).putInt(0xDEAD0001);
+        for (int i = 0; i < 24; i++) data.putInt(0x1000 + i * 16);
+        DmInit value = new DmInit(data.array());
+        value.updateRuntimeData(0, 1, new int[8], new int[8]);
+        return value;
+    }
+    private static final class DimeStateSnapshot implements AutoCloseable {
+        final PlatformContext context = PlatformContext.getInstance();
+        final DimeModState state = context.getDimeModState();
+        final boolean ram = context.isRamTuneRuntimeAvailable();
+        final RamTuneRuntimeMetadata metadata = context.getRamTuneRuntimeMetadata().orElse(null);
+        public void close() { context.setDimeModRuntime(state, ram, metadata); }
     }
 
     private final class Fixture implements AutoCloseable {
