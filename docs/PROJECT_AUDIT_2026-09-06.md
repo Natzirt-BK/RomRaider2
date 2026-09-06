@@ -1,5 +1,9 @@
 # Full-project audit — September 6, 2026 UTC
 
+For the completed source repairs and final candidate qualification, see the
+[automated repair status](AUDIT_REPAIR_STATUS_2026-09-06.md). This original report
+retains the findings at its earlier audited snapshot.
+
 Subsequent work: [data-preservation repairs](DATA_PRESERVATION_FIXES.md) addresses
 A1 and A2; [portable XML hardening](XML_IMPORT_HARDENING.md) addresses A5.
 [Gauge warning/conversion repairs](GAUGE_WARNING_REPAIRS.md) address A3/A4.

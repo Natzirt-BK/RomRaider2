@@ -61,6 +61,11 @@ sideloading it or connecting an adapter.
 
 ## Where it stands
 
+The [automated audit repair status](docs/AUDIT_REPAIR_STATUS_2026-09-06.md)
+records the tested 1.1.2 source candidate, completed platform checks and remaining
+signing-migration/hardware gates. These source fixes are not in the public 1.1.1
+downloads yet.
+
 The [full-project audit](docs/PROJECT_AUDIT_2026-09-06.md) separates current
 `master` from the published 1.1.1 packages. Source repairs for
 [installer migration and Android ROM-save failure handling](docs/DATA_PRESERVATION_FIXES.md)
