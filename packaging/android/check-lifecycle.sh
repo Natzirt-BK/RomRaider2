@@ -36,8 +36,10 @@ run_phase seed
 run_phase verify
 "$adb_command" -s "$serial" install -r "$upgrade"
 run_phase verify
+run_phase gauges
+run_phase live-gauges
 run_phase clear
 run_phase verify-empty
 run_phase corrupt
 run_phase verify-corrupt
-echo 'PASS: profile/definition restoration, source removal, same-key upgrade, retained log export, clear selection, corrupt setup, and no automatic logging.'
+echo 'PASS: setup restoration, source removal, same-key upgrade, retained log export, gauge view/session/CSV continuity, clear selection, corrupt setup, and no automatic logging.'

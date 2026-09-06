@@ -94,6 +94,9 @@ path without changing the vendor driver.
 
 ## Highlights
 
+Current source is preparing **1.1.2**; the download links above remain on the
+published release until replacement packages are qualified and uploaded.
+
 - Tabbed calibration workspace with favorites, recent and changed maps, ROM
   comparison, grouped undo/redo, notes, and crash recovery.
 - Search across maps, Logger channels, DTCs, settings, and commands.
@@ -102,9 +105,12 @@ path without changing the vendor driver.
 - A rebuilt JavaFX Logger workspace with searchable channels, live data,
   graphs, dashboard gauges, Dyno and offline analysis. Current source adds
   channel categories, unit selection and rolling statistics.
-- Saved Gauge/Value/Trend/Alarm dashboard layouts. Custom warning/scale editing,
-  warning correctness, and legacy MAF/injector workspace parity remain work
-  items; desktop and Android dashboards are not feature-identical.
+- Saved Gauge/Value/Trend/Alarm desktop layouts with conversion-bound limits.
+  Nine [new gauge designs](docs/GAUGE_DESIGN.md) and gauges-only views are available
+  in current Android, JavaFX and Compose source. Switching views preserves the
+  logger; desktop and Android configuration options are not identical.
+- Initial read-only [MAF and injector log analysis](docs/FUEL_LOG_ANALYSIS.md)
+  in JavaFX. Full legacy analysis parity remains in progress.
 - RomRaider CSV analysis with linked tables and graphs, statistics, sample
   ranges, playback, markers, and configurable X/Y plotting.
 - Managed Logger-definition install and reload instead of the old forum

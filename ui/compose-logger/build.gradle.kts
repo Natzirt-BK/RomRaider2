@@ -28,6 +28,7 @@ val romraiderJar = providers.gradleProperty("romraiderJar")
 val auditedDesktopRuntimes by configurations.creating
 
 dependencies {
+    implementation(project(":platform:shared-core"))
     compileOnly(files(romraiderJar))
     implementation(compose.desktop.currentOs)
     auditedDesktopRuntimes(

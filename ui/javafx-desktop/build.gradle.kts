@@ -29,6 +29,7 @@ val javafxLinuxRuntime by configurations.creating
 val javafxWindowsRuntime by configurations.creating
 
 dependencies {
+    implementation(project(":platform:shared-core"))
     compileOnly(files(romraiderJar))
     listOf("base", "graphics", "controls").forEach { module ->
         implementation("org.openjfx:javafx-$module:$javafxVersion:$hostPlatform")
@@ -61,6 +62,7 @@ fun registerStage(name: String, platform: String, artifactSuffix: String,
         runtime: Configuration) = tasks.register<Sync>(name) {
     dependsOn(tasks.jar)
     from(tasks.jar)
+    from(project(":platform:shared-core").tasks.named("jar"))
     from(runtime) {
         include("*-$artifactSuffix.jar")
     }

@@ -10,7 +10,16 @@ public enum LoggerGaugeTheme {
     AMBER_GT("Amber GT"),
     CENTRAL_TACH("Central Tach"),
     NEON_CIRCUIT("Neon Circuit"),
-    HANDHELD("Handheld");
+    HANDHELD("Handheld"),
+    RALLY_PRECISION("Rally Precision"),
+    CIRCUIT_STACK("Circuit Stack"),
+    RETRO_VFD("Retro VFD"),
+    CLUB_SPORT("Club Sport"),
+    SWEEP_RIBBON("Sweep Ribbon"),
+    TWIN_ARC("Twin Arc"),
+    AMBER_MATRIX("Amber Matrix"),
+    VECTOR_HUD("Vector HUD"),
+    TURBO_POD("Turbo Pod");
 
     private final String displayName;
 

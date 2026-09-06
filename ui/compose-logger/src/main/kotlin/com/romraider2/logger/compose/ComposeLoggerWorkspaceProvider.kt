@@ -10,6 +10,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -93,6 +94,8 @@ import com.romraider.logger.api.LiveDataSample
 import com.romraider.logger.api.LoggerChannel
 import com.romraider.logger.api.LoggerChannelKind
 import com.romraider.logger.api.LoggerGaugeTheme
+import com.romraider.portable.gauge.GaugeFaceRenderer
+import com.romraider.portable.gauge.GaugeReferenceScale
 import com.romraider.logger.api.LoggerGaugeConfiguration
 import com.romraider.logger.api.LoggerGaugeAlertTracker
 import com.romraider.logger.api.LoggerGaugeLayout
@@ -153,12 +156,14 @@ internal fun LoggerWorkspace(
     var activeView by remember {
         mutableStateOf(context.preferences.view)
     }
+    var gaugesOnly by remember { mutableStateOf(false) }
+    var gaugeNow by remember { mutableStateOf(System.nanoTime()) }
+    val gaugeReceivedAt = remember(context) { java.util.concurrent.ConcurrentHashMap<String, Long>() }
     var darkTheme by remember {
         mutableStateOf(steamOs || context.preferences.isDarkTheme)
     }
     var gaugeTheme by remember {
-        mutableStateOf(if (steamOs) LoggerGaugeTheme.HANDHELD
-            else context.preferences.gaugeTheme)
+        mutableStateOf(context.preferences.gaugeTheme)
     }
     var gaugeLayout by remember {
         mutableStateOf(if (steamOs) LoggerGaugeLayout.STANDARD
@@ -182,6 +187,7 @@ internal fun LoggerWorkspace(
         rootFocus.requestFocus()
         while (isActive) {
             delay(33)
+            if (gaugesOnly && System.nanoTime() - gaugeNow > 500_000_000L) gaugeNow = System.nanoTime()
             val received = mutableListOf<LiveDataSample>()
             while (true) {
                 val next = pendingSamples.poll() ?: break
@@ -217,6 +223,7 @@ internal fun LoggerWorkspace(
             override fun sessionStateChanged(state: LoggerSessionState) {
                 gaugeAlerts.sessionChanged(state)
                 if (state == LoggerSessionState.CONNECTING || state == LoggerSessionState.RECONNECTING) {
+                    gaugeReceivedAt.clear()
                     pendingSamples.clear()
                     onUiThread { samples = emptyMap(); history = emptyMap() }
                 }
@@ -224,12 +231,14 @@ internal fun LoggerWorkspace(
             }
 
             override fun sampleUpdated(sample: LiveDataSample) {
+                gaugeReceivedAt[sample.parameterId] = System.nanoTime()
                 gaugeAlerts.update(sample, context.preferences.getGaugeConfiguration(
                     sample.parameterId, sample.conversionIdentity))
                 pendingSamples.add(sample)
             }
 
             override fun parameterRemoved(parameterId: String) {
+                gaugeReceivedAt.remove(parameterId)
                 gaugeAlerts.remove(parameterId)
                 onUiThread {
                     pendingSamples.removeIf {
@@ -262,6 +271,9 @@ internal fun LoggerWorkspace(
                 .onPreviewKeyEvent { event ->
                     if (event.type != KeyEventType.KeyDown) {
                         false
+                    } else if (gaugesOnly) {
+                        if (event.key == Key.Escape) gaugesOnly = false
+                        true
                     } else if (event.isCtrlPressed) {
                         val next = workspaceForShortcut(event.key)
                         when {
@@ -286,6 +298,16 @@ internal fun LoggerWorkspace(
             color = colors.background
         ) {
             Column(Modifier.fillMaxSize()) {
+              if (gaugesOnly) {
+                Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Button(onClick = { gaugesOnly = false }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Exit gauges") }
+                    Text(sessionState.displayName, modifier = Modifier.weight(1f).padding(horizontal = 16.dp))
+                    Button(onClick = { context.session.stopRecording() }, enabled = sessionState == LoggerSessionState.RECORDING,
+                        modifier = Modifier.heightIn(min = 48.dp)) { Text("Stop recording") }
+                }
+                MountedInstruments(channels, samples, history, gaugeTheme, sessionState,
+                    gaugeReceivedAt, gaugeNow, context.preferences, gaugeAlerts)
+              } else {
                 if (!context.hasHostSessionControls()) {
                     SessionBar(
                         state = sessionState,
@@ -361,7 +383,7 @@ internal fun LoggerWorkspace(
                                 activeView, channels, samples, history,
                                 graphPaused, pausedHistory, gaugeTheme,
                                 gaugeLayout,
-                                allowGaugeThemes = !steamOs,
+                                allowGaugeThemes = true,
                                 onGaugeTheme = {
                                     gaugeTheme = it
                                     context.preferences.setGaugeTheme(it)
@@ -414,7 +436,7 @@ internal fun LoggerWorkspace(
                                 activeView, channels, samples, history,
                                 graphPaused, pausedHistory, gaugeTheme,
                                 gaugeLayout,
-                                allowGaugeThemes = !steamOs,
+                                allowGaugeThemes = true,
                                 onGaugeTheme = {
                                     gaugeTheme = it
                                     context.preferences.setGaugeTheme(it)
@@ -437,9 +459,61 @@ internal fun LoggerWorkspace(
                         }
                     }
                 }
-                WorkspaceNavigation(activeView) {
-                    activeView = it
-                    context.preferences.setView(it)
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Button(onClick = { gaugesOnly = true }, modifier = Modifier.padding(8.dp).heightIn(min = 48.dp)) { Text("Gauges only") }
+                    Box(Modifier.weight(1f)) {
+                        WorkspaceNavigation(activeView) {
+                            activeView = it
+                            context.preferences.setView(it)
+                        }
+                    }
+                }
+              }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MountedInstruments(
+    channels: List<LoggerChannel>, samples: Map<String, LiveDataSample>,
+    history: Map<String, List<LiveDataSample>>, theme: LoggerGaugeTheme,
+    state: LoggerSessionState, receivedAt: Map<String, Long>, now: Long,
+    preferences: LoggerWorkspacePreferences, alerts: LoggerGaugeAlertTracker
+) {
+    val selected = channels.filter { it.isSelected }.take(8)
+    if (selected.isEmpty()) Text("Select channels in the logger while parked. This view never starts a connection.", Modifier.padding(24.dp))
+    LazyVerticalGrid(columns = GridCells.Adaptive(240.dp), modifier = Modifier.fillMaxSize().padding(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        gridItems(selected, key = { it.parameterId }) { channel ->
+            val sample = samples[channel.parameterId]?.takeIf { it.conversionIdentity == channel.conversionIdentity }
+            val values = history[channel.parameterId].orEmpty().filter { it.conversionIdentity == channel.conversionIdentity }
+                .map { it.rawValue }.filter { it.isFinite() }
+            val scale = GaugeReferenceScale.forChannel(channel.parameterId, channel.name, channel.units,
+                values.minOrNull() ?: Double.NaN, values.maxOrNull() ?: Double.NaN)
+            val config = preferences.getGaugeConfiguration(channel.parameterId, channel.conversionIdentity)
+            val custom = config?.hasCustomScale() == true
+            val range = GaugeRange(if (custom) config.scaleMinimum else scale.minimum,
+                if (custom) config.scaleMaximum else scale.maximum)
+            val fresh = receivedAt[channel.parameterId]?.let { now - it < 3_000_000_000L } == true
+            val status = if (!state.isLive) "STOPPED" else if (!fresh) "NO RECENT DATA"
+                else if (sample?.rawValue?.isFinite() != true) "NO VALID DATA" else "LIVE"
+            val raw = if (state.isLive && fresh) sample?.rawValue ?: Double.NaN else Double.NaN
+            val warning = alerts.state(channel.parameterId, config)
+            val reading = GaugeFaceRenderer.Reading(channel.name, sample?.displayValue ?: "—", channel.units,
+                raw, range.minimum, range.maximum, values.maxOrNull() ?: Double.NaN, status,
+                if (custom) "CUSTOM SCALE" else if (scale.reference) "REFERENCE SCALE" else "RECENT SCALE",
+                raw.isFinite() && (warning == LoggerGaugeConfiguration.AlertState.HIGH || warning == LoggerGaugeConfiguration.AlertState.LOW))
+            val instrument = runCatching { GaugeFaceRenderer.Style.valueOf(theme.name) }.getOrNull()
+            Column(Modifier.fillMaxWidth().aspectRatio(320f / 250f).semantics {
+                contentDescription = "${channel.name}, ${if (raw.isFinite()) reading.display else "no valid data"}, $status"
+            }) {
+                if (instrument != null) InstrumentGauge(instrument, reading, Modifier.fillMaxSize())
+                else {
+                    Text(channel.name, Modifier.padding(8.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    GaugeTileBody(gaugeProgress(raw, range), gaugeStyle(theme), if (raw.isFinite()) reading.display else "—",
+                        false, channel, range, reading.scaleLabel)
+                    Text(status, Modifier.padding(8.dp), fontSize = 11.sp)
                 }
             }
         }
@@ -1740,7 +1814,18 @@ private fun LiveGaugeCard(
             }
         }
         when (tile.role) {
-            LoggerDashboardTileRole.GAUGE -> GaugeTileBody(
+            LoggerDashboardTileRole.GAUGE -> if (gaugeTheme in listOf(LoggerGaugeTheme.RALLY_PRECISION,
+                    LoggerGaugeTheme.CIRCUIT_STACK, LoggerGaugeTheme.RETRO_VFD,
+                    LoggerGaugeTheme.CLUB_SPORT, LoggerGaugeTheme.SWEEP_RIBBON,
+                    LoggerGaugeTheme.TWIN_ARC, LoggerGaugeTheme.AMBER_MATRIX,
+                    LoggerGaugeTheme.VECTOR_HUD, LoggerGaugeTheme.TURBO_POD)) {
+                InstrumentGauge(GaugeFaceRenderer.Style.valueOf(gaugeTheme.name),
+                    GaugeFaceRenderer.Reading(channel.name, displayedValue ?: "—", channel.units,
+                        displayedRaw ?: Double.NaN, range.minimum, range.maximum,
+                        stats?.maximum ?: Double.NaN, if (displayedRaw?.isFinite() != true) "NO VALID DATA" else if (showPeak) "MEASURED PEAK" else "CURRENT SAMPLE",
+                        if (configuration?.hasCustomScale() == true) "CUSTOM SCALE" else if (standardRange != null) "REFERENCE SCALE" else "RECENT SCALE",
+                        alerting), Modifier.fillMaxWidth().weight(1f))
+            } else GaugeTileBody(
                 progress, style, displayedValue, showPeak, channel, range,
                 when {
                     configuration?.hasCustomScale() == true -> "CUSTOM SCALE"
@@ -2235,6 +2320,15 @@ private data class GaugeStyle(
 )
 
 private fun gaugeStyle(theme: LoggerGaugeTheme): GaugeStyle = when (theme) {
+    LoggerGaugeTheme.RALLY_PRECISION -> gaugeStyle(LoggerGaugeTheme.RALLY_HERITAGE)
+    LoggerGaugeTheme.CIRCUIT_STACK -> gaugeStyle(LoggerGaugeTheme.CENTRAL_TACH)
+    LoggerGaugeTheme.RETRO_VFD -> gaugeStyle(LoggerGaugeTheme.AMBER_GT)
+    LoggerGaugeTheme.CLUB_SPORT -> gaugeStyle(LoggerGaugeTheme.CENTRAL_TACH)
+    LoggerGaugeTheme.SWEEP_RIBBON -> gaugeStyle(LoggerGaugeTheme.RALLY_HERITAGE)
+    LoggerGaugeTheme.TWIN_ARC -> gaugeStyle(LoggerGaugeTheme.NEON_CIRCUIT)
+    LoggerGaugeTheme.AMBER_MATRIX -> gaugeStyle(LoggerGaugeTheme.AMBER_GT)
+    LoggerGaugeTheme.VECTOR_HUD -> gaugeStyle(LoggerGaugeTheme.NEON_CIRCUIT)
+    LoggerGaugeTheme.TURBO_POD -> gaugeStyle(LoggerGaugeTheme.AMBER_GT)
     LoggerGaugeTheme.RR2_CLASSIC -> GaugeStyle(
         Color(0xFF151C24), Color(0xFF2D3945), brandRed,
         Color(0xFF718397), Color(0xFFD92632), Color.White,

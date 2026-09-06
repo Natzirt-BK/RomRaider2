@@ -51,6 +51,9 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
             startActivitySync(intent);
             awaitImports();
             if (phase.equals("seed")) seed();
+            else if (phase.equals("gauges")) verifyGaugesOnly();
+            else if (phase.equals("live-gauges")) verifyReadOnlySessionViewSwitch();
+            else if (phase.equals("gauge-gallery")) captureGaugeGallery();
             else if (phase.equals("verify")) verify(2);
             else if (phase.equals("clear")) {
                 verify(2);
@@ -308,15 +311,151 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
                     android.graphics.Bitmap.Config.ARGB_8888);
             try {
                 MobileGaugeSnapshot snapshot = new MobileGaugeSnapshot("fixture", "Fixture", "V", "0.0", 12);
-                for (double value : new double[] {Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY, 0}) {
+                for (MobileGaugeTheme theme : MobileGaugeTheme.values()) {
+                  gauge.setTheme(theme);
+                  for (double value : new double[] {Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY, 0}) {
                     snapshot.accept(value);
                     gauge.setValue(snapshot.id, snapshot.name, snapshot.displayValue(), snapshot.units,
                             snapshot.value, snapshot.minimum, snapshot.maximum);
                     gauge.draw(new android.graphics.Canvas(bitmap));
                     check(gauge.getContentDescription().toString().contains("no valid data") == !Double.isFinite(value),
                             "Gauge accessibility did not reflect missing/recovered data");
+                  }
                 }
             } finally { bitmap.recycle(); }
+        });
+    }
+    private void verifyGaugesOnly() throws Exception {
+        verifyMissingGaugeReading();
+        verifySelection(2);
+        invoke("toggleLoggerPreview", new Class<?>[0]);
+        long deadline = SystemClock.uptimeMillis() + 5000;
+        while ((Integer) field("previewCycle") < 2 && SystemClock.uptimeMillis() < deadline) SystemClock.sleep(50);
+        check((Boolean) field("previewRunning"), "Synthetic session did not start");
+        Object session = field("previewSession");
+        Object grid = field("loggerGaugeGrid");
+        int cycle = (Integer) field("previewCycle");
+        for (MobileGaugeTheme theme : MobileGaugeTheme.values()) {
+            invoke("setLoggerGaugeTheme", new Class<?>[] {MobileGaugeTheme.class}, theme);
+            invoke("showGaugesOnly", new Class<?>[0]);
+            check((Boolean) field("gaugesVisible"), "Gauges view is not visible");
+            check(field("previewSession") == session && field("loggerGaugeGrid") == grid
+                    && (Boolean) field("previewRunning"), "Gauges view replaced/stopped the session");
+            invoke("leaveGaugesOnly", new Class<?>[0]);
+            check(field("previewSession") == session && field("loggerGaugeGrid") == grid,
+                    "Returning to LOGGER replaced session or gauges");
+        }
+        deadline = SystemClock.uptimeMillis() + 5000;
+        while ((Integer) field("previewCycle") <= cycle && SystemClock.uptimeMillis() < deadline) SystemClock.sleep(50);
+        check((Integer) field("previewCycle") > cycle, "Recording stopped advancing across view switches");
+        invoke("stopLoggerPreview", new Class<?>[] {String.class}, (Object) null);
+        invoke("refreshGaugeAvailability", new Class<?>[0]);
+        runOnMainSync(() -> {
+            java.util.Map<?, ?> gauges = (java.util.Map<?, ?>) fieldUnchecked("loggerGaugeViews");
+            for (Object gauge : gauges.values()) check(((MobileGaugeView) gauge).getContentDescription()
+                    .toString().contains("STOPPED"), "Stopped gauge still appears live");
+        });
+        invoke("showLoggerGaugeDemo", new Class<?>[0]);
+        invoke("setLoggerGaugeTheme", new Class<?>[] {MobileGaugeTheme.class}, MobileGaugeTheme.RALLY_PRECISION);
+        invoke("showGaugesOnly", new Class<?>[0]);
+        System.out.println("PASS: all themes preserve the same simulated session and gauge instances across view switches.");
+    }
+    private void captureGaugeGallery() throws Exception {
+        invoke("showLoggerGaugeDemo", new Class<?>[0]);
+        invoke("showGaugesOnly", new Class<?>[0]);
+        File directory = new File(getTargetContext().getExternalFilesDir(null), "gauge-gallery");
+        check(directory.isDirectory() || directory.mkdirs(), "Cannot create render directory");
+        for (MobileGaugeTheme theme : MobileGaugeTheme.values()) {
+            if (theme.instrumentStyle() == null) continue;
+            invoke("setLoggerGaugeTheme", new Class<?>[] {MobileGaugeTheme.class}, theme);
+            waitForIdleSync();
+            SystemClock.sleep(250); // Allow a native layout/draw frame before screen capture.
+            AccessibilityNodeInfo active = getUiAutomation().getRootInActiveWindow();
+            long deadline = SystemClock.uptimeMillis() + 5000;
+            while ((active == null || !getTargetContext().getPackageName().contentEquals(active.getPackageName()))
+                    && SystemClock.uptimeMillis() < deadline) {
+                SystemClock.sleep(50);
+                active = getUiAutomation().getRootInActiveWindow();
+            }
+            check(active != null && getTargetContext().getPackageName().contentEquals(active.getPackageName()),
+                    "Gauge render is obstructed by another window: " + (active == null ? "none" : active.getPackageName()));
+            android.graphics.Bitmap bitmap = getUiAutomation().takeScreenshot();
+            check(bitmap != null, "Native screenshot failed");
+            try (OutputStream file = new FileOutputStream(new File(directory, theme.name() + ".png"))) {
+                check(bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, file), "PNG encoding failed");
+            } finally { bitmap.recycle(); }
+        }
+    }
+    private void verifyReadOnlySessionViewSwitch() throws Exception {
+        verifySelection(2);
+        File spool = File.createTempFile("synthetic-gauge-session-", ".csv.part", getTargetContext().getCacheDir());
+        com.romraider.portable.PortableLogSession log = com.romraider.portable.PortableLogSession.streaming(spool, 20);
+        java.util.concurrent.atomic.AtomicInteger identifies = new java.util.concurrent.atomic.AtomicInteger();
+        java.util.concurrent.atomic.AtomicInteger closes = new java.util.concurrent.atomic.AtomicInteger();
+        com.romraider.portable.logger.ReadOnlyLoggerTransport transport = new com.romraider.portable.logger.ReadOnlyLoggerTransport() {
+            public String identifyEcu(com.romraider.portable.logger.PortableLoggerProtocol protocol) {
+                identifies.incrementAndGet(); return "SYNTHETIC";
+            }
+            public byte[] read(com.romraider.portable.logger.PortableLoggerQueryBatch batch) {
+                SystemClock.sleep(25);
+                byte[] result = new byte[batch.getAddresses().length];
+                java.util.Arrays.fill(result, (byte) 120); return result;
+            }
+            public void closeReadOnlyKLine() { closes.incrementAndGet(); }
+        };
+        com.romraider.mobile.logger.ReadOnlyLoggerSession session = new com.romraider.mobile.logger.ReadOnlyLoggerSession(
+                transport, (PortableLoggerDefinition) field("loggerDefinition"),
+                (PortableLoggerProfile) field("loggerProfile"), log,
+                new com.romraider.mobile.logger.ReadOnlyLoggerSession.Listener() {
+                    public void onIdentified(String id, int ready, int unavailable) {
+                        setField("liveEcuIdentified", true);
+                    }
+                    public void onValues(String id, long timestamp,
+                            java.util.List<com.romraider.portable.logger.PortableLoggerValue> values, int samples) {
+                        invoke("updateLoggerGauges", new Class<?>[] {java.util.List.class}, values);
+                    }
+                    public void onStopped(String message) { setField("liveLogger", null); }
+                });
+        invoke("clearLoggerGauges", new Class<?>[0]);
+        setField("liveLogger", session); setField("liveLog", log);
+        Thread worker = new Thread(session::run, "synthetic-read-only-gauge-test");
+        worker.start();
+        try {
+            long deadline = SystemClock.uptimeMillis() + 5000;
+            while (log.size() < 4 && SystemClock.uptimeMillis() < deadline) SystemClock.sleep(30);
+            check(log.size() >= 4 && identifies.get() == 1, "Read-only synthetic logger did not begin");
+            int before = log.size();
+            long bytes = spool.length();
+            Object grid = field("loggerGaugeGrid");
+            for (MobileGaugeTheme theme : MobileGaugeTheme.values()) {
+                invoke("setLoggerGaugeTheme", new Class<?>[] {MobileGaugeTheme.class}, theme);
+                invoke("showGaugesOnly", new Class<?>[0]);
+                check(field("liveLogger") == session && field("liveLog") == log && field("loggerGaugeGrid") == grid,
+                        "Mounted view replaced the running read-only session, writer or gauges");
+                invoke("leaveGaugesOnly", new Class<?>[0]);
+                check(closes.get() == 0 && identifies.get() == 1, "View switching disconnected/reidentified the ECU");
+            }
+            deadline = SystemClock.uptimeMillis() + 5000;
+            while (log.size() <= before && SystemClock.uptimeMillis() < deadline) SystemClock.sleep(30);
+            check(log.size() > before && spool.length() > bytes, "CSV spool stopped growing during view switches");
+        } finally {
+            session.stop(); worker.join(5000);
+            check(!worker.isAlive(), "Synthetic logger failed to stop");
+            setField("liveLogger", null); setField("liveLog", null);
+            try {
+                StringWriter csv = new StringWriter(); log.writeRomRaiderCsv(csv);
+                check(csv.toString().startsWith("Time (msec),"), "Recording no longer exports standard RomRaider CSV");
+                check(closes.get() == 1, "Transport was not closed exactly once");
+            } finally { log.discard(); }
+        }
+        System.out.println("PASS: actual read-only session and disk-backed CSV writer survive every theme/view switch with a fake transport.");
+    }
+    private void setField(String name, Object value) {
+        runOnMainSync(() -> {
+            try {
+                Field field = MainActivity.class.getDeclaredField(name);
+                field.setAccessible(true); field.set(activity, value);
+            } catch (ReflectiveOperationException ex) { throw new AssertionError(ex); }
         });
     }
     private Object field(String name) throws Exception {

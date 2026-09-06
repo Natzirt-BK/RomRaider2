@@ -592,7 +592,7 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
                         || applicationTheme == ThemeMode.HIGH_CONTRAST);
         workspacePreferences = new LoggerWorkspacePreferences(
                 getSettings().getLoggerWorkspaceView(), darkWorkspace,
-                RuntimeUiProfile.isSteamOs() ? LoggerGaugeTheme.HANDHELD
+                RuntimeUiProfile.isSteamOs() && getSettings().getLoggerGaugeTheme() == LoggerGaugeTheme.RR2_CLASSIC ? LoggerGaugeTheme.HANDHELD
                         : getSettings().getLoggerGaugeTheme(),
                 (view, dark) -> {
                     getSettings().setLoggerWorkspaceView(view);

@@ -9,6 +9,7 @@ import android.graphics.RectF;
 import android.view.View;
 
 import java.util.Locale;
+import com.romraider.portable.gauge.GaugeFaceRenderer;
 
 /** Glanceable hybrid number/needle gauge for the Android logger preview. */
 final class MobileGaugeView extends View {
@@ -25,6 +26,22 @@ final class MobileGaugeView extends View {
     private double measuredMaximum = Double.NaN;
     private MobileGaugeScale scale = new MobileGaugeScale(0, 1);
     private MobileGaugeTheme theme = MobileGaugeTheme.RR2_CLASSIC;
+    private String dataState = "";
+
+    void setDataState(String state) {
+        dataState = state == null ? "" : state;
+        setContentDescription(name + ", " + (Double.isFinite(value)
+                ? displayValue + " " + units : "no valid data") + ", " + dataState);
+        invalidate();
+    }
+
+    void markUnavailable(String state) {
+        value = Double.NaN;
+        displayValue = "—";
+        dataState = state;
+        setContentDescription(name + ", " + state + ", no current value");
+        invalidate();
+    }
 
     MobileGaugeView(Context context) {
         super(context);
@@ -34,6 +51,7 @@ final class MobileGaugeView extends View {
 
     void setTheme(MobileGaugeTheme next) {
         theme = next == null ? MobileGaugeTheme.RR2_CLASSIC : next;
+        requestLayout();
         invalidate();
     }
 
@@ -55,7 +73,8 @@ final class MobileGaugeView extends View {
 
     @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
-        int desired = dp(205);
+        int desired = theme.instrumentStyle() == null ? dp(205)
+                : Math.max(dp(130), Math.round(MeasureSpec.getSize(widthMeasureSpec) * 250f / 320f));
         int height = resolveSize(desired, heightMeasureSpec);
         setMeasuredDimension(MeasureSpec.getSize(widthMeasureSpec), height);
     }
@@ -66,6 +85,18 @@ final class MobileGaugeView extends View {
         float density = getResources().getDisplayMetrics().density;
         float width = getWidth();
         float height = getHeight();
+        if (theme.instrumentStyle() != null) {
+            canvas.save();
+            float factor = Math.min(width / 320f, height / 250f);
+            canvas.translate((width - 320 * factor) / 2, (height - 250 * factor) / 2);
+            canvas.scale(factor, factor);
+            GaugeFaceRenderer.draw(new NativeSurface(canvas), theme.instrumentStyle(),
+                    new GaugeFaceRenderer.Reading(name, displayValue, units, value,
+                            scale.minimum, scale.maximum, measuredMaximum, dataState,
+                            scale.reference ? "REFERENCE SCALE" : "RECENT SCALE", false));
+            canvas.restore();
+            return;
+        }
         float corner = 10 * density;
         paint.setStyle(Paint.Style.FILL);
         paint.setColor(0xFF182129);
@@ -170,7 +201,7 @@ final class MobileGaugeView extends View {
         paint.setTextAlign(Paint.Align.CENTER);
         paint.setTextSize(8 * density);
         paint.setColor(0xFF687886);
-        canvas.drawText("FIXED SCALE  " + compact(scale.minimum) + "–"
+        canvas.drawText(dataState + "  •  " + compact(scale.minimum) + "–"
                 + compact(scale.maximum), centerX, height - 11 * density, paint);
         paint.setTextAlign(Paint.Align.LEFT);
     }
@@ -195,5 +226,36 @@ final class MobileGaugeView extends View {
 
     private int dp(int value) {
         return Math.round(value * getResources().getDisplayMetrics().density);
+    }
+
+    private final class NativeSurface implements GaugeFaceRenderer.Surface {
+        private final Canvas canvas;
+        NativeSurface(Canvas canvas) { this.canvas = canvas; }
+        private void ink(int color) {
+            paint.clearShadowLayer(); paint.setColor(color); paint.setStyle(Paint.Style.FILL);
+        }
+        public void rect(double x, double y, double w, double h, double radius, int color) {
+            ink(color); canvas.drawRoundRect((float)x, (float)y, (float)(x+w), (float)(y+h), (float)radius, (float)radius, paint);
+        }
+        public void circle(double x, double y, double radius, int color) {
+            ink(color); canvas.drawCircle((float)x, (float)y, (float)radius, paint);
+        }
+        public void line(double x1, double y1, double x2, double y2, double width, int color) {
+            ink(color); paint.setStrokeWidth((float)width); paint.setStrokeCap(Paint.Cap.BUTT);
+            canvas.drawLine((float)x1, (float)y1, (float)x2, (float)y2, paint);
+        }
+        public void text(String value, double x, double y, double size, int color, int align, double maxWidth, boolean mono) {
+            ink(color); paint.setTypeface(mono ? labelTypeface : android.graphics.Typeface.DEFAULT_BOLD);
+            paint.setTextAlign(align < 0 ? Paint.Align.LEFT : align > 0 ? Paint.Align.RIGHT : Paint.Align.CENTER);
+            paint.setTextSize((float)size);
+            if (paint.measureText(value) > maxWidth) {
+                paint.setTextSize((float)Math.max(size * .65, size * maxWidth / paint.measureText(value)));
+                while (value.length() > 1 && paint.measureText(value) > maxWidth) {
+                    value = value.substring(0, value.length() - 2) + "…";
+                }
+            }
+            canvas.drawText(value, (float)x, (float)y, paint);
+            paint.setTextAlign(Paint.Align.LEFT);
+        }
     }
 }

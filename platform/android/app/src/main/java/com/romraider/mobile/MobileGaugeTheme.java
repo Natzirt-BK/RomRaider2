@@ -16,7 +16,19 @@ enum MobileGaugeTheme {
     CENTRAL_TACH("Central Tach", 0xFFF2EEE3, 0xFFD71920, 0xFF252525,
             0xFF171717, false, false),
     NEON_CIRCUIT("Neon Circuit", 0xFF06131D, 0xFF22E8FF, 0xFF8A2BE2,
-            0xFF9AF5FF, true, false);
+            0xFF9AF5FF, true, false),
+    RALLY_PRECISION("Rally Precision", 0xFF0D1319, 0xFFFF4F58, 0xFF78858E,
+            Color.WHITE, false, false),
+    CIRCUIT_STACK("Circuit Stack", 0xFF10171D, 0xFFFFC56B, 0xFF37434B,
+            Color.WHITE, false, false),
+    RETRO_VFD("Retro VFD", 0xFF071510, 0xFF77F7BF, 0xFF204333,
+            0xFF77F7BF, false, true),
+    CLUB_SPORT("Club Sport", 0xFFF4F1E6, 0xFFCB2336, 0xFF446477, 0xFF182532, false, false),
+    SWEEP_RIBBON("Sweep Ribbon", 0xFF10171D, 0xFFFF4F58, 0xFF33404B, Color.WHITE, false, false),
+    TWIN_ARC("Twin Arc", 0xFF10171D, 0xFF7CDFFF, 0xFFC4ACFF, Color.WHITE, false, false),
+    AMBER_MATRIX("Amber Matrix", 0xFF211A0B, 0xFFFFC56B, 0xFF49391B, Color.WHITE, false, false),
+    VECTOR_HUD("Vector HUD", 0xFF10171D, 0xFF7CDFFF, 0xFF436170, Color.WHITE, false, false),
+    TURBO_POD("Turbo Pod", 0xFF080E14, 0xFFFF8C61, 0xFF8495A4, Color.WHITE, false, false);
 
     final String displayName;
     final int face;
@@ -44,5 +56,10 @@ enum MobileGaugeTheme {
         } catch (IllegalArgumentException exception) {
             return RR2_CLASSIC;
         }
+    }
+
+    com.romraider.portable.gauge.GaugeFaceRenderer.Style instrumentStyle() {
+        try { return com.romraider.portable.gauge.GaugeFaceRenderer.Style.valueOf(name()); }
+        catch (IllegalArgumentException exception) { return null; }
     }
 }

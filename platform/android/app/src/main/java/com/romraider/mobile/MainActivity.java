@@ -33,6 +33,7 @@ import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.GridLayout;
+import android.widget.FrameLayout;
 import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -113,6 +114,24 @@ public final class MainActivity extends Activity {
     private LinearLayout content;
     private Button loggerTab;
     private Button editorTab;
+    private Button gaugesTab;
+    private ScrollView workspaceScroll;
+    private LinearLayout workspaceBrand;
+    private TextView workspaceFooter;
+    private LinearLayout gaugesPage;
+    private TextView gaugesStatus;
+    private ViewGroup gaugeGridHome;
+    private int gaugeGridHomeIndex;
+    private boolean gaugesVisible;
+    private boolean gaugeDemo;
+    private boolean liveEcuIdentified;
+    private final Map<String, Long> gaugeReceivedAt = new LinkedHashMap<>();
+    private final Runnable gaugeMonitor = new Runnable() {
+        @Override public void run() {
+            refreshGaugeAvailability();
+            previewHandler.postDelayed(this, 1000);
+        }
+    };
     private PortableRomDocument rom;
     private TextView romSummary;
     private TextView hexPreview;
@@ -254,6 +273,8 @@ public final class MainActivity extends Activity {
         super.onResume();
         closeMissingOpenPort();
         refreshUsbStatus();
+        previewHandler.removeCallbacks(gaugeMonitor);
+        previewHandler.post(gaugeMonitor);
     }
 
     @Override
@@ -275,6 +296,7 @@ public final class MainActivity extends Activity {
 
     @Override
     protected void onStop() {
+        previewHandler.removeCallbacks(gaugeMonitor);
         stopLoggerPreview(null);
         stopLiveLogger("Live logging stopped when RomRaider2 left the foreground.");
         scheduleWorkspaceRecovery();
@@ -285,8 +307,20 @@ public final class MainActivity extends Activity {
         LinearLayout page = column();
         page.setPadding(dp(20), dp(18), dp(20), dp(12));
         page.setBackgroundColor(BACKGROUND);
+        if (Build.VERSION.SDK_INT >= 30) {
+            getWindow().setDecorFitsSystemWindows(false);
+            page.setOnApplyWindowInsetsListener((view, insets) -> {
+                android.graphics.Insets bars = insets.getInsets(
+                        android.view.WindowInsets.Type.systemBars()
+                                | android.view.WindowInsets.Type.displayCutout());
+                view.setPadding(dp(20) + bars.left, dp(18) + bars.top,
+                        dp(20) + bars.right, dp(12) + bars.bottom);
+                return insets;
+            });
+        }
 
         LinearLayout brand = new LinearLayout(this);
+        workspaceBrand = brand;
         brand.setOrientation(LinearLayout.HORIZONTAL);
         brand.setGravity(Gravity.CENTER_VERTICAL);
         TextView mark = text("RR2", 14, Color.WHITE);
@@ -317,19 +351,32 @@ public final class MainActivity extends Activity {
         tabs.setPadding(0, 0, 0, dp(12));
         loggerTab = button("LOGGER");
         editorTab = button("EDITOR");
-        loggerTab.setOnClickListener(view -> showLogger());
+        gaugesTab = button("GAUGES");
+        loggerTab.setOnClickListener(view -> {
+            if (gaugesVisible) leaveGaugesOnly();
+            else if (!loggerVisible) showLogger();
+        });
         editorTab.setOnClickListener(view -> showEditor());
+        gaugesTab.setOnClickListener(view -> showGaugesOnly());
         tabs.addView(loggerTab, weighted());
+        tabs.addView(gaugesTab, weighted());
         tabs.addView(editorTab, weighted());
         page.addView(tabs, matchWrap());
 
         ScrollView scroll = new ScrollView(this);
+        workspaceScroll = scroll;
         content = column();
         scroll.addView(content, matchWrap());
-        page.addView(scroll, new LinearLayout.LayoutParams(
+        FrameLayout host = new FrameLayout(this);
+        host.addView(scroll);
+        gaugesPage = column();
+        gaugesPage.setVisibility(View.GONE);
+        host.addView(gaugesPage);
+        page.addView(host, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
         TextView footer = text("ECU writing is unavailable in this version.",
                 11, MUTED);
+        workspaceFooter = footer;
         footer.setGravity(Gravity.CENTER);
         footer.setPadding(0, dp(9), 0, 0);
         page.addView(footer, matchWrap());
@@ -337,6 +384,7 @@ public final class MainActivity extends Activity {
     }
 
     private void showLogger() {
+        if (gaugesVisible) leaveGaugesOnly();
         stopLoggerPreview(null);
         stopLiveLogger(null);
         loggerVisible = true;
@@ -350,6 +398,8 @@ public final class MainActivity extends Activity {
         loggerGaugeEmpty = null;
         loggerGaugeViews.clear();
         loggerGaugeSnapshots.clear();
+        gaugeReceivedAt.clear();
+        gaugeDemo = false;
         loggerGaugeThemeButtons.clear();
         selectTab(loggerTab, editorTab);
         content.removeAllViews();
@@ -670,6 +720,11 @@ public final class MainActivity extends Activity {
     }
 
     private void showEditor() {
+        if (liveLogger != null || previewRunning) {
+            notice("Stop logging before opening the editor. LOGGER and GAUGES remain available.");
+            return;
+        }
+        if (gaugesVisible) leaveGaugesOnly();
         stopLoggerPreview(null);
         stopLiveLogger(null);
         loggerVisible = false;
@@ -1510,6 +1565,7 @@ public final class MainActivity extends Activity {
                             int unavailable) {
                         runOnUiThread(() -> {
                             if (isDestroyed() || generation != liveSessionGeneration) return;
+                            liveEcuIdentified = true;
                             if (liveLoggerView != null) {
                                 liveLoggerView.setText(getString(
                                         R.string.logger_live_identified,
@@ -1539,6 +1595,7 @@ public final class MainActivity extends Activity {
                     public void onStopped(String message) {
                         runOnUiThread(() -> {
                             if (isDestroyed() || generation != liveSessionGeneration) return;
+                            liveEcuIdentified = false;
                             liveLog = recording;
                             liveLogger = null;
                             getWindow().clearFlags(
@@ -1670,6 +1727,8 @@ public final class MainActivity extends Activity {
         loggerGaugeGrid.setColumnCount(2);
         loggerGaugeGrid.setAlignmentMode(GridLayout.ALIGN_MARGINS);
         loggerGaugeGrid.setUseDefaultMargins(false);
+        loggerGaugeGrid.addOnLayoutChangeListener((view, left, top, right, bottom,
+                oldLeft, oldTop, oldRight, oldBottom) -> layoutGaugeColumns());
         card.addView(loggerGaugeGrid, matchWrap());
         styleLoggerGaugeThemeButtons();
         return card;
@@ -1726,8 +1785,8 @@ public final class MainActivity extends Activity {
                 gauge.setTheme(loggerGaugeTheme);
                 int index = loggerGaugeViews.size();
                 GridLayout.LayoutParams params = new GridLayout.LayoutParams(
-                        GridLayout.spec(index / 2),
-                        GridLayout.spec(index % 2, 1f));
+                        GridLayout.spec(index / grid.getColumnCount()),
+                        GridLayout.spec(index % grid.getColumnCount(), 1f));
                 params.width = 0;
                 params.height = ViewGroup.LayoutParams.WRAP_CONTENT;
                 params.setMargins(dp(3), dp(3), dp(3), dp(3));
@@ -1737,6 +1796,8 @@ public final class MainActivity extends Activity {
         gauge.setValue(snapshot.id, snapshot.name,
                 snapshot.displayValue(), snapshot.units, snapshot.value,
                 snapshot.minimum, snapshot.maximum);
+        gaugeReceivedAt.put(id, SystemClock.elapsedRealtime());
+        gauge.setDataState(gaugeDemo || previewRunning ? "SIMULATED" : "LIVE");
         if (loggerGaugeEmpty != null && !loggerGaugeViews.isEmpty()) {
             loggerGaugeEmpty.setVisibility(View.GONE);
         }
@@ -1749,6 +1810,7 @@ public final class MainActivity extends Activity {
         }
         stopLoggerPreview(null);
         clearLoggerGauges();
+        gaugeDemo = true;
         demoGauge("P-RPM", "Engine Speed", "rpm", "0", 720, 6650, 4210);
         demoGauge("P-BOOST", "Boost Pressure", "psi", "0.0", -8.6, 18.4, 12.7);
         demoGauge("P-COOLANT", "Coolant Temperature", "°F", "0", 154, 207, 196);
@@ -1783,9 +1845,13 @@ public final class MainActivity extends Activity {
         if (loggerGaugeSnapshots.isEmpty()) {
             notice("There are no dashboard peaks to reset yet.");
         }
+        refreshGaugeAvailability();
     }
 
     private void clearLoggerGauges() {
+        gaugeDemo = false;
+        liveEcuIdentified = false;
+        gaugeReceivedAt.clear();
         loggerGaugeSnapshots.clear();
         loggerGaugeViews.clear();
         if (loggerGaugeGrid != null) loggerGaugeGrid.removeAllViews();
@@ -1956,10 +2022,96 @@ public final class MainActivity extends Activity {
     }
 
     private void selectTab(Button selected, Button other) {
-        selected.setTextColor(Color.WHITE);
-        selected.setBackground(rounded(ACCENT, ACCENT, 8));
-        other.setTextColor(MUTED);
-        other.setBackground(rounded(PANEL, BORDER, 8));
+        for (Button tab : new Button[] { loggerTab, gaugesTab, editorTab }) {
+            if (tab == null) continue;
+            tab.setTextColor(tab == selected ? Color.WHITE : MUTED);
+            tab.setBackground(rounded(tab == selected ? ACCENT : PANEL,
+                    tab == selected ? ACCENT : BORDER, 8));
+            tab.setSelected(tab == selected);
+            tab.setMinHeight(dp(48));
+        }
+    }
+
+    /** Changes only presentation: the logger, writer, and gauge instances survive. */
+    private void showGaugesOnly() {
+        if (gaugesVisible) return;
+        if (!loggerVisible) showLogger();
+        gaugeGridHome = (ViewGroup) loggerGaugeGrid.getParent();
+        gaugeGridHomeIndex = gaugeGridHome.indexOfChild(loggerGaugeGrid);
+        gaugeGridHome.removeView(loggerGaugeGrid);
+        gaugesPage.removeAllViews();
+        gaugesStatus = statusText("");
+        Button stop = button("STOP");
+        stop.setMinHeight(dp(48));
+        stop.setOnClickListener(view -> {
+            stopLoggerPreview(null);
+            stopLiveLogger("Stopped from gauges dashboard.");
+            gaugeDemo = false;
+            refreshGaugeAvailability();
+        });
+        LinearLayout status = new LinearLayout(this);
+        status.setGravity(Gravity.CENTER_VERTICAL);
+        status.addView(gaugesStatus, weighted());
+        status.addView(stop);
+        gaugesPage.addView(status, matchWrap());
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(loggerGaugeGrid, matchWrap());
+        gaugesPage.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1f));
+        gaugesVisible = true;
+        layoutGaugeColumns();
+        workspaceScroll.setVisibility(View.GONE);
+        workspaceBrand.setVisibility(View.GONE);
+        workspaceFooter.setVisibility(View.GONE);
+        gaugesPage.setVisibility(View.VISIBLE);
+        selectTab(gaugesTab, loggerTab);
+        refreshGaugeAvailability();
+    }
+
+    private void leaveGaugesOnly() {
+        if (!gaugesVisible) return;
+        ((ViewGroup) loggerGaugeGrid.getParent()).removeView(loggerGaugeGrid);
+        gaugeGridHome.addView(loggerGaugeGrid, gaugeGridHomeIndex, matchWrap());
+        gaugesVisible = false;
+        layoutGaugeColumns();
+        gaugesPage.setVisibility(View.GONE);
+        workspaceScroll.setVisibility(View.VISIBLE);
+        workspaceBrand.setVisibility(View.VISIBLE);
+        workspaceFooter.setVisibility(View.VISIBLE);
+        selectTab(loggerTab, gaugesTab);
+    }
+
+    private void refreshGaugeAvailability() {
+        String state = gaugeDemo || previewRunning ? "SIMULATED"
+                : liveLogger != null ? (liveEcuIdentified ? "LIVE • RECORDING" : "CONNECTING") : "STOPPED";
+        if (gaugesStatus != null) gaugesStatus.setText(state + (loggerGaugeViews.isEmpty()
+                ? "\nSelect channels in LOGGER while parked."
+                : "  •  " + loggerGaugeViews.size() + " gauges"));
+        long now = SystemClock.elapsedRealtime();
+        for (Map.Entry<String, MobileGaugeView> entry : loggerGaugeViews.entrySet()) {
+            if (gaugeDemo) entry.getValue().setDataState("SIMULATED");
+            else if (!previewRunning && liveLogger == null) entry.getValue().markUnavailable("STOPPED");
+            else if (now - gaugeReceivedAt.getOrDefault(entry.getKey(), 0L) > 3000)
+                entry.getValue().markUnavailable("NO RECENT DATA");
+        }
+    }
+
+    private void layoutGaugeColumns() {
+        if (loggerGaugeGrid == null) return;
+        int columns = gaugesVisible ? Math.max(1, Math.min(4,
+                loggerGaugeGrid.getWidth() / dp(220))) : 2;
+        if (loggerGaugeGrid.getColumnCount() == columns) return;
+        loggerGaugeGrid.removeAllViews();
+        loggerGaugeGrid.setColumnCount(columns);
+        int index = 0;
+        for (MobileGaugeView gauge : loggerGaugeViews.values()) {
+            GridLayout.LayoutParams params = new GridLayout.LayoutParams(
+                    GridLayout.spec(index / columns), GridLayout.spec(index % columns, 1f));
+            params.width = 0;
+            params.height = ViewGroup.LayoutParams.WRAP_CONTENT;
+            params.setMargins(dp(3), dp(3), dp(3), dp(3));
+            loggerGaugeGrid.addView(gauge, params);
+            index++;
+        }
     }
 
     private LinearLayout column() {

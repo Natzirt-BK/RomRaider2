@@ -673,7 +673,7 @@ public final class LoggerDesktopRuntime implements EcuRelatedMessageListener,
                         || applicationTheme == ThemeMode.HIGH_CONTRAST);
         return new LoggerWorkspacePreferences(
                 settings.getLoggerWorkspaceView(), dark,
-                RuntimeUiProfile.isSteamOs() ? LoggerGaugeTheme.HANDHELD
+                RuntimeUiProfile.isSteamOs() && settings.getLoggerGaugeTheme() == LoggerGaugeTheme.RR2_CLASSIC ? LoggerGaugeTheme.HANDHELD
                         : settings.getLoggerGaugeTheme(),
                 (view, nextDark) -> {
                     settings.setLoggerWorkspaceView(view);

@@ -22,6 +22,9 @@ import com.romraider.logger.api.LoggerDashboardTileRole;
 import com.romraider.logger.api.LoggerDashboardTileSize;
 import com.romraider.logger.api.LoggerGaugeConfiguration;
 import com.romraider.logger.api.LoggerGaugeAlertTracker;
+import com.romraider.logger.api.LoggerGaugeTheme;
+import com.romraider.portable.gauge.GaugeFaceRenderer;
+import com.romraider.portable.gauge.GaugeReferenceScale;
 import com.romraider.logger.api.LoggerLiveDataListener;
 import com.romraider.logger.api.LoggerMessageSnapshot;
 import com.romraider.logger.api.LoggerSessionState;
@@ -44,6 +47,7 @@ import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.control.Button;
 import javafx.scene.control.ColorPicker;
+import javafx.scene.control.ComboBox;
 import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
 import javafx.scene.control.Menu;
@@ -85,6 +89,13 @@ final class FxLoggerWindow {
     private final TableView<LiveDataSample> data = new TableView<>();
     private final LiveGraph graph = new LiveGraph();
     private final FlowPane dashboard = new FlowPane(12, 12);
+    private final FlowPane mountedGauges = new FlowPane(12, 12);
+    private final Label mountedStatus = new Label();
+    private final Map<String, Long> receivedAt = new LinkedHashMap<>();
+    private final javafx.animation.Timeline gaugeClock = new javafx.animation.Timeline(
+            new javafx.animation.KeyFrame(javafx.util.Duration.seconds(1), event -> refreshViews()));
+    private Node normalTop, normalBottom;
+    private boolean gaugesOnly;
     private final BorderPane analysis = new BorderPane();
     private FxDynoPane dyno;
     private FxFuelAnalysisPane mafAnalysis;
@@ -173,6 +184,7 @@ final class FxLoggerWindow {
                 synchronized (samples) {
                     gaugeAlerts.update(sample, configurationFor(sample));
                     samples.put(sample.getParameterId(), sample);
+                    receivedAt.put(sample.getParameterId(), System.nanoTime());
                 }
                 scheduleRefresh();
             }
@@ -180,6 +192,7 @@ final class FxLoggerWindow {
             @Override public void parameterRemoved(String parameterId) {
                 synchronized (samples) {
                     samples.remove(parameterId);
+                    receivedAt.remove(parameterId);
                     gaugeAlerts.remove(parameterId);
                 }
                 scheduleRefresh();
@@ -193,9 +206,13 @@ final class FxLoggerWindow {
         context.getLiveData().addListener(liveListener);
         ApplicationThemeService.getInstance().addListener(themeListener);
 
-        root.setTop(new VBox(menuBar(), header(), viewBar()));
+        normalTop = new VBox(menuBar(), header(), viewBar());
+        normalBottom = statusBar();
+        root.setTop(normalTop);
         root.setCenter(workspace());
-        root.setBottom(statusBar());
+        root.setBottom(normalBottom);
+        gaugeClock.setCycleCount(javafx.animation.Animation.INDEFINITE);
+        gaugeClock.play();
         Scene scene = new Scene(root, 1380, 860);
         FxTheme.apply(stage, scene);
         stage.setScene(scene);
@@ -233,6 +250,7 @@ final class FxLoggerWindow {
         ThemeMode active = SettingsManager.getSettings().getThemeMode();
         (active == ThemeMode.LIGHT ? light : dark).setSelected(true);
         Menu view = new Menu("View", null,
+                item("Gauges only", event -> setGaugesOnly(true)),
                 item("Toggle channels", event ->
                         setChannelsVisible(!channels.isSelected())),
                 new SeparatorMenuItem(), light, dark);
@@ -333,11 +351,13 @@ final class FxLoggerWindow {
                 fixedTab("Dyno", dynoWorkspace()),
                 fixedTab("Log Analysis", analysisWorkspace()),
                 fixedTab("MAF", mafAnalysis = new FxFuelAnalysisPane(FxFuelAnalysisPane.Mode.MAF, this::openLog)),
-                fixedTab("Injector", injectorAnalysis = new FxFuelAnalysisPane(FxFuelAnalysisPane.Mode.INJECTOR, this::openLog)));
+                fixedTab("Injector", injectorAnalysis = new FxFuelAnalysisPane(FxFuelAnalysisPane.Mode.INJECTOR, this::openLog)),
+                fixedTab("Gauges only", new StackPane()));
         views.getSelectionModel().select(tabFor(
                 context.getPreferences().getView()));
         views.getSelectionModel().selectedIndexProperty().addListener(
                 (value, oldIndex, newIndex) -> {
+                    if (newIndex.intValue() == 8) { setGaugesOnly(true); return; }
                     LoggerWorkspaceView selected = viewFor(newIndex.intValue());
                     if (selected != null) context.getPreferences().setView(selected);
                 });
@@ -350,6 +370,20 @@ final class FxLoggerWindow {
     }
 
     private Node dashboardWorkspace(Node cards) {
+        ComboBox<LoggerGaugeTheme> gaugeTheme = new ComboBox<>(FXCollections.observableArrayList(LoggerGaugeTheme.values()));
+        gaugeTheme.setConverter(new javafx.util.StringConverter<>() {
+            public String toString(LoggerGaugeTheme theme) { return theme == null ? "" : theme.getDisplayName(); }
+            public LoggerGaugeTheme fromString(String value) { return LoggerGaugeTheme.fromName(value); }
+        });
+        gaugeTheme.setValue(context.getPreferences().getGaugeTheme());
+        gaugeTheme.setAccessibleText("Gauge visual style");
+        gaugeTheme.setOnAction(event -> {
+            if (gaugeTheme.getValue() == null) return;
+            context.getPreferences().setGaugeTheme(gaugeTheme.getValue());
+            refreshViews();
+        });
+        Button mounted = new Button("Gauges only");
+        mounted.setOnAction(event -> setGaugesOnly(true));
         dashboardSelection.getStyleClass().add("muted");
         HBox selection = new HBox(6,
                 styled("SELECTED GAUGE", "section-kicker"),
@@ -366,7 +400,7 @@ final class FxLoggerWindow {
         selection.setAlignment(Pos.CENTER_LEFT);
         roles.setAlignment(Pos.CENTER_LEFT);
         sizes.setAlignment(Pos.CENTER_LEFT);
-        FlowPane styles = new FlowPane(12, 6, selection, roles, sizes);
+        FlowPane styles = new FlowPane(12, 6, gaugeTheme, mounted, selection, roles, sizes);
         styles.setAlignment(Pos.CENTER_LEFT);
         styles.setPadding(new Insets(8, 12, 8, 12));
         BorderPane pane = new BorderPane(cards);
@@ -469,6 +503,7 @@ final class FxLoggerWindow {
         if (disposed) return;
         viewHistory = context.getLiveData().getRecentSamples();
         List<LiveDataSample> selected = selectedSamples();
+        if (gaugesOnly) { refreshMountedGauges(selected); return; }
         channelsMetric.setText(selected.size() + " SELECTED");
         if (selectedDashboardParameter != null && selected.stream().noneMatch(
                 sample -> sample.getParameterId().equals(
@@ -535,6 +570,7 @@ final class FxLoggerWindow {
                 && !detached);
         resize.setManaged(resize.isVisible());
         HBox footer = new HBox(6, units, resize, fill, settings, color, detach);
+        footer.setVisible(!gaugesOnly); footer.setManaged(!gaugesOnly);
         footer.setAlignment(Pos.CENTER_LEFT);
         VBox card = new VBox(7, name, body, footer);
         card.setPadding(new Insets(13));
@@ -549,6 +585,7 @@ final class FxLoggerWindow {
         };
         double height = tile.getSize() == LoggerDashboardTileSize.LARGE
                 ? 270 : 225;
+        if (instrumentStyle() != null) height = Math.max(height, 275);
         double[] custom = customGaugeSizes.get(sample.getParameterId());
         if (custom == null && tile.hasCustomSize()) {
             custom = new double[] {tile.getCustomWidth(), tile.getCustomHeight()};
@@ -596,6 +633,8 @@ final class FxLoggerWindow {
     }
 
     private Node analogGauge(LiveDataSample sample, Color accent) {
+        GaugeFaceRenderer.Style style = instrumentStyle();
+        if (style != null) return instrument(sample, style);
         Canvas canvas = new Canvas(190, 125);
         GraphicsContext graphics = canvas.getGraphicsContext2D();
         graphics.setLineWidth(12);
@@ -613,6 +652,82 @@ final class FxLoggerWindow {
         StackPane gauge = new StackPane(canvas, value);
         gauge.setMinHeight(135);
         return gauge;
+    }
+
+    private GaugeFaceRenderer.Style instrumentStyle() {
+        try { return GaugeFaceRenderer.Style.valueOf(context.getPreferences().getGaugeTheme().name()); }
+        catch (IllegalArgumentException exception) { return null; }
+    }
+
+    private Node instrument(LiveDataSample sample, GaugeFaceRenderer.Style style) {
+        List<LiveDataSample> history = viewHistory.getOrDefault(sample.getParameterId(), List.of()).stream()
+                .filter(item -> item.getConversionIdentity().equals(sample.getConversionIdentity())).toList();
+        double low = history.stream().mapToDouble(LiveDataSample::getRawValue).filter(Double::isFinite).min().orElse(Double.NaN);
+        double high = history.stream().mapToDouble(LiveDataSample::getRawValue).filter(Double::isFinite).max().orElse(Double.NaN);
+        GaugeReferenceScale reference = GaugeReferenceScale.forChannel(sample.getParameterId(), sample.getName(), sample.getUnits(), low, high);
+        LoggerGaugeConfiguration config = configurationFor(sample);
+        boolean custom = config != null && config.hasCustomScale();
+        boolean live = context.getSession().getState().isLive();
+        boolean fresh;
+        synchronized (samples) { fresh = receivedAt.containsKey(sample.getParameterId())
+                && System.nanoTime() - receivedAt.get(sample.getParameterId()) < 3_000_000_000L; }
+        String state = !live ? "STOPPED" : !fresh ? "NO RECENT DATA" : "LIVE";
+        LoggerGaugeConfiguration.AlertState alert = gaugeAlerts.state(sample.getParameterId(), config);
+        FxInstrumentView view = new FxInstrumentView(style, new GaugeFaceRenderer.Reading(
+                sample.getName(), sample.getDisplayValue(), sample.getUnits(), live && fresh ? sample.getRawValue() : Double.NaN,
+                custom ? config.getScaleMinimum() : reference.minimum,
+                custom ? config.getScaleMaximum() : reference.maximum, high, state,
+                custom ? "CUSTOM SCALE" : reference.reference ? "REFERENCE SCALE" : "RECENT SCALE",
+                live && fresh && (alert == LoggerGaugeConfiguration.AlertState.HIGH || alert == LoggerGaugeConfiguration.AlertState.LOW)));
+        view.setPrefSize(220, 172);
+        return view;
+    }
+
+    void setGaugesOnly(boolean enabled) {
+        if (disposed || gaugesOnly == enabled) return;
+        gaugesOnly = enabled;
+        if (!enabled) {
+            root.setTop(normalTop); root.setCenter(workspace); root.setBottom(normalBottom);
+            views.getSelectionModel().select(3); refreshViews(); return;
+        }
+        Button back = new Button("Exit gauges"); back.setMinHeight(48);
+        back.setOnAction(event -> setGaugesOnly(false));
+        Button fullscreen = new Button("Full screen"); fullscreen.setMinHeight(48);
+        fullscreen.setOnAction(event -> stage.setFullScreen(!stage.isFullScreen()));
+        Region fill = new Region(); HBox.setHgrow(fill, Priority.ALWAYS);
+        HBox bar = new HBox(12, back, mountedStatus, fill, fullscreen);
+        bar.setAlignment(Pos.CENTER_LEFT); bar.setPadding(new Insets(6, 12, 6, 12));
+        mountedGauges.setAlignment(Pos.TOP_CENTER); mountedGauges.setPadding(new Insets(8));
+        ScrollPane scroll = new ScrollPane(mountedGauges); scroll.setFitToWidth(true);
+        root.setTop(bar); root.setCenter(scroll); root.setBottom(null);
+        gaugeClock.play(); refreshViews();
+    }
+
+    private void refreshMountedGauges(List<LiveDataSample> selected) {
+        mountedStatus.setText(context.getSession().getState().getDisplayName() + "  ·  "
+                + Math.min(8, selected.size()) + "/" + selected.size() + " gauges");
+        mountedGauges.getChildren().clear();
+        double available = Math.max(240, root.getWidth() - 40);
+        int columns = Math.max(1, Math.min(4, (int)(available / 280)));
+        double width = Math.min(400, (available - 12 * (columns - 1)) / columns);
+        int index = 0;
+        for (LiveDataSample sample : selected.stream().limit(8).toList()) {
+            GaugeFaceRenderer.Style style = instrumentStyle();
+            boolean fresh;
+            synchronized (samples) { fresh = receivedAt.containsKey(sample.getParameterId())
+                    && System.nanoTime() - receivedAt.get(sample.getParameterId()) < 3_000_000_000L; }
+            LiveDataSample displayed = context.getSession().getState().isLive() && fresh ? sample
+                    : new LiveDataSample(sample.getParameterId(), sample.getName(), Double.NaN, "—",
+                            sample.getUnits(), sample.getTimestampMillis(), sample.getConversionIdentity());
+            Node gauge = style == null ? dashboardCard(displayed, index++, true) : instrument(sample, style);
+            if (gauge instanceof Region region) {
+                region.setMinSize(width, width * 250 / 320);
+                region.setPrefSize(width, width * 250 / 320);
+                region.setMaxSize(width, width * 250 / 320);
+            }
+            mountedGauges.getChildren().add(gauge);
+        }
+        if (selected.isEmpty()) mountedGauges.getChildren().add(emptyLoggerState("No gauges selected", "Exit this view and select channels while parked. Entering this view never starts a connection."));
     }
 
     private Node digitalGauge(LiveDataSample sample, Color accent) {
@@ -1017,6 +1132,7 @@ final class FxLoggerWindow {
     private void dispose() {
         if (disposed) return;
         disposed = true;
+        gaugeClock.stop();
         logLoads.close();
         context.getChannels().removeListener(channelListener);
         context.getSession().removeStateListener(stateListener);

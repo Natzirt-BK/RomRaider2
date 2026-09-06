@@ -1,116 +1,85 @@
-# RomRaider2 Android foundation
+# RomRaider2 for Android
 
-This standalone Android project is an early portable client. It deliberately
-ships no ECU writing path.
+The Android client provides offline ROM editing, log review and foreground-only,
+read-only OpenPort logging. It contains no ECU writing or flashing path.
 
-Implemented:
+This page describes current source (1.1.2). Check the
+[main download page](../../README.md#downloads) for the version actually published;
+a source checkpoint is not a new APK release.
 
-- open a ROM through Android's document picker;
-- match a standard or standalone RomRaider ECU definition against the exact
-  ROM size and internal ID;
-- search named numeric calibration tables, inspect scaled values, edit a
-  selected cell, and save a separate review copy;
-- inspect the first 256 bytes, apply bounded hexadecimal edits, reset edits,
-  and save a separate copy;
-- open and summarize traditional RomRaider wide-column and RomRaider2
-  portable long-form CSV logs;
-- securely import an existing RomRaider logger definition and profile;
-- resolve direct SSM parameters and switches against exact units, module
-  targets, and ECU mappings;
-- show selected serial external inputs as unavailable instead of silently
-  dropping them;
-- plan deduplicated, 64-address-or-smaller read batches and apply the same
-  signed, unsigned, endian, float, arithmetic, conditional, and bitwise
-  conversions used by the desktop logger;
-- run a clearly labeled simulated logger session with updating values and save
-  that session as portable CSV;
-- enumerate attached USB devices;
-- request Android USB permission for an OpenPort 2.0, claim its bulk interface,
-  identify its firmware, and read vehicle battery voltage without querying the
-  ECU;
-- share a bounded OpenPort K-line stream decoder and read-only Subaru SSM
-  init/address codec with no ECU write commands;
-- open a foreground-only 4800-baud SSM K-Line session, identify the engine ECU,
-  exclude transmission-only parameters, execute the selected read batches,
-  display converted values, and record a live CSV.
-- select Mitsubishi MUT-II explicitly and use the OpenPort 2.0 ISO9141 channel
-  at 15625 baud, 8N1, with read-only single-PID requests;
-- import the read-only `type=mut2` subset of an OpenPort `logcfg.txt` directly,
-  including arithmetic RPN scaling, or load a MUT2 RomRaider logger XML;
-- select channels on the phone without requiring a separate logger profile;
-- flush each completed cycle and retain separate app-private recording files,
-  available from **Recover / export recordings** after restart. Normal stop
-  closes the writer; new sessions do not discard older recordings.
+## Features
 
-Current preview limits:
+- Open a ROM with Android's document picker and match a RomRaider ECU definition
+  against the exact ROM size and internal identifier.
+- Search numeric calibration tables, inspect scaled values, edit a selected cell,
+  and save a separate review copy. Bounded hexadecimal editing is also available.
+- Import traditional RomRaider wide-column or RR2 long-form CSV logs.
+- Import logger definitions, profiles and the read-only `type=mut2` subset of
+  OpenPort `logcfg.txt`, including supported arithmetic RPN scaling.
+- Preserve imported definitions and selected channels across Activity/process
+  restarts. Select channels on the device without requiring a separate profile.
+- Run explicitly labeled simulated data for offline setup and visual review.
+- Log Subaru SSM K-Line or Mitsubishi MUT-II through an OpenPort 2.0 and USB host
+  adapter. Only supported definition-backed read requests are sent.
+- Record to separate app-private files, flush completed cycles, recover recordings
+  after restart and export the standard RomRaider CSV format.
+- Choose from 14 gauge themes, including nine new instrument faces. Switch between
+  LOGGER and GAUGES without replacing the active session or recording.
+  See [gauge designs and data states](../../docs/GAUGE_DESIGN.md).
 
-- calculated logger-parameter dependency evaluation;
-- MUT2 standalone `priority` is documented but not scheduled: every selected
-  PID is polled once per full cycle; choose fewer channels for faster updates;
-- setup definitions/channel selections must be reloaded after Activity/process
-  recreation; protocol and gauge theme persist;
-- qualify the wired read-only OpenPort logger on a supported car during RC5;
-- responsive large-screen and landscape layouts;
-- release signing, Play Store packaging, and broader physical-device checks.
+## Boundaries and qualification
 
-The first debug APK launched successfully on a Galaxy S25, and the traditional
-logger CSV that exposed the original header gap now opens correctly. The newer
-definition/profile import and offline logger preview still need a phone rerun.
-The OpenPort preparation and SSM/MUT2 live logger paths still need connected-device
-checks. The live button is labeled as awaiting RC5 qualification, stops when
-the app leaves the foreground, and keeps ECU writing absent.
+Basic Forester logging was reported working during the owner's in-car test.
+Sustained sessions, larger channel sets, exact EVO/MUT-II qualification and broader
+physical-device testing remain separate acceptance checks. Synthetic tests and
+successful builds do not establish vehicle reliability.
 
-Android does not correct ROM checksums. Definition-backed and hexadecimal
-edits are offline review features; Android-edited files must not be flashed.
+Logging stops when the app leaves the foreground. Gauges-only view switching is
+not background recording. Configure channels, units and layout while parked.
+Calculated logger-parameter dependencies are not yet evaluated. MUT-II standalone
+priority values are not scheduled: selected PIDs are polled once per full cycle.
 
-See [Android preview testing](../../docs/ANDROID_PREVIEW_TESTING.md) before
-sideloading the APK or reporting a result.
+Android does not correct ROM checksums. Definition-backed and hexadecimal edits
+are offline review features; Android-edited files must not be flashed without
+independent target-specific validation and checksum handling.
 
-The Android SDK is intentionally separate from the desktop build. With a Java
-21 JDK and Android SDK 36 installed:
+## Build and test
 
-```bash
+Use a Java 21 JDK, Gradle and Android SDK 36. The Android project is separate from
+the desktop build:
+
+```sh
 cd platform/android
-gradle :app:assembleDebug
-```
-
-Regression/build gate for the standard preview:
-
-```bash
 gradle :shared-core:check :app:testDebugUnitTest :app:assembleDebug :app:lintDebug
+gradle :app:assembleOpenportDiagnostic :app:lintOpenportDiagnostic
 ```
 
-The portable checks and Android session tests use synthetic responses, not an
-ECU. See [MUT-II implementation audit](../../docs/ANDROID_MUT2_AUDIT_2026-09-05.md)
-for evidence and the remaining hardware gate.
+The side-by-side variant is labeled **RomRaider2 OpenPort Test**. Standard and test
+application IDs retain their historical suffixes for installation continuity;
+these identifiers are not version labels. Numeric versions and version codes come
+from the shared `version.properties`.
 
-## OpenPort acknowledgement repair test build
+For disposable emulator tests:
 
-The receive-filter reply is channel-qualified (`arf3 0 0` on the tested
-adapter firmware), not `arf ` followed by a space. The control-response checks
-cover the captured reply, fragmentation, wrong channels, malformed fields,
-bounded input and complete adapter errors. Timeout messages identify the setup
-operation and distinguish no reply from an unrecognized reply without exposing
-raw payloads. This repairs adapter setup, not proof of connected ECU logging.
-
-To build the separately installed phone test application:
-
-```bash
-gradle :shared-core:check :app:testDebugUnitTest :app:assembleOpenportDiagnostic :app:lintOpenportDiagnostic
+```sh
+gradle -Prr2AndroidTestBuildType=automation \
+  :app:assembleAutomation :app:assembleAutomationAndroidTest
 ```
 
-It appears as **RomRaider2 OpenPort Test**, with application ID
-`com.romraider.mobile.preview.openporttest`, with version name `1.1.1`.
-It uses a local debug signature and installs beside the standard app, leaving that
-app's settings and retained recordings untouched. Import the logger definition
-and profile into the test app separately and grant it USB access. If Android
-offers both apps for the OpenPort, choose the test app and close the other one.
-Do not uninstall the standard app to install this test build. An existing test
-app signed with a different key may also refuse an in-place update; retain and
-export recordings before considering uninstalling either application.
+The lifecycle runner refuses physical-device targets and non-automation APKs.
+It covers setup restoration, same-key updates, retained CSV export and gauge
+switching with both simulated and injected-transport read-only sessions.
+See [Android update tests](../../docs/ANDROID_UPDATE_RELIABILITY.md).
 
-Version 1.1.1 uses versionCode 110405. The normal debug/release application IDs
-are unchanged; the side-by-side variant has its own application ID.
-No ECU writing, reset, programming-voltage or automatic reconnect operation is
-added by this repair. Physical phone/adapter/vehicle logging still requires the
-parked, ignition-on/engine-off acceptance procedure.
+## Installing and updating
+
+Export recordings and preserve setup/unsaved ROM work before any migration.
+Do not uninstall an existing app merely to work around a signature mismatch.
+The standard and OpenPort Test apps have separate storage; an existing test app
+can also have an incompatible signing key.
+
+Read the [1.1.2 signing migration guide](../../docs/ANDROID_1_1_2_MIGRATION.md)
+before updating from 1.1.1, and use the
+[parked read-only test procedure](../../docs/ANDROID_PREVIEW_TESTING.md)
+when qualifying a device. The [MUT-II implementation audit](../../docs/ANDROID_MUT2_AUDIT_2026-09-05.md)
+documents protocol coverage and remaining hardware gates.
