@@ -11,8 +11,11 @@ import android.view.accessibility.AccessibilityNodeInfo;
 import com.romraider.mobile.logger.LoggerImportState;
 import com.romraider.portable.PortableRomRaiderCsvWriter;
 import com.romraider.portable.PortableRomDocument;
+import com.romraider.portable.editor.PortableEcuDefinitionReader;
 import com.romraider.portable.logger.definition.PortableLoggerDefinition;
+import com.romraider.portable.logger.definition.PortableLoggerDefinitionReader;
 import com.romraider.portable.logger.definition.PortableLoggerProfile;
+import com.romraider.portable.logger.definition.PortableLoggerProfileReader;
 import java.io.*;
 import java.lang.reflect.*;
 import java.nio.charset.StandardCharsets;
@@ -90,6 +93,7 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
         }
     }
     private void seed() throws Exception {
+        verifyXmlImportSecurity();
         verifyRomSaveRecovery();
         File folder = getTargetContext().getFilesDir();
         File definition = new File(folder, "automation-definition.xml");
@@ -114,6 +118,72 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
                 + "600,P8,Engine Speed,800.0,rpm\n600,P1,Battery Voltage,13.24,V\n")
                         .getBytes(StandardCharsets.UTF_8));
         verify(2);
+    }
+    private void verifyXmlImportSecurity() throws Exception {
+        String ecu = "<roms><rom><romid><xmlid>TEST</xmlid><filesize>8</filesize>"
+                + "<internalidaddress>0</internalidaddress><internalidstring>TEST</internalidstring>"
+                + "</romid><table type='2D' name='Fixture' storageaddress='4' storagetype='uint8' sizey='1'>"
+                + "<scaling units='raw' expression='x' to_byte='x'/></table></rom></roms>";
+        String[] roots = {"profile", "logger", "roms"};
+        String[] documents = {PROFILE.replace("rpm", "°C"), DEFINITION, ecu};
+        for (String encoding : new String[] {"UTF-8", "UTF-16", "UTF-16LE", "UTF-16BE",
+                "UTF-32LE", "UTF-32BE", "ISO-8859-1", "windows-1252"}) {
+            String declaration = "<?xml version='1.0' encoding='" + encoding + "'?>";
+            for (int reader = 0; reader < documents.length; reader++) {
+                String valid = declaration + "<!DOCTYPE " + roots[reader] + " [<!ELEMENT "
+                        + roots[reader] + " ANY>]>" + documents[reader];
+                readXmlFixture(reader, valid.getBytes(encoding));
+                for (String entity : new String[] {"<!ENTITY x 'bad'>", "<!ENTITY % x 'bad'>",
+                        "<!ENTITY x SYSTEM 'file:///nonexistent-rr2-entity'>"}) {
+                    String hostile = declaration + "<!DOCTYPE " + roots[reader] + " [" + entity
+                            + "]>" + documents[reader];
+                    boolean rejected = false;
+                    try { readXmlFixture(reader, hostile.getBytes(encoding)); }
+                    catch (IOException expected) {
+                        check(expected.getMessage().contains("entity declarations"), "Wrong XML rejection");
+                        rejected = true;
+                    }
+                    check(rejected, "Android accepted entity declaration: " + encoding + " reader " + reader);
+                }
+            }
+        }
+        for (int reader = 0; reader < documents.length; reader++) {
+            for (String encoding : new String[] {"UTF-8", "UTF-16LE", "UTF-16BE"}) {
+                readXmlFixture(reader, ("\ufeff" + documents[reader]).getBytes(encoding));
+            }
+            byte[] truncated = ("\ufeff" + documents[reader]).getBytes(StandardCharsets.UTF_16LE);
+            boolean rejected = false;
+            try { readXmlFixture(reader, java.util.Arrays.copyOf(truncated, truncated.length - 1)); }
+            catch (IOException expected) {
+                check(expected.getMessage().contains("Malformed XML text"), "Wrong truncated XML rejection");
+                rejected = true;
+            }
+            check(rejected, "Android accepted truncated UTF-16");
+        }
+        File dtd = new File(getTargetContext().getFilesDir(), "automation-external.dtd");
+        try {
+            Files.write(dtd.toPath(), "<!ATTLIST parameter units CDATA 'EXTERNAL_SENTINEL'>"
+                    .getBytes(StandardCharsets.UTF_8));
+            String xml = "<!DOCTYPE profile SYSTEM '" + dtd.toURI() + "'>"
+                    + "<profile protocol='SSM'><parameters><parameter id='P8' livedata='selected'/>"
+                    + "</parameters></profile>";
+            check(PortableLoggerProfileReader.read(new ByteArrayInputStream(xml.getBytes(StandardCharsets.UTF_8)))
+                    .selections().get(0).getUnits().isEmpty(), "Android loaded an external DTD");
+        } finally { Files.deleteIfExists(dtd.toPath()); }
+    }
+    private void readXmlFixture(int reader, byte[] xml) throws IOException {
+        ByteArrayInputStream input = new ByteArrayInputStream(xml);
+        if (reader == 0) {
+            check(PortableLoggerProfileReader.read(input).selections().get(0).getUnits().equals("°C"),
+                    "Android XML encoding damaged profile units");
+        } else if (reader == 1) {
+            check(PortableLoggerDefinitionReader.read(input, "SSM").size() == 3,
+                    "Android XML definition lost channels");
+        } else {
+            check(PortableEcuDefinitionReader.read(input, new PortableRomDocument("synthetic.bin",
+                    new byte[] {'T', 'E', 'S', 'T', 1, 0, 0, 0})).getTables().size() == 1,
+                    "Android XML ECU definition lost table");
+        }
     }
     private void verifyRomSaveRecovery() throws Exception {
         File directory = new File(getTargetContext().getFilesDir(), "automation-rom-save");

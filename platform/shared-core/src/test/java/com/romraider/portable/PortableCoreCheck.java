@@ -34,6 +34,7 @@ public final class PortableCoreCheck {
         PortableOpenPortControlCheck.main(new String[0]);
         PortableMut2Check.main(new String[0]);
         PortableRomRaiderCsvCheck.main(new String[0]);
+        PortableXmlSecurityCheck.main(new String[0]);
         PortableRomDocument rom = new PortableRomDocument("sample.bin",
                 new byte[] {1, 2, 3, 4});
         rom.replace(1, new byte[] {8, 9});

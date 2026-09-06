@@ -3,11 +3,12 @@ package com.romraider.portable.editor;
 
 import com.romraider.portable.PortableRomDocument;
 import com.romraider.portable.logger.PortableExpression;
+import com.romraider.portable.xml.PortableXmlInput;
 
-import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -43,8 +44,7 @@ public final class PortableEcuDefinitionReader {
         if (input == null) throw new IllegalArgumentException(
                 "An ECU definition input stream is required");
         if (rom == null) throw new IllegalArgumentException("Open a ROM first");
-        byte[] xml = readBounded(input);
-        rejectEntityDeclarations(xml);
+        String xml = PortableXmlInput.decodeWithoutEntities(readBounded(input));
 
         MetadataHandler metadata = new MetadataHandler();
         parse(xml, metadata);
@@ -190,15 +190,7 @@ public final class PortableEcuDefinitionReader {
         return output.toByteArray();
     }
 
-    private static void rejectEntityDeclarations(byte[] xml) throws IOException {
-        String text = new String(xml, StandardCharsets.ISO_8859_1)
-                .toUpperCase(Locale.ROOT);
-        if (text.contains("<!ENTITY")) {
-            throw new IOException("XML entity declarations are not allowed");
-        }
-    }
-
-    private static void parse(byte[] xml, DefaultHandler handler) throws IOException {
+    private static void parse(String xml, DefaultHandler handler) throws IOException {
         try {
             SAXParserFactory factory = SAXParserFactory.newInstance();
             factory.setNamespaceAware(false);
@@ -209,10 +201,10 @@ public final class PortableEcuDefinitionReader {
             feature(factory, "http://apache.org/xml/features/nonvalidating/load-external-dtd", false);
             XMLReader reader = factory.newSAXParser().getXMLReader();
             reader.setEntityResolver((publicId, systemId) ->
-                    new InputSource(new java.io.StringReader("")));
+                    new InputSource(new StringReader("")));
             reader.setContentHandler(handler);
             reader.setErrorHandler(handler);
-            reader.parse(new InputSource(new ByteArrayInputStream(xml)));
+            reader.parse(new InputSource(new StringReader(xml)));
         } catch (Exception ex) {
             throw new IOException("ECU definition could not be parsed: "
                     + (ex.getMessage() == null ? ex.getClass().getSimpleName()
