@@ -35,7 +35,11 @@ enum MobileGaugeTheme {
     ELECTRIC_BLOOM("Electric Bloom", 0xFF070C18, 0xFF538FFF, 0xFFA17BFF, Color.WHITE, true, false),
     SUNSET_GT("Sunset GT", 0xFFF3DCAD, 0xFFCB2D70, 0xFFFFA24D, 0xFF593F48, false, false),
     LASER_LED("Laser LED", 0xFF050A0B, 0xFFFF633F, 0xFFB5FF42, Color.WHITE, true, true),
-    PRISM_CASSETTE("Prism Cassette", 0xFF0A1326, 0xFF48F5EA, 0xFFFF4EA5, Color.WHITE, true, true);
+    PRISM_CASSETTE("Prism Cassette", 0xFF0A1326, 0xFF48F5EA, 0xFFFF4EA5, Color.WHITE, true, true),
+    APEX_24("Apex 24", 0xFF060B0F, 0xFFFFBE5C, 0xFF63727A, Color.WHITE, true, false),
+    ION_OLED("Ion OLED", 0xFF030608, 0xFFF2F6F8, 0xFFB6E8EE, Color.WHITE, false, false),
+    LOOP_DRIVE("Loop Drive", 0xFF060B11, 0xFF53ABFF, 0xFFFF564E, Color.WHITE, true, false),
+    CHRONO_ROLL("Chrono Roll", 0xFF243039, 0xFFEACCA1, 0xFFFF564E, Color.WHITE, false, false);
 
     final String displayName;
     final int face;

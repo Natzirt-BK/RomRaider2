@@ -8,9 +8,10 @@ public final class GaugeFaceRenderer {
     public enum Presentation { CARD, SEAMLESS }
     public enum Style { RALLY_PRECISION, CIRCUIT_STACK, RETRO_VFD,
         CLUB_SPORT, SWEEP_RIBBON, TWIN_ARC, AMBER_MATRIX, VECTOR_HUD, TURBO_POD,
-        STI_NIGHT, EVOLUTION_NIGHT, PHOSPHOR_84, ELECTRIC_BLOOM, SUNSET_GT, LASER_LED, PRISM_CASSETTE;
+        STI_NIGHT, EVOLUTION_NIGHT, PHOSPHOR_84, ELECTRIC_BLOOM, SUNSET_GT, LASER_LED, PRISM_CASSETTE,
+        APEX_24, ION_OLED, LOOP_DRIVE, CHRONO_ROLL;
         public boolean usesNeedleMotion() {
-            return this == STI_NIGHT || this == EVOLUTION_NIGHT || this == ELECTRIC_BLOOM || this == SUNSET_GT;
+            return this == STI_NIGHT || this == EVOLUTION_NIGHT || this == ELECTRIC_BLOOM || this == SUNSET_GT || this == LOOP_DRIVE;
         }
     }
     public interface Surface {
@@ -69,6 +70,10 @@ public final class GaugeFaceRenderer {
         if (s == null || style == null || r == null) throw new IllegalArgumentException("Gauge surface, style and reading are required");
         if (presentation == null) throw new IllegalArgumentException("Gauge presentation is required");
         boolean framed = presentation == Presentation.CARD;
+        if (style == Style.APEX_24 || style == Style.ION_OLED || style == Style.LOOP_DRIVE || style == Style.CHRONO_ROLL) {
+            AftermarketGaugeFaces.draw(s, style, r, framed);
+            return;
+        }
         if (style == Style.STI_NIGHT || style == Style.EVOLUTION_NIGHT) {
             PremiumGaugeFaces.draw(s, style, r, framed);
             return;

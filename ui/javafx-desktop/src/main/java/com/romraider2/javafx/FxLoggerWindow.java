@@ -385,7 +385,7 @@ final class FxLoggerWindow {
     }
 
     private Node dashboardWorkspace(Node cards) {
-        ComboBox<LoggerGaugeTheme> gaugeTheme = new ComboBox<>(FXCollections.observableArrayList(LoggerGaugeTheme.values()));
+        ComboBox<LoggerGaugeTheme> gaugeTheme = new ComboBox<>(FXCollections.observableArrayList(LoggerGaugeTheme.selectableValues()));
         gaugeTheme.setConverter(new javafx.util.StringConverter<>() {
             public String toString(LoggerGaugeTheme theme) { return theme == null ? "" : theme.getDisplayName(); }
             public LoggerGaugeTheme fromString(String value) { return LoggerGaugeTheme.fromName(value); }

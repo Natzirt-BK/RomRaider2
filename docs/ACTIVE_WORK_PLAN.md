@@ -4,6 +4,20 @@ Owner priority: finish the gauge work first and show actual application renders,
 then continue the remaining automated work. Physical in-car tests are deferred
 until the owner is available; never initiate hardware polling to fill that gap.
 
+Current gauge brief supersedes the earlier three/nine/eleven-face counts: **25
+selectable styles** across Android, JavaFX and Compose. The four latest native
+faces are Apex 24, Ion OLED, Loop Drive and Chrono Roll; references and actual
+renders are in [the design guide](GAUGE_DESIGN.md). Legacy desktop Handheld
+preferences remain readable but do not add a 26th picker choice.
+
+Android now consolidates layout, independently assigned display channels,
+explicit Logger-channel copy, per-channel visual style picking and demo Show/Hide
+in Gauges. Only Full Screen keeps the screen awake; a tap reveals an exit menu
+that times out. The next gauge task is equivalent desktop/handheld style picking
+and per-channel persistence, followed by package qualification. Public downloads
+remain 1.1.2 RC1. Resume the parked DimeMod channel-pointer span audit afterward;
+neither the gauge work nor synthetic logging tests qualify vehicle writes.
+
 1. Nine additional, original gauge designs (owner expanded the original three
    by six): Rally Precision, Circuit Stack, Retro VFD, Club Sport, Sweep Ribbon,
    Twin Arc, Amber Matrix, Vector HUD and Turbo Pod.

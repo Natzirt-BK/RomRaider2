@@ -1,8 +1,10 @@
 # Dashboard instruments
 
-RomRaider2 includes nine original instrument faces plus STI Night and Evolution Night
-alongside its existing themes. Development source 1.1.3 adds five more vibrant/retro
-styles below; these five are not in the published 1.1.2 packages.
+Development source 1.1.3 offers **25 selectable gauge styles** on Android, JavaFX
+and Compose: five legacy faces and twenty shared vector instruments. The latest
+four are Apex 24, Ion OLED, Loop Drive and Chrono Roll. They are not in the published
+1.1.2 packages. The old desktop Handheld preference still loads for compatibility,
+but is not an additional style in the current picker.
 On Android, choose channels, layouts and faces in **Gauges**, using the searchable
 visual picker for the default or an individual channel. Display assignments are
 independent of Logger, with an explicit **Use logger channels** shortcut. Enter
@@ -29,6 +31,10 @@ parked. This view is not a replacement for the vehicle's instruments or warnings
 | Sunset GT | Cream face, berry pointer, amber numerals and period-inspired stripes |
 | Laser LED | Smoked circular face, lime level segments and red-orange digits |
 | Prism Cassette | Cyan/violet/pink rising segments, white digits and cassette-era stripes |
+| Apex 24 | Amber 24-block crown with a wide, slanted white numeric window |
+| Ion OLED | Quiet monochrome OLED window, silver bezel and slim linear level indicator |
+| Loop Drive | Blue LED loop, red pointer and separate current/marked historical-peak windows |
+| Chrono Roll | Cream mechanical-counter drums, brushed dark panel and linear pointer |
 
 Android 1.1.3 adds [full-screen mounted display and foreground keep-awake](ANDROID_MOUNTED_DISPLAY.md).
 Mounted views now omit surrounding card boxes and decorative divider lines,
@@ -38,7 +44,7 @@ All five styles apply to the selected channels, not fixed RPM/boost-only gauges.
 
 ![Five vibrant and retro gauge styles rendered by the native JavaFX canvas, using explicitly simulated RPM and boost values](images/five-vibrant-retro-gauges.png)
 
-[View all 21 mobile themes in one labeled, native-rendered collection sheet](images/all-mobile-gauge-styles.png).
+[View all 25 styles in one labeled, native-rendered collection sheet](images/all-mobile-gauge-styles.png).
 The reproducible `gauge-contact-sheet` instrumentation phase draws actual Android
 gauge views. `gauge-gallery` and `gauge-gallery-landscape` capture the full-screen app.
 
@@ -77,6 +83,21 @@ GT and Prism Cassette extend the brief with original cream/berry and multi-color
 retro treatments. Colored segments show measured progress, not invented redlines.
 No manufacturer product photograph, logo or face skin was copied into these five.
 
+For the latest four, the [AEM X-Series manual, pages 1–2](https://documents.aemelectronics.com/techlibrary_30-0334-x-series-obdii-wideband-uego-controller-gauge.pdf)
+provided the 24-segment/readout reference for Apex 24. Its wide slanted window is
+RR2 artwork, distinct from Laser LED's inset segmented display.
+The [Innovate MTX-OL PLUS manual, printed page 2](https://www.innovatemotorsports.com/wp/content/uploads/2022/05/MTX-OL_Manual_110163.pdf)
+and [OLED product description](https://www.innovatemotorsports.com/mtxo-l-plus-digital-wideband-air-fuel-ratio-oled-gauge-kit-3-ft.html)
+informed Ion OLED's restrained window and number-first hierarchy.
+The [BLITZ FLD manufacturer sheet](https://blitz.co.jp/new-product/2012_en/2012-0088EN.pdf)
+informed Loop Drive's analog/LED loop and paired digital windows. Unlike the hardware's
+multiple sensor displays, RR2 shows only the chosen channel and its explicitly labeled
+historical peak; it never invents another sensor reading. Chrono Roll is an original
+mechanical-counter treatment. Its digits remain exact, with no rolling-digit interpolation.
+No new manufacturer logos, fonts, photographs or face skins are bundled. These are
+visual references, not hardware compatibility or endorsement claims. The requested
+“Gnome” reference has not been identified and is not claimed as a design source.
+
 ## Data meaning
 
 - Numbers and units come from the selected logger conversion.
@@ -96,7 +117,15 @@ No manufacturer product photograph, logo or face skin was copied into these five
 
 ## Implementation and validation
 
-`GaugeFaceRenderer` in the portable module defines all sixteen added vector faces. Android,
+September 6 verification of the 25-style collection: 1,400 shared card/seamless
+edge-case renders, 11 core gauge tests, 249 JavaFX tests, 35 Compose tests and 65
+Android debug unit tests pass. The desktop window checks use an explicit
+1280×1024 virtual screen; the host's 640×480 default cannot accommodate their
+1024×700 test window. Android debug/automation builds and lint pass (zero errors,
+five existing warnings). These are software checks, not in-car acceptance or a
+new public release.
+
+`GaugeFaceRenderer` in the portable module defines all twenty added vector faces. Android,
 JavaFX and Compose adapt its drawing operations to their native canvases.
 The portable check exercises every face with finite, missing, infinite and
 out-of-range values and invalid scales. Native UI checks cover rendering and
@@ -112,7 +141,7 @@ Both are part of the lifecycle regression script. `gauge-gallery` captures nativ
 screens and rejects an obstructing window. JavaFX's mounted-gauge smoke test
 checks published recording state, every theme switch, stale data and recovery.
 
-The two night-cluster faces, Electric Bloom and Sunset GT interpolate only the needle for at most 100 ms.
+The two night-cluster faces, Electric Bloom, Sunset GT and Loop Drive interpolate only the needle for at most 100 ms.
 Numeric readings, measured peaks, warnings and CSV recording are never interpolated.
 First readings, invalid values, recovery and long gaps do not trigger a startup
 sweep. Android respects disabled system animators; desktop rendering also accepts

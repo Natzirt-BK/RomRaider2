@@ -6,7 +6,7 @@ The searchable style gallery previews actual native gauge faces with labeled sam
 readings. Tap a face to apply it, or cancel without changing anything.
 
 Tap **FULL SCREEN** to hide the app tabs and Android status/navigation bars,
-reduces outer padding, and keeps the display awake while this Activity is visible.
+reduce outer padding, and keep the display awake while this Activity is visible.
 It works on phone/tablet portrait and landscape layouts. Display cutout insets
 remain protected on modern Android; the OS can retain window controls in multi-window mode.
 
@@ -76,7 +76,7 @@ The `mounted-layouts` phase checks every count in portrait and landscape with
 both legacy and custom faces, retains hidden gauges/profile identity, uses the
 native count picker, checks restoration, and captures 24 actual screenshots.
 The `seamless-gauges` phase checks native transparent outer-edge pixels for all
-21 Android styles and verifies that regular card pixels return on exit.
+25 Android styles and verifies that regular card pixels return on exit.
 The `live-gauges` phase also changes counts during synthetic capture and verifies
 the original session and exported CSV. Portable layout checks cover 108
 viewport/count/face combinations, including tiny and zero-sized viewports.
@@ -84,20 +84,24 @@ These checks do not establish real-phone thermal behavior, sunlight readability,
 USB stability or vehicle safety. Set up while parked; do not adjust it while driving.
 This feature is not in the published 1.1.2 packages.
 
-The consolidated-setup update passes debug and automation builds, all 65 Android
-unit tests in each variant, and lint (zero errors, five existing warnings).
-Emulator phases `seed`, `gauge-setup`, `gauge-demo-toggle`, `gauges`,
-`mounted-fullscreen`, `mounted-layouts`, `seamless-gauges`, `live-gauges`,
-`calculated-gauges` and `background-service` pass. The calculated-gauge fixture now
-explicitly copies Logger channels into display slots; profile loading alone must
-not perform that action. This is Android source verification, not a new public
-release, desktop UI parity, or completion of the planned 25-style collection.
+The collection now contains 25 selectable styles, including Apex 24, Ion OLED,
+Loop Drive and Chrono Roll. [Design references and renderer checks](GAUGE_DESIGN.md)
+cover the shared Android/desktop artwork. The consolidated setup/gallery and
+per-channel Android controls are not yet ported to desktop.
 
-September 6 seamless-display checks: 65 Android unit tests, debug/automation
-builds and lint pass (five existing lint warnings). Native emulator phases pass
-for all 21 borderless styles, fullscreen lifecycle, all 24 count/orientation
-layouts, live-session/CSV continuity and calculated gauges. Shared rendering
-checks cover 1,120 card/seamless edge cases; the desktop suite passes 284 tests.
+The calculated-gauge fixture explicitly copies Logger channels into display slots;
+profile loading alone must not perform that action. Instrumentation flushes its
+preference fixtures before terminating the target process and checks display choices
+after restart/reinstall. This does not turn profile loading into automatic display
+selection, or alter normal asynchronous preference saves in the application.
+
+September 6: the complete emulator lifecycle script passes, including menu
+reveal/reset/timeout/exit, all 25 seamless styles, 1–6 portrait/landscape layouts,
+session/CSV continuity, background capture and process-death recovery. This local
+run reinstalls the same automation APK; it does not establish a version-increment
+upgrade. Hosted checks build separate initial/upgraded automation versions.
+Fresh-install testing reproduced the earlier fixture-persistence failure before
+the instrumentation flush fix. No physical adapter or vehicle was used.
 
 ## Actual Android layouts
 

@@ -118,7 +118,9 @@ class FxEditorCatalogSmokeTest {
                 var grid = root.lookup(".calibration-grid"); assertNotNull(grid);
                 assertTrue(grid.localToScene(grid.getBoundsInLocal()).getMinY() < 320,
                         "Compact editor should not push the table below 320 pixels");
-                assertTrue(grid.getBoundsInLocal().getHeight() > 300);
+                assertTrue(grid.getBoundsInLocal().getHeight() > 300,
+                        "Grid=" + grid.getBoundsInLocal() + ", scene=" + stage.getScene().getWidth() + "x"
+                                + stage.getScene().getHeight() + ", stage=" + stage.getWidth() + "x" + stage.getHeight());
                 TreeView<?> tree = field(window[0], "navigation");
                 tree.getRoot().getChildren().forEach(item -> item.setExpanded(false));
                 EditorDocumentController controller = field(window[0], "controller");

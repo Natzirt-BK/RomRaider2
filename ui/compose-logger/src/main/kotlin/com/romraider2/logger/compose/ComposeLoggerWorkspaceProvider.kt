@@ -1544,9 +1544,7 @@ private fun GaugeControls(
                 Text("GAUGE STYLE",
                     color = MaterialTheme.colors.onSurface.copy(.50f),
                     fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                LoggerGaugeTheme.values().filter {
-                    it != LoggerGaugeTheme.HANDHELD
-                }.forEach { theme ->
+                LoggerGaugeTheme.selectableValues().forEach { theme ->
                     val active = theme == selected
                     GaugeControlChip(theme.displayName, active, true) {
                         onSelect(theme)
@@ -1823,7 +1821,8 @@ private fun LiveGaugeCard(
                     LoggerGaugeTheme.STI_NIGHT, LoggerGaugeTheme.EVOLUTION_NIGHT,
                     LoggerGaugeTheme.PHOSPHOR_84, LoggerGaugeTheme.ELECTRIC_BLOOM,
                     LoggerGaugeTheme.SUNSET_GT, LoggerGaugeTheme.LASER_LED,
-                    LoggerGaugeTheme.PRISM_CASSETTE)) {
+                    LoggerGaugeTheme.PRISM_CASSETTE, LoggerGaugeTheme.APEX_24,
+                    LoggerGaugeTheme.ION_OLED, LoggerGaugeTheme.LOOP_DRIVE, LoggerGaugeTheme.CHRONO_ROLL)) {
                 InstrumentGauge(GaugeFaceRenderer.Style.valueOf(gaugeTheme.name),
                     GaugeFaceRenderer.Reading(channel.name, displayedValue ?: "—", channel.units,
                         displayedRaw ?: Double.NaN, range.minimum, range.maximum,
@@ -2337,7 +2336,9 @@ private fun gaugeStyle(theme: LoggerGaugeTheme): GaugeStyle = when (theme) {
     LoggerGaugeTheme.STI_NIGHT -> gaugeStyle(LoggerGaugeTheme.RALLY_HERITAGE)
     LoggerGaugeTheme.EVOLUTION_NIGHT -> gaugeStyle(LoggerGaugeTheme.RALLY_HERITAGE)
     LoggerGaugeTheme.PHOSPHOR_84, LoggerGaugeTheme.ELECTRIC_BLOOM,
-    LoggerGaugeTheme.PRISM_CASSETTE -> gaugeStyle(LoggerGaugeTheme.NEON_CIRCUIT)
+    LoggerGaugeTheme.PRISM_CASSETTE,
+    LoggerGaugeTheme.APEX_24, LoggerGaugeTheme.ION_OLED,
+    LoggerGaugeTheme.LOOP_DRIVE, LoggerGaugeTheme.CHRONO_ROLL -> gaugeStyle(LoggerGaugeTheme.NEON_CIRCUIT)
     LoggerGaugeTheme.SUNSET_GT -> gaugeStyle(LoggerGaugeTheme.CENTRAL_TACH)
     LoggerGaugeTheme.LASER_LED -> gaugeStyle(LoggerGaugeTheme.AMBER_GT)
     LoggerGaugeTheme.RR2_CLASSIC -> GaugeStyle(

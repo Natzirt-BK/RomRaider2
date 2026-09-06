@@ -10,14 +10,17 @@ public final class PortableGaugeCheck {
     public static void main(String[] args) {
         motion();
         Set<String> faces = new HashSet<>();
+        Set<String> geometry = new HashSet<>();
         for (GaugeFaceRenderer.Style style : GaugeFaceRenderer.Style.values()) {
             require(style.usesNeedleMotion() == (style == GaugeFaceRenderer.Style.STI_NIGHT
                     || style == GaugeFaceRenderer.Style.EVOLUTION_NIGHT
                     || style == GaugeFaceRenderer.Style.ELECTRIC_BLOOM
-                    || style == GaugeFaceRenderer.Style.SUNSET_GT), "Unexpected animated instrument");
+                    || style == GaugeFaceRenderer.Style.SUNSET_GT
+                    || style == GaugeFaceRenderer.Style.LOOP_DRIVE), "Unexpected animated instrument");
             Recording surface = new Recording();
             GaugeFaceRenderer.draw(surface, style, reading(12.7, -15, 30));
             faces.add(surface.commands.toString());
+            geometry.add(surface.geometry.toString());
             Recording explicitCard = new Recording();
             GaugeFaceRenderer.draw(explicitCard, style, reading(12.7, -15, 30), GaugeFaceRenderer.Presentation.CARD);
             require(surface.commands.toString().equals(explicitCard.commands.toString()), "Default card changed");
@@ -43,6 +46,8 @@ public final class PortableGaugeCheck {
             require(missing.commands.indexOf("—") >= 0, "Missing reading was not blanked");
         }
         require(faces.size() == GaugeFaceRenderer.Style.values().length, "Styles must have distinct geometry");
+        require(geometry.size() == GaugeFaceRenderer.Style.values().length,
+                "Styles must differ in geometry, not only colors, names or text contents");
         scale("Air/Fuel Ratio", "lambda", .6, 1.4);
         scale("MAF Sensor Voltage", "V", 0, 5);
         scale("Battery Voltage", "V", 8, 18);
@@ -89,10 +94,12 @@ public final class PortableGaugeCheck {
     }
     private static final class Recording implements GaugeFaceRenderer.Surface {
         final StringBuilder commands = new StringBuilder();
+        final StringBuilder geometry = new StringBuilder();
         final java.util.List<String> labels = new java.util.ArrayList<>();
         int chrome;
         private void coordinates(double... values) {
             for (double value : values) require(Double.isFinite(value), "Non-finite drawing coordinate");
+            geometry.append(java.util.Arrays.toString(values));
         }
         public void rect(double x, double y, double w, double h, double r, int color) {
             coordinates(x,y,w,h,r); require(w >= 0 && h >= 0 && r >= 0, "Negative rectangle");

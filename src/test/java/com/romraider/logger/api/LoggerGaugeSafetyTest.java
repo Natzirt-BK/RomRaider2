@@ -16,6 +16,13 @@ import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 
 public class LoggerGaugeSafetyTest {
+    @Test public void currentCollectionHas25ChoicesAndRetainsLegacyPreferenceCompatibility() {
+        assertEquals(25, LoggerGaugeTheme.selectableValues().length);
+        assertEquals(25, new java.util.HashSet<>(java.util.Arrays.asList(LoggerGaugeTheme.selectableValues())).size());
+        assertFalse(java.util.Arrays.asList(LoggerGaugeTheme.selectableValues()).contains(LoggerGaugeTheme.HANDHELD));
+        assertSame(LoggerGaugeTheme.HANDHELD, LoggerGaugeTheme.fromName("HANDHELD"));
+        for (LoggerGaugeTheme theme : LoggerGaugeTheme.selectableValues()) assertSame(theme, LoggerGaugeTheme.fromName(theme.name()));
+    }
     @Rule public TemporaryFolder temporary = new TemporaryFolder();
     private static final LoggerGaugeConfiguration LIMITS = new LoggerGaugeConfiguration(
             0.0, 120.0, 10.0, 100.0, 5).forConversion("C");

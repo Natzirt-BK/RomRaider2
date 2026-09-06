@@ -26,7 +26,11 @@ public enum LoggerGaugeTheme {
     ELECTRIC_BLOOM("Electric Bloom"),
     SUNSET_GT("Sunset GT"),
     LASER_LED("Laser LED"),
-    PRISM_CASSETTE("Prism Cassette");
+    PRISM_CASSETTE("Prism Cassette"),
+    APEX_24("Apex 24"),
+    ION_OLED("Ion OLED"),
+    LOOP_DRIVE("Loop Drive"),
+    CHRONO_ROLL("Chrono Roll");
 
     private final String displayName;
 
@@ -36,6 +40,11 @@ public enum LoggerGaugeTheme {
 
     public String getDisplayName() {
         return displayName;
+    }
+
+    /** Current 25-face collection. Retain HANDHELD only for existing preference compatibility. */
+    public static LoggerGaugeTheme[] selectableValues() {
+        return java.util.Arrays.stream(values()).filter(theme -> theme != HANDHELD).toArray(LoggerGaugeTheme[]::new);
     }
 
     public static LoggerGaugeTheme fromName(String value) {

@@ -103,6 +103,11 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
                         "Missing restore failure message");
                 verifyNotRunning();
             } else throw new AssertionError("Unknown automation phase");
+            // Instrumentation.finish terminates its target process, unlike a normal
+            // Activity background transition that drains SharedPreferences.apply().
+            // Flush fixture preferences before the next force-stop/restart/upgrade.
+            if (activity != null) runOnMainSync(() -> check(activity.getPreferences(0).edit().commit(),
+                    "Could not persist instrumentation preference fixtures"));
             result.putString("stream", "\nPASS logger setup automation: " + phase + "\n");
             finish(Activity.RESULT_OK, result);
         } catch (Throwable failure) {
@@ -363,6 +368,8 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
     private void verify(int channels) throws Exception {
         verifySelection(channels);
         verifyNotRunning();
+        if (channels == 2) check(((java.util.List<?>) field("gaugeChannelSlots")).subList(0, 2)
+                .equals(java.util.Arrays.asList("P8", "P1")), "Explicit display choices did not survive restart/upgrade");
         File recording = new File(getTargetContext().getFilesDir(), "recordings/automation-recording.csv.part");
         StringWriter csv = new StringWriter();
         PortableRomRaiderCsvWriter.writeSpool(recording, csv);
@@ -573,6 +580,7 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
     }
 
     private void verifyGaugeSetup() throws Exception {
+        check(MobileGaugeTheme.values().length == 25, "The mobile collection must expose exactly 25 styles");
         verifyGaugePreferences();
         verifySelection(2);
         Object profile = field("loggerProfile");
@@ -800,7 +808,7 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
                 } finally { bitmap.recycle(); }
             }
         });
-        System.out.println("PASS: all 21 native gauge styles remove outer card pixels in fullscreen and restore them on exit.");
+        System.out.println("PASS: all " + MobileGaugeTheme.values().length + " native gauge styles remove outer card pixels in fullscreen and restore them on exit.");
     }
 
     private void verifyMountedLayouts() throws Exception {
@@ -917,7 +925,7 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
     private void captureGaugeContactSheet() throws Exception {
         // Draw the actual mobile View for every selectable theme, including legacy faces.
         File file = new File(getTargetContext().getExternalFilesDir(null), "all-mobile-gauge-styles.png");
-        android.graphics.Bitmap bitmap = android.graphics.Bitmap.createBitmap(1440, 1930,
+        android.graphics.Bitmap bitmap = android.graphics.Bitmap.createBitmap(1790, 1635,
                 android.graphics.Bitmap.Config.ARGB_8888);
         try {
             runOnMainSync(() -> {
@@ -929,11 +937,11 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
                 canvas.drawText("ROMRAIDER2 / THE GAUGE COLLECTION", 32, 51, text);
                 text.setTypeface(android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL));
                 text.setTextSize(18); text.setColor(0xFFA6B3C0);
-                canvas.drawText("21 mobile styles • Actual Android rendering • Simulated values • 1.1.3 development source", 32, 85, text);
+                canvas.drawText(MobileGaugeTheme.values().length + " mobile styles • Actual Android rendering • Simulated values • 1.1.3 development source", 32, 85, text);
                 float density = getTargetContext().getResources().getDisplayMetrics().density;
                 int index = 0;
                 for (MobileGaugeTheme theme : MobileGaugeTheme.values()) {
-                    float x = 32 + (index % 4) * 350, y = 124 + (index / 4) * 295;
+                    float x = 32 + (index % 5) * 350, y = 124 + (index / 5) * 295;
                     text.setTextSize(18); text.setColor(0xFFE6EDF4);
                     text.setTypeface(android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD));
                     canvas.drawText(String.format(java.util.Locale.ROOT, "%02d  %s", index + 1, theme.displayName), x, y, text);
@@ -951,7 +959,7 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
                     index++;
                 }
                 text.setTextSize(17); text.setColor(0xFFA6B3C0);
-                canvas.drawText("Display scales are not engine limits. Configure while parked.", 32, 1910, text);
+                canvas.drawText("Display scales are not engine limits. Configure while parked.", 32, 1615, text);
             });
             try (OutputStream output = new FileOutputStream(file)) {
                 check(bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, output), "Contact sheet encoding failed");
