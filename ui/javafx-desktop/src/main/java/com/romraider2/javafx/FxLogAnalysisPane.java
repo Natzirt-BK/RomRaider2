@@ -56,6 +56,7 @@ final class FxLogAnalysisPane extends BorderPane implements AutoCloseable {
     private final LogDataset dataset;
     private final FxLogMapTracePane mapTrace;
     private final FxBinnedLogPane binned;
+    private final FxRunComparisonPane comparison;
     private final LogCursorModel cursor = new LogCursorModel();
     private final LogPlaybackService playback = new LogPlaybackService(cursor);
     private final TableView<Integer> values = new TableView<>();
@@ -89,6 +90,7 @@ final class FxLogAnalysisPane extends BorderPane implements AutoCloseable {
         this.dataset = dataset;
         mapTrace = new FxLogMapTracePane(dataset);
         binned = new FxBinnedLogPane(dataset);
+        comparison = new FxRunComparisonPane(dataset);
         selectedRange = LogRange.all(dataset);
         rangeEnd.setText(Integer.toString(dataset.getRowCount()));
         position = new Slider(0, dataset.getRowCount() - 1, 0);
@@ -102,7 +104,7 @@ final class FxLogAnalysisPane extends BorderPane implements AutoCloseable {
                 tab("Time Series", timelineWorkspace()),
                 tab("X/Y Plot", scatterWorkspace()),
                 tab("Statistics", statisticsTable()),
-                tab("Markers", markerWorkspace()), tab("Map trace", mapTrace), tab("Binned analysis", binned)));
+                tab("Markers", markerWorkspace()), tab("Map trace", mapTrace), tab("Binned analysis", binned), tab("Run comparison", comparison)));
         setBottom(new VBox(5, playbackBar(), status));
         setPadding(new Insets(12));
         configureTable();
@@ -199,6 +201,7 @@ final class FxLogAnalysisPane extends BorderPane implements AutoCloseable {
         rebuildScatter();
         mapTrace.showSample(cursor.getSampleIndex(), false);
         binned.setRange(selectedRange, false);
+        comparison.setRange(selectedRange, false);
         positionLabel.setText((cursor.getSampleIndex() + 1) + " / " + dataset.getRowCount());
     }
 
@@ -213,6 +216,7 @@ final class FxLogAnalysisPane extends BorderPane implements AutoCloseable {
         rangePending.set(true); playback.pause(); clock.pause(); play.setText("Play");
         mapTrace.showSample(cursor.getSampleIndex(), true);
         binned.setRange(selectedRange, true);
+        comparison.setRange(selectedRange, true);
         values.getItems().clear(); statistics.getItems().clear(); timelineChart.getData().clear(); scatterChart.getData().clear();
         positionLabel.setText("Apply range to resume"); rangeStatus.setText("Range draft · apply to refresh views and playback");
     }
@@ -541,6 +545,7 @@ final class FxLogAnalysisPane extends BorderPane implements AutoCloseable {
         closed = true;
         mapTrace.close();
         binned.close();
+        comparison.close();
         clock.stop();
         playback.pause();
     }

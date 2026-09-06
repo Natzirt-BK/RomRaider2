@@ -85,7 +85,9 @@ rows with bounded background work and stale-output guards.
 over a reviewed, frozen 2D/3D table snapshot with explicit axis mappings and
 geometric-neighbor semantics. [Binned 2D/3D views](BINNED_LOG_ANALYSIS.md) now add
 explicit axis origins/widths, counts, gap-preserving tables/plots and bounded
-background aggregation. Continue injector transfer and run comparisons.
+background aggregation. [Common-bin run comparisons](RUN_COMPARISONS.md) now
+support independent CSV/range selection, count-aware means/differences, bounded
+second-log imports and gap-aware overlays. Continue injector transfer.
 Portable logger-setup export/import and
 bounded large-log review follow. Background recording needs its own Android
 service/USB/notification and failure-recovery design; switching to GAUGES is not

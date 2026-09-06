@@ -12,7 +12,7 @@ from whichever controls happen to be visible later.
 The table shows original **1-based CSV sample numbers**, recorded time in the
 CSV's own units, and the selected channel's original numeric reading. Sample
 numbers identify data rows, not physical text-file line numbers; headers and
-quoted multiline fields are not samples. Gaps in sample numbers are expected
+skipped blank lines are not samples. Gaps in sample numbers are expected
 when intervening rows were rejected. A missing time column or nonfinite reading
 is displayed as unavailable, never replaced with zero.
 

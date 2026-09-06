@@ -143,3 +143,10 @@ two-axis aggregation, explicit counts/gaps, threshold-aware heatmaps, 2D curves
 and isometric 3D mean plots. Applied-range linkage, bounded background work and
 stale/cancelled result guards are implemented. Run comparisons, injector
 transfer, general large-log handling and remaining mobile work are still open.
+
+[Saved-run comparison](RUN_COMPARISONS.md) is implemented in 1.1.3 source:
+independent CSV/range/channel selection, explicit common bins, count-aware
+means/differences, shared-scale overlays, bounded second-log imports and stale
+work guards. This advances item 6 without claiming automatic pull/time alignment
+or statistical/vehicle qualification. Injector transfer, general large-log
+review, portable setup transfer and remaining mobile work are still open.
