@@ -67,6 +67,7 @@ import com.romraider.portable.logger.definition.PortableLoggerParameter;
 import com.romraider.portable.logger.definition.PortableMut2LogConfigReader;
 
 import java.io.InputStream;
+import java.io.IOException;
 import java.io.File;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
@@ -374,13 +375,45 @@ public final class MainActivity extends Activity {
         host.addView(gaugesPage);
         page.addView(host, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
-        TextView footer = text("ECU writing is unavailable in this version.",
+        TextView footer = text("ECU writing unavailable · About / licenses",
                 11, MUTED);
         workspaceFooter = footer;
         footer.setGravity(Gravity.CENTER);
         footer.setPadding(0, dp(9), 0, 0);
+        footer.setMinHeight(dp(48));
+        footer.setFocusable(true);
+        footer.setContentDescription("About RomRaider2 and software licenses");
+        footer.setOnClickListener(view -> showAbout());
         page.addView(footer, matchWrap());
         setContentView(page);
+    }
+
+    private void showAbout() {
+        new AlertDialog.Builder(this).setTitle("RomRaider2 " + BuildConfig.VERSION_NAME)
+                .setMessage("Independent community software. Not affiliated with Subaru, STI or Mitsubishi. "
+                        + "Gauge markings are reference scales, not engine limits. ECU writing is unavailable.")
+                .setPositiveButton("Software license", (dialog, which) -> showNotice("license.txt", "Software license"))
+                .setNeutralButton("Brand notice", (dialog, which) -> showNotice("STI-wordmark-NOTICE.txt", "Brand notice"))
+                .setNegativeButton("Close", null).show();
+    }
+
+    private void showNotice(String asset, String title) {
+        try (InputStream input = getAssets().open("notices/" + asset)) {
+            java.io.ByteArrayOutputStream bytes = new java.io.ByteArrayOutputStream();
+            byte[] buffer = new byte[4096];
+            int count;
+            while ((count = input.read(buffer)) != -1) {
+                if (bytes.size() + count > 65536) throw new IOException("Notice is too large");
+                bytes.write(buffer, 0, count);
+            }
+            TextView noticeText = text(new String(bytes.toByteArray(), StandardCharsets.UTF_8), 14, INK);
+            noticeText.setTextIsSelectable(true);
+            noticeText.setPadding(dp(16), dp(12), dp(16), dp(12));
+            ScrollView scroll = new ScrollView(this);
+            scroll.addView(noticeText);
+            new AlertDialog.Builder(this).setTitle(title).setView(scroll)
+                    .setPositiveButton("Close", null).show();
+        } catch (IOException failure) { notice("Unable to open bundled notice: " + failure.getMessage()); }
     }
 
     private void showLogger() {
@@ -1507,7 +1540,7 @@ public final class MainActivity extends Activity {
         Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         intent.setType("text/csv");
-        intent.putExtra(Intent.EXTRA_TITLE, "RomRaider2-android-preview.csv");
+        intent.putExtra(Intent.EXTRA_TITLE, "RomRaider2-android-simulated.csv");
         startActivityForResult(intent, SAVE_PREVIEW_LOG);
     }
 

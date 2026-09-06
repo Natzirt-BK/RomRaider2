@@ -326,6 +326,7 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
         });
     }
     private void verifyGaugesOnly() throws Exception {
+        verifyBundledNotices();
         verifyMissingGaugeReading();
         verifySelection(2);
         invoke("toggleLoggerPreview", new Class<?>[0]);
@@ -359,6 +360,20 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
         invoke("setLoggerGaugeTheme", new Class<?>[] {MobileGaugeTheme.class}, MobileGaugeTheme.RALLY_PRECISION);
         invoke("showGaugesOnly", new Class<?>[0]);
         System.out.println("PASS: all themes preserve the same simulated session and gauge instances across view switches.");
+    }
+
+    private void verifyBundledNotices() throws Exception {
+        for (String asset : new String[] {"license.txt", "STI-wordmark-NOTICE.txt"}) {
+            try (java.io.InputStream input = getTargetContext().getAssets().open("notices/" + asset)) {
+                check(input.read(new byte[256]) > 100, "Bundled notice is missing or empty: " + asset);
+            }
+        }
+        invoke("showAbout", new Class<?>[0]);
+        clickDialogText("Brand notice");
+        clickDialogText("Close");
+        invoke("showAbout", new Class<?>[0]);
+        clickDialogText("Software license");
+        clickDialogText("Close");
     }
     private void captureGaugeGallery() throws Exception {
         invoke("showLoggerGaugeDemo", new Class<?>[0]);

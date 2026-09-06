@@ -108,6 +108,9 @@ jobs:
             com.romraider.mobile.preview platform/android/app/build/outputs/apk/debug/app-debug.apk
           AAPT="$ANDROID_HOME/build-tools/36.0.0/aapt" bash packaging/android/verify-package-version.sh \
             com.romraider.mobile.preview.openporttest platform/android/app/build/outputs/apk/openportDiagnostic/app-openportDiagnostic.apk
+          bash packaging/android/verify-notices.sh \
+            platform/android/app/build/outputs/apk/debug/app-debug.apk \
+            platform/android/app/build/outputs/apk/openportDiagnostic/app-openportDiagnostic.apk
           APKSIGNER="$ANDROID_HOME/build-tools/36.0.0/apksigner" \
             bash packaging/android/verify-signing.sh "$(< packaging/android/signing-certificate.sha256)" \
               platform/android/app/build/outputs/apk/debug/app-debug.apk \

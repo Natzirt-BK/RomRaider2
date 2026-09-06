@@ -130,10 +130,32 @@ val stageAndroidBranding by tasks.registering(StageAndroidBranding::class) {
     outputDirectory.set(layout.buildDirectory.dir("generated/branding-res"))
 }
 
+abstract class StageAndroidNotices : DefaultTask() {
+    @get:Inject abstract val fileSystemOperations: FileSystemOperations
+    @get:InputFile abstract val softwareLicense: RegularFileProperty
+    @get:InputFile abstract val brandNotice: RegularFileProperty
+    @get:OutputDirectory abstract val outputDirectory: DirectoryProperty
+
+    @TaskAction fun stage() {
+        fileSystemOperations.sync {
+            from(softwareLicense, brandNotice)
+            into(outputDirectory.dir("notices"))
+        }
+    }
+}
+
+val stageAndroidNotices by tasks.registering(StageAndroidNotices::class) {
+    softwareLicense.set(rootProject.layout.projectDirectory.file("../../license.txt"))
+    brandNotice.set(rootProject.layout.projectDirectory.file("../../licenses/STI-wordmark-NOTICE.txt"))
+    outputDirectory.set(layout.buildDirectory.dir("generated/notice-assets"))
+}
+
 androidComponents {
     onVariants(selector().all()) { variant ->
         variant.sources.res?.addGeneratedSourceDirectory(
             stageAndroidBranding, StageAndroidBranding::outputDirectory)
+        variant.sources.assets?.addGeneratedSourceDirectory(
+            stageAndroidNotices, StageAndroidNotices::outputDirectory)
     }
 }
 

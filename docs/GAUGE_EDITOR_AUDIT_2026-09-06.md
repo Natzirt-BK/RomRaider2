@@ -16,12 +16,16 @@ security, hardware or calibration-safety certification.
 | Definition size parser indexed before the start of short strings and could overflow unit multiplication | Short byte counts and case-insensitive units now parse; negative/overflowing counts fail explicitly. |
 | Shared-cell cache used storage-type codes as byte widths and missed partial overlaps | Float and MOVI20 addresses now use actual byte widths; every overlapping byte region refreshes all affected cell models. Edit/Undo/Redo tests cover float aliases and partial integer overlaps. |
 | Legacy checksum table opened an unowned Swing dialog from the model | Warnings now use the existing UI-neutral ROM interaction boundary. Invalid/disabled checksums are still reported; this does not suppress warnings or approve a ROM. |
+| Android packaging omitted the software license and STI attribution | Both notices are now generated assets, accessible through About / licenses. Package verification compares their bytes with the repository originals; emulator checks exercise both dialogs. |
 
 The selection/reload/parser work is at `551b44c4` with hosted
 [Linux/Windows](https://github.com/Natzirt-BK/RomRaider2/actions/runs/34022661714)
 and [Android/Mac/SteamOS](https://github.com/Natzirt-BK/RomRaider2/actions/runs/34022661871)
-passes. The subsequent shared-cell/checksum-boundary fixes require fresh package
-qualification before publication; previous artifacts do not contain those fixes.
+passes. The subsequent shared-cell/checksum-boundary fixes at `4824204a` also
+passed fresh [Linux/Windows](https://github.com/Natzirt-BK/RomRaider2/actions/runs/34023171449)
+and [Android/Mac/SteamOS](https://github.com/Natzirt-BK/RomRaider2/actions/runs/34023171471)
+qualification. The final Android notice change still requires fresh packaged
+artifacts before publication.
 
 ## Application checks
 
@@ -57,6 +61,14 @@ a ROM file; the source-file bytes were rechecked afterward.
 | Forester `Z2WC412I_DM23100`, ECU `3B12584306`, 1 MiB baseline definition | Base and retained test image load 609 tables, 884 regions and 19,200 numeric cells without structural/nonfinite findings. |
 | Forester installed custom overrun definition | Matches its controlled workspace copy by SHA-256. The retained test image loads 618 tables, 896 regions and 19,286 numeric cells without structural/nonfinite findings. Its paired ECUFlash custom XML also matches the controlled workspace copy. |
 | Forester serialization/checksum | Base no-edit serialization changes four save-stamp bytes. The retained v33 test ROM still has its previously documented stale checksum; serialization changes its four checksum bytes and three save-stamp bytes. These are **not byte-identical round trips** and do not make the retained input flash-approved. All original files remain unchanged. |
+
+The independent Forester overrun and rev-limit/DBW audits also pass, as do the
+three final overrun Logger variants, their exact source-hash checks, and six
+RAM-variable code-use checks. A legacy Logger audit script referenced an obsolete
+Downloads directory; its local path was repaired to use the pinned workspace
+v370 sources without changing those sources or any definition. Shared axes and
+intentional aliases remain visible in the XML inventory rather than being
+misrepresented as independent calibration regions.
 
 The fresh EVO audit also rechecks retained ECUFlash 1.44.4870 application-load
 and controlled-file-edit evidence. It does not rerun ECUFlash against a cable.
