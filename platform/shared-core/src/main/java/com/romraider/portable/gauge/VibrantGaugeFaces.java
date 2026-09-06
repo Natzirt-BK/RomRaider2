@@ -12,18 +12,22 @@ final class VibrantGaugeFaces {
             MUTED = 0xFFA6B1C9, VIOLET = 0xFFA17BFF, ORANGE = 0xFFFFA24D, LIME = 0xFFB5FF42;
     private VibrantGaugeFaces() { }
 
-    static void draw(Surface s, Style style, Reading r) {
+    static void draw(Surface s, Style style, Reading r, boolean framed) {
         boolean light = style == Style.SUNSET_GT;
         int accent = style == Style.LASER_LED ? LIME : style == Style.SUNSET_GT ? ORANGE
                 : style == Style.ELECTRIC_BLOOM ? 0xFF548CFF : CYAN;
-        s.rect(0, 0, 320, 250, 15, r.warning && r.available() ? 0xFFFF554F : 0xFF566175);
-        s.rect(1, 1, 318, 248, 14, light ? 0xFF35212E : 0xFF080D1A);
-        s.rect(3, 3, 314, 27, 12, light ? 0xFF502D3E : 0xFF172036);
+        if (framed) {
+            s.rect(0, 0, 320, 250, 15, r.warning && r.available() ? 0xFFFF554F : 0xFF566175);
+            s.rect(1, 1, 318, 248, 14, light ? 0xFF35212E : 0xFF080D1A);
+            s.rect(3, 3, 314, 27, 12, light ? 0xFF502D3E : 0xFF172036);
+        }
         s.text(r.name.toUpperCase(Locale.ROOT), 16, 22, 12, WHITE, -1, 250, false);
         s.text("RR2", 304, 22, 10, accent, 1, 32, true);
-        s.line(16, 31, 236, 31, 1, alpha(accent, 100));
-        s.line(241, 31, 276, 31, 2, PINK);
-        s.line(282, 31, 304, 31, 2, ORANGE);
+        if (framed) {
+            s.line(16, 31, 236, 31, 1, alpha(accent, 100));
+            s.line(241, 31, 276, 31, 2, PINK);
+            s.line(282, 31, 304, 31, 2, ORANGE);
+        }
         switch (style) {
             case PHOSPHOR_84: phosphor(s, r); break;
             case ELECTRIC_BLOOM: electric(s, r); break;
@@ -33,7 +37,7 @@ final class VibrantGaugeFaces {
             default: throw new AssertionError(style);
         }
         s.text(r.scaleLabel, 160, 221, 8, MUTED, 0, 278, true);
-        s.line(16, 227, 304, 227, .6, light ? 0xFF765062 : 0xFF30394D);
+        if (framed) s.line(16, 227, 304, 227, .6, light ? 0xFF765062 : 0xFF30394D);
         String state = !r.available() ? (r.state.isEmpty() ? "NO VALID DATA" : r.state)
                 : r.warning ? "LIMIT WARNING" : r.state;
         s.text(state, 16, 241, 9, !r.available() || r.warning ? ORANGE : MUTED, -1, 170, true);

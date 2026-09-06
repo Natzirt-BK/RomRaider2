@@ -18,6 +18,13 @@ public final class PortableGaugeCheck {
             Recording surface = new Recording();
             GaugeFaceRenderer.draw(surface, style, reading(12.7, -15, 30));
             faces.add(surface.commands.toString());
+            Recording explicitCard = new Recording();
+            GaugeFaceRenderer.draw(explicitCard, style, reading(12.7, -15, 30), GaugeFaceRenderer.Presentation.CARD);
+            require(surface.commands.toString().equals(explicitCard.commands.toString()), "Default card changed");
+            Recording seamless = new Recording();
+            GaugeFaceRenderer.draw(seamless, style, reading(12.7, -15, 30), GaugeFaceRenderer.Presentation.SEAMLESS);
+            require(surface.chrome > 0 && seamless.chrome == 0, "Seamless gauge retains card chrome: " + style);
+            require(surface.labels.equals(seamless.labels), "Seamless gauge lost reading/status labels: " + style);
             for (double value : new double[] {Double.NaN, Double.POSITIVE_INFINITY,
                     Double.NEGATIVE_INFINITY, -100, 0, 100, Double.MAX_VALUE}) {
                 for (double[] range : new double[][] {{-15, 30}, {0, 0}, {10, -10},
@@ -26,6 +33,9 @@ public final class PortableGaugeCheck {
                     require(Double.isFinite(reading.progress()) && reading.progress() >= 0
                             && reading.progress() <= 1, "Invalid gauge fraction");
                     GaugeFaceRenderer.draw(new Recording(), style, reading);
+                    Recording floating = new Recording();
+                    GaugeFaceRenderer.draw(floating, style, reading, GaugeFaceRenderer.Presentation.SEAMLESS);
+                    require(floating.chrome == 0, "Invalid-reading state restored a gauge frame");
                 }
             }
             Recording missing = new Recording();
@@ -44,7 +54,7 @@ public final class PortableGaugeCheck {
         require(!GaugeReferenceScale.forChannel("", "Unknown", "", Double.NaN, Double.NaN).reference,
                 "Unknown values must not invent a reference");
         System.out.println("Portable gauge checks passed: " + faces.size()
-                + " faces, " + faces.size() * 35 + " edge-case renders, unit-aware scales");
+                + " faces, " + faces.size() * 70 + " card/seamless edge-case renders, unit-aware scales");
     }
     private static void motion() {
         com.romraider.portable.gauge.GaugeMotion motion = new com.romraider.portable.gauge.GaugeMotion();
@@ -79,11 +89,14 @@ public final class PortableGaugeCheck {
     }
     private static final class Recording implements GaugeFaceRenderer.Surface {
         final StringBuilder commands = new StringBuilder();
+        final java.util.List<String> labels = new java.util.ArrayList<>();
+        int chrome;
         private void coordinates(double... values) {
             for (double value : values) require(Double.isFinite(value), "Non-finite drawing coordinate");
         }
         public void rect(double x, double y, double w, double h, double r, int color) {
             coordinates(x,y,w,h,r); require(w >= 0 && h >= 0 && r >= 0, "Negative rectangle");
+            if (x < 5 && y < 5 && w > 310 && (h > 240 || h <= 30)) chrome++;
             commands.append("rect").append(color).append(x).append(y);
         }
         public void circle(double x, double y, double r, int color) {
@@ -91,10 +104,12 @@ public final class PortableGaugeCheck {
         }
         public void line(double x, double y, double xx, double yy, double w, int color) {
             coordinates(x,y,xx,yy,w); commands.append("line").append(x).append(y);
+            if (y == yy && xx - x >= 200 && (y == 31 || y == 34 || y == 227)) chrome++;
         }
         public void text(String value, double x, double y, double size, int color, int align, double width, boolean mono) {
             coordinates(x,y,size,width); require(value != null && size > 0 && width > 0, "Invalid text");
             commands.append(value);
+            labels.add(value);
         }
         public void radialCircle(double x, double y, double radius, int center, int edge) {
             coordinates(x, y, radius); require(radius > 0, "Invalid radial fill");

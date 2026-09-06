@@ -57,6 +57,7 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
             else if (phase.equals("gauges")) verifyGaugesOnly();
             else if (phase.equals("mounted-fullscreen")) verifyMountedFullScreen();
             else if (phase.equals("mounted-layouts")) verifyMountedLayouts();
+            else if (phase.equals("seamless-gauges")) verifySeamlessGauges();
             else if (phase.equals("live-gauges")) verifyReadOnlySessionViewSwitch();
             else if (phase.equals("calculated-gauges")) verifyCalculatedGauges();
             else if (phase.equals("channel-transfer")) verifyChannelTransfer();
@@ -559,6 +560,36 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
         System.out.println("PASS: immersive gauges hide bars, stay awake when stopped, release awake in background, and exit through Back/LOGGER.");
     }
 
+    private void verifySeamlessGauges() {
+        runOnMainSync(() -> {
+            for (MobileGaugeTheme theme : MobileGaugeTheme.values()) {
+                MobileGaugeView view = new MobileGaugeView(activity);
+                view.setTheme(theme);
+                view.setValue("P8", "Engine Speed", "3210", "rpm", 3210, 1000, 5000);
+                view.setDataState("SIMULATED");
+                int height = theme.instrumentStyle() == null ? 205 : 250;
+                view.measure(android.view.View.MeasureSpec.makeMeasureSpec(320, android.view.View.MeasureSpec.EXACTLY),
+                        android.view.View.MeasureSpec.makeMeasureSpec(height, android.view.View.MeasureSpec.EXACTLY));
+                view.layout(0, 0, 320, height);
+                android.graphics.Bitmap bitmap = android.graphics.Bitmap.createBitmap(320, height,
+                        android.graphics.Bitmap.Config.ARGB_8888);
+                try {
+                    for (boolean seamless : new boolean[]{false, true, false}) {
+                        view.setFitToViewport(seamless);
+                        bitmap.eraseColor(android.graphics.Color.TRANSPARENT);
+                        view.draw(new android.graphics.Canvas(bitmap));
+                        int alpha = android.graphics.Color.alpha(bitmap.getPixel(4, height / 2));
+                        check(seamless ? alpha == 0 : alpha > 0,
+                                "Gauge card edge did not follow fullscreen presentation: " + theme + "/" + seamless);
+                        check(view.getContentDescription().toString().contains("3210"),
+                                "Presentation change lost accessible reading");
+                    }
+                } finally { bitmap.recycle(); }
+            }
+        });
+        System.out.println("PASS: all 21 native gauge styles remove outer card pixels in fullscreen and restore them on exit.");
+    }
+
     private void verifyMountedLayouts() throws Exception {
         invoke("showLoggerGaugeDemo", new Class<?>[0]);
         invoke("showGaugesOnly", new Class<?>[0]);
@@ -649,6 +680,8 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
     private void assertMountedWindow(boolean enabled) throws Exception {
         check((Boolean) field("mountedFullScreen") == enabled, "Unexpected mounted mode state");
         check(screenAwake() == enabled, "Idle mounted keep-screen-on state incorrect");
+        runOnMainSync(() -> check((((android.view.View) fieldUnchecked("gaugesStatus")).getBackground() == null)
+                == enabled, "Mounted status frame was not removed/restored"));
         runOnMainSync(() -> check(((android.view.View) fieldUnchecked("workspaceTabs")).getVisibility()
                 == (enabled ? android.view.View.GONE : android.view.View.VISIBLE), "Mounted navigation chrome incorrect"));
         if (android.os.Build.VERSION.SDK_INT >= 30) {

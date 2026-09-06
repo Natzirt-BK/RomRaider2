@@ -26,7 +26,8 @@ import com.romraider.portable.gauge.GaugeFaceRenderer
 
 @Composable
 internal fun InstrumentGauge(style: GaugeFaceRenderer.Style,
-    reading: GaugeFaceRenderer.Reading, modifier: Modifier = Modifier) {
+    reading: GaugeFaceRenderer.Reading, modifier: Modifier = Modifier,
+    presentation: GaugeFaceRenderer.Presentation = GaugeFaceRenderer.Presentation.CARD) {
     val measurer = rememberTextMeasurer()
     val motion = remember { com.romraider.portable.gauge.GaugeMotion() }
     var indicator by remember { mutableStateOf(reading.value) }
@@ -93,7 +94,7 @@ internal fun InstrumentGauge(style: GaugeFaceRenderer.Style,
                     val left = x.toFloat() - when { align < 0 -> 0f; align > 0 -> layout.size.width.toFloat(); else -> layout.size.width / 2f }
                     scope.drawText(layout, topLeft = Offset(left, baseline.toFloat() - layout.firstBaseline))
                 }
-            }, style, if (animated) reading.withIndicator(indicator) else reading)
+            }, style, if (animated) reading.withIndicator(indicator) else reading, presentation)
         }
     }
 }

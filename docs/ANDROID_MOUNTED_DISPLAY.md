@@ -19,6 +19,15 @@ full width; faces scale uniformly without stretching or cropping. Portrait,
 landscape and window-size changes trigger a fresh fit. Some space around a face
 is intentional to preserve its proportions.
 
+Full-screen gauges use a seamless presentation: no surrounding card backgrounds,
+rectangular borders, header strips or decorative header/footer divider lines.
+The instruments share one dark backdrop. Dial bezels, scales, numeric display
+windows and style-specific artwork remain part of the gauge itself, and warning,
+stopped/stale and unavailable-reading text stays visible. Exiting full screen
+restores the regular cards without replacing gauge instances or the recording.
+The same borderless presentation is used in JavaFX and Compose mounted views;
+their normal workspace theme is restored on exit.
+
 **EXIT** or Android Back restores the regular Gauges view. **STOP** remains
 accessible and stops the same recording without leaving mounted mode. The display
 stays awake even when stopped or displaying explicitly simulated data. Entering
@@ -48,12 +57,20 @@ The synthetic service tests also switch full screen during disk-backed capture.
 The `mounted-layouts` phase checks every count in portrait and landscape with
 both legacy and custom faces, retains hidden gauges/profile identity, uses the
 native count picker, checks restoration, and captures 24 actual screenshots.
+The `seamless-gauges` phase checks native transparent outer-edge pixels for all
+21 Android styles and verifies that regular card pixels return on exit.
 The `live-gauges` phase also changes counts during synthetic capture and verifies
 the original session and exported CSV. Portable layout checks cover 108
 viewport/count/face combinations, including tiny and zero-sized viewports.
 These checks do not establish real-phone thermal behavior, sunlight readability,
 USB stability or vehicle safety. Set up while parked; do not adjust it while driving.
 This feature is not in the published 1.1.2 packages.
+
+September 6 seamless-display checks: 65 Android unit tests, debug/automation
+builds and lint pass (five existing lint warnings). Native emulator phases pass
+for all 21 borderless styles, fullscreen lifecycle, all 24 count/orientation
+layouts, live-session/CSV continuity and calculated gauges. Shared rendering
+checks cover 1,120 card/seamless edge cases; the desktop suite passes 284 tests.
 
 ## Actual Android layouts
 
@@ -70,7 +87,7 @@ vehicle-test results. The complete 24-image set is reproducible with the
 
 This is an AI-generated product mockup using an actual Android screenshot as its
 screen reference, not a photograph of a vehicle test or exact hardware fitment.
-It predates the count-picker controls described above.
+It predates the count-picker controls and seamless presentation described above.
 The app display is explicitly simulated. [Generation prompts and method](images/mounted-phone-image-prompt.md)
 are retained with the image. See the [actual native gauge collection](images/all-mobile-gauge-styles.png)
 for ungenerated gauge artwork.

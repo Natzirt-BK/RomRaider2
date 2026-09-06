@@ -105,7 +105,8 @@ final class MobileGaugeView extends View {
                             scale.minimum, scale.maximum, measuredMaximum, dataState,
                             scale.reference ? "REFERENCE SCALE" : "RECENT SCALE", false)
                             .withIndicator(android.animation.ValueAnimator.areAnimatorsEnabled()
-                                    ? motion.valueAt(System.nanoTime()) : value));
+                                    ? motion.valueAt(System.nanoTime()) : value),
+                    fitToViewport ? GaugeFaceRenderer.Presentation.SEAMLESS : GaugeFaceRenderer.Presentation.CARD);
             canvas.restore();
             if (theme.instrumentStyle().usesNeedleMotion()
                     && android.animation.ValueAnimator.areAnimatorsEnabled() && motion.isAnimating(System.nanoTime()))
@@ -119,14 +120,16 @@ final class MobileGaugeView extends View {
             canvas.scale(factor, factor);
             width = 320; height = 205; density = 1;
         }
-        float corner = 10 * density;
-        paint.setStyle(Paint.Style.FILL);
-        paint.setColor(0xFF182129);
-        canvas.drawRoundRect(1, 1, width - 1, height - 1, corner, corner, paint);
-        paint.setStyle(Paint.Style.STROKE);
-        paint.setStrokeWidth(density);
-        paint.setColor(0xFF344350);
-        canvas.drawRoundRect(1, 1, width - 1, height - 1, corner, corner, paint);
+        if (!fitToViewport) {
+            float corner = 10 * density;
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(0xFF182129);
+            canvas.drawRoundRect(1, 1, width - 1, height - 1, corner, corner, paint);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(density);
+            paint.setColor(0xFF344350);
+            canvas.drawRoundRect(1, 1, width - 1, height - 1, corner, corner, paint);
+        }
 
         paint.setStyle(Paint.Style.FILL);
         paint.setTypeface(labelTypeface);

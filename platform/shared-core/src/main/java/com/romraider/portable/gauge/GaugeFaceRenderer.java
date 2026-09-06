@@ -5,6 +5,7 @@ import java.util.Locale;
 
 /** Shared vector instruments. Coordinates: 320 x 250; branded assets have separate notices. */
 public final class GaugeFaceRenderer {
+    public enum Presentation { CARD, SEAMLESS }
     public enum Style { RALLY_PRECISION, CIRCUIT_STACK, RETRO_VFD,
         CLUB_SPORT, SWEEP_RIBBON, TWIN_ARC, AMBER_MATRIX, VECTOR_HUD, TURBO_POD,
         STI_NIGHT, EVOLUTION_NIGHT, PHOSPHOR_84, ELECTRIC_BLOOM, SUNSET_GT, LASER_LED, PRISM_CASSETTE;
@@ -60,24 +61,33 @@ public final class GaugeFaceRenderer {
     private GaugeFaceRenderer() { }
 
     public static void draw(Surface s, Style style, Reading r) {
+        draw(s, style, r, Presentation.CARD);
+    }
+
+    /** Seamless instruments omit surrounding card chrome, not dial artwork or warnings. */
+    public static void draw(Surface s, Style style, Reading r, Presentation presentation) {
         if (s == null || style == null || r == null) throw new IllegalArgumentException("Gauge surface, style and reading are required");
+        if (presentation == null) throw new IllegalArgumentException("Gauge presentation is required");
+        boolean framed = presentation == Presentation.CARD;
         if (style == Style.STI_NIGHT || style == Style.EVOLUTION_NIGHT) {
-            PremiumGaugeFaces.draw(s, style, r);
+            PremiumGaugeFaces.draw(s, style, r, framed);
             return;
         }
         if (style == Style.PHOSPHOR_84 || style == Style.ELECTRIC_BLOOM || style == Style.SUNSET_GT
                 || style == Style.LASER_LED || style == Style.PRISM_CASSETTE) {
-            VibrantGaugeFaces.draw(s, style, r);
+            VibrantGaugeFaces.draw(s, style, r, framed);
             return;
         }
         int accent = style == Style.RETRO_VFD ? MINT
                 : style == Style.CIRCUIT_STACK || style == Style.AMBER_MATRIX ? AMBER
                 : style == Style.TWIN_ARC || style == Style.VECTOR_HUD ? 0xFF7CDFFF : RED;
-        s.rect(0, 0, 320, 250, 14, r.warning ? RED : 0xFF33404B);
-        s.rect(1.5, 1.5, 317, 247, 13, style == Style.RETRO_VFD ? 0xFF071510 : 0xFF10171D);
+        if (framed) {
+            s.rect(0, 0, 320, 250, 14, r.warning ? RED : 0xFF33404B);
+            s.rect(1.5, 1.5, 317, 247, 13, style == Style.RETRO_VFD ? 0xFF071510 : 0xFF10171D);
+        }
         s.text(r.name.toUpperCase(Locale.ROOT), 16, 24, 15, WHITE, -1, 226, false);
         s.text("RR2", 304, 24, 11, accent, 1, 38, true);
-        s.line(16, 34, 304, 34, 1, style == Style.RETRO_VFD ? 0xFF234C39 : 0xFF2B3741);
+        if (framed) s.line(16, 34, 304, 34, 1, style == Style.RETRO_VFD ? 0xFF234C39 : 0xFF2B3741);
         switch (style) {
             case RALLY_PRECISION: rally(s, r); break;
             case CIRCUIT_STACK: stack(s, r); break;

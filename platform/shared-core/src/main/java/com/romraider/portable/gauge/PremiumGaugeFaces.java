@@ -9,13 +9,15 @@ import com.romraider.portable.gauge.GaugeFaceRenderer.Surface;
 /** Night-cluster interpretations. Illumination is not a configured warning band. */
 final class PremiumGaugeFaces {
     private PremiumGaugeFaces() { }
-    static void draw(Surface s, Style style, Reading r) {
+    static void draw(Surface s, Style style, Reading r, boolean framed) {
         boolean sti = style == Style.STI_NIGHT;
         int red = sti ? 0xFFFF3348 : 0xFFFF5B40;
         int numerals = sti ? 0xFFFF493F : 0xFFE8E3D9;
-        s.rect(0, 0, 320, 250, 16, r.warning && r.available() ? 0xFFFF5D51 : 0xFF41434A);
-        s.rect(1, 1, 318, 248, 15, 0xFF080A0F);
-        s.rect(2, 2, 316, 28, 14, 0xFF12151B);
+        if (framed) {
+            s.rect(0, 0, 320, 250, 16, r.warning && r.available() ? 0xFFFF5D51 : 0xFF41434A);
+            s.rect(1, 1, 318, 248, 15, 0xFF080A0F);
+            s.rect(2, 2, 316, 28, 14, 0xFF12151B);
+        }
         s.text(r.name.toUpperCase(Locale.ROOT), 16, 21, 12, 0xFFCCD0D5, -1, 243, false);
         s.text("RR2", 304, 21, 10, 0xFF737982, 1, 35, true);
 

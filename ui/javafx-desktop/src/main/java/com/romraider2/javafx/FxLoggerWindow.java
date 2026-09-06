@@ -589,8 +589,8 @@ final class FxLoggerWindow {
         footer.setAlignment(Pos.CENTER_LEFT);
         VBox card = new VBox(7, name, body, footer);
         card.setPadding(new Insets(13));
-        card.getStyleClass().add("logger-card");
-        if (sample.getParameterId().equals(selectedDashboardParameter)) {
+        card.getStyleClass().add(gaugesOnly ? "logger-gauge-seamless" : "logger-card");
+        if (!gaugesOnly && sample.getParameterId().equals(selectedDashboardParameter)) {
             card.getStyleClass().add("logger-card-selected");
         }
         double width = switch (tile.getSize()) {
@@ -697,6 +697,7 @@ final class FxLoggerWindow {
                 gaugeMotions.computeIfAbsent(sample.getParameterId() + "\n" + sample.getConversionIdentity(),
                         key -> new com.romraider.portable.gauge.GaugeMotion()));
         view.setPrefSize(220, 172);
+        if (gaugesOnly) view.setPresentation(GaugeFaceRenderer.Presentation.SEAMLESS);
         return view;
     }
 
@@ -714,8 +715,13 @@ final class FxLoggerWindow {
         Region fill = new Region(); HBox.setHgrow(fill, Priority.ALWAYS);
         HBox bar = new HBox(12, back, mountedStatus, fill, fullscreen);
         bar.setAlignment(Pos.CENTER_LEFT); bar.setPadding(new Insets(6, 12, 6, 12));
+        String mountedStyle = "-rr-text: #edf1f4; -rr-muted: #a6b1bf; -fx-base: #17212b; "
+                + "-fx-background: #0f151b; -fx-background-color: #0f151b; -fx-text-background-color: #edf1f4;";
+        bar.setStyle(mountedStyle);
+        mountedGauges.setStyle(mountedStyle);
         mountedGauges.setAlignment(Pos.TOP_CENTER); mountedGauges.setPadding(new Insets(8));
         ScrollPane scroll = new ScrollPane(mountedGauges); scroll.setFitToWidth(true);
+        scroll.setStyle(mountedStyle + " -fx-background-insets: 0; -fx-padding: 0; -fx-border-width: 0;");
         root.setTop(bar); root.setCenter(scroll); root.setBottom(null);
         gaugeClock.play(); refreshViews();
     }

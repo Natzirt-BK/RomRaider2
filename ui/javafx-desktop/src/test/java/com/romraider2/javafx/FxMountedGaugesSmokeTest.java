@@ -13,6 +13,30 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
 @EnabledIfEnvironmentVariable(named = "RR2_FX_WINDOW_SMOKE", matches = "1")
 class FxMountedGaugesSmokeTest {
+    @Test void nativeInstrumentFramesDisappearAndRestoreWithoutLosingReadings() throws Exception {
+        FxTestRuntime.run(() -> {
+            for (var style : com.romraider.portable.gauge.GaugeFaceRenderer.Style.values()) {
+                var view = new FxInstrumentView(style, new com.romraider.portable.gauge.GaugeFaceRenderer.Reading(
+                        "Synthetic RPM", "3210", "rpm", 3210, 0, 9000, 5000,
+                        "SIMULATED", "REFERENCE SCALE", false));
+                view.resize(320, 250);
+                var parameters = new javafx.scene.SnapshotParameters();
+                parameters.setFill(javafx.scene.paint.Color.TRANSPARENT);
+                for (var presentation : new com.romraider.portable.gauge.GaugeFaceRenderer.Presentation[]{
+                        com.romraider.portable.gauge.GaugeFaceRenderer.Presentation.CARD,
+                        com.romraider.portable.gauge.GaugeFaceRenderer.Presentation.SEAMLESS,
+                        com.romraider.portable.gauge.GaugeFaceRenderer.Presentation.CARD}) {
+                    view.setPresentation(presentation);
+                    view.layout();
+                    double alpha = view.snapshot(parameters, null).getPixelReader().getColor(4, 125).getOpacity();
+                    assertEquals(presentation == com.romraider.portable.gauge.GaugeFaceRenderer.Presentation.SEAMLESS,
+                            alpha == 0, style + "/" + presentation);
+                    assertTrue(view.getAccessibleText().contains("3210"));
+                }
+            }
+        });
+    }
+
     @Test void switchesPreservePublishedRecordingStateAndBlankStaleReadings() throws Exception {
         FxLoggerWindow[] window = new FxLoggerWindow[1];
         try {
@@ -37,6 +61,8 @@ class FxMountedGaugesSmokeTest {
                     assertEquals(LoggerSessionState.RECORDING, context.getSession().getState());
                     FlowPane gauges = FxEditorControlsSmokeTest.field(window[0], "mountedGauges");
                     assertEquals(1, gauges.getChildren().size());
+                    assertFalse(gauges.getChildren().getFirst().getStyleClass().contains("logger-card"));
+                    assertFalse(gauges.getChildren().getFirst().getStyleClass().contains("logger-card-selected"));
                     window[0].setGaugesOnly(false);
                     assertEquals(historySize, context.getLiveData().getRecentSamples().get("gauge-fixture").size());
                 }

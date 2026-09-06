@@ -2627,6 +2627,7 @@ public final class MainActivity extends Activity {
             }
         }
         mountedFullScreen = enabled;
+        gaugesStatus.setBackground(enabled ? null : rounded(BACKGROUND, BORDER, 7));
         ((ViewGroup) loggerGaugeGrid.getParent()).removeView(loggerGaugeGrid);
         gaugesScroll.setVisibility(enabled ? View.GONE : View.VISIBLE);
         if (enabled) mountedGaugeViewport.addView(loggerGaugeGrid, new FrameLayout.LayoutParams(-1, -1));

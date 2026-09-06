@@ -27,6 +27,9 @@ parked. This view is not a replacement for the vehicle's instruments or warnings
 | Prism Cassette | Cyan/violet/pink rising segments, white digits and cassette-era stripes |
 
 Android 1.1.3 adds [full-screen mounted display and foreground keep-awake](ANDROID_MOUNTED_DISPLAY.md).
+Mounted views now omit surrounding card boxes and decorative divider lines,
+placing the instruments on one continuous dark backdrop. Normal dashboards keep
+their existing cards; dial artwork and warning/readout text are unchanged.
 All five styles apply to the selected channels, not fixed RPM/boost-only gauges.
 
 ![Five vibrant and retro gauge styles rendered by the native JavaFX canvas, using explicitly simulated RPM and boost values](images/five-vibrant-retro-gauges.png)
@@ -56,7 +59,7 @@ visual references, not endorsements, compatibility claims or reproduced artwork.
 The green segmented and amber dot-matrix treatments are RR2's interpretation of
 retro digital instruments. The ribbon, split pod and dual arcs provide different
 information layouts, not merely alternate colors. All faces are drawn in code.
-The owner's subsequent premium pass adds the STI wordmark; see the
+STI Night includes the STI wordmark; see the
 [brand provenance and notices](GAUGE_BRAND_NOTICES.md). No cluster photograph or
 manufacturer font asset is embedded.
 

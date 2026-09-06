@@ -16,6 +16,7 @@ final class FxInstrumentView extends Region {
     private final Canvas canvas = new Canvas();
     private final GaugeFaceRenderer.Style style;
     private final GaugeFaceRenderer.Reading reading;
+    private GaugeFaceRenderer.Presentation presentation = GaugeFaceRenderer.Presentation.CARD;
     private final com.romraider.portable.gauge.GaugeMotion motion;
     private final javafx.animation.AnimationTimer animation = new javafx.animation.AnimationTimer() {
         @Override public void handle(long now) {
@@ -39,6 +40,10 @@ final class FxInstrumentView extends Region {
         setAccessibleText(reading.name + ", " + (reading.available()
                 ? reading.display + " " + reading.units : "no valid data") + ", " + reading.state);
     }
+    void setPresentation(GaugeFaceRenderer.Presentation presentation) {
+        this.presentation = java.util.Objects.requireNonNull(presentation);
+        requestLayout();
+    }
     @Override protected void layoutChildren() {
         canvas.setWidth(getWidth()); canvas.setHeight(getHeight());
         GraphicsContext g = canvas.getGraphicsContext2D();
@@ -47,7 +52,7 @@ final class FxInstrumentView extends Region {
         if (factor <= 0) return;
         g.save(); g.translate((getWidth() - 320 * factor) / 2, (getHeight() - 250 * factor) / 2); g.scale(factor, factor);
         GaugeFaceRenderer.draw(new NativeSurface(g), style,
-                animated() ? reading.withIndicator(motion.valueAt(System.nanoTime())) : reading); g.restore();
+                animated() ? reading.withIndicator(motion.valueAt(System.nanoTime())) : reading, presentation); g.restore();
     }
     private boolean animated() {
         return style.usesNeedleMotion()

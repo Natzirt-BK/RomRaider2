@@ -262,7 +262,7 @@ internal fun LoggerWorkspace(
         }
     }
 
-    val colors = workspaceColors(darkTheme, steamOs)
+    val colors = workspaceColors(darkTheme || gaugesOnly, steamOs)
     MaterialTheme(colors = colors) {
         Surface(
             Modifier.fillMaxSize()
@@ -508,7 +508,8 @@ private fun MountedInstruments(
             Column(Modifier.fillMaxWidth().aspectRatio(320f / 250f).semantics {
                 contentDescription = "${channel.name}, ${if (raw.isFinite()) reading.display else "no valid data"}, $status"
             }) {
-                if (instrument != null) InstrumentGauge(instrument, reading, Modifier.fillMaxSize())
+                if (instrument != null) InstrumentGauge(instrument, reading, Modifier.fillMaxSize(),
+                    GaugeFaceRenderer.Presentation.SEAMLESS)
                 else {
                     Text(channel.name, Modifier.padding(8.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
                     GaugeTileBody(gaugeProgress(raw, range), gaugeStyle(theme), if (raw.isFinite()) reading.display else "—",
