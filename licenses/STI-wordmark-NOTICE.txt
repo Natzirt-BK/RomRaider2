@@ -1,0 +1,14 @@
+STI Night gauge theme — brand attribution
+
+The STI wordmark is associated with Subaru Tecnica International.
+Reference: inline 74 x 28 SVG wordmark at https://www.sti.jp/en/
+Retrieved: 2026-09-06
+
+The project owner requested this identifying mark for the STI Night theme.
+GaugeArtwork converts the reference geometry to native vector drawing commands.
+No cluster photograph or manufacturer font asset is included.
+
+RomRaider2 is an independent community project, not an official Subaru or STI
+product. No sponsorship or endorsement is claimed. The project's software
+license does not grant trademark rights. This notice records provenance; it is
+not a claim of permission from the brand owner.

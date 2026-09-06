@@ -3,7 +3,7 @@ package com.romraider.logger.api;
 
 import java.util.Locale;
 
-/** Original RR2 dashboard styles; no manufacturer artwork or logos. */
+/** RR2 dashboard styles; branded-theme attribution is in GAUGE_BRAND_NOTICES.md. */
 public enum LoggerGaugeTheme {
     RR2_CLASSIC("RR2 Classic"),
     RALLY_HERITAGE("Rally Heritage"),
@@ -19,7 +19,9 @@ public enum LoggerGaugeTheme {
     TWIN_ARC("Twin Arc"),
     AMBER_MATRIX("Amber Matrix"),
     VECTOR_HUD("Vector HUD"),
-    TURBO_POD("Turbo Pod");
+    TURBO_POD("Turbo Pod"),
+    STI_NIGHT("STI Night"),
+    EVOLUTION_NIGHT("Evolution Night");
 
     private final String displayName;
 

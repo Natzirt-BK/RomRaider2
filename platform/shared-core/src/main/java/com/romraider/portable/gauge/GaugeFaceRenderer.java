@@ -3,26 +3,43 @@ package com.romraider.portable.gauge;
 
 import java.util.Locale;
 
-/** Original vector instruments, shared by native UI adapters. Coordinates: 320 x 250. */
+/** Shared vector instruments. Coordinates: 320 x 250; branded assets have separate notices. */
 public final class GaugeFaceRenderer {
     public enum Style { RALLY_PRECISION, CIRCUIT_STACK, RETRO_VFD,
-        CLUB_SPORT, SWEEP_RIBBON, TWIN_ARC, AMBER_MATRIX, VECTOR_HUD, TURBO_POD }
+        CLUB_SPORT, SWEEP_RIBBON, TWIN_ARC, AMBER_MATRIX, VECTOR_HUD, TURBO_POD,
+        STI_NIGHT, EVOLUTION_NIGHT }
     public interface Surface {
         void rect(double x, double y, double width, double height, double radius, int color);
         void circle(double x, double y, double radius, int color);
         void line(double x1, double y1, double x2, double y2, double width, int color);
+        void radialCircle(double x, double y, double radius, int centerColor, int edgeColor);
+        /** Commands: 0 move(x,y), 1 line(x,y), 2 cubic(x1,y1,x2,y2,x,y), 3 close. */
+        void path(double[] commands, int color);
         /** align: -1 left, 0 center, +1 right; text must fit maxWidth. */
         void text(String text, double x, double baseline, double size, int color, int align, double maxWidth, boolean mono);
     }
     public static final class Reading {
         public final String name, display, units, state, scaleLabel;
         public final double value, minimum, maximum, peak;
+        public final double indicatorValue;
         public final boolean warning;
         public Reading(String name, String display, String units, double value,
                 double minimum, double maximum, double peak, String state, String scaleLabel, boolean warning) {
+            this(name, display, units, value, minimum, maximum, peak, state, scaleLabel, warning, value);
+        }
+        private Reading(String name, String display, String units, double value,
+                double minimum, double maximum, double peak, String state, String scaleLabel, boolean warning, double indicatorValue) {
             this.name = clean(name); this.display = clean(display); this.units = clean(units);
             this.value = value; this.minimum = minimum; this.maximum = maximum; this.peak = peak;
             this.state = clean(state); this.scaleLabel = clean(scaleLabel); this.warning = warning;
+            this.indicatorValue = indicatorValue;
+        }
+        public Reading withIndicator(double indicator) {
+            return new Reading(name, display, units, value, minimum, maximum, peak, state, scaleLabel, warning, indicator);
+        }
+        public double indicatorProgress() {
+            if (!available() || !Double.isFinite(indicatorValue)) return progress();
+            return Math.max(0, Math.min(1, (indicatorValue - minimum) / (maximum - minimum)));
         }
         public boolean available() {
             return Double.isFinite(value) && Double.isFinite(minimum)
@@ -40,6 +57,10 @@ public final class GaugeFaceRenderer {
 
     public static void draw(Surface s, Style style, Reading r) {
         if (s == null || style == null || r == null) throw new IllegalArgumentException("Gauge surface, style and reading are required");
+        if (style == Style.STI_NIGHT || style == Style.EVOLUTION_NIGHT) {
+            PremiumGaugeFaces.draw(s, style, r);
+            return;
+        }
         int accent = style == Style.RETRO_VFD ? MINT
                 : style == Style.CIRCUIT_STACK || style == Style.AMBER_MATRIX ? AMBER
                 : style == Style.TWIN_ARC || style == Style.VECTOR_HUD ? 0xFF7CDFFF : RED;

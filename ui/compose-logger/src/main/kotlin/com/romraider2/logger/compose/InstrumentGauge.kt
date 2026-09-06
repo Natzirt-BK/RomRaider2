@@ -3,6 +3,12 @@ package com.romraider2.logger.compose
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -22,6 +28,19 @@ import com.romraider.portable.gauge.GaugeFaceRenderer
 internal fun InstrumentGauge(style: GaugeFaceRenderer.Style,
     reading: GaugeFaceRenderer.Reading, modifier: Modifier = Modifier) {
     val measurer = rememberTextMeasurer()
+    val motion = remember { com.romraider.portable.gauge.GaugeMotion() }
+    var indicator by remember { mutableStateOf(reading.value) }
+    val animated = (style == GaugeFaceRenderer.Style.STI_NIGHT || style == GaugeFaceRenderer.Style.EVOLUTION_NIGHT) &&
+        !java.lang.Boolean.getBoolean("romraider2.gauge.reduceMotion")
+    LaunchedEffect(style, reading.value) {
+        if (!animated || !reading.value.isFinite()) {
+            motion.update(reading.value, System.nanoTime()); indicator = reading.value
+        } else {
+            motion.update(reading.value, System.nanoTime())
+            do { withFrameNanos { now -> indicator = motion.valueAt(now) } }
+            while (motion.isAnimating(System.nanoTime()))
+        }
+    }
     Canvas(modifier) {
         val factor = minOf(size.width / 320f, size.height / 250f)
         if (factor <= 0f) return@Canvas
@@ -42,6 +61,30 @@ internal fun InstrumentGauge(style: GaugeFaceRenderer.Style,
                 }
                 override fun text(text: String, x: Double, baseline: Double, size: Double,
                     color: Int, align: Int, maxWidth: Double, mono: Boolean) {
+                    drawLabel(text, x, baseline, size, color, align, maxWidth, mono)
+                }
+                override fun radialCircle(x: Double, y: Double, radius: Double, center: Int, edge: Int) {
+                    scope.drawCircle(androidx.compose.ui.graphics.Brush.radialGradient(
+                        listOf(Color(center), Color(edge)), Offset(x.toFloat(), y.toFloat()), radius.toFloat()),
+                        radius.toFloat(), Offset(x.toFloat(), y.toFloat()))
+                }
+                override fun path(commands: DoubleArray, color: Int) {
+                    val path = androidx.compose.ui.graphics.Path()
+                    var i = 0
+                    while (i < commands.size) {
+                        when (commands[i++].toInt()) {
+                            0 -> path.moveTo(commands[i++].toFloat(), commands[i++].toFloat())
+                            1 -> path.lineTo(commands[i++].toFloat(), commands[i++].toFloat())
+                            2 -> path.cubicTo(commands[i++].toFloat(), commands[i++].toFloat(), commands[i++].toFloat(),
+                                commands[i++].toFloat(), commands[i++].toFloat(), commands[i++].toFloat())
+                            3 -> path.close()
+                            else -> error("Unknown vector command")
+                        }
+                    }
+                    scope.drawPath(path, Color(color))
+                }
+                private fun drawLabel(text: String, x: Double, baseline: Double, size: Double,
+                    color: Int, align: Int, maxWidth: Double, mono: Boolean) {
                     val layout = measurer.measure(text, style = TextStyle(color = Color(color),
                         fontSize = with(scope) { size.toFloat().toSp() },
                         fontFamily = if (mono) FontFamily.Monospace else FontFamily.Default,
@@ -50,7 +93,7 @@ internal fun InstrumentGauge(style: GaugeFaceRenderer.Style,
                     val left = x.toFloat() - when { align < 0 -> 0f; align > 0 -> layout.size.width.toFloat(); else -> layout.size.width / 2f }
                     scope.drawText(layout, topLeft = Offset(left, baseline.toFloat() - layout.firstBaseline))
                 }
-            }, style, reading)
+            }, style, if (animated) reading.withIndicator(indicator) else reading)
         }
     }
 }

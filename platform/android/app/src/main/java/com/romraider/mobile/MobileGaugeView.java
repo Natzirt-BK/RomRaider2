@@ -27,6 +27,7 @@ final class MobileGaugeView extends View {
     private MobileGaugeScale scale = new MobileGaugeScale(0, 1);
     private MobileGaugeTheme theme = MobileGaugeTheme.RR2_CLASSIC;
     private String dataState = "";
+    private final com.romraider.portable.gauge.GaugeMotion motion = new com.romraider.portable.gauge.GaugeMotion();
 
     void setDataState(String state) {
         dataState = state == null ? "" : state;
@@ -36,6 +37,7 @@ final class MobileGaugeView extends View {
     }
 
     void markUnavailable(String state) {
+        motion.update(Double.NaN, System.nanoTime());
         value = Double.NaN;
         displayValue = "—";
         dataState = state;
@@ -61,6 +63,7 @@ final class MobileGaugeView extends View {
         displayValue = Double.isFinite(nextValue) ? nextDisplay : "—";
         units = nextUnits == null ? "" : nextUnits;
         value = nextValue;
+        motion.update(nextValue, System.nanoTime());
         measuredMinimum = minimum;
         measuredMaximum = maximum;
         scale = MobileGaugeScale.forChannel(id, name, units, minimum, maximum);
@@ -93,8 +96,13 @@ final class MobileGaugeView extends View {
             GaugeFaceRenderer.draw(new NativeSurface(canvas), theme.instrumentStyle(),
                     new GaugeFaceRenderer.Reading(name, displayValue, units, value,
                             scale.minimum, scale.maximum, measuredMaximum, dataState,
-                            scale.reference ? "REFERENCE SCALE" : "RECENT SCALE", false));
+                            scale.reference ? "REFERENCE SCALE" : "RECENT SCALE", false)
+                            .withIndicator(android.animation.ValueAnimator.areAnimatorsEnabled()
+                                    ? motion.valueAt(System.nanoTime()) : value));
             canvas.restore();
+            if ((theme == MobileGaugeTheme.STI_NIGHT || theme == MobileGaugeTheme.EVOLUTION_NIGHT)
+                    && android.animation.ValueAnimator.areAnimatorsEnabled() && motion.isAnimating(System.nanoTime()))
+                postInvalidateOnAnimation();
             return;
         }
         float corner = 10 * density;
@@ -243,6 +251,27 @@ final class MobileGaugeView extends View {
         public void line(double x1, double y1, double x2, double y2, double width, int color) {
             ink(color); paint.setStrokeWidth((float)width); paint.setStrokeCap(Paint.Cap.BUTT);
             canvas.drawLine((float)x1, (float)y1, (float)x2, (float)y2, paint);
+        }
+        public void radialCircle(double x, double y, double radius, int center, int edge) {
+            ink(center);
+            paint.setShader(new android.graphics.RadialGradient((float)x, (float)y, (float)radius,
+                    center, edge, android.graphics.Shader.TileMode.CLAMP));
+            canvas.drawCircle((float)x, (float)y, (float)radius, paint);
+            paint.setShader(null);
+        }
+        public void path(double[] commands, int color) {
+            android.graphics.Path path = new android.graphics.Path();
+            for (int i = 0; i < commands.length;) {
+                switch ((int) commands[i++]) {
+                    case 0: path.moveTo((float)commands[i++], (float)commands[i++]); break;
+                    case 1: path.lineTo((float)commands[i++], (float)commands[i++]); break;
+                    case 2: path.cubicTo((float)commands[i++], (float)commands[i++], (float)commands[i++],
+                            (float)commands[i++], (float)commands[i++], (float)commands[i++]); break;
+                    case 3: path.close(); break;
+                    default: throw new IllegalArgumentException("Unknown vector command");
+                }
+            }
+            ink(color); canvas.drawPath(path, paint);
         }
         public void text(String value, double x, double y, double size, int color, int align, double maxWidth, boolean mono) {
             ink(color); paint.setTypeface(mono ? labelTypeface : android.graphics.Typeface.DEFAULT_BOLD);

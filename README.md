@@ -106,7 +106,8 @@ published release until replacement packages are qualified and uploaded.
   graphs, dashboard gauges, Dyno and offline analysis. Current source adds
   channel categories, unit selection and rolling statistics.
 - Saved Gauge/Value/Trend/Alarm desktop layouts with conversion-bound limits.
-  Nine [new gauge designs](docs/GAUGE_DESIGN.md) and gauges-only views are available
+  Nine original [new gauge designs](docs/GAUGE_DESIGN.md), STI Night and Evolution
+  Night styles, and gauges-only views are available
   in current Android, JavaFX and Compose source. Switching views preserves the
   logger; desktop and Android configuration options are not identical.
 - Initial read-only [MAF and injector log analysis](docs/FUEL_LOG_ANALYSIS.md)

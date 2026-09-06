@@ -8,6 +8,7 @@ import java.util.Set;
 
 public final class PortableGaugeCheck {
     public static void main(String[] args) {
+        motion();
         Set<String> faces = new HashSet<>();
         for (GaugeFaceRenderer.Style style : GaugeFaceRenderer.Style.values()) {
             Recording surface = new Recording();
@@ -41,6 +42,26 @@ public final class PortableGaugeCheck {
         System.out.println("Portable gauge checks passed: " + faces.size()
                 + " faces, " + faces.size() * 35 + " edge-case renders, unit-aware scales");
     }
+    private static void motion() {
+        com.romraider.portable.gauge.GaugeMotion motion = new com.romraider.portable.gauge.GaugeMotion();
+        motion.update(100, 0);
+        require(motion.valueAt(0) == 100 && !motion.isAnimating(0), "First reading must not sweep from zero");
+        motion.update(200, 1);
+        require(motion.valueAt(50_000_001) == 150, "Needle interpolation midpoint");
+        require(motion.valueAt(100_000_001) == 200, "Needle must settle within 100ms");
+        motion.update(Double.NaN, 100_000_002);
+        require(Double.isNaN(motion.valueAt(100_000_002)) && !motion.isAnimating(100_000_002), "Missing data must disappear immediately");
+        motion.update(300, 100_000_003);
+        require(motion.valueAt(100_000_003) == 300, "Recovery must not animate from a stale reading");
+        motion.update(400, 2_000_000_000);
+        require(motion.valueAt(2_000_000_000) == 400, "Long gaps must not animate from old data");
+        motion.update(-Double.MAX_VALUE, 2_000_000_001);
+        motion.update(Double.MAX_VALUE, 2_100_000_002);
+        require(Double.isFinite(motion.valueAt(2_150_000_002L)), "Finite motion overflowed");
+        GaugeFaceRenderer.Reading reading = reading(12.7, -15, 30).withIndicator(0);
+        require(reading.value == 12.7 && reading.display.equals("12.7") && reading.indicatorProgress() != reading.progress(),
+                "Visual interpolation changed the exact numeric reading");
+    }
     private static void scale(String name, String units, double min, double max) {
         GaugeReferenceScale scale = GaugeReferenceScale.forChannel("", name, units, 0, 1);
         require(scale.minimum == min && scale.maximum == max && scale.reference, "Incorrect scale: " + name + units);
@@ -70,6 +91,13 @@ public final class PortableGaugeCheck {
         public void text(String value, double x, double y, double size, int color, int align, double width, boolean mono) {
             coordinates(x,y,size,width); require(value != null && size > 0 && width > 0, "Invalid text");
             commands.append(value);
+        }
+        public void radialCircle(double x, double y, double radius, int center, int edge) {
+            coordinates(x, y, radius); require(radius > 0, "Invalid radial fill");
+            commands.append("gradient").append(radius);
+        }
+        public void path(double[] path, int color) {
+            coordinates(path); commands.append("path").append(path.length).append(color);
         }
     }
 }

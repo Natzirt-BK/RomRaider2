@@ -5,7 +5,7 @@ import android.graphics.Color;
 
 import java.util.Locale;
 
-/** Original RR2 mobile gauge faces with no manufacturer artwork or logos. */
+/** RR2 mobile gauge faces; branded-theme attribution is in GAUGE_BRAND_NOTICES.md. */
 enum MobileGaugeTheme {
     RR2_CLASSIC("RR2 Classic", 0xFF141B22, 0xFFD92632, 0xFF718397,
             Color.WHITE, false, false),
@@ -28,7 +28,9 @@ enum MobileGaugeTheme {
     TWIN_ARC("Twin Arc", 0xFF10171D, 0xFF7CDFFF, 0xFFC4ACFF, Color.WHITE, false, false),
     AMBER_MATRIX("Amber Matrix", 0xFF211A0B, 0xFFFFC56B, 0xFF49391B, Color.WHITE, false, false),
     VECTOR_HUD("Vector HUD", 0xFF10171D, 0xFF7CDFFF, 0xFF436170, Color.WHITE, false, false),
-    TURBO_POD("Turbo Pod", 0xFF080E14, 0xFFFF8C61, 0xFF8495A4, Color.WHITE, false, false);
+    TURBO_POD("Turbo Pod", 0xFF080E14, 0xFFFF8C61, 0xFF8495A4, Color.WHITE, false, false),
+    STI_NIGHT("STI Night", 0xFF080A0F, 0xFFFF3348, 0xFF732738, Color.WHITE, true, false),
+    EVOLUTION_NIGHT("Evolution Night", 0xFF080A0F, 0xFFFF5B40, 0xFF666A73, Color.WHITE, true, false);
 
     final String displayName;
     final int face;

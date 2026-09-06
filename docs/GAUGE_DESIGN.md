@@ -1,6 +1,7 @@
 # Dashboard instruments
 
-RomRaider2 adds nine original instrument faces alongside its existing themes.
+RomRaider2 adds nine original instrument faces plus STI Night and Evolution Night
+alongside its existing themes.
 Choose a face in the Logger dashboard, then switch to **Gauges** on Android or
 **Gauges only** in the JavaFX or Compose desktop/handheld logger. Configure the display while
 parked. This view is not a replacement for the vehicle's instruments or warnings.
@@ -16,6 +17,8 @@ parked. This view is not a replacement for the vehicle's instruments or warnings
 | Amber Matrix | Dot-matrix numerals and discrete level indicators |
 | Vector HUD | Minimal numeric display with a vertical scale and marker |
 | Turbo Pod | Offset circular dial paired with a separate digital display |
+| STI Night | Red-lit dial, STI wordmark, shaded bezel and bright tapered needle |
+| Evolution Night | Metallic bezel, warm-white numerals and red-orange tapered needle |
 
 ## Research and design decisions
 
@@ -37,8 +40,10 @@ visual references, not endorsements, compatibility claims or reproduced artwork.
 
 The green segmented and amber dot-matrix treatments are RR2's interpretation of
 retro digital instruments. The ribbon, split pod and dual arcs provide different
-information layouts, not merely alternate colors. All artwork is drawn in code;
-no manufacturer face, badge, font asset or logo has been embedded.
+information layouts, not merely alternate colors. All faces are drawn in code.
+The owner's subsequent premium pass adds the STI wordmark; see the
+[brand provenance and notices](GAUGE_BRAND_NOTICES.md). No cluster photograph or
+manufacturer font asset is embedded.
 
 ## Data meaning
 
@@ -58,7 +63,7 @@ no manufacturer face, badge, font asset or logo has been embedded.
 
 ## Implementation and validation
 
-`GaugeFaceRenderer` in the portable module defines all nine vector faces. Android,
+`GaugeFaceRenderer` in the portable module defines all eleven added vector faces. Android,
 JavaFX and Compose adapt its drawing operations to their native canvases.
 The portable check exercises every face with finite, missing, infinite and
 out-of-range values and invalid scales. Native UI checks cover rendering and
@@ -66,10 +71,16 @@ view-switch behavior without a vehicle. Synthetic tests do not establish real
 vehicle timing, outdoor sunlight readability, USB stability or driving safety;
 those remain supervised acceptance checks.
 
-Android's `gauges` instrumentation phase preserves the simulated session across
-all 14 themes. `live-gauges` runs the actual `ReadOnlyLoggerSession` and streaming
+Android's `gauges` instrumentation phase exercises the simulated session across
+every theme. `live-gauges` runs the actual `ReadOnlyLoggerSession` and streaming
 CSV writer against an injected fake transport, checks that the file continues
 growing, and asserts one identification and one deliberate transport close.
 Both are part of the lifecycle regression script. `gauge-gallery` captures native
 screens and rejects an obstructing window. JavaFX's mounted-gauge smoke test
-checks published recording state, all 15 theme switches, stale data and recovery.
+checks published recording state, every theme switch, stale data and recovery.
+
+The two night-cluster faces interpolate only the needle for at most 100 ms.
+Numeric readings, measured peaks, warnings and CSV recording are never interpolated.
+First readings, invalid values, recovery and long gaps do not trigger a startup
+sweep. Android respects disabled system animators; desktop rendering also accepts
+`-Dromraider2.gauge.reduceMotion=true`.

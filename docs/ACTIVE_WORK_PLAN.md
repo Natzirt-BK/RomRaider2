@@ -38,3 +38,8 @@ until the owner is available; never initiate hardware polling to fill that gap.
 Checkpoints before gauge development: `79ad42f9` (approved compact editor)
 and `a4aca11f` (initial read-only fuel-log analysis), pushed to GitHub `master`
 and the development branch. These are source checkpoints, not public releases.
+
+Gauge checkpoint `294791f6` adds the nine approved faces, native mounted views,
+unit-aware scales, foreground/session protections and Android CSV continuity
+tests. It is on GitHub `master`; hosted desktop builds and Android regressions
+passed. The premium STI/Evolution refinement follows this checkpoint.

@@ -92,6 +92,7 @@ final class FxLoggerWindow {
     private final FlowPane mountedGauges = new FlowPane(12, 12);
     private final Label mountedStatus = new Label();
     private final Map<String, Long> receivedAt = new LinkedHashMap<>();
+    private final Map<String, com.romraider.portable.gauge.GaugeMotion> gaugeMotions = new java.util.concurrent.ConcurrentHashMap<>();
     private final javafx.animation.Timeline gaugeClock = new javafx.animation.Timeline(
             new javafx.animation.KeyFrame(javafx.util.Duration.seconds(1), event -> refreshViews()));
     private Node normalTop, normalBottom;
@@ -193,6 +194,7 @@ final class FxLoggerWindow {
                 synchronized (samples) {
                     samples.remove(parameterId);
                     receivedAt.remove(parameterId);
+                    gaugeMotions.keySet().removeIf(key -> key.startsWith(parameterId + "\n"));
                     gaugeAlerts.remove(parameterId);
                 }
                 scheduleRefresh();
@@ -678,7 +680,9 @@ final class FxLoggerWindow {
                 custom ? config.getScaleMinimum() : reference.minimum,
                 custom ? config.getScaleMaximum() : reference.maximum, high, state,
                 custom ? "CUSTOM SCALE" : reference.reference ? "REFERENCE SCALE" : "RECENT SCALE",
-                live && fresh && (alert == LoggerGaugeConfiguration.AlertState.HIGH || alert == LoggerGaugeConfiguration.AlertState.LOW)));
+                live && fresh && (alert == LoggerGaugeConfiguration.AlertState.HIGH || alert == LoggerGaugeConfiguration.AlertState.LOW)),
+                gaugeMotions.computeIfAbsent(sample.getParameterId() + "\n" + sample.getConversionIdentity(),
+                        key -> new com.romraider.portable.gauge.GaugeMotion()));
         view.setPrefSize(220, 172);
         return view;
     }
@@ -1133,6 +1137,7 @@ final class FxLoggerWindow {
         if (disposed) return;
         disposed = true;
         gaugeClock.stop();
+        gaugeMotions.clear();
         logLoads.close();
         context.getChannels().removeListener(channelListener);
         context.getSession().removeStateListener(stateListener);

@@ -23,7 +23,8 @@ a source checkpoint is not a new APK release.
   adapter. Only supported definition-backed read requests are sent.
 - Record to separate app-private files, flush completed cycles, recover recordings
   after restart and export the standard RomRaider CSV format.
-- Choose from 14 gauge themes, including nine new instrument faces. Switch between
+- Choose from 16 gauge themes, including nine new instrument faces and two
+  premium night-cluster styles. Switch between
   LOGGER and GAUGES without replacing the active session or recording.
   See [gauge designs and data states](../../docs/GAUGE_DESIGN.md).
 
