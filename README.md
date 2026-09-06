@@ -101,7 +101,8 @@ package verification and platform-specific limits.
 Development source is now **1.1.3**, adding reusable/linked
 [MAF/Injector analysis setups](docs/FUEL_LOG_ANALYSIS.md#reusable-setups-113-development-source),
 [curve review](docs/FUEL_CURVE_REVIEW.md), explicitly confirmed
-[offline MAF-table transfer](docs/REVIEWED_MAF_TRANSFER.md), and Android
+[offline MAF-table transfer](docs/REVIEWED_MAF_TRANSFER.md),
+[recorded-time transient filtering](docs/FUEL_RATE_FILTER.md), and Android
 [calculated logger channels](docs/CALCULATED_LOGGER_CHANNELS.md).
 These follow-ups are not in the published 1.1.2 downloads.
 

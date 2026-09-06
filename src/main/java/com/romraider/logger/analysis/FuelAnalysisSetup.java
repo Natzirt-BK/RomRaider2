@@ -6,8 +6,19 @@ import java.util.Objects;
 
 /** Portable inputs only: no captured data, file paths, sample indices or approval. */
 public record FuelAnalysisSetup(Kind kind, Channel x, Channel y, Channel correction,
-        double binWidth, double stoichAfr, double fuelDensity, List<Filter> filters) {
+        double binWidth, double stoichAfr, double fuelDensity, List<Filter> filters, Rate rate) {
     public enum Kind { MAF, INJECTOR }
+    public FuelAnalysisSetup(Kind kind, Channel x, Channel y, Channel correction,
+            double binWidth, double stoichAfr, double fuelDensity, List<Filter> filters) {
+        this(kind, x, y, correction, binWidth, stoichAfr, fuelDensity, filters, null);
+    }
+    public record Rate(Channel signal, Channel time, double secondsPerTimeUnit, double maximumRate, double maximumGapSeconds) {
+        public Rate {
+            Objects.requireNonNull(signal, "Rate signal"); Objects.requireNonNull(time, "Recorded time");
+            if (signal.equals(time)) throw new IllegalArgumentException("Rate signal and time must differ");
+            new FuelRateFilter(0, 1, secondsPerTimeUnit, maximumRate, maximumGapSeconds);
+        }
+    }
 
     public record Channel(String label, String units) {
         public Channel {
@@ -29,9 +40,13 @@ public record FuelAnalysisSetup(Kind kind, Channel x, Channel y, Channel correct
         }
         /** Exact identity only. Duplicate headers are deliberately unresolved. */
         public LogChannel resolve(LogDataset data) {
+            return resolve(data, false);
+        }
+        public LogChannel resolveTime(LogDataset data) { return resolve(data, true); }
+        private LogChannel resolve(LogDataset data, boolean time) {
             LogChannel match = null;
             for (LogChannel channel : data.getChannels()) {
-                if (!channel.isTimeChannel() && label.equals(channel.getLabel())
+                if (channel.isTimeChannel() == time && label.equals(channel.getLabel())
                         && units.equals(channel.getUnits())) {
                     if (match != null) return null;
                     match = channel;

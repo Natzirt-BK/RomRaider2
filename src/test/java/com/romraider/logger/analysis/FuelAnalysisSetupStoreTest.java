@@ -50,6 +50,25 @@ public class FuelAnalysisSetupStoreTest {
         assertNull(channel("Time (msec)", "msec").resolve(data));
         assertEquals(4, channel("Temp (°C)", "°C").resolve(data).getIndex());
     }
+    @Test public void rateSetupUsesStrictVersionTwoWithoutLosingVersionOneCompatibility() throws Exception {
+        Path path = file("rate.rr2analysis"); var base = setup(true);
+        var rate = new FuelAnalysisSetup.Rate(channel("Signal (V)", "V"), channel("Time (msec)", "msec"), .001, .5, 2);
+        var setup = new FuelAnalysisSetup(base.kind(), base.x(), base.y(), base.correction(), base.binWidth(), base.stoichAfr(), base.fuelDensity(), base.filters(), rate);
+        store.write(path, setup); assertEquals(setup, store.read(path));
+        String valid = Files.readString(path); assertTrue(valid.contains("format.version=2"));
+        for (String invalid : List.of(valid.replace("format.version=2", "format.version=1"),
+                valid.replace("rate.maximum=0.5", "rate.maximum=NaN"), valid.replace("rate.seconds.per.time.unit=0.001", "rate.seconds.per.time.unit=0.0"),
+                valid.replace("rate.maximum.gap.seconds=2.0", "rate.maximum.gap.seconds=0.0"), valid + "rate.enabled=true\n")) {
+            Files.writeString(path, invalid); rejects(() -> store.read(path));
+        }
+        store.write(path, base); assertNull(store.read(path).rate()); assertTrue(Files.readString(path).contains("format.version=1"));
+    }
+    @Test public void rateTimeIdentityResolvesOnlyTheExactRecognizedTimeColumn() throws Exception {
+        LogDataset data = new RomRaiderCsvLogParser().parse("synthetic.csv", new StringReader("Time (msec),Signal (V)\n0,1\n"));
+        assertEquals(0, channel("Time (msec)", "msec").resolveTime(data).getIndex());
+        assertNull(channel("Time (sec)", "sec").resolveTime(data));
+        assertNull(channel("Signal (V)", "V").resolveTime(data));
+    }
 
     @Test public void rejectsVersionUnknownDuplicateAndMissingFields() throws Exception {
         Path path = file("invalid.rr2analysis"); store.write(path, setup(true));

@@ -51,6 +51,7 @@ final class FxFuelAnalysisPane extends BorderPane implements AutoCloseable {
     private final TableView<FuelLogAnalysis.Bin> results = new TableView<>();
     private final ScatterChart<Number, Number> chart;
     private final FxFuelCurvePane curve;
+    private final FxFuelRateFilterPane rateFilter;
     private final Button calculate = new Button("Analyze saved log");
     private final Button copy = new Button("Copy results");
     private final Button saveSetup = new Button("Save analysis setup…");
@@ -73,6 +74,7 @@ final class FxFuelAnalysisPane extends BorderPane implements AutoCloseable {
         this.mode = mode;
         boolean maf = mode == Mode.MAF;
         curve = new FxFuelCurvePane(!maf);
+        rateFilter = new FxFuelRateFilterPane(this::conditionsChanged);
         binWidth = new TextField(maf ? "0.05" : "0.1");
         NumberAxis horizontal = new NumberAxis(), vertical = new NumberAxis();
         horizontal.setLabel(maf ? "Observed mean MAF voltage (V)" : "Observed mean pulse width (ms)");
@@ -128,13 +130,13 @@ final class FxFuelAnalysisPane extends BorderPane implements AutoCloseable {
                     filter.channel, new HBox(5, filter.minimum, filter.maximum)));
         }
         confirmed.setText(maf
-                ? "I confirmed volts and percent units for these channels (no unit conversion)."
-                : "I confirmed ms and g/rev units, fuel properties, and the legacy four-cylinder assumption (load ÷ 2). Defaults are examples, not detected fuel properties.");
+                ? "I confirmed volts/percent units and any enabled filter units/time scale. Signal units are not converted."
+                : "I confirmed ms and g/rev units, fuel properties, the legacy four-cylinder assumption (load ÷ 2), and any enabled filter units/time scale. Defaults are examples, not detected fuel properties.");
         confirmed.setWrapText(true);
         calculate.setMaxWidth(Double.MAX_VALUE); calculate.setDisable(true);
         calculate.setOnAction(event -> analyze());
         status.setWrapText(true);
-        setup.getChildren().addAll(confirmed, calculate, status);
+        setup.getChildren().addAll(rateFilter, confirmed, calculate, status);
         setup.setPadding(new Insets(10));
         ScrollPane scroll = new ScrollPane(setup); scroll.setFitToWidth(true);
         scroll.setPrefViewportWidth(340); scroll.setMinWidth(270); scroll.setMinHeight(0);
@@ -179,6 +181,7 @@ final class FxFuelAnalysisPane extends BorderPane implements AutoCloseable {
         if (closed) return;
         if (conditionsLink != null) conditionsLink.disconnect();
         invalidate(); dataset = next;
+        rateFilter.setDataset(next);
         List<LogChannel> channels = next.getChannels().stream().filter(channel -> !channel.isTimeChannel()).toList();
         for (ComboBox<LogChannel> mapping : List.of(x, y, correction)) {
             mapping.setItems(FXCollections.observableArrayList(channels)); mapping.setValue(null);
@@ -200,7 +203,7 @@ final class FxFuelAnalysisPane extends BorderPane implements AutoCloseable {
     long inputRevision() { return generation; }
     FxFuelAnalysisLink.Draft conditionsDraft() {
         return new FxFuelAnalysisLink.Draft(dataset, first.getText(), last.getText(), filters.stream()
-                .map(row -> new FxFuelAnalysisLink.FilterDraft(row.channel.getValue(), row.minimum.getText(), row.maximum.getText())).toList());
+                .map(row -> new FxFuelAnalysisLink.FilterDraft(row.channel.getValue(), row.minimum.getText(), row.maximum.getText())).toList(), rateFilter.draft());
     }
     void applyConditionsDraft(FxFuelAnalysisLink.Draft draft) {
         if (!conditionsAvailable() || draft.dataset() != dataset || draft.filters().size() != filters.size()) {
@@ -208,6 +211,7 @@ final class FxFuelAnalysisPane extends BorderPane implements AutoCloseable {
         }
         invalidateConditions();
         first.setText(draft.first()); last.setText(draft.last());
+        rateFilter.apply(draft.rate());
         for (int i = 0; i < filters.size(); i++) {
             FilterRow row = filters.get(i);
             FxFuelAnalysisLink.FilterDraft next = draft.filters().get(i);
@@ -265,7 +269,7 @@ final class FxFuelAnalysisPane extends BorderPane implements AutoCloseable {
                 FuelAnalysisSetup.Channel.of(x.getValue()), FuelAnalysisSetup.Channel.of(y.getValue()),
                 mode == Mode.MAF ? FuelAnalysisSetup.Channel.of(correction.getValue()) : null,
                 decimal(binWidth, "Bin width"), decimal(stoich, "Stoichiometric AFR"),
-                decimal(density, "Fuel density"), savedFilters);
+                decimal(density, "Fuel density"), savedFilters, rateFilter.setup(dataset));
     }
 
     Future<?> saveSetup(Path target) {
@@ -321,6 +325,7 @@ final class FxFuelAnalysisPane extends BorderPane implements AutoCloseable {
                 row.minimum.setText(Double.toString(filter.minimum())); row.maximum.setText(Double.toString(filter.maximum()));
             } else { row.channel.setValue(null); row.minimum.clear(); row.maximum.clear(); row.channel.setTooltip(null); }
         }
+        rateFilter.restore(setup.rate(), dataset, unresolved);
         first.setText("1"); last.setText(Integer.toString(dataset.getRowCount()));
         status.setText("Setup loaded for review. Sample range reset to all " + dataset.getRowCount()
                 + " rows; review the range, units, filters and assumptions before analyzing."
@@ -393,10 +398,12 @@ final class FxFuelAnalysisPane extends BorderPane implements AutoCloseable {
         }
         if (mode == Mode.MAF) {
             int correctionIndex = selected(correction);
-            return () -> FuelLogAnalysis.maf(input, range, xIndex, yIndex, correctionIndex, width, selectedFilters);
+            var rate = rateFilter.draft().filter(input);
+            return () -> FuelLogAnalysis.maf(input, range, xIndex, yIndex, correctionIndex, width, selectedFilters, rate);
         }
         double afr = decimal(stoich, "Stoichiometric AFR"), fuelDensity = decimal(density, "Fuel density");
-        return () -> FuelLogAnalysis.injector(input, range, xIndex, yIndex, afr, fuelDensity, width, selectedFilters);
+        var rate = rateFilter.draft().filter(input);
+        return () -> FuelLogAnalysis.injector(input, range, xIndex, yIndex, afr, fuelDensity, width, selectedFilters, rate);
     }
 
     private void copyResults() {

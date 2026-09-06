@@ -99,3 +99,9 @@ source: explicit open-target selection, native stored-value/coverage review,
 stale document/analysis/byte guards and one undoable offline edit. No automatic
 ROM save or ECU write occurs. Injector transfer remains separate; a fitted
 intercept is not a voltage-dependent latency curve. Public packages remain 1.1.2.
+
+The optional [recorded-time rate filter](FUEL_RATE_FILTER.md) is implemented in
+1.1.3 source, including explicit time scaling/gap limits, adjacent-row semantics,
+linked condition drafts, strict version-2 setups and curve invalidation. This
+advances transient filtering; named/full operating-condition filtering is still
+open, along with the remaining analysis/mobile backlog and supervised acceptance.

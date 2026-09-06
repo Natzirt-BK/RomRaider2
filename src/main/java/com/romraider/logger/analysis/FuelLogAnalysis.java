@@ -67,12 +67,16 @@ public final class FuelLogAnalysis {
     /** Inputs must be volts and percent. Output is learning + correction (%). */
     public static Result maf(LogDataset data, LogRange range, int voltage,
             int learning, int correction, double binWidth, List<Filter> filters) {
+        return maf(data, range, voltage, learning, correction, binWidth, filters, null);
+    }
+    public static Result maf(LogDataset data, LogRange range, int voltage,
+            int learning, int correction, double binWidth, List<Filter> filters, FuelRateFilter rate) {
         validateChannel(data, correction);
         if (voltage == learning || voltage == correction || learning == correction) {
             throw new IllegalArgumentException("Choose distinct MAF, learning and correction channels");
         }
         return analyze(data, range, voltage, learning, correction,
-                binWidth, filters, false, 1, 1);
+                binWidth, filters, false, 1, 1, rate);
     }
 
     /**
@@ -82,15 +86,19 @@ public final class FuelLogAnalysis {
      */
     public static Result injector(LogDataset data, LogRange range, int pulseWidth,
             int load, double stoichAfr, double density, double binWidth, List<Filter> filters) {
+        return injector(data, range, pulseWidth, load, stoichAfr, density, binWidth, filters, null);
+    }
+    public static Result injector(LogDataset data, LogRange range, int pulseWidth,
+            int load, double stoichAfr, double density, double binWidth, List<Filter> filters, FuelRateFilter rate) {
         positive(stoichAfr, "Stoichiometric AFR"); positive(density, "Fuel density");
         if (pulseWidth == load) throw new IllegalArgumentException("Choose distinct pulse-width and load channels");
         return analyze(data, range, pulseWidth, load, -1,
-                binWidth, filters, true, stoichAfr, density);
+                binWidth, filters, true, stoichAfr, density, rate);
     }
 
     private static Result analyze(LogDataset data, LogRange range, int xChannel,
             int yChannel, int correction, double width, List<Filter> filters,
-            boolean injector, double stoich, double density) {
+            boolean injector, double stoich, double density, FuelRateFilter rate) {
         validateChannel(data, xChannel); validateChannel(data, yChannel);
         positive(width, "Bin width");
         if (range == null || range.getEndExclusive() > data.getRowCount()) {
@@ -102,9 +110,10 @@ public final class FuelLogAnalysis {
             validateChannel(data, filter.channel);
         }
         List<Filter> capturedFilters = List.copyOf(filters);
+        if (rate != null) rate.validate(data);
         Map<Long, Accumulator> groups = new TreeMap<Long, Accumulator>();
         int[] counts = visitAccepted(data, range, xChannel, yChannel, correction, width, capturedFilters,
-                injector, stoich, density, (x, y) -> {
+                injector, stoich, density, rate, (x, y) -> {
                     long key = (long) Math.floor(Math.nextUp(x / width));
                     Accumulator bin = groups.get(key);
                     if (bin == null) {
@@ -118,12 +127,12 @@ public final class FuelLogAnalysis {
             bins.add(new Bin(entry.getKey() * width, (entry.getKey() + 1) * width, entry.getValue()));
         }
         return new Result(bins, counts[0], counts[1], counts[2], consumer -> visitAccepted(data, range,
-                xChannel, yChannel, correction, width, capturedFilters, injector, stoich, density, consumer));
+                xChannel, yChannel, correction, width, capturedFilters, injector, stoich, density, rate, consumer));
     }
 
     private static int[] visitAccepted(LogDataset data, LogRange range, int xChannel,
             int yChannel, int correction, double width, List<Filter> filters,
-            boolean injector, double stoich, double density, PointConsumer consumer) {
+            boolean injector, double stoich, double density, FuelRateFilter rate, PointConsumer consumer) {
         int accepted = 0, invalid = 0, filtered = 0;
         for (int row = range.getStartInclusive(); row < range.getEndExclusive(); row++) {
             if (Thread.currentThread().isInterrupted()) throw new java.util.concurrent.CancellationException();
@@ -138,6 +147,11 @@ public final class FuelLogAnalysis {
                 double value = data.getValue(row, filter.channel);
                 missing |= !Double.isFinite(value);
                 excluded |= value < filter.minimum || value > filter.maximum;
+            }
+            if (rate != null) {
+                double slope = rate.rateAt(data, row, range.getStartInclusive());
+                missing |= !Double.isFinite(slope);
+                excluded |= slope > rate.maximumRate();
             }
             if (missing) { invalid++; continue; }
             if (excluded) { filtered++; continue; }

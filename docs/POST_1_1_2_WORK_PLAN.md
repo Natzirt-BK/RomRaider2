@@ -71,6 +71,10 @@ including raw-sample polynomial/linear fits and observed-bin interpolation.
 with explicit target/stored-value review, stale guards and grouped undo/rollback.
 Injector transfer still needs its own evidence-backed mapping; line-fit intercepts
 must not be treated as a voltage-dependent latency curve.
+An optional [recorded-time rate filter](FUEL_RATE_FILTER.md) now supplies explicit
+adjacent-row transient filtering, shared conditions and versioned setup transfer.
+It does not infer suitable operating conditions or complete the named legacy
+filter pipeline.
 Continue full legacy operating-condition filtering, injector transfer, log-to-map
 tracing and binned/run-comparison views. Portable logger-setup export/import and
 bounded large-log review follow. Background recording needs its own Android

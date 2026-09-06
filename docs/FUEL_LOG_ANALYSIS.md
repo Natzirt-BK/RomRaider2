@@ -80,7 +80,10 @@ run analysis or certify that the selected operating conditions are appropriate.
 
 The bounded UTF-8 properties document contains its schema version, analysis kind,
 exact channel labels/units, bin width, up to three filters, stoichiometric AFR and
-fuel density. It deliberately excludes CSV contents, source paths, ROM data,
+fuel density. An enabled [recorded-time rate filter](FUEL_RATE_FILTER.md) adds its
+signal/time identities and limits in schema version 2; setups without it remain
+version 1. Importing version 1 clears that optional condition. The file deliberately
+excludes CSV contents, source paths, ROM data,
 sample indices and unit confirmation. Channel names themselves can contain
 personal information; inspect a setup before sharing it.
 
@@ -115,7 +118,8 @@ Both tabs initially keep independent ranges and filters. After loading a CSV,
 select **Link MAF / Injector range and filters…** in the tab whose conditions
 you want to use. The native review dialog lists its inclusive sample range and
 numeric filters, with one-based CSV column numbers to distinguish duplicate
-headers. Approving replaces the other tab's range and filters; cancelling changes
+headers, plus any enabled [recorded-time rate condition](FUEL_RATE_FILTER.md).
+Approving replaces the other tab's range and filters; cancelling changes
 neither setup. Invalid ranges, unresolved filters, nonfinite/reversed limits and
 channels from another dataset are rejected before review. Changes made to either
 setup while the dialog is open invalidate that approval.

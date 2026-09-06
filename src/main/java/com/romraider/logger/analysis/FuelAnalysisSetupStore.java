@@ -44,7 +44,8 @@ public final class FuelAnalysisSetupStore {
             };
             values.load(new StringReader(content));
             Set<String> used = new HashSet<>();
-            if (!"1".equals(required(values, used, "format.version"))) throw new IllegalArgumentException("Unsupported analysis setup version");
+            String version = required(values, used, "format.version");
+            if (!Set.of("1", "2").contains(version)) throw new IllegalArgumentException("Unsupported analysis setup version");
             FuelAnalysisSetup.Kind kind = FuelAnalysisSetup.Kind.valueOf(required(values, used, "kind"));
             var x = channel(values, used, "x"); var y = channel(values, used, "y");
             var correction = kind == FuelAnalysisSetup.Kind.MAF ? channel(values, used, "correction") : null;
@@ -58,8 +59,11 @@ public final class FuelAnalysisSetupStore {
                 filters.add(new FuelAnalysisSetup.Filter(channel(values, used, prefix),
                         number(values, used, prefix + ".minimum"), number(values, used, prefix + ".maximum")));
             }
+            FuelAnalysisSetup.Rate rate = null;
+            if (version.equals("2")) rate = new FuelAnalysisSetup.Rate(channel(values, used, "rate.signal"), channel(values, used, "rate.time"),
+                    number(values, used, "rate.seconds.per.time.unit"), number(values, used, "rate.maximum"), number(values, used, "rate.maximum.gap.seconds"));
             if (!used.equals(values.stringPropertyNames())) throw new IllegalArgumentException("Unknown analysis setup fields");
-            return new FuelAnalysisSetup(kind, x, y, correction, width, afr, density, filters);
+            return new FuelAnalysisSetup(kind, x, y, correction, width, afr, density, filters, rate);
         } catch (IllegalArgumentException failure) {
             throw new IOException("Invalid analysis setup: " + failure.getMessage(), failure);
         }
@@ -74,13 +78,19 @@ public final class FuelAnalysisSetupStore {
             throw new IOException("Cannot replace a directory or linked setup file");
         }
         Properties values = new Properties();
-        values.setProperty("format.version", "1"); values.setProperty("kind", setup.kind().name());
+        values.setProperty("format.version", setup.rate() == null ? "1" : "2"); values.setProperty("kind", setup.kind().name());
         putChannel(values, "x", setup.x()); putChannel(values, "y", setup.y());
         if (setup.correction() != null) putChannel(values, "correction", setup.correction());
         values.setProperty("bin.width", Double.toString(setup.binWidth()));
         values.setProperty("stoich.afr", Double.toString(setup.stoichAfr()));
         values.setProperty("fuel.density", Double.toString(setup.fuelDensity()));
         values.setProperty("filter.count", Integer.toString(setup.filters().size()));
+        if (setup.rate() != null) {
+            var rate = setup.rate(); putChannel(values, "rate.signal", rate.signal()); putChannel(values, "rate.time", rate.time());
+            values.setProperty("rate.seconds.per.time.unit", Double.toString(rate.secondsPerTimeUnit()));
+            values.setProperty("rate.maximum", Double.toString(rate.maximumRate()));
+            values.setProperty("rate.maximum.gap.seconds", Double.toString(rate.maximumGapSeconds()));
+        }
         for (int i = 0; i < setup.filters().size(); i++) {
             var filter = setup.filters().get(i); String prefix = "filter." + i;
             putChannel(values, prefix, filter.channel());

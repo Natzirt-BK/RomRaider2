@@ -8,6 +8,10 @@ https://github.com/Natzirt-BK/RomRaider2/releases/latest
 What changed for 1.1.3
 ---------------------
 
+- Optional saved-log rate filtering uses explicitly scaled recorded timestamps
+  and adjacent samples, with missing/time-gap checks and no guessed limits.
+  Linked MAF/Injector conditions and version-2 analysis setups retain the filter;
+  edits clear stale curves. Full operating-condition filtering remains separate.
 - JavaFX MAF/Injector analysis setups can be saved and imported for review.
   Files contain bounded, versioned channel identities, filters and assumptions,
   not CSV data, private paths, sample ranges or a saved unit-confirmation state.

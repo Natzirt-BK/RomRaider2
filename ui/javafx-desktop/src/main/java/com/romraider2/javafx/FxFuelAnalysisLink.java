@@ -10,10 +10,14 @@ import com.romraider.logger.analysis.LogRange;
 /** Window-local, explicitly enabled condition linking. All calls run on the FX thread. */
 final class FxFuelAnalysisLink {
     record FilterDraft(LogChannel channel, String minimum, String maximum) { }
-    record Draft(LogDataset dataset, String first, String last, List<FilterDraft> filters) {
+    record Draft(LogDataset dataset, String first, String last, List<FilterDraft> filters, FxFuelRateFilterPane.Draft rate) {
+        Draft(LogDataset dataset, String first, String last, List<FilterDraft> filters) {
+            this(dataset, first, last, filters, FxFuelRateFilterPane.Draft.empty());
+        }
         Draft { filters = List.copyOf(filters); }
         void validate() {
             if (dataset == null) throw new IllegalArgumentException("Open the same CSV in both analysis tabs first.");
+            rate.filter(dataset);
             try { LogRange.of(Integer.parseInt(first.trim()) - 1, Integer.parseInt(last.trim()), dataset.getRowCount()); }
             catch (IllegalArgumentException failure) { throw new IllegalArgumentException("Enter a valid inclusive sample range before linking."); }
             for (FilterDraft filter : filters) {
@@ -45,7 +49,7 @@ final class FxFuelAnalysisLink {
                         .append(filter.channel().getLabel()).append(" · ").append(filter.minimum()).append(" to ").append(filter.maximum());
             }
             if (count == 0) text.append("\nNo numeric filters");
-            return text.toString();
+            return text.append("\n").append(rate.summary()).toString();
         }
     }
 
