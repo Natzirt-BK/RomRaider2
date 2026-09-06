@@ -96,7 +96,8 @@ class FxLogMapTraceSmokeTest {
                 log[0].invalidateSharedRange(); assertNull(field(pane, "point")); log[0].selectRange(LogRange.of(0, 1, 4));
                 assertTrue(((Label) field(pane, "status")).getText().startsWith("Sample 1"));
                 stage[0] = new Stage(); Scene scene = new Scene(log[0], 1000, 640); FxTheme.apply(stage[0], scene); stage[0].setScene(scene); stage[0].show();
-                ((TabPane) log[0].getCenter()).getSelectionModel().selectLast(); log[0].applyCss(); log[0].layout();
+                TabPane views = (TabPane) log[0].getCenter();
+                views.getSelectionModel().select(views.getTabs().stream().filter(tab -> tab.getText().equals("Map trace")).findFirst().orElseThrow()); log[0].applyCss(); log[0].layout();
                 TableView<?> grid = field(pane, "grid"); assertTrue(grid.getHeight() > 100);
                 assertTrue(grid.lookupAll(".table-cell").stream().anyMatch(cell -> cell.getStyle().contains("#bcebe4")), "Visible geometric neighbors must be highlighted");
                 String capture = System.getenv("RR2_MAP_TRACE_CAPTURE");

@@ -8,6 +8,10 @@ https://github.com/Natzirt-BK/RomRaider2/releases/latest
 What changed for 1.1.3
 ---------------------
 
+- Binned saved-log analysis adds explicit one-/two-axis grouping, counts and
+  mean/min/max values, a heatmap and 2D/3D mean plots. Empty/low-count bins stay
+  visibly unavailable. Bounded background work, range/input invalidation and
+  canonical clipboard output do not alter the original CSV or any ROM table.
 - Read-only Log Analysis map tracing follows the saved cursor over an explicitly
   captured 2D/3D editor table. Manual axis mappings, frozen-snapshot labels,
   geometric neighbor weights and missing/outside states are explicit. No ECU

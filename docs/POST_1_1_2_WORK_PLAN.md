@@ -83,8 +83,10 @@ statistics](ACCEPTED_FUEL_SAMPLES.md) now cover each fuel result's exact origina
 rows with bounded background work and stale-output guards.
 [Read-only log-to-map tracing](LOG_MAP_TRACING.md) now follows the saved-log cursor
 over a reviewed, frozen 2D/3D table snapshot with explicit axis mappings and
-geometric-neighbor semantics. Continue injector transfer and binned/run-comparison
-views. Portable logger-setup export/import and
+geometric-neighbor semantics. [Binned 2D/3D views](BINNED_LOG_ANALYSIS.md) now add
+explicit axis origins/widths, counts, gap-preserving tables/plots and bounded
+background aggregation. Continue injector transfer and run comparisons.
+Portable logger-setup export/import and
 bounded large-log review follow. Background recording needs its own Android
 service/USB/notification and failure-recovery design; switching to GAUGES is not
 background recording.

@@ -112,6 +112,8 @@ workspaces while keeping range-only statistics distinct from filtered fuel resul
 paging and full-accepted-set channel statistics to both fuel workspaces.
 [Read-only map tracing](docs/LOG_MAP_TRACING.md) follows the saved-log cursor over
 an explicitly captured table snapshot, with manual axis-channel mapping.
+[Binned log analysis](docs/BINNED_LOG_ANALYSIS.md) adds count-aware tables,
+heatmaps and 2D/3D mean plots with explicit gaps and bounded background work.
 These follow-ups are not in the published 1.1.2 downloads.
 
 - Tabbed calibration workspace with favorites, recent and changed maps, ROM

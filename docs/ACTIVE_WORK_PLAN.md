@@ -137,3 +137,9 @@ source: reviewed capture of the selected editor table, frozen numeric geometry,
 explicit axis-channel mappings, shared playback/range linkage and geometric
 neighbor highlighting. It does not claim actual ECU lookup behavior, mutate the
 editor table/selection or complete binned analysis/run comparisons.
+
+[Binned saved-log analysis](BINNED_LOG_ANALYSIS.md) now provides one-axis and
+two-axis aggregation, explicit counts/gaps, threshold-aware heatmaps, 2D curves
+and isometric 3D mean plots. Applied-range linkage, bounded background work and
+stale/cancelled result guards are implemented. Run comparisons, injector
+transfer, general large-log handling and remaining mobile work are still open.
