@@ -68,3 +68,10 @@ Use [the post-1.1.2 plan](POST_1_1_2_WORK_PLAN.md) for concrete next steps and t
 gates: reusable analysis setups first, then calculated mobile channels and the
 remaining analysis/mobile backlog. Do not treat release publication as completion
 of items 5–7 or as hardware qualification.
+
+The next source patch is 1.1.3 (Android code 110407). Reusable JavaFX analysis
+setups are implemented with strict file validation, explicit import review,
+exact/ambiguity-aware channel matching, retained unresolved filters and guarded
+asynchronous I/O. They do not yet ship in the public 1.1.2 packages. The rest of
+item 5 (synchronized filtering, fitting/interpolation and reviewed transfer),
+item 6 and the mobile items remain open.

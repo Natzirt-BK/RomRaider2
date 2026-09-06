@@ -5,9 +5,13 @@ backlog. These are software tasks that can progress without a vehicle. New
 application changes belong to the next shared numeric patch version, not silent
 replacement of an already published 1.1.2 binary.
 
-## Next: reusable saved-log analysis setups
+## Reusable saved-log analysis setups
 
-Start with the existing JavaFX MAF/Injector panes, keeping the calculations
+Implemented in 1.1.3 development source; see [the user guide](FUEL_LOG_ANALYSIS.md#reusable-setups-113-development-source).
+Fresh qualification is required before publishing replacement packages. Sample
+indices are deliberately excluded rather than reused across different logs.
+
+The implementation uses the existing JavaFX MAF/Injector panes, keeping the calculations
 read-only. Save the analysis kind, channel labels and units, bin width, filter
 definitions and explicit injector assumptions in a bounded, versioned document.
 Do not store a source CSV, private path, ROM image or a claim that the setup is

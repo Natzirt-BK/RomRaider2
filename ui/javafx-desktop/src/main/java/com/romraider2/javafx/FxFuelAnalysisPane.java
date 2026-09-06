@@ -9,8 +9,13 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import java.nio.file.Path;
+import java.nio.file.Files;
+import java.io.File;
 
 import com.romraider.logger.analysis.FuelLogAnalysis;
+import com.romraider.logger.analysis.FuelAnalysisSetup;
+import com.romraider.logger.analysis.FuelAnalysisSetupStore;
 import com.romraider.logger.analysis.LogChannel;
 import com.romraider.logger.analysis.LogDataset;
 import com.romraider.logger.analysis.LogRange;
@@ -26,8 +31,9 @@ import javafx.scene.control.*;
 import javafx.scene.input.Clipboard;
 import javafx.scene.input.ClipboardContent;
 import javafx.scene.layout.*;
+import javafx.stage.FileChooser;
 
-/** Offline-only data inspection. No runtime, transport, ROM editor or file writer. */
+/** Offline-only analysis; setup exports cannot write CSV or ROM destinations. */
 final class FxFuelAnalysisPane extends BorderPane implements AutoCloseable {
     enum Mode { MAF, INJECTOR }
     private final Mode mode;
@@ -43,6 +49,13 @@ final class FxFuelAnalysisPane extends BorderPane implements AutoCloseable {
     private final ScatterChart<Number, Number> chart;
     private final Button calculate = new Button("Analyze saved log");
     private final Button copy = new Button("Copy results");
+    private final Button saveSetup = new Button("Save analysis setup…");
+    private final Button loadSetup = new Button("Load analysis setup…");
+    private final FuelAnalysisSetupStore setupStore = new FuelAnalysisSetupStore();
+    private final ExecutorService setupWorker = Executors.newSingleThreadExecutor(task -> {
+        Thread thread = new Thread(task, "rr2-analysis-setup-io"); thread.setDaemon(true); return thread;
+    });
+    private long setupGeneration;
     private final ExecutorService worker = Executors.newSingleThreadExecutor(task -> {
         Thread thread = new Thread(task, "rr2-offline-fuel-analysis");
         thread.setDaemon(true); return thread;
@@ -66,7 +79,11 @@ final class FxFuelAnalysisPane extends BorderPane implements AutoCloseable {
         title.getStyleClass().add("title");
         source.setWrapText(true);
         Button open = new Button("Open CSV log…"); open.setOnAction(event -> openLog.run());
-        VBox heading = new VBox(5, title, source, open); heading.setPadding(new Insets(10));
+        saveSetup.setDisable(true); loadSetup.setDisable(true);
+        saveSetup.setOnAction(event -> chooseSetupFile(true));
+        loadSetup.setOnAction(event -> chooseSetupFile(false));
+        FlowPane actions = new FlowPane(8, 5, open, saveSetup, loadSetup);
+        VBox heading = new VBox(5, title, source, actions); heading.setPadding(new Insets(10));
         setTop(heading);
 
         GridPane mapping = new GridPane(); mapping.setHgap(8); mapping.setVgap(7);
@@ -143,7 +160,112 @@ final class FxFuelAnalysisPane extends BorderPane implements AutoCloseable {
         first.setText("1"); last.setText(Integer.toString(next.getRowCount()));
         confirmed.setSelected(false);
         source.setText(next.getSourceName() + " · " + next.getRowCount() + " samples · saved data only");
-        calculate.setDisable(false); invalidate();
+        calculate.setDisable(false); saveSetup.setDisable(false); loadSetup.setDisable(false); invalidate();
+    }
+
+    private void chooseSetupFile(boolean save) {
+        if (closed || dataset == null) return;
+        // Validate before opening a chooser, without running any analysis.
+        try { if (save) snapshotSetup(); }
+        catch (IllegalArgumentException failure) { status.setText(failure.getMessage()); return; }
+        long revision = generation;
+        FileChooser chooser = new FileChooser();
+        chooser.setTitle(save ? "Save analysis setup" : "Load analysis setup for review");
+        chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("RomRaider2 analysis setup", "*.rr2analysis"));
+        if (save) chooser.setInitialFileName(mode.name().toLowerCase(Locale.ROOT) + FuelAnalysisSetupStore.EXTENSION);
+        var owner = getScene() == null ? null : getScene().getWindow();
+        File file = save ? chooser.showSaveDialog(owner) : chooser.showOpenDialog(owner);
+        if (file == null || closed) return;
+        if (save && !file.getName().contains(".")) file = new File(file.getParentFile(), file.getName() + FuelAnalysisSetupStore.EXTENSION);
+        if (save && Files.exists(file.toPath()) && !FxDialogs.confirm(owner, "Replace analysis setup?",
+                "Replace only this setup file? Captured logs and ROMs are not changed.", "Replace setup")) return;
+        if (closed || revision != generation) { status.setText("Inputs changed while choosing a file. Try again with the current setup."); return; }
+        if (save) saveSetup(file.toPath()); else loadSetup(file.toPath());
+    }
+
+    FuelAnalysisSetup snapshotSetup() {
+        if (closed || dataset == null) throw new IllegalArgumentException("Open a CSV log first");
+        // A stale/out-of-range visible range is an input error, even though ranges
+        // are intentionally not portable and are not written to the setup file.
+        LogRange.of(integer(first, "First sample") - 1, integer(last, "Last sample"), dataset.getRowCount());
+        var savedFilters = new ArrayList<FuelAnalysisSetup.Filter>();
+        for (FilterRow filter : filters) {
+            if (filter.channel.getValue() == null) {
+                if (!filter.minimum.getText().isBlank() || !filter.maximum.getText().isBlank()) {
+                    throw new IllegalArgumentException("Select a channel for each entered filter, or clear its limits.");
+                }
+            } else savedFilters.add(new FuelAnalysisSetup.Filter(FuelAnalysisSetup.Channel.of(filter.channel.getValue()),
+                    decimal(filter.minimum, "Filter minimum"), decimal(filter.maximum, "Filter maximum")));
+        }
+        return new FuelAnalysisSetup(FuelAnalysisSetup.Kind.valueOf(mode.name()),
+                FuelAnalysisSetup.Channel.of(x.getValue()), FuelAnalysisSetup.Channel.of(y.getValue()),
+                mode == Mode.MAF ? FuelAnalysisSetup.Channel.of(correction.getValue()) : null,
+                decimal(binWidth, "Bin width"), decimal(stoich, "Stoichiometric AFR"),
+                decimal(density, "Fuel density"), savedFilters);
+    }
+
+    Future<?> saveSetup(Path target) {
+        final FuelAnalysisSetup setup;
+        try { setup = snapshotSetup(); }
+        catch (IllegalArgumentException failure) { status.setText(failure.getMessage()); return null; }
+        long revision = generation, operation = ++setupGeneration;
+        status.setText("Saving analysis setup…");
+        return setupWorker.submit(() -> {
+            String message;
+            try { setupStore.write(target, setup); message = "Analysis setup saved. CSV data, sample ranges and unit confirmation are not included."; }
+            catch (Exception failure) { message = "Setup was not saved: " + FxDialogs.rootMessage(failure); }
+            String outcome = message;
+            Platform.runLater(() -> { if (!closed && revision == generation && operation == setupGeneration) status.setText(outcome); });
+        });
+    }
+
+    Future<?> loadSetup(Path input) {
+        if (closed || dataset == null) return null;
+        long revision = generation, operation = ++setupGeneration;
+        status.setText("Loading analysis setup for review…");
+        return setupWorker.submit(() -> {
+            try {
+                FuelAnalysisSetup setup = setupStore.read(input);
+                Platform.runLater(() -> {
+                    if (closed || operation != setupGeneration) return;
+                    if (revision != generation) { status.setText("Setup load skipped because the log or inputs changed. Load again to review it."); return; }
+                    try { applySetup(setup); }
+                    catch (IllegalArgumentException failure) { status.setText(failure.getMessage()); }
+                });
+            } catch (Exception failure) {
+                Platform.runLater(() -> { if (!closed && revision == generation && operation == setupGeneration)
+                    status.setText("Setup was not loaded; existing inputs are unchanged. " + FxDialogs.rootMessage(failure)); });
+            }
+        });
+    }
+
+    void applySetup(FuelAnalysisSetup setup) {
+        if (closed || dataset == null) throw new IllegalArgumentException("Open a CSV log first");
+        if (!setup.kind().name().equals(mode.name())) throw new IllegalArgumentException("This setup belongs in the " + setup.kind() + " tab; existing inputs are unchanged.");
+        invalidate(); confirmed.setSelected(false);
+        List<String> unresolved = new ArrayList<>();
+        restoreChannel(x, setup.x(), unresolved); restoreChannel(y, setup.y(), unresolved);
+        if (setup.correction() != null) restoreChannel(correction, setup.correction(), unresolved);
+        binWidth.setText(Double.toString(setup.binWidth()));
+        stoich.setText(Double.toString(setup.stoichAfr())); density.setText(Double.toString(setup.fuelDensity()));
+        for (int i = 0; i < filters.size(); i++) {
+            FilterRow row = filters.get(i);
+            if (i < setup.filters().size()) {
+                var filter = setup.filters().get(i);
+                restoreChannel(row.channel, filter.channel(), unresolved);
+                row.minimum.setText(Double.toString(filter.minimum())); row.maximum.setText(Double.toString(filter.maximum()));
+            } else { row.channel.setValue(null); row.minimum.clear(); row.maximum.clear(); row.channel.setTooltip(null); }
+        }
+        first.setText("1"); last.setText(Integer.toString(dataset.getRowCount()));
+        status.setText("Setup loaded for review. Sample range reset to all " + dataset.getRowCount()
+                + " rows; review the range, units, filters and assumptions before analyzing."
+                + (unresolved.isEmpty() ? "" : " Remap missing or ambiguous channels: " + String.join(", ", unresolved)));
+    }
+
+    private void restoreChannel(ComboBox<LogChannel> choice, FuelAnalysisSetup.Channel saved, List<String> unresolved) {
+        LogChannel resolved = saved.resolve(dataset);
+        choice.setValue(resolved); choice.setTooltip(new Tooltip("Saved channel: " + saved.label() + " · units: " + saved.units()));
+        if (resolved == null) unresolved.add(saved.label());
     }
 
     private void invalidate() {
@@ -272,5 +394,8 @@ final class FxFuelAnalysisPane extends BorderPane implements AutoCloseable {
     @Override public void close() {
         if (closed) return;
         closed = true; invalidate(); dataset = null; worker.shutdownNow();
+        // Complete already-requested atomic exports; closed/load-generation guards
+        // prevent any queued import from mutating a disposed pane.
+        setupWorker.shutdown();
     }
 }

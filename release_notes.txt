@@ -1,8 +1,19 @@
-RomRaider2 ECU Studio 1.1.2
+RomRaider2 ECU Studio 1.1.3
 ================================
 
-Version 1.1.2 changes. For published packages and their verification record:
+Development source for the next patch. Public downloads remain 1.1.2 until a
+separately verified release is published. For published packages:
 https://github.com/Natzirt-BK/RomRaider2/releases/latest
+
+What changed for 1.1.3
+---------------------
+
+- JavaFX MAF/Injector analysis setups can be saved and imported for review.
+  Files contain bounded, versioned channel identities, filters and assumptions,
+  not CSV data, private paths, sample ranges or a saved unit-confirmation state.
+- Exact channel matching leaves missing/ambiguous headers unresolved. Imports
+  reset the sample range for explicit review; malformed or wrong-kind imports
+  preserve existing inputs/results. Setup exports cannot overwrite CSV/ROM paths.
 
 What changed for 1.1.2
 ---------------------

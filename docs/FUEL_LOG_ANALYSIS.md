@@ -51,7 +51,7 @@ cannot publish into a replacement log or a closed window.
 ## Still deferred
 
 Live capture, synchronized legacy filtering, MAF interpolation, injector
-regression/scaling/latency fitting, portable saved analysis setups, and explicit
+regression/scaling/latency fitting, and explicit
 reviewed transfer into ROM tables remain follow-ups. Neither pane can connect
 to a vehicle, alter ROM bytes, save over the source CSV, or execute ECU writes.
 Android and the other desktop shells are unchanged by this JavaFX addition.
@@ -60,3 +60,42 @@ Synthetic regression tests check inherited arithmetic, finite/missing handling,
 range/filter boundaries, bin limits, unit-confirmation gating, stale-result
 invalidation, replacement/close behavior, and a scrollable small-window form.
 They are not real-vehicle or real-log tuning qualification.
+
+## Reusable setups (1.1.3 development source)
+
+The published 1.1.2 packages do not include this follow-up. In JavaFX, open a CSV
+and use **Save analysis setup…** or **Load analysis setup…** above the MAF/Injector
+workspace. Choose an `.rr2analysis` file. Saving requires valid, distinct channel
+mappings, finite/ordered filter limits and positive numeric settings. It does not
+run analysis or certify that the selected operating conditions are appropriate.
+
+The bounded UTF-8 properties document contains its schema version, analysis kind,
+exact channel labels/units, bin width, up to three filters, stoichiometric AFR and
+fuel density. It deliberately excludes CSV contents, source paths, ROM data,
+sample indices and unit confirmation. Channel names themselves can contain
+personal information; inspect a setup before sharing it.
+
+Import replaces inputs only after the whole document validates and the MAF or
+Injector kind matches the current tab. Exact label/unit matches are restored;
+duplicate or missing headers remain unresolved, including filters. Filter limits
+are retained so a missing filter cannot silently disappear. Select the intended
+channel or explicitly clear its limits. All imported inputs need review, unit
+confirmation is cleared and the sample range visibly resets to the entire
+current log. Choose the appropriate range before analyzing.
+
+File work is asynchronous. A late import cannot replace newer edits, a different
+log or a closed pane. Failed imports retain current mappings and results. Exports
+write a synchronized temporary sibling and require atomic replacement; unsupported
+atomic replacement fails without a non-atomic fallback. CSV/ROM extensions,
+linked files and directory destinations are rejected. Native chooser cancellation
+does not request an export. The panes never save over the captured CSV or apply
+results to a ROM.
+
+Local qualification: full Ant tests/Linux compilation, 79 display-enabled JavaFX
+tests and 35 Compose tests pass. The new coverage includes six setup-store tests
+and six JavaFX setup tests: both file kinds, strict parsing, duplicate/changed
+channel identities, failed-file preservation, unresolved filters, range reset,
+wrong-kind imports and stale analysis/import callbacks. Android unit tests, lint,
+both 1.1.3 APK versions/notices and portable checks pass after the shared version
+bump. Native file-chooser/provider failure paths and physical platform behavior
+still need separate acceptance; these results do not qualify vehicle tuning.

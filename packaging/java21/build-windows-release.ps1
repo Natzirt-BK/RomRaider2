@@ -2,7 +2,7 @@
 param(
     [string]$ApplicationImage,
     [string]$OutputRoot,
-    [string]$ReleaseName = "RomRaider2_ECU_Studio_1.1.2_Windows_x64",
+    [string]$ReleaseName = "RomRaider2_ECU_Studio_1.1.3_Windows_x64",
     [string]$SourceRevision
 )
 
@@ -83,7 +83,7 @@ try {
     Copy-Item -LiteralPath (Join-Path $RepoRoot "packaging/java21/VERIFY_RELEASE_WINDOWS.ps1") -Destination $Release
 
     @(
-        "RomRaider2 ECU Studio 1.1.2"
+        "RomRaider2 ECU Studio 1.1.3"
         "Source commit: $SourceRevision"
         "Built: $([DateTimeOffset]::Now.ToString('o'))"
         "Runtime: Java 21 Windows x64 application image"

@@ -18,7 +18,7 @@ reject() {
         echo "Version guard accepted $1" >&2; exit 1
     fi
 }
-sed -i 's/^version.android.code=.*/version.android.code=110405/' "$fixture/version.properties"
+sed -i 's/^version.android.code=.*/version.android.code=110406/' "$fixture/version.properties"
 reject 'an unchanged public Android versionCode'
 cp -- "$repo_root/version.properties" "$fixture/version.properties"
 sed -i 's/^version.buildnumber=.*/version.buildnumber=0.0.0-preview/' "$fixture/version.properties"

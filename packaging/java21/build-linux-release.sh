@@ -2,9 +2,9 @@
 set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
-application_image=${ROMRAIDER2_APP_IMAGE:-$repo_root/build/release-1.1.2/RomRaider2}
+application_image=${ROMRAIDER2_APP_IMAGE:-$repo_root/build/release-1.1.3/RomRaider2}
 output_root=${1:-$repo_root/build/releases}
-release_name=${ROMRAIDER2_RELEASE_NAME:-RomRaider2_ECU_Studio_1.1.2_Linux_x64}
+release_name=${ROMRAIDER2_RELEASE_NAME:-RomRaider2_ECU_Studio_1.1.3_Linux_x64}
 destination=$output_root/$release_name
 archive=$output_root/$release_name.zip
 archive_name=${archive##*/}
@@ -56,7 +56,7 @@ cp -- "$repo_root/packaging/java21/VERIFY_RELEASE_LINUX.sh" "$release/"
 chmod +x "$release/VERIFY_RELEASE_LINUX.sh"
 
 {
-    printf 'RomRaider2 ECU Studio 1.1.2\n'
+    printf 'RomRaider2 ECU Studio 1.1.3\n'
     printf 'Source commit: %s\n' "$commit"
     printf 'Built: %s\n' "$(date --iso-8601=seconds)"
     printf 'Runtime: Java 21 x64 application image\n'
