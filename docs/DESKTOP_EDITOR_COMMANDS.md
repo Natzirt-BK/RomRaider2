@@ -1,7 +1,7 @@
 # Desktop selection and document commands
 
-The JavaFX editor in the 1.1.2 source candidate adds these controls. These changes
-are not in the public 1.1.1 package; macOS's Compose editor is unchanged by this
+The JavaFX editor in version 1.1.2 adds these controls. The earlier 1.1.1 package
+does not include them; macOS's Compose editor is unchanged by this
 JavaFX UI pass.
 
 ## Selection math

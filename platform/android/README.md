@@ -3,9 +3,9 @@
 The Android client provides offline ROM editing, log review and foreground-only,
 read-only OpenPort logging. It contains no ECU writing or flashing path.
 
-This page describes current source (1.1.2). Check the
-[main download page](../../README.md#downloads) for the version actually published;
-a source checkpoint is not a new APK release.
+This page describes version 1.1.2. See the
+[main download page](../../README.md#downloads) for published packages and migration
+guidance; later source checkpoints are not automatically new APK releases.
 
 ## Features
 
@@ -27,6 +27,7 @@ a source checkpoint is not a new APK release.
   premium night-cluster styles. Switch between
   LOGGER and GAUGES without replacing the active session or recording.
   See [gauge designs and data states](../../docs/GAUGE_DESIGN.md).
+- Read bundled software-license and brand notices through About / licenses.
 
 ## Boundaries and qualification
 

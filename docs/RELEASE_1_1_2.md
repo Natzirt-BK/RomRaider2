@@ -19,7 +19,7 @@ does not copy the standard app's private data. See the
   **Evolution Night**, with premium dial shading and bounded needle motion.
   Existing styles remain available. Pointer animation never changes logged or
   displayed numeric readings.
-- Gauges-only views on Android, JavaFX desktop and Compose/SteamOS, with explicit
+- Gauges-only views on Android, JavaFX (including SteamOS) and Compose, with explicit
   simulated/live/stale/stopped states. Switching views preserves the logger
   session; Android still stops logging when the app leaves the foreground.
 - A more compact JavaFX editor: centered/narrower cells, **Save Options**, less
@@ -32,6 +32,7 @@ does not copy the standard app's private data. See the
   conversions, XML imports, shared calibration-cell refresh and checksum-warning
   presentation. Definition-size parsing now rejects overflow.
 - Bundled Android license and brand notices, available through About / licenses.
+  Mac packaging also verifies the application GPL and STI notices.
 
 ## Packages and verification scope
 
@@ -41,6 +42,24 @@ unsigned. Android 8.0+ has standard and separate-test APKs, versionCode 110406.
 Every binary archive/APK has a SHA-256 sidecar.
 
 Application source checkpoint: `d51399932e12fd917fe3980238c7590c75ec4529`.
+Linux/Windows packages use `fe18d034` from
+[desktop qualification](https://github.com/Natzirt-BK/RomRaider2/actions/runs/34023980227);
+Android/SteamOS use the same checkpoint from
+[platform qualification](https://github.com/Natzirt-BK/RomRaider2/actions/runs/34023979663).
+Mac packages are rebuilt at `38a155f9` in
+[Mac notice qualification](https://github.com/Natzirt-BK/RomRaider2/actions/runs/34024327409)
+for the packaging-only GPL notice repair.
+Application code is identical across these checkpoints. The release tag includes
+that Mac packaging correction; Linux/Windows `VERSION.txt` retains the actual
+package source revision rather than being relabeled.
+
+All seven downloaded packages pass SHA-256/ZIP CRC and archive-path checks.
+GPL/STI notice content and clean default settings were checked (Windows notice
+line endings normalized for comparison). Shared-cell/checksum class bytes agree
+across the five desktop packages. Both APK identities, versions and permanent
+signatures pass independent package-tool checks. The Linux package passes its
+internal verifier and an isolated bundled-runtime synthetic desktop probe.
+
 See the [gauge/editor and companion audit](https://github.com/Natzirt-BK/RomRaider2/blob/master/docs/GAUGE_EDITOR_AUDIT_2026-09-06.md)
 for findings, repairs and the distinction between fresh automated checks and
 retained application evidence.

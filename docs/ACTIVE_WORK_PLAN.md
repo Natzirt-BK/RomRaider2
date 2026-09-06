@@ -53,8 +53,18 @@ fixes the Compose runtime staging dependency found by clean hosted packaging.
 passed Android, SteamOS and both macOS architectures. These are source/build
 checkpoints, not a new public release.
 
-The next JavaFX editor command pass implements item 4's selection multiplier,
+The JavaFX editor command pass completed item 4's selection multiplier,
 session-local fine/coarse steps, protected saved-ROM reload and read-only ROM
 properties. See [command semantics and test scope](DESKTOP_EDITOR_COMMANDS.md).
 The remaining analysis/mobile work in items 5–7 is still pending; neither these
 editor commands nor the gauges imply production live-tune qualification.
+
+Items 1, 2 and 4 are implemented and verified: eleven added faces including the
+premium STI/Evolution pair, retained-session gauges-only views and the protected
+editor commands. Item 3 is complete: [1.1.2 is published](RELEASE_1_1_2.md) with all
+seven platform packages and their checksum sidecars. The offline ECUFlash/Forester/EVO and companion-installer audit
+is recorded in [the follow-up audit](GAUGE_EDITOR_AUDIT_2026-09-06.md).
+Use [the post-1.1.2 plan](POST_1_1_2_WORK_PLAN.md) for concrete next steps and test
+gates: reusable analysis setups first, then calculated mobile channels and the
+remaining analysis/mobile backlog. Do not treat release publication as completion
+of items 5–7 or as hardware qualification.

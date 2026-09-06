@@ -12,9 +12,8 @@ logging and unfinished ECU-write research.
 
 ## Downloads
 
-This branch documents **RomRaider2 1.1.2** for desktop and Android. Check the
-[Releases page](https://github.com/Natzirt-BK/RomRaider2/releases/latest) for
-published package availability; a source checkout is not a release. Version
+The current release is **RomRaider2 1.1.2** for desktop and Android, with
+[release notes and verification](docs/RELEASE_1_1_2.md). Version
 numbers use patch increments for routine updates, minor increments for milestones,
 and rare major increments for substantial changes. Only the latest release is
 kept on the Releases page; older source tags remain in Git history. See the

@@ -1,9 +1,10 @@
 # Android testing
 
-The currently published Android version is **1.1.1**; development source uses
-**1.1.2**, which is not yet a published release. Packages are sideloaded and
+This guide covers Android **1.1.2**. Check the
+[latest release](https://github.com/Natzirt-BK/RomRaider2/releases/latest)
+for published downloads. Packages are sideloaded and
 remain debuggable, so Android or Play Protect may warn about an unknown app.
-The next distribution uses a permanent signing key, unlike the older public
+Version 1.1.2 uses a permanent signing key, unlike the older public
 1.1.1 APK. That key change prevents an in-place update from the old APK.
 Existing application IDs are unchanged. **Export your recordings before
 uninstalling or clearing app data.** A side-by-side APK named
@@ -14,7 +15,7 @@ See [update reliability and migration precautions](ANDROID_UPDATE_RELIABILITY.md
 The [step-by-step 1.1.2 migration checklist](ANDROID_1_1_2_MIGRATION.md) includes
 recordings, unsaved ROM work and logger definitions/profiles, not only APK signing.
 
-Version 1.1.1 includes the OpenPort filter-response repair, retains imported
+The app includes the OpenPort filter-response repair, retains imported
 profile selections when definitions are reloaded, and exports normal wide-column
 RomRaider CSV files. Loading a definition alone selects no channels. Basic
 Forester logging was reported working; larger profiles, sustained sessions, and
@@ -31,8 +32,10 @@ MUT-II vehicle qualification remain open.
   logs.
 - Import a RomRaider v370 Logger definition and an existing Logger profile.
 - Run the clearly marked simulated Logger and save its CSV.
-- Review the two-column mobile gauge dashboard, switch between its five styles,
-  reset measured peaks, and use the simulated gauge demo without an ECU.
+- Review the responsive gauge dashboard, choose from 16 styles, reset measured
+  peaks and use the simulated gauge demo without an ECU. Switching between
+  LOGGER and GAUGES preserves the active session and recording.
+- Open About / licenses to review the bundled software license and brand notice.
 - Check whether Android detects an attached OpenPort 2.0 and grants USB
   permission.
 - Attach an OpenPort 2.0 while RomRaider2 is closed and confirm Android offers
@@ -77,8 +80,9 @@ available in this Android version.
 5. With the vehicle parked, ignition on and engine off, start the read-only
    logger. `MUT2_GENERIC` means a plausible battery-PID response, **not** a match
    to a particular ECU calibration. Verify the definition against your vehicle.
-6. Stop and wait for completion, then **Save live CSV**. Backgrounding the app,
-   switching workspace, or disconnecting USB stops the session. It does not
+6. Stop and wait for completion, then **Save live CSV**. Switching between
+   LOGGER and GAUGES preserves the session. Backgrounding the app or disconnecting
+   USB stops it; the Editor cannot be opened during recording. The app does not
    automatically reconnect or resume ECU requests.
 
 No pin-voltage, fault-clear, reset, flashing, or ECU memory-write operation is
@@ -94,7 +98,7 @@ export recordings** exports earlier sessions after an app restart; exporting
 does not delete the recovery copy. Back these up before uninstalling or clearing
 app data. Storage use grows with retained recordings. The current cycle may be
 lost or incomplete after abrupt process/power loss; this is not a crash-proof
-data recorder. The 1.1.2 candidate restores saved definitions/channel selections
+data recorder. Version 1.1.2 restores saved definitions/channel selections
 after restart or Activity recreation; this does not migrate data across an
 uninstall or automatically restore a USB/logging session. Keep source setup
 files for the old public version and for manual migration. Phone-specific USB,

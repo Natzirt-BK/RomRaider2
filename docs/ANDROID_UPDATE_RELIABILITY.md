@@ -1,7 +1,8 @@
 # Android update reliability and saved logger setup
 
-Work for the next patch release; no new public release is created by these
-checks. The current published version remains 1.1.1.
+Signing and saved-setup protections for version 1.1.2 and later. See the
+[latest release](https://github.com/Natzirt-BK/RomRaider2/releases/latest)
+for published packages; automated checks alone do not constitute publication.
 
 ## Persistent signing
 
