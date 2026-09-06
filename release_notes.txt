@@ -14,6 +14,11 @@ What changed for 1.1.3
 - Exact channel matching leaves missing/ambiguous headers unresolved. Imports
   reset the sample range for explicit review; malformed or wrong-kind imports
   preserve existing inputs/results. Setup exports cannot overwrite CSV/ROM paths.
+- Android calculated logger channels resolve bounded, definition-backed hidden
+  inputs, including P200 engine load and P201 injector duty. Explicit input units
+  are honored; bare inputs use definition-default units independently of gauge
+  units. Selected CSV columns stay unchanged; failed cycles publish no partial row.
+  DimeMod runtime discovery and external serial AEM input remain separate work.
 
 What changed for 1.1.2
 ---------------------

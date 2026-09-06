@@ -1,5 +1,9 @@
 # Android testing
 
+Development-source follow-up: [calculated logger channels](CALCULATED_LOGGER_CHANNELS.md)
+are implemented for 1.1.3. The public-package instructions and limits below still
+describe 1.1.2 until the next verified release is published.
+
 This guide covers Android **1.1.2**. Check the
 [latest release](https://github.com/Natzirt-BK/RomRaider2/releases/latest)
 for published downloads. Packages are sideloaded and

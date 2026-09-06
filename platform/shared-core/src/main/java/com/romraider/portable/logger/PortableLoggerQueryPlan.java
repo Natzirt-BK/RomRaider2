@@ -8,6 +8,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.IdentityHashMap;
 
 import com.romraider.portable.logger.definition.PortableSelectedParameter;
 
@@ -16,14 +17,19 @@ public final class PortableLoggerQueryPlan {
     private static final int MAX_ADDRESSES = 64;
 
     private final List<PortableSelectedParameter> selections;
+    private final List<PortableSelectedParameter> evaluations;
+    private final List<PortableSelectedParameter> readParameters;
     private final List<PortableParameterConverter> converters;
     private final List<PortableLoggerQueryBatch> batches;
 
     private PortableLoggerQueryPlan(List<PortableSelectedParameter> selections,
+            List<PortableSelectedParameter> evaluations, List<PortableSelectedParameter> readParameters,
             List<PortableParameterConverter> converters,
             List<PortableLoggerQueryBatch> batches) {
         this.selections = Collections.unmodifiableList(
                 new ArrayList<PortableSelectedParameter>(selections));
+        this.evaluations = Collections.unmodifiableList(new ArrayList<>(evaluations));
+        this.readParameters = Collections.unmodifiableList(new ArrayList<>(readParameters));
         this.converters = Collections.unmodifiableList(
                 new ArrayList<PortableParameterConverter>(converters));
         this.batches = Collections.unmodifiableList(
@@ -41,7 +47,12 @@ public final class PortableLoggerQueryPlan {
         if (selections == null || selections.isEmpty()) {
             throw new IllegalArgumentException("At least one logger parameter is required");
         }
-        List<Group> groups = connectedGroups(selections);
+        Set<PortableSelectedParameter> nodes = new LinkedHashSet<>();
+        for (PortableSelectedParameter selection : selections) collect(selection, nodes, new LinkedHashSet<>(), 0);
+        List<PortableSelectedParameter> evaluations = new ArrayList<>(nodes), leaves = new ArrayList<>();
+        for (PortableSelectedParameter node : evaluations) if (!node.isCalculated()) leaves.add(node);
+        if (leaves.isEmpty()) throw new IllegalArgumentException("The logger plan contains no concrete reads");
+        List<Group> groups = connectedGroups(leaves);
         int maxAddresses = protocol == PortableLoggerProtocol.MUT2 ? 256 : MAX_ADDRESSES;
         List<LinkedHashSet<Integer>> packed = new ArrayList<>();
         for (Group group : groups) {
@@ -72,16 +83,18 @@ public final class PortableLoggerQueryPlan {
             } else batches.add(new PortableLoggerQueryBatch(toArray(addresses), protocol));
         }
         List<PortableParameterConverter> converters = new ArrayList<>();
-        for (PortableSelectedParameter selection : selections) {
-            converters.add(new PortableParameterConverter(
-                    selection.getConversion()));
+        for (PortableSelectedParameter selection : evaluations) {
+            converters.add(selection.isCalculated() ? null : new PortableParameterConverter(selection.getConversion()));
         }
-        return new PortableLoggerQueryPlan(selections, converters, batches);
+        return new PortableLoggerQueryPlan(selections, evaluations, leaves, converters, batches);
     }
 
     public List<PortableLoggerQueryBatch> batches() {
         return batches;
     }
+
+    /** Concrete inputs, including hidden dependencies, for simulation/inspection. */
+    public List<PortableSelectedParameter> readParameters() { return readParameters; }
 
     public List<PortableLoggerValue> decode(List<byte[]> batchValues) {
         if (batchValues == null || batchValues.size() != batches.size()) {
@@ -100,9 +113,18 @@ public final class PortableLoggerQueryPlan {
                 valuesByAddress.put(addresses[index], values[index]);
             }
         }
-        List<PortableLoggerValue> result = new ArrayList<>();
-        for (int index = 0; index < selections.size(); index++) {
-            PortableSelectedParameter selection = selections.get(index);
+        // Fresh cycle-local values only. Nothing survives a failed or missing cycle.
+        Map<PortableSelectedParameter, Double> evaluated = new IdentityHashMap<>();
+        for (int index = 0; index < evaluations.size(); index++) {
+            PortableSelectedParameter selection = evaluations.get(index);
+            if (selection.isCalculated()) {
+                Map<String, Double> inputs = new LinkedHashMap<>();
+                for (Map.Entry<String, PortableSelectedParameter> entry : selection.getInputs().entrySet()) {
+                    inputs.put(entry.getKey(), evaluated.get(entry.getValue()));
+                }
+                evaluated.put(selection, selection.getCalculation().evaluate(inputs));
+                continue;
+            }
             int[] addresses = selection.getAddresses();
             byte[] raw = new byte[addresses.length];
             for (int valueIndex = 0; valueIndex < addresses.length; valueIndex++) {
@@ -113,10 +135,22 @@ public final class PortableLoggerQueryPlan {
                 }
                 raw[valueIndex] = value;
             }
-            result.add(new PortableLoggerValue(selection,
-                    converters.get(index).convert(raw)));
+            evaluated.put(selection, converters.get(index).convert(raw));
         }
+        List<PortableLoggerValue> result = new ArrayList<>();
+        for (PortableSelectedParameter selection : selections) result.add(new PortableLoggerValue(selection, evaluated.get(selection)));
         return Collections.unmodifiableList(result);
+    }
+
+    private static void collect(PortableSelectedParameter node, Set<PortableSelectedParameter> ordered,
+            Set<PortableSelectedParameter> path, int depth) {
+        if (node == null) throw new IllegalArgumentException("Null logger selection");
+        if (depth > 32 || path.contains(node)) throw new IllegalArgumentException("Invalid/deep calculated dependency graph");
+        if (ordered.contains(node)) return;
+        if (ordered.size() + path.size() >= 4096) throw new IllegalArgumentException("Logger dependency graph exceeds 4096 nodes");
+        path.add(node);
+        for (PortableSelectedParameter input : node.getInputs().values()) collect(input, ordered, path, depth + 1);
+        path.remove(node); ordered.add(node);
     }
 
     private static List<Group> connectedGroups(

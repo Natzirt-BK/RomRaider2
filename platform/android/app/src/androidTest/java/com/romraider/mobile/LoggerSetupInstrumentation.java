@@ -53,6 +53,7 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
             if (phase.equals("seed")) seed();
             else if (phase.equals("gauges")) verifyGaugesOnly();
             else if (phase.equals("live-gauges")) verifyReadOnlySessionViewSwitch();
+            else if (phase.equals("calculated-gauges")) verifyCalculatedGauges();
             else if (phase.equals("gauge-gallery")) captureGaugeGallery();
             else if (phase.equals("verify")) verify(2);
             else if (phase.equals("clear")) {
@@ -401,8 +402,59 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
             } finally { bitmap.recycle(); }
         }
     }
+    private void verifyCalculatedGauges() throws Exception {
+        String definitionXml = "<logger><protocol id='SSM'><parameters>"
+                + parameter("P8", "Engine Speed", "rpm", "0x0E", "x/4")
+                + parameter("P12", "Mass Airflow", "g/s", "0x13", "x/100")
+                + parameter("P21", "Pulse", "ms", "0x20", "x/100")
+                + "<parameter id='P200' name='Engine Load'><depends><ref parameter='P12'/><ref parameter='P8'/></depends>"
+                + "<conversions><conversion units='g/rev' expr='P12*60/P8' format='0.00'/></conversions></parameter>"
+                + "<parameter id='P201' name='Injector Duty'><depends><ref parameter='P8'/><ref parameter='P21'/></depends>"
+                + "<conversions><conversion units='%' expr='P8*[P21:ms]/1200' format='0.00'/></conversions></parameter>"
+                + "</parameters></protocol></logger>";
+        String profileXml = "<profile protocol='SSM'><parameters>"
+                + "<parameter id='P200' livedata='selected' units='g/rev'/>"
+                + "<parameter id='P201' livedata='selected' units='%'/></parameters></profile>";
+        File definition = new File(getTargetContext().getFilesDir(), "calculated-definition.xml");
+        File profile = new File(getTargetContext().getFilesDir(), "calculated-profile.xml");
+        Files.write(definition.toPath(), definitionXml.getBytes(StandardCharsets.UTF_8));
+        Files.write(profile.toPath(), profileXml.getBytes(StandardCharsets.UTF_8));
+        invoke("loadLoggerProfile", new Class<?>[] {Uri.class, String.class}, Uri.fromFile(profile), profile.getName());
+        invoke("loadLoggerDefinition", new Class<?>[] {Uri.class, String.class}, Uri.fromFile(definition), definition.getName());
+        awaitImports();
+        Files.delete(definition.toPath()); Files.delete(profile.toPath());
+        Activity closing = activity;
+        runOnMainSync(closing::finish);
+        waitForIdleSync();
+        startActivitySync(new Intent().setClassName(getTargetContext(), MainActivity.class.getName())
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        awaitImports();
+        verifyNotRunning();
+        check(((PortableLoggerDefinition) field("loggerDefinition")).parameters().size() == 5,
+                "Calculated definition did not restore");
+        check(((PortableLoggerProfile) field("loggerProfile")).selections().size() == 2,
+                "Hidden dependencies expanded the saved profile");
+        invoke("toggleLoggerPreview", new Class<?>[0]);
+        try {
+            long deadline = SystemClock.uptimeMillis() + 5000;
+            while ((Integer) field("previewCycle") < 2 && SystemClock.uptimeMillis() < deadline) SystemClock.sleep(50);
+            com.romraider.portable.PortableLogSession log =
+                    (com.romraider.portable.PortableLogSession) field("previewSession");
+            check(log != null && log.size() >= 4, "Calculated simulation did not produce samples");
+            for (com.romraider.portable.PortableLogSample sample : log.snapshot()) {
+                check((sample.getChannelId().equals("P200") || sample.getChannelId().equals("P201"))
+                        && Double.isFinite(sample.getValue()), "Calculated simulation exposed an input or invalid value");
+            }
+            check(((java.util.Map<?, ?>) field("loggerGaugeViews")).size() == 2,
+                    "Hidden dependencies became visible gauges");
+        } finally { invoke("stopLoggerPreview", new Class<?>[] {String.class}, (Object) null); }
+        verifyReadOnlySessionViewSwitch(true);
+    }
     private void verifyReadOnlySessionViewSwitch() throws Exception {
         verifySelection(2);
+        verifyReadOnlySessionViewSwitch(false);
+    }
+    private void verifyReadOnlySessionViewSwitch(boolean calculated) throws Exception {
         File spool = File.createTempFile("synthetic-gauge-session-", ".csv.part", getTargetContext().getCacheDir());
         com.romraider.portable.PortableLogSession log = com.romraider.portable.PortableLogSession.streaming(spool, 20);
         java.util.concurrent.atomic.AtomicInteger identifies = new java.util.concurrent.atomic.AtomicInteger();
@@ -414,7 +466,19 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
             public byte[] read(com.romraider.portable.logger.PortableLoggerQueryBatch batch) {
                 SystemClock.sleep(25);
                 byte[] result = new byte[batch.getAddresses().length];
-                java.util.Arrays.fill(result, (byte) 120); return result;
+                java.util.Arrays.fill(result, (byte) 120);
+                if (calculated) for (int i = 0; i < result.length; i++) {
+                    switch (batch.getAddresses()[i]) {
+                        case 14: result[i] = 0x2e; break;
+                        case 15: result[i] = (byte) 0xe0; break;
+                        case 19: result[i] = 0x27; break;
+                        case 20: result[i] = 0x10; break;
+                        case 32: result[i] = 0x01; break;
+                        case 33: result[i] = 0x00; break;
+                        default: throw new AssertionError("Unexpected calculated input address");
+                    }
+                }
+                return result;
             }
             public void closeReadOnlyKLine() { closes.incrementAndGet(); }
         };
@@ -460,6 +524,16 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
             try {
                 StringWriter csv = new StringWriter(); log.writeRomRaiderCsv(csv);
                 check(csv.toString().startsWith("Time (msec),"), "Recording no longer exports standard RomRaider CSV");
+                if (calculated) {
+                    check(csv.toString().startsWith("Time (msec),Engine Load (g/rev),Injector Duty (%)\n"),
+                            "Calculated CSV changed selected order or exposed hidden inputs");
+                    for (com.romraider.portable.PortableLogSample sample : log.snapshot()) {
+                        check(sample.getChannelId().equals("P200") || sample.getChannelId().equals("P201"),
+                                "Unselected input reached the recording");
+                        double expected = sample.getChannelId().equals("P200") ? 2.0 : 6.4;
+                        check(Math.abs(sample.getValue() - expected) < 1e-9, "Calculated recording value is incorrect");
+                    }
+                }
                 check(closes.get() == 1, "Transport was not closed exactly once");
             } finally { log.discard(); }
         }

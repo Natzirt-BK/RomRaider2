@@ -30,10 +30,9 @@ loading does not authorize transferring calculated corrections into a ROM.
 
 ## Mobile calculated-channel parity
 
-The definition reader already retains dependency IDs, but selected parameters
-currently require concrete addresses and the expression evaluator accepts only
-the raw variable `x`. Supporting calculated channels therefore needs a compiled
-measurement plan, not invented addresses or an Android-only formula shortcut.
+Implemented in 1.1.3 development source using a compiled measurement plan.
+See [selection semantics, compatibility limits and test scope](CALCULATED_LOGGER_CHANNELS.md).
+Public 1.1.2 remains unchanged. The following requirements govern this work:
 
 - Resolve a bounded dependency graph and reject cycles, unknown IDs, unsupported
   targets and conversions before starting requests. Add only required leaf
@@ -55,6 +54,16 @@ runtime-derived channel. Do not hardcode the owner's RAM addresses. External
 serial AEM input remains a distinct transport/lifecycle project.
 
 ## Then
+
+The next analysis slice is shared, reviewed conditions between MAF and Injector:
+the same loaded dataset, inclusive sample range and up to three numeric filters.
+Keep the input-channel mappings, bin widths and injector fuel assumptions
+independent. Sharing conditions must be explicit, reject invalid ranges or
+unresolved filter channels, and clear affected results and unit confirmation.
+It must not silently overwrite an edited setup or carry sample indices across
+different datasets. Cover source/target replacement, stale worker results,
+duplicate column identities, missing/nonfinite filter values and closed panes.
+This is not automatic closed-loop/transient filtering or full legacy parity.
 
 Continue synchronized analysis filters, reviewed fitting/interpolation, log-to-map
 tracing and binned/run-comparison views. Portable logger-setup export/import and

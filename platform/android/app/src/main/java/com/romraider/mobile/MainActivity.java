@@ -201,8 +201,7 @@ public final class MainActivity extends Activity {
             if (!previewRunning) return;
             try {
                 List<PortableLoggerValue> values = previewPlan.decode(
-                        simulatedResponses(previewPlan, previewSelections,
-                                previewCycle));
+                        simulatedResponses(previewPlan, previewCycle));
                 long timestamp = SystemClock.elapsedRealtime() - previewStartedAt;
                 for (PortableLoggerValue value : values) {
                     PortableSelectedParameter selected = value.getSelection();
@@ -591,6 +590,9 @@ public final class MainActivity extends Activity {
                         .append(selection.ready().size())
                         .append("  /  waiting or unavailable: ")
                         .append(selection.unavailable().size());
+                if (selection.ready().stream().anyMatch(PortableSelectedParameter::isCalculated)) {
+                    result.append("\nCalculated inputs use definition-default units or explicit [ID:units], independently of gauge display units. Hidden inputs add reads, not CSV columns.");
+                }
                 for (PortableSelectedParameter selected : selection.ready()) {
                     result.append("\n  READY  ")
                             .append(selected.getParameter().getName())
@@ -1891,10 +1893,9 @@ public final class MainActivity extends Activity {
     }
 
     private static List<byte[]> simulatedResponses(
-            PortableLoggerQueryPlan plan,
-            List<PortableSelectedParameter> selections, int cycle) {
+            PortableLoggerQueryPlan plan, int cycle) {
         Map<Integer, Byte> valuesByAddress = new HashMap<>();
-        for (PortableSelectedParameter selection : selections) {
+        for (PortableSelectedParameter selection : plan.readParameters()) {
             byte[] raw = simulatedRawValue(selection, cycle);
             int[] addresses = selection.getAddresses();
             for (int index = 0; index < addresses.length; index++) {

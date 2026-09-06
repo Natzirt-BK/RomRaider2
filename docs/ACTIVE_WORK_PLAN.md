@@ -74,4 +74,10 @@ setups are implemented with strict file validation, explicit import review,
 exact/ambiguity-aware channel matching, retained unresolved filters and guarded
 asynchronous I/O. They do not yet ship in the public 1.1.2 packages. The rest of
 item 5 (synchronized filtering, fitting/interpolation and reviewed transfer),
-item 6 and the mobile items remain open.
+item 6 and the remaining mobile items remain open.
+
+Portable calculated channels are now implemented in 1.1.3 development source,
+including P200/P201, bounded hidden dependencies and explicit input-unit binding.
+See [the calculation contract and verification scope](CALCULATED_LOGGER_CHANNELS.md).
+This does not complete DimeMod runtime discovery, external serial sensors,
+background recording, setup transfer or hardware acceptance.

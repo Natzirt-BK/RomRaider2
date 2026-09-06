@@ -1,5 +1,9 @@
 # Android foundation
 
+This is the historical foundation design, not the current release checklist.
+Use [Android testing](ANDROID_PREVIEW_TESTING.md) for public 1.1.2 and
+[calculated channels](CALCULATED_LOGGER_CHANNELS.md) for the 1.1.3 source follow-up.
+
 Android is being treated as a portable companion, not a desktop package in a
 smaller window. The first useful scope is offline ROM editing and log review.
 ECU writing stays out until the USB transport and recovery behavior have been

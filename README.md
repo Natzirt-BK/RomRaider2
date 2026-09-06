@@ -99,8 +99,9 @@ Features below describe **1.1.2**. Consult the selected release's notes for its
 package verification and platform-specific limits.
 
 Development source is now **1.1.3**, adding reusable
-[MAF/Injector analysis setups](docs/FUEL_LOG_ANALYSIS.md#reusable-setups-113-development-source).
-This follow-up is not in the published 1.1.2 downloads.
+[MAF/Injector analysis setups](docs/FUEL_LOG_ANALYSIS.md#reusable-setups-113-development-source)
+and Android [calculated logger channels](docs/CALCULATED_LOGGER_CHANNELS.md).
+These follow-ups are not in the published 1.1.2 downloads.
 
 - Tabbed calibration workspace with favorites, recent and changed maps, ROM
   comparison, grouped undo/redo, notes, and crash recovery.

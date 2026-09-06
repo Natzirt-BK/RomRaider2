@@ -16,6 +16,14 @@ public final class PortableParameterConverter {
             throw new IllegalArgumentException("Logger conversion is required");
         }
         this.conversion = conversion;
+        String storage = conversion.getStorageType().toLowerCase(java.util.Locale.ROOT);
+        if (!java.util.Arrays.asList("", "uint", "int", "uint8", "uint16", "uint32", "int8", "int16", "int32", "float").contains(storage)) {
+            throw new IllegalArgumentException("Unsupported logger storage type: " + storage);
+        }
+        String endian = conversion.getEndian();
+        if (!endian.isEmpty() && !"little".equalsIgnoreCase(endian) && !"big".equalsIgnoreCase(endian)) {
+            throw new IllegalArgumentException("Unsupported logger byte order: " + endian);
+        }
         this.expression = PortableExpression.compile(conversion.getExpression());
     }
 
