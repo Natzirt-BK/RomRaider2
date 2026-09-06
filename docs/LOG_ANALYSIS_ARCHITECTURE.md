@@ -23,6 +23,36 @@ The workspace provides whole-log or inclusive sample-range statistics:
 CSV loading runs off the Swing event thread. The result is a read-only analysis
 surface and does not enable memory reads, writes, resets, or flash operations.
 
+## Finite-value arithmetic — 1.1.3 development source
+
+The shared statistics service uses compensated summation for the mean. If an
+intermediate sum overflows, it recomputes that channel's sum with exact decimal
+representations of the binary-double inputs, then divides with 34-digit decimal
+precision before returning a double. This preserves small cancellation residuals
+without routing ordinary logs through arbitrary-precision arithmetic.
+
+Population standard deviation is calculated in centered, scaled coordinates;
+it does not square original-unit values or subtract a rounded original-unit
+mean from adjacent large readings. Opposite-sign percentile endpoints use a
+weighted interpolation when their difference overflows. The definitions above
+are unchanged: standard deviation divides by the finite sample count, not count
+minus one, and missing readings do not become zeroes. An all-missing channel
+retains unavailable numeric statistics; a finite singleton has zero deviation.
+
+Regression tests cover opposite maximum doubles, squared-deviation overflow
+and underflow, adjacent doubles at a large offset, cancellation, subnormal
+readings, missing/singleton rules and 21 scaled distributions spanning 500
+decimal orders. These are numerical software checks, not calibration validation.
+Local qualification passed all nine statistics tests, the full Ant unit suite
+(optional private-corpus tests remain skipped), the Linux core build, 126 JavaFX
+tests, 35 Compose tests, portable-core checks and Linux JavaFX staging.
+
+This change applies to consumers of `LogStatisticsService`, including Swing and
+JavaFX range statistics. It does not change fuel-bin means, curve-fit residuals,
+recorded CSV values or gauge readings. Exact percentiles still sort finite
+samples per channel; this is not the pending bounded/asynchronous large-log
+statistics implementation. Public 1.1.2 packages are unchanged.
+
 ## Linked cursor and playback
 
 `LogCursorModel` owns the one range-clamped sample selection shared by the time

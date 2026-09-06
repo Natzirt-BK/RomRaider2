@@ -1,6 +1,8 @@
 /* RomRaider2 ECU Studio - GPL 2.0 or later. */
 package com.romraider.logger.analysis;
 
+import java.math.BigDecimal;
+import java.math.MathContext;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -31,16 +33,11 @@ public final class LogStatisticsService {
             LogRange range, LogChannel channel) {
         double[] finite = new double[range.size()];
         int count = 0;
-        double mean = 0.0;
-        double m2 = 0.0;
         for (int row = range.getStartInclusive();
                 row < range.getEndExclusive(); row++) {
             double value = dataset.getValue(row, channel.getIndex());
             if (!Double.isFinite(value)) continue;
             finite[count++] = value;
-            double delta = value - mean;
-            mean += delta / count;
-            m2 += delta * (value - mean);
         }
 
         int missing = range.size() - count;
@@ -53,9 +50,57 @@ public final class LogStatisticsService {
         finite = Arrays.copyOf(finite, count);
         Arrays.sort(finite);
         return new ChannelStatistics(channel, count, missing,
-                finite[0], finite[count - 1], mean,
-                percentile(finite, 0.50), Math.sqrt(m2 / count),
+                finite[0], finite[count - 1], mean(finite),
+                percentile(finite, 0.50), standardDeviation(finite),
                 percentile(finite, 0.05), percentile(finite, 0.95));
+    }
+
+    private static double mean(double[] values) {
+        Sum sum = new Sum();
+        for (double value : values) {
+            sum.add(value);
+            if (!Double.isFinite(sum.value())) {
+                // Rare extreme-value fallback. Preserve the exact binary-double
+                // inputs, including small residuals after huge cancellations.
+                BigDecimal exact = BigDecimal.ZERO;
+                for (double input : values) exact = exact.add(new BigDecimal(input));
+                return exact.divide(BigDecimal.valueOf(values.length), MathContext.DECIMAL128).doubleValue();
+            }
+        }
+        return sum.value() / values.length;
+    }
+
+    private static double standardDeviation(double[] sorted) {
+        double minimum = sorted[0], maximum = sorted[sorted.length - 1];
+        double span = maximum - minimum;
+        if (span == 0.0) return 0.0;
+        // Center before scaling when possible: subtracting a rounded original-
+        // unit mean loses the spread of adjacent doubles at a huge offset.
+        double origin = Double.isFinite(span) ? minimum : 0.0;
+        double scale = Double.isFinite(span) ? span : Math.max(Math.abs(minimum), Math.abs(maximum));
+        Sum normalized = new Sum();
+        for (double value : sorted) normalized.add((value - origin) / scale);
+        double center = normalized.value() / sorted.length;
+        Sum squares = new Sum();
+        for (double value : sorted) {
+            double deviation = (value - origin) / scale - center;
+            squares.add(deviation * deviation);
+        }
+        // Population SD cannot exceed half the finite span, or max(abs(value))
+        // when the span overflows. Clamp only rounding at that mathematical bound.
+        double bound = Double.isFinite(span) ? 0.5 : 1.0;
+        return scale * Math.min(bound, Math.sqrt(squares.value() / sorted.length));
+    }
+
+    private static final class Sum {
+        private double sum, correction;
+        void add(double value) {
+            double next = sum + value;
+            correction += Math.abs(sum) >= Math.abs(value)
+                    ? (sum - next) + value : (value - next) + sum;
+            sum = next;
+        }
+        double value() { return sum + correction; }
     }
 
     private static double percentile(double[] sorted, double fraction) {
@@ -65,6 +110,8 @@ public final class LogStatisticsService {
         int upper = (int) Math.ceil(position);
         if (lower == upper) return sorted[lower];
         double weight = position - lower;
-        return sorted[lower] + (sorted[upper] - sorted[lower]) * weight;
+        double difference = sorted[upper] - sorted[lower];
+        return Double.isFinite(difference) ? sorted[lower] + difference * weight
+                : sorted[lower] * (1.0 - weight) + sorted[upper] * weight;
     }
 }

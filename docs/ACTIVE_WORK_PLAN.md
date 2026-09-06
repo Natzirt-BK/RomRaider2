@@ -119,3 +119,8 @@ Analysis's cursor/views/range statistics aligned with the visible MAF/Injector
 range drafts, while preserving independent fuel filters. Exact accepted-row
 inspection/statistics, bounded large-log review, injector transfer and the rest
 of the analysis/mobile backlog remain open.
+
+The shared [range-statistics arithmetic](LOG_ANALYSIS_ARCHITECTURE.md#finite-value-arithmetic--113-development-source)
+now handles extreme finite values without the previous intermediate overflow
+and squared-deviation underflow. This is a numerical audit fix, not accepted-row
+inspection or bounded/asynchronous large-log processing.
