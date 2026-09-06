@@ -10,3 +10,7 @@ build/
 target/
 tmp/
 /settings.xml
+*.keystore
+*.jks
+*.p12
+keystore.properties

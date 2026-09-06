@@ -62,9 +62,13 @@ jobs:
           if-no-files-found: error
 
   android-debug:
+    # Distribution credentials are never exposed to arbitrary dispatch branches.
+    if: github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -72,11 +76,29 @@ jobs:
       - uses: gradle/actions/setup-gradle@v5
         with:
           gradle-version: "9.5.0"
-      - name: Check portable core and build Android package
+      - name: Restore persistent Android signing key
+        env:
+          RR2_ANDROID_KEYSTORE_BASE64: ${{ secrets.RR2_ANDROID_KEYSTORE_BASE64 }}
         run: |
-          gradle --no-daemon -p platform/android \
+          set -euo pipefail
+          test -n "$RR2_ANDROID_KEYSTORE_BASE64" || { echo 'Android signing secret is missing; refusing unsigned distribution.' >&2; exit 1; }
+          umask 077
+          printf '%s' "$RR2_ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/romraider2-signing.p12"
+      - name: Check portable core and build Android package
+        env:
+          RR2_ANDROID_SIGNING_REQUIRED: "true"
+          RR2_ANDROID_KEYSTORE: ${{ runner.temp }}/romraider2-signing.p12
+          RR2_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.RR2_ANDROID_KEYSTORE_PASSWORD }}
+          RR2_ANDROID_KEY_ALIAS: romraider2
+          RR2_ANDROID_KEY_PASSWORD: ${{ secrets.RR2_ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          gradle --no-daemon --no-configuration-cache -p platform/android \
             :shared-core:check :app:testDebugUnitTest :app:assembleDebug :app:lintDebug \
             :app:assembleOpenportDiagnostic :app:lintOpenportDiagnostic
+          APKSIGNER="$ANDROID_HOME/build-tools/36.0.0/apksigner" \
+            bash packaging/android/verify-signing.sh "$(< packaging/android/signing-certificate.sha256)" \
+              platform/android/app/build/outputs/apk/debug/app-debug.apk \
+              platform/android/app/build/outputs/apk/openportDiagnostic/app-openportDiagnostic.apk
           mkdir -p build/platform-packages
           cp platform/android/app/build/outputs/apk/debug/app-debug.apk \
             build/platform-packages/RomRaider2_1.1.1_Android-debug.apk
@@ -101,6 +123,10 @@ jobs:
             build/platform-packages/RomRaider2_1.1.1_Android-side-by-side-test.apk
             build/platform-packages/RomRaider2_1.1.1_Android-side-by-side-test.apk.sha256
           if-no-files-found: error
+
+      - name: Remove temporary Android signing key
+        if: always()
+        run: rm -f -- "$RUNNER_TEMP/romraider2-signing.p12"
 
   steamos-package:
     runs-on: ubuntu-latest

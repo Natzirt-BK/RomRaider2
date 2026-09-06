@@ -50,6 +50,7 @@ import com.romraider.portable.editor.PortableRomTable;
 import com.romraider.mobile.usb.OpenPortUsbTransport;
 import com.romraider.mobile.logger.ReadOnlyLoggerSession;
 import com.romraider.mobile.logger.LoggerImportState;
+import com.romraider.mobile.logger.LoggerSetupStore;
 import com.romraider.portable.logger.definition.PortableLoggerDefinition;
 import com.romraider.portable.logger.definition.PortableLoggerDefinitionReader;
 import com.romraider.portable.logger.definition.PortableLoggerProfile;
@@ -155,6 +156,8 @@ public final class MainActivity extends Activity {
     private volatile PortableLogSession liveLog;
     private PortableLoggerProtocol loggerProtocol = PortableLoggerProtocol.SSM;
     private final LoggerImportState loggerImports = new LoggerImportState();
+    private int loggerSetupRevision;
+    private byte[] loggerDefinitionBytes = new byte[0];
     private int liveSessionGeneration;
     private File archiveToExport;
     private boolean loggerVisible;
@@ -234,6 +237,7 @@ public final class MainActivity extends Activity {
                 RECEIVER_NOT_EXPORTED);
         showWorkspace();
         showLogger();
+        restoreLoggerSetup();
         restoreUnsavedWorkspace();
         previewHandler.post(() -> prepareAttachedOpenPort(getIntent()));
     }
@@ -377,16 +381,20 @@ public final class MainActivity extends Activity {
                             PortableLoggerProtocol next = which == 0
                                     ? PortableLoggerProtocol.SSM : PortableLoggerProtocol.MUT2;
                             if (next == loggerProtocol) return;
+                            stopLoggerPreview(null);
                             stopLiveLogger(null);
+                            loggerSetupRevision++;
                             loggerImports.reset();
                             loggerProtocol = next;
                             loggerDefinition = null;
+                            loggerDefinitionBytes = new byte[0];
                             loggerProfile = null;
                             loggerDefinitionName = "";
                             loggerProfileName = "";
                             loggerSetupState = "Load a " + next + " logger definition.";
                             getPreferences(MODE_PRIVATE).edit()
                                     .putString("logger_protocol", next.name()).apply();
+                            scheduleLoggerSetupSave();
                             showLogger();
                         }).show());
         setupCard.addView(protocolChoice, matchWrap(dp(9)));
@@ -1118,9 +1126,11 @@ public final class MainActivity extends Activity {
     }
 
     private void loadLoggerDefinition(Uri uri, String name) {
+        loggerSetupRevision++;
         stopLoggerPreview(null);
         stopLiveLogger(null);
         loggerDefinition = null;
+        loggerDefinitionBytes = new byte[0];
         loggerDefinitionName = "";
         final int generation = loggerImports.beginDefinition();
         final PortableLoggerProtocol protocol = loggerProtocol;
@@ -1128,23 +1138,12 @@ public final class MainActivity extends Activity {
         refreshLoggerSetupStatus();
         workerExecutor.execute(() -> {
             try (InputStream input = getContentResolver().openInputStream(uri)) {
-                java.io.BufferedInputStream buffered = new java.io.BufferedInputStream(input);
-                buffered.mark(4096);
-                int first;
-                do { first = buffered.read(); } while (first >= 0 && Character.isWhitespace(first));
-                if (first == 0xEF) { // UTF-8 BOM
-                    buffered.read(); buffered.read();
-                    do { first = buffered.read(); } while (first >= 0 && Character.isWhitespace(first));
-                }
-                buffered.reset();
-                PortableLoggerDefinition parsed = first == '<'
-                        ? PortableLoggerDefinitionReader.read(buffered, protocol.name())
-                        : protocol == PortableLoggerProtocol.MUT2
-                                ? PortableMut2LogConfigReader.read(buffered) : null;
-                if (parsed == null) throw new IllegalArgumentException("SSM requires a logger XML definition");
+                byte[] bytes = LoggerSetupStore.readDefinition(input);
+                PortableLoggerDefinition parsed = parseLoggerDefinition(bytes, protocol);
                 runOnUiThread(() -> {
                     if (isDestroyed() || !loggerImports.finishDefinition(generation)) return;
                     loggerDefinition = parsed;
+                    loggerDefinitionBytes = bytes;
                     loggerDefinitionName = name;
                     PortableLoggerProfile previous = loggerProfile;
                     loggerProfile = LoggerImportState.afterDefinition(previous, protocol.name());
@@ -1152,6 +1151,7 @@ public final class MainActivity extends Activity {
                     loggerSetupState = previous == loggerProfile
                             ? "Logger definition loaded; channel selection retained."
                             : "Logger definition loaded. Import a profile or choose channels.";
+                    scheduleLoggerSetupSave();
                     refreshLoggerSetupStatus();
                 });
             } catch (Exception ex) {
@@ -1159,6 +1159,7 @@ public final class MainActivity extends Activity {
                     if (isDestroyed() || !loggerImports.finishDefinition(generation)) return;
                     loggerSetupState = ex.getMessage() == null
                             ? "Logger definition could not be opened." : ex.getMessage();
+                    scheduleLoggerSetupSave();
                     refreshLoggerSetupStatus();
                 });
             }
@@ -1166,6 +1167,7 @@ public final class MainActivity extends Activity {
     }
 
     private void loadLoggerProfile(Uri uri, String name) {
+        loggerSetupRevision++;
         stopLoggerPreview(null);
         stopLiveLogger(null);
         loggerProfile = null;
@@ -1187,6 +1189,7 @@ public final class MainActivity extends Activity {
                             parsed.selections(), parsed.unsupported());
                     loggerProfileName = name;
                     loggerSetupState = "Logger profile loaded.";
+                    scheduleLoggerSetupSave();
                     refreshLoggerSetupStatus();
                 });
             } catch (Exception ex) {
@@ -1194,6 +1197,7 @@ public final class MainActivity extends Activity {
                     if (isDestroyed() || !loggerImports.finishProfile(generation)) return;
                     loggerSetupState = ex.getMessage() == null
                             ? "Logger profile could not be opened." : ex.getMessage();
+                    scheduleLoggerSetupSave();
                     refreshLoggerSetupStatus();
                 });
             }
@@ -1225,15 +1229,18 @@ public final class MainActivity extends Activity {
                 .setNeutralButton("Clear all", (dialog, which) -> {
                     if (loggerImports.isLoading() || loggerDefinition != definition
                             || loggerProfile != originalProfile) return;
+                    loggerSetupRevision++;
                     stopLoggerPreview(null);
                     stopLiveLogger(null);
                     loggerProfile = new PortableLoggerProfile(loggerProtocol.name(), Collections.emptyList(), Collections.emptyList());
                     loggerProfileName = "Custom channels";
+                    scheduleLoggerSetupSave();
                     refreshLoggerSetupStatus();
                 })
                 .setPositiveButton("Use channels", (dialog, which) -> {
                     if (loggerImports.isLoading() || loggerDefinition != definition
                             || loggerProfile != originalProfile) return;
+                    loggerSetupRevision++;
                     stopLoggerPreview(null);
                     stopLiveLogger(null);
                     List<PortableLoggerProfile.Selection> selections = new ArrayList<>();
@@ -1246,8 +1253,90 @@ public final class MainActivity extends Activity {
                     }
                     loggerProfile = new PortableLoggerProfile(loggerProtocol.name(), selections, Collections.emptyList());
                     loggerProfileName = "Custom channels";
+                    scheduleLoggerSetupSave();
                     refreshLoggerSetupStatus();
                 }).show();
+    }
+
+    private static PortableLoggerDefinition parseLoggerDefinition(byte[] bytes,
+            PortableLoggerProtocol protocol) throws Exception {
+        java.io.ByteArrayInputStream input = new java.io.ByteArrayInputStream(bytes);
+        input.mark(bytes.length);
+        int first;
+        do { first = input.read(); } while (first >= 0 && Character.isWhitespace(first));
+        if (first == 0xEF) {
+            input.read(); input.read();
+            do { first = input.read(); } while (first >= 0 && Character.isWhitespace(first));
+        }
+        input.reset();
+        PortableLoggerDefinition parsed = first == '<'
+                ? PortableLoggerDefinitionReader.read(input, protocol.name())
+                : protocol == PortableLoggerProtocol.MUT2 ? PortableMut2LogConfigReader.read(input) : null;
+        if (parsed == null) throw new IllegalArgumentException("SSM requires a logger XML definition");
+        return parsed;
+    }
+
+    private void restoreLoggerSetup() {
+        final int revision = loggerSetupRevision;
+        final int definitionImport = loggerImports.beginDefinition();
+        final int profileImport = loggerImports.beginProfile();
+        loggerSetupState = "Restoring saved logger setup...";
+        refreshLoggerSetupStatus();
+        workerExecutor.execute(() -> {
+            try {
+                LoggerSetupStore.Setup saved = LoggerSetupStore.restore(getFilesDir());
+                byte[] bytes = saved == null ? new byte[0] : saved.definitionBytes();
+                PortableLoggerDefinition definition = bytes.length == 0 ? null
+                        : parseLoggerDefinition(bytes, saved.protocol);
+                runOnUiThread(() -> {
+                    if (isDestroyed()) return;
+                    loggerImports.finishDefinition(definitionImport);
+                    loggerImports.finishProfile(profileImport);
+                    if (revision != loggerSetupRevision) { refreshLoggerSetupStatus(); return; }
+                    if (saved == null) {
+                        loggerSetupState = "Open a logger definition and, optionally, an existing profile.";
+                    } else {
+                        loggerProtocol = saved.protocol;
+                        loggerDefinition = definition;
+                        loggerDefinitionBytes = bytes;
+                        loggerDefinitionName = saved.definitionName;
+                        loggerProfile = saved.profile;
+                        loggerProfileName = saved.profileName;
+                        loggerSetupState = "Saved logger setup restored. Logging has not started.";
+                        getPreferences(MODE_PRIVATE).edit()
+                                .putString("logger_protocol", loggerProtocol.name()).apply();
+                    }
+                    if (loggerVisible) showLogger();
+                });
+            } catch (Exception failure) {
+                runOnUiThread(() -> {
+                    if (isDestroyed()) return;
+                    loggerImports.finishDefinition(definitionImport);
+                    loggerImports.finishProfile(profileImport);
+                    if (revision == loggerSetupRevision) loggerSetupState =
+                            "Saved logger setup could not be restored. Import the definition and profile again.";
+                    refreshLoggerSetupStatus();
+                });
+            }
+        });
+    }
+
+    private void scheduleLoggerSetupSave() {
+        if (loggerImports.isLoading()) return;
+        final int revision = loggerSetupRevision;
+        LoggerSetupStore.Setup setup = new LoggerSetupStore.Setup(loggerProtocol,
+                loggerDefinitionName, loggerDefinitionBytes, loggerProfileName, loggerProfile);
+        // The single worker preserves write order. Never persist USB or running state.
+        workerExecutor.execute(() -> {
+            try { LoggerSetupStore.save(getFilesDir(), setup); }
+            catch (Exception failure) {
+                runOnUiThread(() -> {
+                    if (!isDestroyed() && revision == loggerSetupRevision) {
+                        notice("Logger setup could not be saved for the next launch. Current logging setup is unchanged.");
+                    }
+                });
+            }
+        });
     }
 
     private void chooseArchivedLog() {

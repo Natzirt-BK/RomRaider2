@@ -11,6 +11,20 @@ plugins {
     id("com.android.application")
 }
 
+val distributionSigning = listOf("RR2_ANDROID_KEYSTORE", "RR2_ANDROID_KEYSTORE_PASSWORD",
+    "RR2_ANDROID_KEY_ALIAS", "RR2_ANDROID_KEY_PASSWORD").associateWith {
+    providers.environmentVariable(it).orNull
+}
+val requireDistributionSigning = providers.environmentVariable("RR2_ANDROID_SIGNING_REQUIRED")
+    .orNull == "true"
+val hasDistributionSigning = distributionSigning.values.all { !it.isNullOrBlank() }
+if ((requireDistributionSigning || distributionSigning.values.any { it != null }) && !hasDistributionSigning) {
+    throw GradleException("Complete Android distribution signing credentials are required; refusing debug-key fallback.")
+}
+if (hasDistributionSigning && gradle.startParameter.isConfigurationCacheRequested) {
+    throw GradleException("Use --no-configuration-cache for signed distribution builds to avoid caching credentials.")
+}
+
 android {
     namespace = "com.romraider.mobile"
     compileSdk = 36
@@ -24,23 +38,46 @@ android {
         applicationId = "com.romraider.mobile"
         minSdk = 26
         targetSdk = 36
-        versionCode = 110405
-        versionName = "1.1.1"
+        versionCode = providers.gradleProperty("rr2AndroidVersionCode").orNull?.toInt() ?: 110405
+        versionName = providers.gradleProperty("rr2AndroidVersionName").orNull ?: "1.1.1"
+        testInstrumentationRunner = "com.romraider.mobile.LoggerSetupInstrumentation"
+        require(versionCode!! > 0 && versionName!!.matches(Regex("[0-9]+\\.[0-9]+\\.[0-9]+"))) {
+            "Android versions must use positive versionCode and numeric major.minor.patch"
+        }
+    }
+
+    testBuildType = providers.gradleProperty("rr2AndroidTestBuildType").orNull ?: "debug"
+
+    if (hasDistributionSigning) {
+        signingConfigs.create("distribution") {
+            storeFile = file(distributionSigning.getValue("RR2_ANDROID_KEYSTORE")!!)
+            storePassword = distributionSigning.getValue("RR2_ANDROID_KEYSTORE_PASSWORD")
+            keyAlias = distributionSigning.getValue("RR2_ANDROID_KEY_ALIAS")
+            keyPassword = distributionSigning.getValue("RR2_ANDROID_KEY_PASSWORD")
+        }
     }
 
     buildTypes {
         debug {
             // Retain the installed package identity; this is not a version label.
             applicationIdSuffix = ".preview"
+            if (hasDistributionSigning) signingConfig = signingConfigs.getByName("distribution")
         }
         create("openportDiagnostic") {
             initWith(getByName("debug"))
             applicationIdSuffix = ".preview.openporttest"
             resValue("string", "app_name", "RomRaider2 OpenPort Test")
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName(if (hasDistributionSigning) "distribution" else "debug")
+            matchingFallbacks += listOf("debug")
+        }
+        create("automation") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".automation"
+            resValue("string", "app_name", "RomRaider2 Automation")
             matchingFallbacks += listOf("debug")
         }
         release {
+            if (hasDistributionSigning) signingConfig = signingConfigs.getByName("distribution")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
