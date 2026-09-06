@@ -200,6 +200,23 @@ public final class SSMLoggerConnection implements LoggerConnection {
             }
         }
 
+        boolean forceUpdate = refreshDmRuntime(dmInit, module);
+        callback.callback(dmInit, forceUpdate);
+    }
+
+    @Override
+    public DmInit readDmRuntime(DmInit cached, Module module) throws InterruptedException {
+        if (!(protocol.getProtocol() instanceof SSMProtocol) &&
+                !(protocol.getProtocol() instanceof com.romraider.io.protocol.ssm.iso15765.SSMProtocol))
+            throw new UnsupportedOperationException("Read-only DimeMod runtime refresh requires SSM");
+        if (cached == null || cached.getMajorVer() != 2 || module == null)
+            throw new IllegalArgumentException("DimeMod runtime refresh requires supported cached metadata and a module");
+        DmInit snapshot = new DmInit(cached.getDmInitBytes());
+        refreshDmRuntime(snapshot, module);
+        return snapshot;
+    }
+
+    private boolean refreshDmRuntime(DmInit dmInit, Module module) throws InterruptedException {
         boolean forceUpdate = false;
         // read runtime params
         if (dmInit != null && dmInit.getMajorVer() == 2) {
@@ -232,11 +249,6 @@ public final class SSMLoggerConnection implements LoggerConnection {
                 byte[] processedResponse = protocol.preprocessResponse(request, response, new PollingStateImpl());
                 if (LOGGER.isDebugEnabled())
                     LOGGER.debug(module + " Init DM Runtime Params Response <--- " + asHex(processedResponse));
-                byte responseType = dmResponseType(processedResponse);
-                if (responseType != SSMProtocol.READ_ADDRESS_RESPONSE) {
-                    // error
-                    return;
-                }
                 dmPayload(processedResponse, SSMProtocol.READ_ADDRESS_RESPONSE, 14, 14);
                 forceUpdate = dmInit.updateRuntimeData(getIntFromResponse(processedResponse, 5),
                         getShortFromResponse(processedResponse, 9),
@@ -292,11 +304,6 @@ public final class SSMLoggerConnection implements LoggerConnection {
                 byte[] processedResponse = protocol.preprocessResponse(request, response, new PollingStateImpl());
                 if (LOGGER.isDebugEnabled())
                     LOGGER.debug(module + " Init DM Runtime Params Response <--- " + asHex(processedResponse));
-                byte responseType = dmResponseType(processedResponse);
-                if (responseType != SSMProtocol.READ_ADDRESS_RESPONSE) {
-                    // error
-                    return;
-                }
                 dmPayload(processedResponse, SSMProtocol.READ_ADDRESS_RESPONSE, 38, 38);
                 forceUpdate = dmInit.updateRuntimeData(getIntFromResponse(processedResponse, 5),
                         getShortFromResponse(processedResponse, 9),
@@ -323,7 +330,7 @@ public final class SSMLoggerConnection implements LoggerConnection {
                 );
             }
         }
-        callback.callback(dmInit, forceUpdate);
+        return forceUpdate;
     }
 
     /** Read the advertised block without wrapping addresses or accepting empty progress. */

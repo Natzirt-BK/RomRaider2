@@ -72,9 +72,11 @@ qualifies the legacy write handshake for Android's read-only logger.
 
 The [cache/lifecycle follow-up](DIMEMOD_CACHE_LIFECYCLE.md) rejects late ECU and
 DimeMod callbacks from closed modern desktop workspaces, including after a new
-workspace opens. Full cache identity and retained Swing/read-codes ownership
-remain separate work; invalidating a cache must not silently increase discovery
-writes.
+workspace opens. Read-codes now captures metadata once and uses a separate
+runtime-only API returning an independent snapshot; cache changes cannot select
+discovery writes or replace its decoded result. Full cache identity and retained
+Swing callback ownership remain separate work; invalidating a cache must not
+silently increase discovery writes.
 
 ## Then
 

@@ -23,6 +23,7 @@ import com.romraider.logger.ecu.comms.manager.PollingState;
 import com.romraider.logger.ecu.comms.query.EcuInitCallback;
 import com.romraider.logger.ecu.comms.query.EcuQuery;
 import com.romraider.logger.ecu.comms.query.dimemod.DmInitCallback;
+import com.romraider.logger.ecu.comms.query.dimemod.DmInit;
 import com.romraider.logger.ecu.definition.Module;
 
 import java.util.Collection;
@@ -52,12 +53,23 @@ public interface LoggerConnection {
     void ecuInit(EcuInitCallback callback, Module module);
 
     /**
-     * Use this method to get the identity the Module communicating with.
-     *
-     * @param callback     - callback which will identify the Module
-     * @param module       - the Module to identify
+     * Initialize DimeMod metadata and runtime state. A missing cache may invoke
+     * the legacy write-based discovery handshake; this is not a read-only API.
+     * @param callback - supplies cached metadata and receives initialized state
+     * @param module - the Module to initialize
      */
     void dmInit(DmInitCallback callback, Module module) throws InterruptedException;
+
+    /**
+     * Read runtime state using supplied, previously discovered metadata only.
+     * Returns an independent snapshot without mutating the supplied cache.
+     * Missing/unsupported metadata or failed reads must fail, never fall back
+     * to discovery or return stale runtime state. This does not verify that
+     * the supplied metadata belongs to the currently connected ECU.
+     */
+    default DmInit readDmRuntime(DmInit cached, Module module) throws InterruptedException {
+        throw new UnsupportedOperationException("Read-only DimeMod runtime refresh is unsupported");
+    }
 
     /**
      * Use this method to query the Module for the parameters included as queries. 

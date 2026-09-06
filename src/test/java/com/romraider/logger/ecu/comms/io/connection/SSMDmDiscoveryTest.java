@@ -151,7 +151,7 @@ public class SSMDmDiscoveryTest {
     public void cachedRuntimeRejectsInvalidFramesWithoutPublishingOrMutating() throws Exception {
         for (boolean can : new boolean[] {false, true}) for (int minor : new int[] {0, 3}) {
             for (Fault fault : new Fault[] {Fault.EMPTY, Fault.OVERSIZED, Fault.BAD_ID, Fault.TRUNCATED,
-                    Fault.BAD_CHECKSUM, Fault.BAD_LENGTH}) {
+                    Fault.BAD_CHECKSUM, Fault.BAD_LENGTH, Fault.WRONG_TYPE}) {
                 if (can && (fault == Fault.BAD_CHECKSUM || fault == Fault.BAD_LENGTH)) continue;
                 Fixture f = new Fixture(can);
                 f.fault = fault;
@@ -173,6 +173,112 @@ public class SSMDmDiscoveryTest {
                 assertEquals(0, f.writes);
             }
         }
+    }
+
+    @Test
+    public void runtimeOnlyRejectsMissingUnsupportedMetadataAndModuleBeforeIo() throws Exception {
+        for (boolean can : new boolean[] {false, true}) {
+            Fixture f = new Fixture(can);
+            for (DmInit cached : new DmInit[] {null, new DmInit(new byte[] {3, 1, 0, 1})}) {
+                try { f.connection.readDmRuntime(cached, f.module); fail("Accepted missing/unsupported cache"); }
+                catch (IllegalArgumentException expected) { }
+            }
+            try { f.connection.readDmRuntime(new DmInit(discovery(3)), null); fail("Accepted missing module"); }
+            catch (IllegalArgumentException expected) { }
+            assertTrue(f.requests.isEmpty());
+        }
+    }
+
+    @Test(timeout = 5000)
+    public void runtimeOnlyReadsFreshSnapshotWithoutNegotiationOrCacheMutation() throws Exception {
+        for (boolean can : new boolean[] {false, true}) for (int minor : new int[] {0, 3}) {
+            Fixture f = new Fixture(can);
+            f.runtimeOnly = true;
+            f.runtimeData = new byte[minor == 0 ? 14 : 38];
+            ByteBuffer data = ByteBuffer.wrap(f.runtimeData);
+            data.putInt(0).putShort((short) 2);
+            if (minor == 0) data.putInt(0x12345678).putInt(0x23456789);
+            else {
+                for (int i = 0; i < 8; i++) data.putShort((short) (0x8000 + i));
+                for (int i = 0; i < 8; i++) data.putShort((short) (0x9000 + i));
+            }
+            DmInit cached = new DmInit(discovery(minor));
+            int[] oldErrors = new int[minor == 0 ? 1 : 8];
+            oldErrors[0] = 1;
+            cached.updateRuntimeData(0, 1, oldErrors, oldErrors);
+            int channelCount = cached.getEcuParams().size();
+            DmInit fresh = f.connection.readDmRuntime(cached, f.module);
+            assertNotSame(cached, fresh);
+            assertArrayEquals(cached.getDmInitBytes(), fresh.getDmInitBytes());
+            assertArrayEquals(oldErrors, cached.getRuntimeCurrentErrors());
+            assertArrayEquals(oldErrors, cached.getRuntimeMemErrors());
+            assertEquals(1, cached.getRuntimeActiveInputs());
+            assertEquals(channelCount, cached.getEcuParams().size());
+            assertEquals(2, fresh.getRuntimeActiveInputs());
+            int[] current = new int[minor == 0 ? 1 : 8];
+            int[] memorized = new int[current.length];
+            for (int i = 0; i < current.length; i++) {
+                current[i] = minor == 0 ? 0x12345678 : 0x8000 + i;
+                memorized[i] = minor == 0 ? 0x23456789 : 0x9000 + i;
+            }
+            assertArrayEquals(current, fresh.getRuntimeCurrentErrors());
+            assertArrayEquals(memorized, fresh.getRuntimeMemErrors());
+            assertEquals(1, f.requests.size());
+            assertEquals(0xa8, f.requests.get(0)[4] & 0xff);
+            assertEquals(0x2020, address(f.requests.get(0), 6));
+            assertEquals(0, f.writes);
+            assertEquals(0, f.scalar);
+        }
+    }
+
+    @Test(timeout = 10000)
+    public void runtimeOnlyFailuresNeverReturnStaleOrFabricatedErrors() throws Exception {
+        for (boolean can : new boolean[] {false, true}) for (int minor : new int[] {0, 3}) {
+            for (Fault fault : Fault.values()) {
+                if (fault == Fault.NONE || can && (fault == Fault.BAD_CHECKSUM || fault == Fault.BAD_LENGTH)) continue;
+                Fixture f = new Fixture(can);
+                f.runtimeOnly = true;
+                f.fault = fault;
+                DmInit cached = new DmInit(discovery(minor));
+                int[] errors = new int[minor == 0 ? 1 : 8];
+                errors[0] = 1;
+                cached.updateRuntimeData(0, 1, errors, errors);
+                try { f.connection.readDmRuntime(cached, f.module); fail("Accepted invalid runtime " + fault); }
+                catch (InvalidResponseException expected) { }
+                assertArrayEquals(errors, cached.getRuntimeCurrentErrors());
+                assertArrayEquals(errors, cached.getRuntimeMemErrors());
+                assertEquals(1, cached.getRuntimeActiveInputs());
+                assertEquals(1, f.requests.size());
+                assertEquals(0, f.writes);
+            }
+        }
+    }
+
+    @Test(timeout = 5000)
+    public void runtimeOnlyCancellationStopsBeforeIo() throws Exception {
+        for (boolean can : new boolean[] {false, true}) {
+            Fixture f = new Fixture(can);
+            Thread.currentThread().interrupt();
+            try { f.connection.readDmRuntime(new DmInit(discovery(3)), f.module); fail("Ignored cancellation"); }
+            catch (InterruptedException expected) { assertTrue(f.requests.isEmpty()); }
+            finally { Thread.interrupted(); }
+        }
+    }
+
+    @Test
+    public void runtimeOnlyRejectsNonSsmProtocolBeforeIo() throws Exception {
+        Fixture f = new Fixture(false);
+        LoggerProtocol nonSsm = (LoggerProtocol) java.lang.reflect.Proxy.newProxyInstance(
+                LoggerProtocol.class.getClassLoader(), new Class<?>[] {LoggerProtocol.class},
+                (proxy, method, args) -> {
+                    if (method.getName().equals("getProtocol")) return null;
+                    throw new AssertionError("Unexpected protocol call: " + method.getName());
+                });
+        try {
+            new SSMLoggerConnection(f, nonSsm).readDmRuntime(new DmInit(discovery(3)), f.module);
+            fail("Accepted non-SSM protocol");
+        } catch (UnsupportedOperationException expected) { }
+        assertTrue(f.requests.isEmpty());
     }
 
     @Test
@@ -225,6 +331,7 @@ public class SSMDmDiscoveryTest {
         final SSMLoggerConnection connection;
         final List<byte[]> requests = new ArrayList<>();
         byte[] block = new byte[256];
+        byte[] runtimeData;
         int readOffset, writes, runtimeReads, scalar, memoryLimit = 256;
         int startAddress = 0x1000, faultOnRequest = 1;
         boolean handshake, runtimeOnly;
@@ -263,7 +370,7 @@ public class SSMDmDiscoveryTest {
                 } else if (runtimeOnly || target == 0x2020) {
                     runtimeReads++;
                     assertTrue(requested == 14 || requested == 38);
-                    data = new byte[requested];
+                    data = runtimeData == null ? new byte[requested] : runtimeData.clone();
                 } else {
                     assertEquals(startAddress + readOffset, target);
                     assertTrue(requested <= (can ? 32 : 96));

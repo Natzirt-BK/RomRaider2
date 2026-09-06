@@ -36,6 +36,47 @@ subsequently separated remembered maximization from a redundant queued startup
 fit, corrected the restore-before-resize test sequence, and removed the queued
 modal fit. The failed lifecycle-checkpoint run remains recorded above.
 
+## Read-codes runtime-only boundary
+
+The retained Swing read-codes action previously checked the mutable owner cache
+and looked it up again inside `dmInit`. Clearing it between those reads could
+select the legacy discovery writes. Result decoding then looked up the owner
+again, potentially displaying a different object's errors.
+
+`LoggerConnection.readDmRuntime` now provides a separate read-only contract.
+Unsupported implementations fail explicitly; the default never delegates to
+`dmInit`. The SSM implementation requires supported cached metadata and a module,
+copies the metadata into a new object, and reads only the existing runtime
+addresses. Missing metadata cannot select discovery. The owner cache is not
+mutated. Read-codes captures its cache once and uses the returned snapshot for
+both the no-codes decision and decoded results. With no cache it continues the
+standard DTC operation without attempting DimeMod discovery.
+
+The shared runtime parser rejects wrong response types as failures, rather than
+silently returning without a callback. All runtime data still requires valid
+native framing and exactly 14 bytes for 2.0 or 38 bytes for later 2.x layouts.
+Read failures propagate to the existing failed-operation path; interruption is
+preserved there. The legacy initialization handshake itself is unchanged.
+
+Synthetic qualification covers both native K-line/CAN framing and 2.0/2.3
+metadata: a single A8 runtime read with no negotiation writes, all current and
+memorized error values, independent snapshots, unchanged cached channels/state,
+missing/unsupported inputs, invalid/truncated replies, and cancellation before
+I/O. The production read-codes cache helper is also exercised with an owner
+cache cleared or replaced during refresh, a missing cache, an unsupported
+connection, and read/cancellation failures. Those helper tests do not construct
+the Swing logger, open an adapter, or qualify its entire UI/connection lifecycle.
+
+Qualification: 39 focused tests pass (17 native SSM discovery/runtime, four
+read-codes cache-boundary, eight metadata and ten channel tests). The full Ant
+Linux build/unit suite passes with its three existing optional/native skips.
+Shared-core checks, all 246 display-enabled JavaFX tests and all 35 Compose
+tests pass, with no skipped UI tests; Linux JavaFX staging also succeeds.
+
+This closes the read-codes write-fallback race, **not cache identity validation**.
+No fresh ECU identification is added to read-codes; previously discovered dynamic
+addresses are still not proven to belong to the currently attached firmware.
+
 ## Existing cache boundary
 
 The remaining cache is **ECU-ID keyed, not fully ECU/session bound**:
@@ -52,12 +93,10 @@ The remaining cache is **ECU-ID keyed, not fully ECU/session bound**:
   obtains its cache from `getDmInit()`: a non-null entry takes the runtime-read
   path, whereas a null entry takes the legacy write-based discovery path.
   `needToInit()` is not consulted by this implementation.
-- The Swing read-codes path obtains a connection and uses the logger's cached
-  DimeMod object without a fresh ECU identification in that method. Its outer
-  cache check and callback lookup are separate reads of mutable owner state.
-  Freezing that lookup and verifying identity before cached-address reads need
-  qualification; a cache miss must not silently turn a read-codes action into
-  discovery writes.
+- The Swing read-codes path obtains a connection and reads a snapshot using the
+  logger's cached DimeMod metadata without fresh ECU identification in that
+  method. Its runtime-only boundary above prevents discovery writes, but
+  verifying identity before cached-address reads remains open.
 
 These findings come from the current call sites, not physical disconnect or
 reflash tests. A matching ECU ID alone does not establish that previously

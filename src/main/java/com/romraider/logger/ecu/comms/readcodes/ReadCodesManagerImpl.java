@@ -24,12 +24,10 @@ import static com.romraider.util.ParamChecker.checkNotNull;
 
 import java.text.MessageFormat;
 import java.util.*;
+import java.util.function.Supplier;
 
-import com.romraider.logger.ecu.comms.query.EcuQueryData;
 import com.romraider.logger.ecu.comms.query.dimemod.DmInit;
-import com.romraider.logger.ecu.comms.query.dimemod.DmInitCallback;
-import com.romraider.logger.ecu.definition.EcuData;
-import com.romraider.logger.ecu.definition.EcuParameterImpl;
+import com.romraider.logger.ecu.definition.Module;
 import org.apache.log4j.Logger;
 
 import com.romraider.Settings;
@@ -126,37 +124,21 @@ public final class ReadCodesManagerImpl implements ReadCodesManager {
                     }
                 }
 
-                final int[][] dmCodes = {{}};
-                final int[][] dmMemCodes = {{}};
-                if (logger.getDmInit() != null) {
-                    connection.dmInit(new DmInitCallback() {
-                        @Override
-                        public void callback(DmInit dmInit, boolean forceUpdate) {
-                            dmCodes[0] = dmInit.getRuntimeCurrentErrors();
-                            dmMemCodes[0] = dmInit.getRuntimeMemErrors();
-                        }
+                final DmInit dmRuntime = readDmRuntime(logger::getDmInit,
+                        connection, settings.getDestinationTarget());
+                final int[] dmCodes = dmRuntime == null ? new int[0] : dmRuntime.getRuntimeCurrentErrors();
+                final int[] dmMemCodes = dmRuntime == null ? new int[0] : dmRuntime.getRuntimeMemErrors();
 
-                        @Override
-                        public boolean needToInit() {
-                            return logger.getDmInit() == null;
-                        }
-
-                        @Override
-                        public DmInit getDmInit() {
-                            return logger.getDmInit();
-                        }
-                    }, settings.getDestinationTarget());
-                }
-
-                if (dtcSet.isEmpty() && (dmCodes[0].length == 0 || dmCodes[0][0] == 0) && (dmMemCodes[0].length == 0 || dmMemCodes[0][0] == 0)) {
+                if (dtcSet.isEmpty() && (dmCodes.length == 0 || dmCodes[0] == 0)
+                        && (dmMemCodes.length == 0 || dmMemCodes[0] == 0)) {
                     LOGGER.info("Success reading " + target +
                             " DTC codes, none set");
                     return -1;
                 }
                 else {
-                    if (logger.getDmInit() != null) {
-                        Set<String> dmCodesStr = logger.getDmInit().decodeDmCurrentErrors();
-                        Set<String> dmMemCodesStr = logger.getDmInit().decodeDmMemorizedErrors();
+                    if (dmRuntime != null) {
+                        Set<String> dmCodesStr = dmRuntime.decodeDmCurrentErrors();
+                        Set<String> dmMemCodesStr = dmRuntime.decodeDmMemorizedErrors();
                         ReadCodesResultsPanel.displayResultsPane(logger, dtcSet, dmCodesStr, dmMemCodesStr);
                     } else {
                         ReadCodesResultsPanel.displayResultsPane(logger, dtcSet);
@@ -169,11 +151,19 @@ public final class ReadCodesManagerImpl implements ReadCodesManager {
             }
         }
         catch (Exception e) {
+            if (e instanceof InterruptedException) Thread.currentThread().interrupt();
             messageListener.reportMessage(MessageFormat.format(
                     rb.getString("FAILED"), target));
             LOGGER.error("Error reading " + target + " DTC codes", e);
 
             return 0;
         }
+    }
+
+    /** Capture owner metadata once; never route a cache miss through discovery. */
+    static DmInit readDmRuntime(Supplier<DmInit> cache, LoggerConnection connection,
+            Module module) throws InterruptedException {
+        final DmInit cached = cache.get();
+        return cached == null ? null : connection.readDmRuntime(cached, module);
     }
 }
