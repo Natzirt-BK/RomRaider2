@@ -206,7 +206,12 @@ public class EditorWorkbenchComponentsTest {
     }
 
     @Test
-    public void statusBarKeepsSafePrimaryActionsExplicit() {
+    public void statusBarKeepsSafePrimaryActionsExplicit() throws Exception {
+        // Layout and visibility assertions must not race Swing resize/activity events.
+        SwingUtilities.invokeAndWait(() -> verifyStatusBarPrimaryActions());
+    }
+
+    private void verifyStatusBarPrimaryActions() {
         ApplicationActivityService.getInstance().ready("Ready");
         final boolean[] resetRequested = {false};
         EditorStatusBar bar = new EditorStatusBar(new EditorStatusBar.Actions() {
@@ -217,13 +222,13 @@ public class EditorWorkbenchComponentsTest {
         assertNull(findButton(bar, "Live Data"));
         JButton reset = findNamed(bar, JButton.class, "RESET ROM CHANGES");
         assertNotNull(reset);
-        assertTrue(reset.getPreferredSize().height <= 22);
-        assertFalse(reset.isEnabled());
+        assertTrue("Reset action height: " + reset.getPreferredSize().height, reset.getPreferredSize().height <= 22);
+        assertFalse("Reset must be disabled without a ROM", reset.isEnabled());
         assertFalse(resetRequested[0]);
         JButton romMod = findNamed(bar, JButton.class,
                 "ROM MODIFICATION STATUS CHIP");
         assertNotNull(romMod);
-        assertFalse(romMod.isVisible());
+        assertFalse("ROM modification chip must start hidden", romMod.isVisible());
         assertEquals("ROM Mods: None detected", romMod.getText());
         JLabel initialContext = findNamed(bar, JLabel.class,
                 "VEHICLE AND ROM CONTEXT");
@@ -236,11 +241,11 @@ public class EditorWorkbenchComponentsTest {
         merpTable.setCategory("MerpMod - Speed Density");
         moddedRom.addTableByName(merpTable);
         bar.showRom(moddedRom);
-        assertTrue(romMod.isVisible());
+        assertTrue("Detected ROM modifications must be visible", romMod.isVisible());
         assertEquals("ROM Mods: CarBerry + MerpMod", romMod.getText());
         JLabel recovery = findNamed(bar, JLabel.class, "ROM RECOVERY STATUS");
         assertNotNull(recovery);
-        assertFalse(recovery.isVisible());
+        assertFalse("Recovery must start hidden", recovery.isVisible());
         JProgressPane activity = findNamed(bar, JProgressPane.class,
                 "EDITOR PROGRESS STATUS");
         assertNotNull(activity);
@@ -248,7 +253,7 @@ public class EditorWorkbenchComponentsTest {
         JLabel activityText = findNamed(activity, JLabel.class,
                 "APPLICATION ACTIVITY STATUS");
         assertNotNull(activityText);
-        assertFalse(findNamed(activity, JProgressBar.class,
+        assertFalse("Ready activity must not display task progress", findNamed(activity, JProgressBar.class,
                 "EDITOR TASK PROGRESS").isVisible());
         JLabel romState = findNamed(bar, JLabel.class, "ROM LOAD STATE");
         JLabel romIdentity = findNamed(bar, JLabel.class, "ROM IDENTITY");
@@ -269,8 +274,8 @@ public class EditorWorkbenchComponentsTest {
         assertNotNull(vehicleContext);
         assertSame(vehicleContext.getParent(), bar.getComponent(1));
         assertEquals(JLabel.CENTER, vehicleContext.getHorizontalAlignment());
-        assertTrue(bar.getPreferredSize().height >= 28);
-        assertTrue(bar.getPreferredSize().height <= 34);
+        assertTrue("Status bar too short: " + bar.getPreferredSize().height, bar.getPreferredSize().height >= 28);
+        assertTrue("Status bar too tall: " + bar.getPreferredSize().height, bar.getPreferredSize().height <= 34);
 
         Rom rom = new Rom(new com.romraider.maps.RomID());
         rom.setFileName("test.bin");
@@ -278,7 +283,7 @@ public class EditorWorkbenchComponentsTest {
                 new com.romraider.swing.JProgressPane());
         bar.showRom(rom);
         bar.showRecoveryState(rom, RecoveryState.SCHEDULED);
-        assertTrue(recovery.isVisible());
+        assertTrue("Queued recovery must be visible", recovery.isVisible());
         assertEquals("○ RECOVERY QUEUED", recovery.getText());
 
         rom.setFileName(
@@ -287,10 +292,10 @@ public class EditorWorkbenchComponentsTest {
         bar.setSize(1166, 30);
         bar.doLayout();
         bar.updateResponsiveText();
-        assertTrue(romIdentity.getText().endsWith("…"));
+        assertTrue("Long ROM identity was not elided: " + romIdentity.getText(), romIdentity.getText().endsWith("…"));
         assertEquals("ROM: " + rom.getFileName(),
                 romIdentity.getToolTipText());
-        assertTrue(bar.getPreferredSize().height <= 34);
+        assertTrue("Long identity increased status height: " + bar.getPreferredSize().height, bar.getPreferredSize().height <= 34);
     }
 
     @Test
