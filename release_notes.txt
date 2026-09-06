@@ -8,6 +8,10 @@ https://github.com/Natzirt-BK/RomRaider2/releases/latest
 What changed for 1.1.3
 ---------------------
 
+- Read-only Log Analysis map tracing follows the saved cursor over an explicitly
+  captured 2D/3D editor table. Manual axis mappings, frozen-snapshot labels,
+  geometric neighbor weights and missing/outside states are explicit. No ECU
+  lookup behavior is assumed and no table values or selections are modified.
 - MAF/Injector Accepted samples tabs inspect exact original CSV rows and calculate
   selected-channel statistics across the full accepted set, independently of
   table paging. Background work, explicit review limits and stale-result guards

@@ -85,6 +85,7 @@ final class JavaFxDesktopRuntime {
             if (logger == null) {
                 logger = new FxLoggerWindow(this::loggerClosed);
                 logger.setMafTransferTarget(() -> editor == null ? null : editor.mafTransferTarget());
+                logger.setMapTraceTarget(() -> editor == null ? null : editor.mapTraceTarget());
             }
             logger.show();
         }

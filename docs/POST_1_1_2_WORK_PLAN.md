@@ -80,8 +80,11 @@ parity. [Reviewed range sharing](SHARED_ANALYSIS_RANGE.md) now connects all thre
 workspaces to Log Analysis's cursor and range-only views/statistics; it does not
 apply fuel filters to those statistics. Separate [accepted-sample inspection and
 statistics](ACCEPTED_FUEL_SAMPLES.md) now cover each fuel result's exact original
-rows with bounded background work and stale-output guards. Continue injector transfer, log-to-map
-tracing and binned/run-comparison views. Portable logger-setup export/import and
+rows with bounded background work and stale-output guards.
+[Read-only log-to-map tracing](LOG_MAP_TRACING.md) now follows the saved-log cursor
+over a reviewed, frozen 2D/3D table snapshot with explicit axis mappings and
+geometric-neighbor semantics. Continue injector transfer and binned/run-comparison
+views. Portable logger-setup export/import and
 bounded large-log review follow. Background recording needs its own Android
 service/USB/notification and failure-recovery design; switching to GAUGES is not
 background recording.

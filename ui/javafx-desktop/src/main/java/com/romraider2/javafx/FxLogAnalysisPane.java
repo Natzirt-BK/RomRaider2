@@ -54,6 +54,7 @@ final class FxLogAnalysisPane extends BorderPane implements AutoCloseable {
     private static final int MAX_CHART_POINTS = 2500;
     private final File source;
     private final LogDataset dataset;
+    private final FxLogMapTracePane mapTrace;
     private final LogCursorModel cursor = new LogCursorModel();
     private final LogPlaybackService playback = new LogPlaybackService(cursor);
     private final TableView<Integer> values = new TableView<>();
@@ -85,6 +86,7 @@ final class FxLogAnalysisPane extends BorderPane implements AutoCloseable {
     FxLogAnalysisPane(File source, LogDataset dataset) {
         this.source = source;
         this.dataset = dataset;
+        mapTrace = new FxLogMapTracePane(dataset);
         selectedRange = LogRange.all(dataset);
         rangeEnd.setText(Integer.toString(dataset.getRowCount()));
         position = new Slider(0, dataset.getRowCount() - 1, 0);
@@ -98,7 +100,7 @@ final class FxLogAnalysisPane extends BorderPane implements AutoCloseable {
                 tab("Time Series", timelineWorkspace()),
                 tab("X/Y Plot", scatterWorkspace()),
                 tab("Statistics", statisticsTable()),
-                tab("Markers", markerWorkspace())));
+                tab("Markers", markerWorkspace()), tab("Map trace", mapTrace)));
         setBottom(new VBox(5, playbackBar(), status));
         setPadding(new Insets(12));
         configureTable();
@@ -178,7 +180,7 @@ final class FxLogAnalysisPane extends BorderPane implements AutoCloseable {
         rangePending.set(false);
         rangeStart.setText(Integer.toString(range.getStartInclusive() + 1));
         rangeEnd.setText(Integer.toString(range.getEndExclusive()));
-        rangeStatus.setText(range.size() + " samples selected");
+        rangeStatus.setText(range.size() + (range.size() == 1 ? " sample selected" : " samples selected"));
         movingSlider = true;
         try {
             List<Integer> rows = new ArrayList<>();
@@ -193,9 +195,12 @@ final class FxLogAnalysisPane extends BorderPane implements AutoCloseable {
         statistics.sort();
         rebuildTimeline();
         rebuildScatter();
+        mapTrace.showSample(cursor.getSampleIndex(), false);
+        positionLabel.setText((cursor.getSampleIndex() + 1) + " / " + dataset.getRowCount());
     }
 
     LogDataset dataset() { return dataset; }
+    void setMapTraceTarget(java.util.function.Supplier<FxMapTraceTarget> target) { mapTrace.setTarget(target); }
     boolean rangeAvailable() { return !closed; }
     long rangeRevision() { return rangeRevision; }
     FxAnalysisRangeLink.Draft rangeDraft() { return new FxAnalysisRangeLink.Draft(rangeStart.getText(), rangeEnd.getText()); }
@@ -203,6 +208,7 @@ final class FxLogAnalysisPane extends BorderPane implements AutoCloseable {
     void copySharedRange(FxAnalysisRangeLink.Draft draft) { rangeStart.setText(draft.first()); rangeEnd.setText(draft.last()); }
     void invalidateSharedRange() {
         rangePending.set(true); playback.pause(); clock.pause(); play.setText("Play");
+        mapTrace.showSample(cursor.getSampleIndex(), true);
         values.getItems().clear(); statistics.getItems().clear(); timelineChart.getData().clear(); scatterChart.getData().clear();
         positionLabel.setText("Apply range to resume"); rangeStatus.setText("Range draft · apply to refresh views and playback");
     }
@@ -347,6 +353,7 @@ final class FxLogAnalysisPane extends BorderPane implements AutoCloseable {
                     movingSlider = true;
                     try {
                         position.setValue(row);
+                        mapTrace.showSample(row, false);
                         values.getSelectionModel().select(Integer.valueOf(row));
                         values.scrollTo(Integer.valueOf(row));
                         positionLabel.setText((row + 1) + " / "
@@ -528,6 +535,7 @@ final class FxLogAnalysisPane extends BorderPane implements AutoCloseable {
     @Override public void close() {
         if (rangeLink != null) rangeLink.close();
         closed = true;
+        mapTrace.close();
         clock.stop();
         playback.pause();
     }

@@ -110,6 +110,8 @@ legacy scalar gate categories with explicit mappings and limits.
 workspaces while keeping range-only statistics distinct from filtered fuel results.
 [Accepted-sample inspection](docs/ACCEPTED_FUEL_SAMPLES.md) adds original-row
 paging and full-accepted-set channel statistics to both fuel workspaces.
+[Read-only map tracing](docs/LOG_MAP_TRACING.md) follows the saved-log cursor over
+an explicitly captured table snapshot, with manual axis-channel mapping.
 These follow-ups are not in the published 1.1.2 downloads.
 
 - Tabbed calibration workspace with favorites, recent and changed maps, ROM

@@ -137,6 +137,11 @@ final class FxLoggerWindow {
     }
 
     void setMafTransferTarget(java.util.function.Supplier<FxMafTransferTarget> target) { mafAnalysis.setTransferTarget(target); }
+    private java.util.function.Supplier<FxMapTraceTarget> mapTraceTarget = () -> null;
+    void setMapTraceTarget(java.util.function.Supplier<FxMapTraceTarget> target) {
+        mapTraceTarget = java.util.Objects.requireNonNull(target);
+        if (analysisPane != null) analysisPane.setMapTraceTarget(target);
+    }
 
     FxLoggerWindow(Runnable closed,
             Function<File, CompletableFuture<LogDataset>> logParser) {
@@ -1100,6 +1105,7 @@ final class FxLoggerWindow {
 
     private void showDataset(File source, LogDataset dataset) {
         FxLogAnalysisPane replacement = new FxLogAnalysisPane(source, dataset);
+        replacement.setMapTraceTarget(mapTraceTarget);
         if (analysisRanges != null) analysisRanges.close();
         if (analysisPane != null) analysisPane.close();
         analysisPane = replacement;

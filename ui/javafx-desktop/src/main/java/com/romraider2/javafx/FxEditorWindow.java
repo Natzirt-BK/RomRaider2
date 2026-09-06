@@ -860,6 +860,21 @@ final class FxEditorWindow {
         });
     }
 
+    FxMapTraceTarget mapTraceTarget() {
+        EditorDocumentSnapshot current = controller.getSession().snapshot();
+        Rom rom = current.getActiveRom();
+        com.romraider.maps.Table table = current.getActiveTable();
+        if (closing || current.getActiveDocument() == null || !(table instanceof com.romraider.maps.Table2D || table instanceof com.romraider.maps.Table3D)
+                || table.getRom() != rom || controller.isBusy(rom)
+                || current.getActiveDocument().getOpenTables().stream().noneMatch(open -> open == table)) return null;
+        long revision = current.getRevision();
+        return new FxMapTraceTarget(table, current.getActiveDocument().getName(), () -> {
+            EditorDocumentSnapshot next = controller.getSession().snapshot();
+            return !closing && next.getRevision() == revision && next.getActiveRom() == rom
+                    && next.getActiveTable() == table && !controller.isBusy(rom);
+        });
+    }
+
     private void dispose() {
         if (!closing) closing = true;
         controller.getSession().removeListener(documentListener);

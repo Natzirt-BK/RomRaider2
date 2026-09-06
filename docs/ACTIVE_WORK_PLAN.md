@@ -111,7 +111,7 @@ for saved logs: all eight scalar gate categories, independent custom/rate filter
 explicit mappings and limits, strict version-3 setups and linked review. This
 advances the filter migration without claiming automatic presets or live-capture
 parity. Range/statistics progress is recorded below; injector transfer,
-tracing/comparisons, remaining mobile work and supervised qualification remain open.
+binned/comparison views, remaining mobile work and supervised qualification remain open.
 
 [Three-workspace range sharing](SHARED_ANALYSIS_RANGE.md) is implemented in
 1.1.3 source. Reviewed activation and an explicit shared Apply step keep Log
@@ -129,5 +129,11 @@ inspection or bounded/asynchronous large-log processing.
 inspection and per-channel statistics in both JavaFX fuel workspaces. Paged
 readings, full-accepted-set statistics, explicit work/memory bounds, background
 execution and stale-result disposal are implemented. This does not complete
-general large-log handling, log-to-map tracing, injector transfer, comparisons
-or the remaining mobile work.
+general large-log handling, injector transfer, comparisons or the remaining
+mobile work. Map-trace progress is recorded below.
+
+[Read-only saved-log map tracing](LOG_MAP_TRACING.md) is now implemented in 1.1.3
+source: reviewed capture of the selected editor table, frozen numeric geometry,
+explicit axis-channel mappings, shared playback/range linkage and geometric
+neighbor highlighting. It does not claim actual ECU lookup behavior, mutate the
+editor table/selection or complete binned analysis/run comparisons.

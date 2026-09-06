@@ -81,6 +81,7 @@ stored in the software repository.
 
 ## Next layer
 
-Markers, event detection, calculated channels, XY graphs, and map awareness
-should consume this dataset and shared cursor through dedicated services. They
-should not be added as direct state and unmanaged threads inside `EcuLogger`.
+JavaFX's [read-only map tracing](LOG_MAP_TRACING.md) now consumes the dataset and
+shared cursor through an immutable table-geometry service and a separate view.
+Further analysis, event detection and map-aware aggregation should likewise use
+dedicated services, not direct state and unmanaged threads inside `EcuLogger`.
