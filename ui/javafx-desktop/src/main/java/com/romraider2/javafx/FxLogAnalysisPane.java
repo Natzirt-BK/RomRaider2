@@ -15,7 +15,6 @@ import com.romraider.logger.analysis.LogMarkerStore;
 import com.romraider.logger.analysis.LogMarkerType;
 import com.romraider.logger.analysis.LogPlaybackService;
 import com.romraider.logger.analysis.LogRange;
-import com.romraider.logger.analysis.LogStatisticsService;
 import com.romraider.logger.analysis.PlaybackState;
 
 import javafx.animation.KeyFrame;
@@ -61,6 +60,13 @@ final class FxLogAnalysisPane extends BorderPane implements AutoCloseable {
     private final LogPlaybackService playback = new LogPlaybackService(cursor);
     private final TableView<Integer> values = new TableView<>();
     private final TableView<ChannelStatistics> statistics = new TableView<>();
+    private final Label statisticsStatus = new Label();
+    private final FxLogStatisticsTask statisticsTask = new FxLogStatisticsTask(javafx.application.Platform::runLater,
+            result -> {
+                statistics.getItems().setAll(result); statistics.sort();
+                statisticsStatus.setText("Samples " + (this.selectedRange.getStartInclusive() + 1) + "–" + this.selectedRange.getEndExclusive()
+                        + " · range-only statistics · fuel filters not applied");
+            }, failure -> statisticsStatus.setText("Statistics unavailable: " + FxDialogs.rootMessage(failure)));
     private final TextField rangeStart = new TextField("1");
     private final TextField rangeEnd = new TextField();
     private final Label rangeStatus = new Label();
@@ -112,6 +118,7 @@ final class FxLogAnalysisPane extends BorderPane implements AutoCloseable {
         configureCharts();
         loadMarkers();
         playback.load(dataset, LogRange.all(dataset));
+        refreshStatistics();
     }
 
     private Node header() {
@@ -195,8 +202,7 @@ final class FxLogAnalysisPane extends BorderPane implements AutoCloseable {
             position.setMax(range.getEndExclusive() - 1);
             playback.setRange(range);
         } finally { movingSlider = false; }
-        statistics.getItems().setAll(LogStatisticsService.analyze(dataset, range));
-        statistics.sort();
+        refreshStatistics();
         rebuildTimeline();
         rebuildScatter();
         mapTrace.showSample(cursor.getSampleIndex(), false);
@@ -217,6 +223,7 @@ final class FxLogAnalysisPane extends BorderPane implements AutoCloseable {
         mapTrace.showSample(cursor.getSampleIndex(), true);
         binned.setRange(selectedRange, true);
         comparison.setRange(selectedRange, true);
+        statisticsTask.cancel(); statisticsStatus.setText("Apply range to calculate statistics.");
         values.getItems().clear(); statistics.getItems().clear(); timelineChart.getData().clear(); scatterChart.getData().clear();
         positionLabel.setText("Apply range to resume"); rangeStatus.setText("Range draft · apply to refresh views and playback");
     }
@@ -433,8 +440,9 @@ final class FxLogAnalysisPane extends BorderPane implements AutoCloseable {
 
     private Node statisticsTable() {
         TableView<ChannelStatistics> table = statistics;
-        table.getItems().setAll(LogStatisticsService.analyze(dataset, selectedRange));
         statisticColumn(table, "Channel", value -> value.getChannel().getLabel(), 260);
+        numericStatisticColumn(table, "Finite", ChannelStatistics::getSampleCount, 100);
+        numericStatisticColumn(table, "Missing", ChannelStatistics::getMissingCount, 100);
         numericStatisticColumn(table, "Min", ChannelStatistics::getMinimum, 110);
         numericStatisticColumn(table, "Max", ChannelStatistics::getMaximum, 110);
         numericStatisticColumn(table, "Mean", ChannelStatistics::getMean, 110);
@@ -442,7 +450,18 @@ final class FxLogAnalysisPane extends BorderPane implements AutoCloseable {
         numericStatisticColumn(table, "Std dev", ChannelStatistics::getStandardDeviation, 110);
         numericStatisticColumn(table, "P05", ChannelStatistics::getPercentile05, 100);
         numericStatisticColumn(table, "P95", ChannelStatistics::getPercentile95, 100);
-        return table;
+        statisticsStatus.setWrapText(true);
+        statisticsStatus.setAccessibleText("Statistics calculation status");
+        VBox workspace = new VBox(8, statisticsStatus, table);
+        VBox.setVgrow(table, Priority.ALWAYS);
+        return workspace;
+    }
+
+    private void refreshStatistics() {
+        statistics.getItems().clear();
+        statisticsStatus.setText("Calculating samples " + (selectedRange.getStartInclusive() + 1) + "–"
+                + selectedRange.getEndExclusive() + "… Table, charts and playback remain available.");
+        statisticsTask.request(dataset, selectedRange);
     }
 
     private void loadMarkers() {
@@ -543,6 +562,7 @@ final class FxLogAnalysisPane extends BorderPane implements AutoCloseable {
     @Override public void close() {
         if (rangeLink != null) rangeLink.close();
         closed = true;
+        statisticsTask.close();
         mapTrace.close();
         binned.close();
         comparison.close();

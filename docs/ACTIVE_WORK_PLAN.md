@@ -178,3 +178,9 @@ limits as second-log comparisons and a single owned, cancellable parser worker.
 Superseded requests are interrupted and cancelled queued work is removed; stale
 callbacks cannot replace a newer dataset. Continue large-log table/statistics
 responsiveness and legacy Swing import handling before claiming broad parity.
+
+The subsequent [JavaFX range-statistics worker](LOG_ANALYSIS_ARCHITECTURE.md#background-range-statistics--113-development-source)
+moves initial and applied-range calculations off the UI thread with bounded
+work, actual cancellation and late result/error rejection. Range drafts clear
+old results, and completed output identifies its sample range and finite/missing
+counts. Table setup/sorting, marker loading and legacy Swing work remain open.

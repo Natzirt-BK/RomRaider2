@@ -46,6 +46,7 @@ class FxLogAnalysisPaneSmokeTest {
                 pane[0].selectRange(LogRange.of(1, 3, 4));
                 assertEquals(List.of(2, 1), table.getItems());
                 TableView<ChannelStatistics> stats = field(pane[0], "statistics");
+                FxLogStatisticsSmokeTest.awaitStatistics(pane[0]);
                 assertEquals(6.5, stats.getItems().get(1).getMean());
                 LineChart<Number, Number> chart = field(pane[0], "timelineChart");
                 assertEquals(2, chart.getData().get(0).getData().size());

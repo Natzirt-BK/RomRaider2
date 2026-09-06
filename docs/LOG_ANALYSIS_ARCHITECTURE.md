@@ -26,7 +26,7 @@ surface and does not enable memory reads, writes, resets, or flash operations.
 ## Finite-value arithmetic — 1.1.3 development source
 
 JavaFX normal CSV imports now have [bounded, cancellable parsing](BOUNDED_CSV_IMPORT.md).
-This is separate from the still-pending asynchronous large-log statistics work.
+The range-statistics worker described below is separate from CSV parsing.
 
 The shared statistics service uses compensated summation for the mean. If an
 intermediate sum overflows, it recomputes that channel's sum with exact decimal
@@ -53,8 +53,46 @@ tests, 35 Compose tests, portable-core checks and Linux JavaFX staging.
 This change applies to consumers of `LogStatisticsService`, including Swing and
 JavaFX range statistics. It does not change fuel-bin means, curve-fit residuals,
 recorded CSV values or gauge readings. Exact percentiles still sort finite
-samples per channel; this is not the pending bounded/asynchronous large-log
-statistics implementation. Public 1.1.2 packages are unchanged.
+samples per channel. Public 1.1.2 packages are unchanged.
+
+## Background range statistics — 1.1.3 development source
+
+The replacement JavaFX Log Analysis pane now computes whole-log and applied-range
+statistics on one owned worker, including the initial dataset load. It clears old
+statistics immediately when starting a new calculation and shows the exact
+inclusive sample range being calculated. Table, chart and playback controls do
+not wait for that calculation. Completed results show finite/missing counts and
+explicitly identify range-only statistics: MAF/Injector filters are not applied.
+
+The existing exact finite-value service above is unchanged; this is scheduling,
+not approximate percentiles, downsampling or a new statistical definition. Work
+is bounded to 1,000,000 selected samples, 256 channels and 8,000,000 selected
+numeric cells. The entire selected range must fit; no partial statistics appear.
+The normal CSV import already applies these bounds to the complete dataset.
+
+Selecting another range cancels the preceding calculation and removes cancelled
+queued tasks. Shared-range drafts clear results and invalidate pending work until
+Apply. Closing the pane cancels work and shuts down its worker. Request identity
+is checked on UI delivery, including errors, so a completed-but-queued result
+cannot reappear over a newer range, draft or closed workspace. An independent
+unapplied range-field edit retains the last applied range's statistics, with the
+completed sample range identified in the status label.
+
+The numeric service checks interruption during scanning and arithmetic. Its
+bounded primitive-array percentile sort is not interruptible mid-sort; the next
+request waits on the same worker, and the preceding result is still rejected.
+This change does not make all large-log work asynchronous: table row allocation
+and sorting, marker-sidecar reads, and legacy Swing range statistics remain
+separate follow-ups. No CSV, ROM, live logger or gauge state is modified.
+
+Regression checks exercise exact range/missing-value semantics, actual worker
+interruption, a burst of 100 superseded requests, queued/stale result and error
+rejection, draft/close handling, limit boundaries and recovery after failure.
+Native JavaFX tests await normal asynchronous delivery while checking linked
+ranges, clearing, playback and the original sample identities.
+Local qualification passed 179 JavaFX tests (including six new worker cases and
+one new native statistics case), 35 Compose tests, portable-core checks and Linux
+JavaFX staging. The shared numerical service and Android code did not change.
 
 ## Linked cursor and playback
 

@@ -94,8 +94,10 @@ explicit review and stale-work guards. JavaFX desktop exchange controls now use
 the same format, exact loaded-definition snapshots, reviewed channel/unit
 replacement and cross-category order persistence. Normal JavaFX CSV imports now
 use [bounded, cancellable parsing](BOUNDED_CSV_IMPORT.md), including actual worker
-interruption and stale-delivery guards. Continue large-log table/statistics
-responsiveness, legacy Swing import handling and the remaining mobile/service work.
+interruption and stale-delivery guards. JavaFX [range statistics](LOG_ANALYSIS_ARCHITECTURE.md#background-range-statistics--113-development-source)
+also run on a bounded, cancellable worker with explicit range status and stale
+result/error rejection. Continue large-log table setup/sorting, marker loading,
+legacy Swing handling and the remaining mobile/service work.
 
 The [desktop profile persistence prerequisite](DESKTOP_PROFILE_INTEGRITY.md) now
 preserves Unicode, escaped attributes, captured protocol and immutable snapshots,

@@ -36,7 +36,10 @@ class FxAnalysisRangeLinkSmokeTest {
     }
     private static TextField text(Object target, String field) throws Exception { return field(target, field); }
     private static void confirm(FxFuelAnalysisPane pane) throws Exception { ((CheckBox) field(pane, "confirmed")).setSelected(true); }
-    private static TableView<ChannelStatistics> stats(Trio trio) throws Exception { return field(trio.log, "statistics"); }
+    private static TableView<ChannelStatistics> stats(Trio trio) throws Exception {
+        FxLogStatisticsSmokeTest.awaitStatistics(trio.log);
+        return field(trio.log, "statistics");
+    }
     private static void sameRange(Trio trio, String first, String last) {
         var expected = new FxAnalysisRangeLink.Draft(first, last);
         assertEquals(expected, trio.log.rangeDraft()); assertEquals(expected, trio.maf.rangeDraft()); assertEquals(expected, trio.injector.rangeDraft());
