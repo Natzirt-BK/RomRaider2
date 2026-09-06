@@ -329,6 +329,89 @@ public final class CalibrationEditControllerTest {
     }
 
     @Test
+    public void multipliesOnlySelectedRealValuesWithOneUndoAndRedo() throws Exception {
+        Table1D table = line("Selected multiply", 0, 3);
+        rom = rom(table, new byte[] {10, 20, 30});
+        TableCalibrationEditController controller = new TableCalibrationEditController(table);
+        CalibrationEditBatchResult result = controller.multiplyCellValues(Arrays.asList(
+                new CalibrationCellCoordinate(0, 0), new CalibrationCellCoordinate(0, 2)), 1.5);
+        assertEquals(2, result.getChangedCellCount());
+        assertEquals(15, rom.getBinary()[0] & 255);
+        assertEquals(20, rom.getBinary()[1] & 255);
+        assertEquals(45, rom.getBinary()[2] & 255);
+        assertEquals(1, RomEditHistory.getInstance().undoDepth(rom));
+        controller.undo();
+        assertEquals(10, rom.getBinary()[0] & 255);
+        assertEquals(30, rom.getBinary()[2] & 255);
+        controller.redo();
+        assertEquals(45, rom.getBinary()[2] & 255);
+    }
+
+    @Test
+    public void customStepsKeepDefinitionIncrementsUnchanged() throws Exception {
+        Table1D table = line("Custom step", 0, 3);
+        rom = rom(table, new byte[] {10, 20, 30});
+        table.getCurrentScale().setFineIncrement(1);
+        table.getCurrentScale().setCoarseIncrement(10);
+        TableCalibrationEditController controller = new TableCalibrationEditController(table);
+        controller.adjustCellValues(Arrays.asList(new CalibrationCellCoordinate(0, 0),
+                new CalibrationCellCoordinate(0, 2)), CalibrationAdjustment.FINE_DECREASE, 3);
+        assertEquals(7, rom.getBinary()[0] & 255);
+        assertEquals(20, rom.getBinary()[1] & 255);
+        assertEquals(27, rom.getBinary()[2] & 255);
+        assertEquals(1, table.getCurrentScale().getFineIncrement(), 0);
+        assertEquals(10, table.getCurrentScale().getCoarseIncrement(), 0);
+        assertEquals(1, RomEditHistory.getInstance().undoDepth(rom));
+        controller.undo();
+        assertEquals(30, rom.getBinary()[2] & 255);
+    }
+
+    @Test
+    public void rejectsInvalidMultiplyAndStepBeforeAnyMutation() throws Exception {
+        Table1D table = line("Invalid math", 0, 2);
+        rom = rom(table, new byte[] {10, 20});
+        TableCalibrationEditController controller = new TableCalibrationEditController(table);
+        java.util.List<CalibrationCellCoordinate> cells = Arrays.asList(new CalibrationCellCoordinate(0, 0),
+                new CalibrationCellCoordinate(0, 1));
+        for (double factor : new double[] {Double.NaN, Double.POSITIVE_INFINITY, Double.MAX_VALUE}) {
+            try { controller.multiplyCellValues(cells, factor); fail("Invalid multiplier accepted"); }
+            catch (CalibrationEditException expected) { }
+        }
+        for (double step : new double[] {0, -1, Double.NaN, Double.POSITIVE_INFINITY}) {
+            try { controller.adjustCellValues(cells, CalibrationAdjustment.FINE_INCREASE, step);
+                fail("Invalid step accepted"); }
+            catch (CalibrationEditException expected) { }
+        }
+        try {
+            controller.multiplyCellValues(Arrays.asList(cells.get(0),
+                    new CalibrationCellCoordinate(0, 99)), 2);
+            fail("Out-of-range selection accepted");
+        } catch (CalibrationEditException expected) { }
+        table.setLocked(true);
+        try { controller.multiplyCellValues(cells, 2); fail("Locked table accepted"); }
+        catch (CalibrationEditException expected) { }
+        assertEquals(10, rom.getBinary()[0] & 255);
+        assertEquals(20, rom.getBinary()[1] & 255);
+        assertFalse(controller.canUndo());
+    }
+
+    @Test
+    public void rejectsNonFiniteInverseScaleBeforeChangingAnySelectedCell() throws Exception {
+        Table1D table = line("Invalid inverse", 0, 2);
+        rom = rom(table, new byte[] {10, 20});
+        table.getCurrentScale().setExpression("x + 0");
+        table.getCurrentScale().setByteExpression("sqrt(30-x)");
+        TableCalibrationEditController controller = new TableCalibrationEditController(table);
+        java.util.List<CalibrationCellCoordinate> cells = Arrays.asList(
+                new CalibrationCellCoordinate(0, 0), new CalibrationCellCoordinate(0, 1));
+        try { controller.multiplyCellValues(cells, 2); fail("Invalid inverse accepted"); }
+        catch (CalibrationEditException expected) { }
+        assertEquals(10, rom.getBinary()[0] & 255);
+        assertEquals(20, rom.getBinary()[1] & 255);
+        assertFalse(controller.canUndo());
+    }
+
+    @Test
     public void acceptsTheCurrentLocalesDecimalSeparator() throws Exception {
         Table1D table = line("Fuel", 0, 1);
         table.setStorageType(Settings.STORAGE_TYPE_FLOAT);

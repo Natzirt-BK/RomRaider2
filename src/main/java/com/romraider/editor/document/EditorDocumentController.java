@@ -43,6 +43,7 @@ public final class EditorDocumentController implements AutoCloseable {
     private final EditHistoryListener recoveryHistoryListener;
     private boolean closed;
     private final Set<Rom> pendingSaves = new HashSet<Rom>();
+    private final Set<Rom> pendingReloads = new HashSet<Rom>();
 
     public EditorDocumentController() {
         this(new EditorDocumentSession(), new RomLoadService(),
@@ -93,6 +94,50 @@ public final class EditorDocumentController implements AutoCloseable {
             throws IOException {
         requireOpen();
         return RomRecoveryService.getInstance().discoverLatestSnapshots();
+    }
+
+    /**
+     * Reload after the UI has obtained discard confirmation. Load first, then
+     * replace on the document executor only if no newer edit would be lost.
+     * No disk bytes are changed. A failed/cancelled load preserves the old ROM.
+     */
+    public synchronized CompletableFuture<RomLoadResult> reload(Rom rom,
+            RomLoadInteraction interaction, Executor completionExecutor) {
+        requireOpen();
+        if (!owns(rom)) throw new IllegalArgumentException("ROM is not open");
+        java.util.Objects.requireNonNull(interaction);
+        java.util.Objects.requireNonNull(completionExecutor);
+        File source = rom.getFullFileName();
+        if (source == null || !source.isFile()) {
+            return CompletableFuture.failedFuture(new IOException(
+                    "This ROM has no readable saved file. Save As first."));
+        }
+        if (isBusy(rom)) {
+            return CompletableFuture.failedFuture(new IllegalStateException(
+                    "Wait for this ROM's current save or reload to finish"));
+        }
+        byte[] requestedBytes = rom.getBinary().clone();
+        pendingReloads.add(rom);
+        CompletableFuture<RomLoadResult> operation = CompletableFuture.supplyAsync(() -> {
+            try { return loader.load(source, interaction); }
+            catch (Exception failure) { throw new java.util.concurrent.CompletionException(failure); }
+        }, work).thenApplyAsync(result -> {
+            synchronized (this) {
+                if (!result.isLoaded()) return result;
+                if (!owns(rom) || !java.util.Objects.equals(source, rom.getFullFileName())
+                        || !java.util.Arrays.equals(requestedBytes, rom.getBinary())) {
+                    result.getRom().clearData();
+                    throw new IllegalStateException(
+                            "The ROM changed while reloading. Your edits were kept; reload again when ready.");
+                }
+                registerLoadedRom(result.getRom());
+                releaseRom(rom);
+                return result;
+            }
+        }, completionExecutor).whenComplete((result, failure) -> {
+            synchronized (this) { pendingReloads.remove(rom); }
+        });
+        return operation.copy();
     }
 
     public CompletableFuture<RomLoadResult> openRecovered(
@@ -177,6 +222,9 @@ public final class EditorDocumentController implements AutoCloseable {
         requireOpen();
         if (!owns(rom)) throw new IllegalArgumentException("ROM is not open");
         java.util.Objects.requireNonNull(completionExecutor);
+        if (pendingReloads.contains(rom)) {
+            return CompletableFuture.failedFuture(new IllegalStateException("This ROM is reloading"));
+        }
         if (!pendingSaves.add(rom)) {
             return CompletableFuture.failedFuture(
                     new IllegalStateException("This ROM is already saving"));
@@ -222,10 +270,22 @@ public final class EditorDocumentController implements AutoCloseable {
         return !pendingSaves.isEmpty();
     }
 
+    public synchronized boolean isBusy(Rom rom) {
+        return pendingSaves.contains(rom) || pendingReloads.contains(rom);
+    }
+
+    public synchronized boolean hasPendingOperations() {
+        return !pendingSaves.isEmpty() || !pendingReloads.isEmpty();
+    }
+
     public synchronized void closeRom(Rom rom) {
         if (rom == null) return;
         requireOpen();
-        if (isSaving(rom)) throw new IllegalStateException("Wait for this ROM to finish saving");
+        if (isBusy(rom)) throw new IllegalStateException("Wait for this ROM to finish saving or reloading");
+        releaseRom(rom);
+    }
+
+    private void releaseRom(Rom rom) {
         EditorWorkspaceService.getInstance().removeRomFromIndex(rom);
         RomEditHistory.getInstance().clear(rom);
         RomChangeService.forget(rom);
@@ -260,7 +320,7 @@ public final class EditorDocumentController implements AutoCloseable {
     public void close() {
         synchronized (this) {
             if (closed) return;
-            if (hasPendingSaves()) throw new IllegalStateException("Wait for ROM saves to finish");
+            if (hasPendingOperations()) throw new IllegalStateException("Wait for ROM saves and reloads to finish");
             closed = true;
         }
         RomEditHistory.getInstance().removeListener(recoveryHistoryListener);

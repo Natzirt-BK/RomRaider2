@@ -23,6 +23,17 @@ public interface CalibrationEditController extends AutoCloseable {
             List<CalibrationCellCoordinate> cells,
             CalibrationAdjustment adjustment) throws CalibrationEditException;
 
+    /** Use a positive session-local step without changing the definition. */
+    CalibrationEditBatchResult adjustCellValues(
+            List<CalibrationCellCoordinate> cells,
+            CalibrationAdjustment adjustment, double step)
+            throws CalibrationEditException;
+
+    /** Multiply the selected real (scaled) values as one undoable operation. */
+    CalibrationEditBatchResult multiplyCellValues(
+            List<CalibrationCellCoordinate> cells, double factor)
+            throws CalibrationEditException;
+
     CalibrationEditResult restoreCellValue(int row, int column)
             throws CalibrationEditException;
 

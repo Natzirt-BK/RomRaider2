@@ -103,6 +103,49 @@ class FxDocumentSafetySmokeTest {
         });
     }
 
+    @Test void cancellingReloadKeepsDirtyDocumentAndSavedBytes() throws Exception {
+        java.nio.file.Path source = java.nio.file.Files.createTempFile("rr2-reload-cancel-", ".bin");
+        java.nio.file.Files.write(source, new byte[] {10});
+        FxEditorWindow[] window = new FxEditorWindow[1];
+        AtomicInteger prompts = new AtomicInteger();
+        Rom dirty = rom("reload-synthetic.bin");
+        dirty.populateTables(new byte[] {10}, new com.romraider.swing.JProgressPane());
+        dirty.setFullFileName(source.toFile());
+        RomChangeService.rememberSavedBinary(dirty);
+        dirty.getBinary()[0] = 20;
+        try {
+            FxTestRuntime.run(() -> {
+                window[0] = new FxEditorWindow(() -> {}, () -> {});
+                EditorDocumentController controller = field(window[0], "controller");
+                controller.getSession().openRom(dirty);
+                FxWindowPlacement.show(field(window[0], "stage"));
+            });
+            FxTestRuntime.run(() -> {
+                Stage stage = field(window[0], "stage");
+                MenuBar menus = (MenuBar) stage.getScene().lookup(".menu-bar");
+                MenuItem reload = menus.getMenus().get(0).getItems().stream()
+                        .filter(item -> "Reload saved ROM…".equals(item.getText())).findFirst().orElseThrow();
+                answerNextDialog(false, prompts);
+                reload.fire();
+                EditorDocumentController controller = field(window[0], "controller");
+                assertSame(dirty, controller.getSession().snapshot().getActiveRom());
+                assertTrue(controller.getSession().snapshot().getActiveDocument().isDirty());
+                assertFalse(controller.hasPendingOperations());
+                assertEquals(20, dirty.getBinary()[0]);
+                assertEquals(1, prompts.get());
+                assertArrayEquals(new byte[] {10}, java.nio.file.Files.readAllBytes(source));
+            });
+        } finally {
+            FxTestRuntime.run(() -> {
+                if (window[0] != null) {
+                    answerNextDialog(true, prompts);
+                    window[0].close();
+                }
+            });
+            java.nio.file.Files.deleteIfExists(source);
+        }
+    }
+
     private static void answerNextDialog(boolean approve, AtomicInteger prompts) {
         Platform.runLater(() -> {
             for (Window window : new ArrayList<>(Window.getWindows())) {

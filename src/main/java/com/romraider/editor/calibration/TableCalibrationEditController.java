@@ -231,11 +231,29 @@ public final class TableCalibrationEditController
         double step = Math.abs(adjustment.isCoarse()
                 ? table.getCurrentScale().getCoarseIncrement()
                 : table.getCurrentScale().getFineIncrement());
+        return adjustCellValues(cells, adjustment, step);
+    }
+
+    @Override
+    public CalibrationEditBatchResult adjustCellValues(
+            List<CalibrationCellCoordinate> cells,
+            CalibrationAdjustment adjustment, double step)
+            throws CalibrationEditException {
+        ensureEditable();
+        if (adjustment == null || table.getCurrentScale() == null) {
+            throw new CalibrationEditException(
+                    "Choose an adjustment on a table with an active scale.");
+        }
         if (!Double.isFinite(step) || step <= 0.0) {
             throw new CalibrationEditException(
-                    "This table does not define a usable increment.");
+                    "Enter a finite step greater than zero.");
         }
         List<PreparedCell> prepared = prepareCells(cells);
+        for (PreparedCell edit : prepared) {
+            double signedStep = step * adjustment.getDirection()
+                    * (table.getCurrentScale().getCoarseIncrement() < 0 ? -1 : 1);
+            validateScaledResult(edit.cell.getRealValue() + signedStep);
+        }
         try (EditTransaction ignored = history.begin(table,
                 (adjustment.getDirection() > 0 ? "Increase " : "Decrease ")
                         + prepared.size() + " " + safeName(table.getName())
@@ -257,6 +275,52 @@ public final class TableCalibrationEditController
             }
         }
         return batchResult(prepared);
+    }
+
+    @Override
+    public CalibrationEditBatchResult multiplyCellValues(
+            List<CalibrationCellCoordinate> cells, double factor)
+            throws CalibrationEditException {
+        ensureEditable();
+        if (!Double.isFinite(factor)) {
+            throw new CalibrationEditException("Enter a finite multiplier.");
+        }
+        if (table.getCurrentScale() == null) {
+            throw new CalibrationEditException("This table does not have an active scale.");
+        }
+        List<PreparedCell> prepared = prepareCells(cells);
+        for (PreparedCell edit : prepared) {
+            validateScaledResult(edit.cell.getRealValue() * factor);
+        }
+        try (EditTransaction ignored = history.begin(table,
+                "Multiply " + prepared.size() + " " + safeName(table.getName())
+                        + " values by " + factor)) {
+            try {
+                for (PreparedCell edit : prepared) edit.cell.multiply(factor);
+            } catch (UserLevelException failure) {
+                rollbackCells(prepared, failure);
+                throw new CalibrationEditException(
+                        "Your current user level cannot edit this table.", failure);
+            } catch (RuntimeException failure) {
+                rollbackCells(prepared, failure);
+                throw new CalibrationEditException(
+                        "The selected calibration values could not be multiplied.", failure);
+            }
+        }
+        return batchResult(prepared);
+    }
+
+    private void validateScaledResult(double value) throws CalibrationEditException {
+        if (!Double.isFinite(value)) {
+            throw new CalibrationEditException("The operation would produce a non-finite value.");
+        }
+        com.romraider.maps.Scale scale = table.getCurrentScale();
+        double raw = scale.getByteExpression() == null
+                ? scale.approximateToByteFunction(value, table.getStorageType(), table.isSignedData())
+                : com.romraider.util.JEPUtil.evaluate(scale.getByteExpression(), value);
+        if (!Double.isFinite(raw)) {
+            throw new CalibrationEditException("The definition cannot convert the requested value to a finite stored value.");
+        }
     }
 
     @Override
@@ -590,7 +654,7 @@ public final class TableCalibrationEditController
         ensureRom();
         if (table.isStaticDataTable()) {
             throw new CalibrationEditException(
-                    "This preview cannot edit a text or switch table.");
+                    "This editor cannot edit a text or switch table.");
         }
         if (table.isLocked()) {
             throw new CalibrationEditException("This table is locked.");

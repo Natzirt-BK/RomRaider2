@@ -99,6 +99,8 @@ published release until replacement packages are qualified and uploaded.
 
 - Tabbed calibration workspace with favorites, recent and changed maps, ROM
   comparison, grouped undo/redo, notes, and crash recovery.
+- JavaFX [selection math and document controls](docs/DESKTOP_EDITOR_COMMANDS.md):
+  multiply cells, custom adjustment steps, protected reload and ROM properties.
 - Search across maps, Logger channels, DTCs, settings, and commands.
 - Light/dark JavaFX themes, configurable scaling and touch controls. The
   retained Compose/macOS interface has a different feature set.

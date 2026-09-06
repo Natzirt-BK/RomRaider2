@@ -236,17 +236,20 @@ public final class RomAttributeParser {
 	}
 
     public static int parseFileSize(String input) throws NumberFormatException {
-        if (input.substring(input.length() - 2).equalsIgnoreCase("kb")) {
-            return Integer.parseInt(input.substring(0, input.length() - 2)) * 1024;
+        if (input == null) throw new NumberFormatException("ROM size is required");
+        String normalized = input.trim().toLowerCase(java.util.Locale.ROOT);
+        int multiplier = 1;
+        if (normalized.endsWith("kb") || normalized.endsWith("mb")) {
+            multiplier = normalized.endsWith("kb") ? 1024 : 1024 * 1024;
+            normalized = normalized.substring(0, normalized.length() - 2).trim();
+        } else if (normalized.endsWith("b")) {
+            normalized = normalized.substring(0, normalized.length() - 1).trim();
         }
-        else if (input.substring(input.length() - 2).equalsIgnoreCase("mb")) {
-            return Integer.parseInt(input.substring(0, input.length() - 2)) * 1024 * 1024;
+        long units = Long.parseLong(normalized);
+        if (units < 0 || units > Integer.MAX_VALUE / multiplier) {
+            throw new NumberFormatException("ROM size is outside the supported byte range");
         }
-        else if (input.substring(input.length() - 1).equalsIgnoreCase("b")) {
-            return Integer.parseInt(input.substring(0, input.length() - 1));
-        }
-
-        return Integer.parseInt(input);
+        return (int) units * multiplier;
     }
 
     public static byte[] floatToByte(float input, Settings.Endian endian, Settings.Endian memModelEndian) {

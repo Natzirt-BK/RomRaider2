@@ -5,11 +5,14 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.regex.Pattern;
+import java.text.NumberFormat;
+import java.text.ParsePosition;
 
 import com.romraider.editor.calibration.CalibrationAdjustment;
 import com.romraider.editor.calibration.CalibrationAxis;
 import com.romraider.editor.calibration.CalibrationInterpolation;
 import com.romraider.editor.calibration.CalibrationCellEdit;
+import com.romraider.editor.calibration.CalibrationCellCoordinate;
 import com.romraider.editor.calibration.CalibrationCellSnapshot;
 import com.romraider.editor.calibration.CalibrationEditController;
 import com.romraider.editor.calibration.CalibrationGridSnapshot;
@@ -82,6 +85,11 @@ final class FxCalibrationPane extends BorderPane implements AutoCloseable {
     private ToggleButton dtcToggle;
     private Label dtcState;
     private double tableScale = 1.0;
+    private String fineStep = "";
+    private String coarseStep = "";
+    private String multiplier = NumberFormat.getNumberInstance(Locale.getDefault()).format(1.05);
+    private boolean refreshingGrid;
+    private boolean closed;
 
     FxCalibrationPane(Table table) {
         this.table = table;
@@ -244,6 +252,7 @@ final class FxCalibrationPane extends BorderPane implements AutoCloseable {
         view.getSelectionModel().getSelectedCells().addListener(
                 (javafx.collections.ListChangeListener<
                         javafx.scene.control.TablePosition>) change -> {
+                    if (refreshingGrid) return;
                     int last = view.getSelectionModel().getSelectedCells().size() - 1;
                     javafx.scene.control.TablePosition position = last < 0
                             ? null : view.getSelectionModel().getSelectedCells().get(last);
@@ -578,10 +587,33 @@ final class FxCalibrationPane extends BorderPane implements AutoCloseable {
         HBox coarse = adjustmentRow("− Coarse",
                 CalibrationAdjustment.COARSE_DECREASE,
                 "+ Coarse", CalibrationAdjustment.COARSE_INCREASE);
-        Label increments = new Label("DEFINITION INCREMENTS");
+        Label increments = new Label("ADJUST SELECTED VALUES");
         increments.getStyleClass().add("section-kicker");
+        TextField fineInput = stepInput("Fine step", fineStep);
+        TextField coarseInput = stepInput("Coarse step", coarseStep);
+        fineInput.textProperty().addListener((observable, oldValue, next) -> fineStep = next);
+        coarseInput.textProperty().addListener((observable, oldValue, next) -> coarseStep = next);
+        Button resetSteps = new Button("Use definition steps");
+        resetSteps.setOnAction(event -> { fineStep = ""; coarseStep = ""; rebuildInspector(); });
+        Label stepHelp = new Label("Blank uses the definition. Custom steps apply only to this open table; normal storage rounding still applies.");
+        stepHelp.setWrapText(true);
+        stepHelp.getStyleClass().add("muted");
+        TextField factor = new TextField(multiplier);
+        factor.setAccessibleText("Selection multiplier");
+        factor.setId("selection-multiplier");
+        factor.textProperty().addListener((observable, oldValue, next) -> multiplier = next);
+        Button multiply = new Button("Multiply selection");
+        multiply.setMaxWidth(Double.MAX_VALUE);
+        multiply.setOnAction(event -> runEdit(() -> controller.multiplyCellValues(
+                selectedCells(), parseControlNumber(multiplier)).getSnapshot(),
+                "Selection multiplied; Undo restores the previous values"));
+        factor.setOnAction(event -> multiply.fire());
+        Label factorHelp = new Label(String.format(Locale.getDefault(),
+                "Factor: %.2f = +5%%; %.2f = −5%%.", 1.05, .95));
+        factorHelp.setWrapText(true);
         box.getChildren().addAll(kicker, value, unit, coordinate, editor, apply,
-                increments, fine, coarse);
+                increments, fineInput, fine, coarseInput, coarse, resetSteps,
+                stepHelp, factor, factorHelp, multiply);
         if (table instanceof com.romraider.maps.Table2D || table instanceof com.romraider.maps.Table3D) {
             box.getChildren().add(axisEditor(CalibrationAxis.COLUMN, selectedColumn,
                     snapshot.getColumnLabels().get(selectedColumn), "X axis"));
@@ -746,14 +778,54 @@ final class FxCalibrationPane extends BorderPane implements AutoCloseable {
     }
 
     private void adjust(CalibrationAdjustment adjustment) {
-        runEdit(() -> controller.adjustCellValue(selectedRow, selectedColumn,
-                adjustment).getSnapshot(), adjustment.isCoarse()
-                ? "Coarse adjustment applied" : "Fine adjustment applied");
+        runEdit(() -> {
+            String step = adjustment.isCoarse() ? coarseStep : fineStep;
+            return (step.isBlank() ? controller.adjustCellValues(selectedCells(), adjustment)
+                    : controller.adjustCellValues(selectedCells(), adjustment,
+                            parseControlNumber(step))).getSnapshot();
+        }, "Selected values adjusted; Undo restores the previous values");
+    }
+
+    private TextField stepInput(String label, String current) {
+        TextField input = new TextField(current);
+        input.setPromptText(label + " · definition default");
+        input.setAccessibleText(label + " override; blank uses the definition");
+        input.setId(label.startsWith("Fine") ? "fine-step" : "coarse-step");
+        return input;
+    }
+
+    static double parseControlNumber(String value) {
+        String normalized = value == null ? "" : value.trim();
+        NumberFormat format = NumberFormat.getNumberInstance(Locale.getDefault());
+        format.setGroupingUsed(false);
+        ParsePosition position = new ParsePosition(0);
+        Number parsed = format.parse(normalized, position);
+        if (parsed == null || position.getIndex() != normalized.length()
+                || !Double.isFinite(parsed.doubleValue())) {
+            throw new IllegalArgumentException("Enter one complete finite number using your local decimal separator.");
+        }
+        return parsed.doubleValue();
+    }
+
+    @SuppressWarnings("rawtypes")
+    private List<CalibrationCellCoordinate> selectedCells() {
+        List<CalibrationCellCoordinate> cells = new ArrayList<>();
+        if (grid != null) {
+            for (Object value : grid.getSelectionModel().getSelectedCells()) {
+                javafx.scene.control.TablePosition position = (javafx.scene.control.TablePosition) value;
+                if (position.getRow() >= 0 && position.getColumn() >= 0) {
+                    cells.add(new CalibrationCellCoordinate(position.getRow(), position.getColumn()));
+                }
+            }
+        }
+        if (cells.isEmpty()) cells.add(new CalibrationCellCoordinate(selectedRow, selectedColumn));
+        return cells;
     }
 
     private void runEdit(EditOperation operation, String message) {
         try {
             refresh(operation.run());
+            status.getStyleClass().removeAll("danger");
             status.setText(message);
         } catch (Exception failure) {
             status.setText(FxDialogs.rootMessage(failure));
@@ -762,11 +834,25 @@ final class FxCalibrationPane extends BorderPane implements AutoCloseable {
     }
 
     private void refresh(CalibrationGridSnapshot next) {
+        if (closed) return;
         snapshot = next;
         updateChangedLabel();
         if (grid != null) {
+            List<CalibrationCellCoordinate> selection = selectedCells();
             var nextRows = FXCollections.observableArrayList(rows(snapshot));
-            grid.setItems(nextRows);
+            refreshingGrid = true;
+            try {
+                grid.setItems(nextRows);
+                for (CalibrationCellCoordinate coordinate : selection) {
+                    if (coordinate.getRow() < snapshot.getRows()
+                            && coordinate.getColumn() < snapshot.getColumns()) {
+                        grid.getSelectionModel().select(coordinate.getRow(),
+                                grid.getColumns().get(coordinate.getColumn()));
+                    }
+                }
+            } finally {
+                refreshingGrid = false;
+            }
             for (int column = 0; column < grid.getColumns().size(); column++) {
                 Label header = (Label) grid.getColumns().get(column).getGraphic();
                 String label = snapshot.getColumnLabels().size() > column ? snapshot.getColumnLabels().get(column) : Integer.toString(column);
@@ -822,6 +908,7 @@ final class FxCalibrationPane extends BorderPane implements AutoCloseable {
     }
 
     @Override public void close() {
+        closed = true;
         unbindVerticalScrolling();
         controller.close();
     }

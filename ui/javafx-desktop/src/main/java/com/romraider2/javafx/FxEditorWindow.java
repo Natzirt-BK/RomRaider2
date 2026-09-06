@@ -173,6 +173,8 @@ final class FxEditorWindow {
                 shortcutItem("Save", "Shortcut+S", event -> save(false)),
                 shortcutItem("Save As…", "Shortcut+Shift+S",
                         event -> save(true)),
+                item("Reload saved ROM…", event -> reloadSavedRom()),
+                item("ROM Properties…", event -> showRomProperties()),
                 new SeparatorMenuItem(),
                 item("Close ROM", event -> closeActiveRom()),
                 item("Exit", event -> close()));
@@ -415,8 +417,8 @@ final class FxEditorWindow {
     private void save(boolean saveAs) {
         Rom rom = controller.getSession().snapshot().getActiveRom();
         if (rom == null) return;
-        if (controller.isSaving(rom)) {
-            setStatus("This ROM is already saving; please wait.", 0);
+        if (controller.isBusy(rom)) {
+            setStatus("This ROM is saving or reloading; please wait.", 0);
             return;
         }
         File target = saveAs || rom.getFullFileName() == null
@@ -450,6 +452,38 @@ final class FxEditorWindow {
         }
     }
 
+    private void reloadSavedRom() {
+        Rom rom = controller.getSession().snapshot().getActiveRom();
+        if (rom == null) return;
+        if (controller.isBusy(rom)) {
+            setStatus("Wait for this ROM to finish saving or reloading.", 0);
+            return;
+        }
+        if (rom.getFullFileName() == null || !rom.getFullFileName().isFile()) {
+            FxDialogs.info(stage, "No saved ROM", "Save As first. Recovered and unsaved documents cannot be reloaded from disk.");
+            return;
+        }
+        if (!FxDialogs.confirm(stage, "Reload saved ROM?", rom.getFileName()
+                + " will be reloaded from disk using the configured definitions. This discards this document's unsaved changes and Undo history only after the load succeeds. The file on disk is not changed.",
+                "Reload saved file")) return;
+        setStatus("Reloading " + rom.getFileName() + "…", 0);
+        controller.reload(rom, new FxRomLoadInteraction(stage, this::setStatus),
+                Platform::runLater).whenComplete((result, failure) -> Platform.runLater(() -> {
+                    if (closing) return;
+                    if (failure != null) {
+                        FxDialogs.error(stage, "ROM was not reloaded", FxDialogs.rootMessage(failure));
+                        setStatus("Reload failed; existing document kept", 0);
+                    } else if (result != null && result.isLoaded()) {
+                        setStatus("Saved ROM reloaded; file on disk unchanged", 100);
+                    } else setStatus("Reload cancelled or unsuccessful; existing document kept", 0);
+                }));
+    }
+
+    private void showRomProperties() {
+        EditorDocument document = controller.getSession().snapshot().getActiveDocument();
+        if (document != null) FxRomProperties.show(stage, document);
+    }
+
     private void closeActiveRom() {
         closeRom(controller.getSession().snapshot().getActiveRom());
     }
@@ -458,8 +492,8 @@ final class FxEditorWindow {
         EditorDocument document = controller.getSession().snapshot().getDocuments()
                 .stream().filter(value -> value.getRom() == rom).findFirst().orElse(null);
         if (document == null) return;
-        if (controller.isSaving(rom)) {
-            setStatus("Wait for this ROM to finish saving before closing it.", 0);
+        if (controller.isBusy(rom)) {
+            setStatus("Wait for this ROM to finish saving or reloading before closing it.", 0);
             return;
         }
         if (document.isDirty() && !FxDialogs.confirm(stage,
@@ -476,8 +510,8 @@ final class FxEditorWindow {
     }
 
     private boolean confirmClose() {
-        if (controller.hasPendingSaves()) {
-            setStatus("Wait for ROM saves to finish before exiting.", 0);
+        if (controller.hasPendingOperations()) {
+            setStatus("Wait for ROM saves and reloads to finish before exiting.", 0);
             return false;
         }
         long dirty = controller.getSession().snapshot().getDocuments().stream()
@@ -490,6 +524,11 @@ final class FxEditorWindow {
 
     private void render(EditorDocumentSnapshot next) {
         snapshot = next;
+        calibrationPanes.entrySet().removeIf(entry -> {
+            if (next.getDocuments().stream().anyMatch(document -> document.getRom() == entry.getKey().getRom())) return false;
+            entry.getValue().close();
+            return true;
+        });
         expandedCategories.keySet().retainAll(next.getDocuments().stream()
                 .map(EditorDocument::getRom).toList());
         stage.setTitle(editorTitle());

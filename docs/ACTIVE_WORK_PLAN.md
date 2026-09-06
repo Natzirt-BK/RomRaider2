@@ -43,3 +43,15 @@ Gauge checkpoint `294791f6` adds the nine approved faces, native mounted views,
 unit-aware scales, foreground/session protections and Android CSV continuity
 tests. It is on GitHub `master`; hosted desktop builds and Android regressions
 passed. The premium STI/Evolution refinement follows this checkpoint.
+
+Premium checkpoint `f75ebba2` adds STI Night and Evolution Night; `e64b3234`
+fixes the Compose runtime staging dependency found by clean hosted packaging.
+[Platform package run 34022049448](https://github.com/Natzirt-BK/RomRaider2/actions/runs/34022049448)
+passed Android, SteamOS and both macOS architectures. These are source/build
+checkpoints, not a new public release.
+
+The next JavaFX editor command pass implements item 4's selection multiplier,
+session-local fine/coarse steps, protected saved-ROM reload and read-only ROM
+properties. See [command semantics and test scope](DESKTOP_EDITOR_COMMANDS.md).
+The remaining analysis/mobile work in items 5–7 is still pending; neither these
+editor commands nor the gauges imply production live-tune qualification.
