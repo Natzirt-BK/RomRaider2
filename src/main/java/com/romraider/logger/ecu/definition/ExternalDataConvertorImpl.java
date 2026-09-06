@@ -46,12 +46,13 @@ public final class ExternalDataConvertorImpl implements EcuDataConvertor {
 
     public double convert(byte[] bytes) {
         double value = dataItem.getData();
+        if (!Double.isFinite(value)) return Double.NaN;
         double result = evaluate(expression, value);
-        return Double.isNaN(result) || Double.isInfinite(result) ? 0.0 : result;
+        return Double.isFinite(result) ? result : Double.NaN;
     }
 
     public String format(double value) {
-        return format.format(value);
+        return Double.isFinite(value) ? format.format(value) : "";
     }
 
     public String getUnits() {

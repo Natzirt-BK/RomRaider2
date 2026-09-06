@@ -59,12 +59,14 @@ public final class EcuDerivedParameterConvertorImpl implements EcuDerivedParamet
             byte[] tmp = new byte[length];
             System.arraycopy(bytes, index, tmp, 0, length);
             ExpressionInfo expressionInfo = expressionInfoMap.get(ecuData.getId());
-            valueMap.put(expressionInfo.getReplacementKey(), expressionInfo.getConvertor().convert(tmp));
+            double value = expressionInfo.getConvertor().convert(tmp);
+            if (!Double.isFinite(value)) return Double.NaN;
+            valueMap.put(expressionInfo.getReplacementKey(), value);
             exp = exp.replace(buildParameterKey(expressionInfo), expressionInfo.getReplacementKey());
             index += length;
         }
         double result = evaluate(exp, valueMap);
-        return Double.isNaN(result) || Double.isInfinite(result) ? 0.0 : result;
+        return Double.isFinite(result) ? result : Double.NaN;
     }
 
     public String getUnits() {
@@ -80,6 +82,7 @@ public final class EcuDerivedParameterConvertorImpl implements EcuDerivedParamet
     }
 
     public String format(double value) {
+        if (!Double.isFinite(value)) return "";
         String formattedValue = format.format(value);
         if (replaceMap.containsKey(formattedValue)) {
             return replaceMap.get(formattedValue);

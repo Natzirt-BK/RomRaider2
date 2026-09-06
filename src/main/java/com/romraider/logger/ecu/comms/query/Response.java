@@ -31,4 +31,12 @@ public interface Response {
     double getDataValue(LoggerData data);
 
     long getTimestamp();
+
+    /** Analysis must not silently bypass an optional filter with an invalid reading. */
+    default boolean hasOnlyFiniteValues() {
+        for (LoggerData data : getData()) {
+            if (!Double.isFinite(getDataValue(data))) return false;
+        }
+        return true;
+    }
 }

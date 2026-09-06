@@ -46,6 +46,8 @@ class FxGaugeWarningSmokeTest {
             });
             FxTestRuntime.run(() -> {
                 assertEquals("NO VALID DATA", alarm(dashboard(window[0])));
+                assertTrue(dashboard(window[0]).lookupAll(".gauge-value").stream()
+                        .anyMatch(node -> ((Label) node).getText().equals("—")));
                 context(window[0]).getChannels().replaceChannels(List.of(channel("F")));
                 context(window[0]).getLiveData().publish(sample(176, "F"));
             });

@@ -225,7 +225,9 @@ public final class GraphUpdateHandler implements DataUpdateHandler, ConvertorUpd
 	                for (final LoggerData loggerData : response.getData()) {
 	                    final XYSeries series = seriesMap.get(loggerData);
 	                    if (series != null) {
-	                    	series.add((response.getTimestamp() - startTime) / 1000.0, response.getDataValue(loggerData));
+                            double value = response.getDataValue(loggerData);
+                            series.add((response.getTimestamp() - startTime) / 1000.0,
+                                    Double.isFinite(value) ? Double.valueOf(value) : null);
 	                    }
 	                }
 	            }

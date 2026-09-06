@@ -23,6 +23,35 @@ display wording and finite drawing coordinates. Shared-core checks, all 44
 Android unit tests, standard/diagnostic APK assembly and lint passed locally.
 No vehicle or physical phone was accessed; these are synthetic checks.
 
-The desktop engine's zero fallback still requires its own consumer audit and
-repair. This portable change does not claim to fix that separate path, detect
-every semantically wrong definition, or validate vehicle-specific conversions.
+## Desktop engine and consumers
+
+Raw, derived and external logger conversions now preserve invalid operands and
+results as missing data. A derived expression cannot mask an invalid input by
+multiplying it by zero. Converter formatting and the actual CSV row handler emit
+empty cells; an empty cell still completes a row, unlike an unreceived value.
+The shared live-sample display is an em dash regardless of a supplied numeric
+display string. Swing table peaks ignore invalid samples and recover normally.
+
+JavaFX and Compose warning states remain unavailable for invalid current values.
+Compose statistics use finite samples only; progress calculations reject invalid
+inputs. Both graph renderers break paths at invalid samples instead of connecting
+across gaps. Legacy Swing graphs use explicit null data points; the Swing gauge
+container hides its numeric style behind `NO VALID DATA`, preserving valid peaks
+without feeding invalid numbers to old rendering code. MAF, injector and dyno
+analysis reject a response containing a non-finite reading, including optional
+filter channels, rather than treating that filter as absent.
+
+Nine desktop core tests cover arithmetic/float/derived/external conversion,
+table peaks, display/analysis gates, actual Swing gauge/graph handling and the
+actual CSV row boundary with an in-memory sink. The display-enabled JavaFX
+warning test checks the missing value label; a new Compose model test covers
+invalid statistics/progress and valid zero recovery. The full core suite and
+desktop build pass (three existing opt-in skips); 60 JavaFX and 35 Compose tests
+pass locally. No adapter, editor write or physical vehicle was used.
+
+These checks do not detect every semantically wrong definition or establish
+vehicle-specific conversion correctness. Legacy editor table-overlay behavior
+and dataflow simulations need separate missing-data review; they are not gauge
+or CSV acceptance evidence. Android's hosted lifecycle run at `4e2fcc88` failed
+while the instrumentation used a terminated Activity worker; app/lifecycle
+diagnostics were added for investigation. That run is not counted as a pass.

@@ -21,7 +21,7 @@ public final class LiveDataSample {
         this.parameterId = required(parameterId, "parameter id");
         this.name = required(name, "parameter name");
         this.rawValue = rawValue;
-        this.displayValue = normalize(displayValue);
+        this.displayValue = Double.isFinite(rawValue) ? normalize(displayValue) : "—";
         this.units = normalize(units);
         this.timestampMillis = timestampMillis;
         this.conversionIdentity = normalize(conversionIdentity);

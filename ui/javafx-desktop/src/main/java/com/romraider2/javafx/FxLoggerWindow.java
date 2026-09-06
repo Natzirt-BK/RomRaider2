@@ -627,11 +627,13 @@ final class FxLoggerWindow {
         graphics.setLineWidth(2.5);
         if (history.size() > 1) {
             double min = history.stream().mapToDouble(
-                    LiveDataSample::getRawValue).min().orElse(0);
+                    LiveDataSample::getRawValue).filter(Double::isFinite).min().orElse(0);
             double max = history.stream().mapToDouble(
-                    LiveDataSample::getRawValue).max().orElse(min + 1);
+                    LiveDataSample::getRawValue).filter(Double::isFinite).max().orElse(min + 1);
             if (max == min) max = min + 1;
             for (int index = 1; index < history.size(); index++) {
+                if (!Double.isFinite(history.get(index - 1).getRawValue())
+                        || !Double.isFinite(history.get(index).getRawValue())) continue;
                 double x1 = (index - 1.0) / (history.size() - 1) * 210;
                 double x2 = index / (double) (history.size() - 1) * 210;
                 double y1 = 135 - (history.get(index - 1).getRawValue() - min)
@@ -1122,13 +1124,15 @@ final class FxLoggerWindow {
                 List<LiveDataSample> values = history.get(latest.getParameterId());
                 if (values == null || values.size() < 2) continue;
                 double min = values.stream().mapToDouble(
-                        LiveDataSample::getRawValue).min().orElse(0);
+                        LiveDataSample::getRawValue).filter(Double::isFinite).min().orElse(0);
                 double max = values.stream().mapToDouble(
-                        LiveDataSample::getRawValue).max().orElse(min + 1);
+                        LiveDataSample::getRawValue).filter(Double::isFinite).max().orElse(min + 1);
                 if (max == min) max = min + 1;
                 graphics.setStroke(colors[series++ % colors.length]);
                 graphics.setLineWidth(2);
                 for (int index = 1; index < values.size(); index++) {
+                    if (!Double.isFinite(values.get(index - 1).getRawValue())
+                            || !Double.isFinite(values.get(index).getRawValue())) continue;
                     double x1 = (index - 1.0) / (values.size() - 1) * width;
                     double x2 = index / (double) (values.size() - 1) * width;
                     double y1 = height - (values.get(index - 1).getRawValue()

@@ -80,7 +80,9 @@ public final class EcuParameterConvertorImpl implements EcuDataConvertor {
             return (asUnsignedInt(bytes) & (1 << bit)) != 0 ? 1 : 0;
         }
         else if (dataType.equalsIgnoreCase(FLOAT)) {
-            result = evaluate(expression, bb.getFloat());
+            float raw = bb.getFloat();
+            if (!Float.isFinite(raw)) return Double.NaN;
+            result = evaluate(expression, raw);
         }
         else {
             long value = 0;
@@ -110,7 +112,7 @@ public final class EcuParameterConvertorImpl implements EcuDataConvertor {
             }
             result = evaluate(expression, value);
         }
-        return Double.isNaN(result) || Double.isInfinite(result) ? 0.0 : result;
+        return Double.isFinite(result) ? result : Double.NaN;
     }
 
     public String getUnits() {
@@ -126,6 +128,7 @@ public final class EcuParameterConvertorImpl implements EcuDataConvertor {
     }
 
     public String format(double value) {
+        if (!Double.isFinite(value)) return "";
         String formattedValue = format.format(value);
         if (replaceMap.containsKey(formattedValue)) {
             return replaceMap.get(formattedValue);

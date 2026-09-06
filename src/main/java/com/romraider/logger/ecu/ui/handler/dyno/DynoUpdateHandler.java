@@ -105,6 +105,7 @@ public final class DynoUpdateHandler implements DataUpdateHandler {
     private double atm;
 
     public synchronized void handleDataUpdate(Response response) {
+        if (!response.hasOnlyFiniteValues()) return;
         if (dynoTab!=null && dynoTab.isRecordData() && (containsData(response, RPM, TA)
                 || containsData(response, RPM, TV)
                 || containsData(response, VS, TA)

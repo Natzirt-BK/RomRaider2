@@ -66,7 +66,12 @@ public final class FileUpdateHandlerImpl implements FileUpdateHandler, Convertor
     private Line currentLine = new Line(loggerDatas.keySet());
 
     public FileUpdateHandlerImpl(EcuRelatedMessageListener messageListener) {
-        fileLogger = new FileLoggerImpl(messageListener);
+        this(new FileLoggerImpl(messageListener));
+    }
+
+    FileUpdateHandlerImpl(FileLogger fileLogger) {
+        checkNotNull(fileLogger, "fileLogger");
+        this.fileLogger = fileLogger;
     }
 
     @Override
@@ -90,7 +95,9 @@ public final class FileUpdateHandlerImpl implements FileUpdateHandler, Convertor
     public synchronized void handleDataUpdate(Response response) {
         if (fileLogger.isStarted()) {
             for (LoggerData loggerData : response.getData()) {
-                currentLine.updateParamValue(loggerData, loggerData.getSelectedConvertor().format(response.getDataValue(loggerData)));
+                double value = response.getDataValue(loggerData);
+                currentLine.updateParamValue(loggerData, Double.isFinite(value)
+                        ? loggerData.getSelectedConvertor().format(value) : "");
             }
             if (currentLine.isFull()) {
                 fileLogger.writeLine(currentLine.values(), response.getTimestamp());

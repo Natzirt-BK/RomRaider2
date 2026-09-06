@@ -45,6 +45,7 @@ public final class MafUpdateHandler implements DataUpdateHandler {
 
     @Override
     public synchronized void handleDataUpdate(Response response) {
+        if (!response.hasOnlyFiniteValues()) return;
         if (mafTab!= null && mafTab.isRecordData() && containsData(response, MAFV, AF_LEARNING_1, AF_CORRECTION_1)) {
             boolean valid = true;
 

@@ -23,6 +23,25 @@ import kotlin.test.assertTrue
 
 class LoggerWorkspaceModelTest {
     @Test
+    fun invalidReadingsDoNotPoisonStatisticsOrDrawingProgress() {
+        val invalid = listOf(Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY)
+        assertNull(statistics(invalid.map { sample(it) }))
+        val stats = statistics((listOf(10.0, 20.0, 0.0) + invalid).map { sample(it) })!!
+        assertEquals(3, stats.count)
+        assertEquals(0.0, stats.minimum)
+        assertEquals(20.0, stats.maximum)
+        assertEquals(10.0, stats.average)
+        assertEquals(10.0, stats.median)
+        for (value in invalid) {
+            assertNull(gaugeProgress(value, GaugeRange(0.0, 100.0)))
+            assertNull(measuredProgress(value, stats))
+        }
+        assertNull(gaugeProgress(1.0, GaugeRange(Double.NaN, 100.0)))
+        assertEquals(0f, gaugeProgress(0.0, GaugeRange(0.0, 100.0)))
+        assertEquals(.5f, gaugeProgress(10.0, GaugeRange(0.0, 20.0)))
+    }
+
+    @Test
     fun providerIsDiscoverableThroughThePackagedServiceBoundary() {
         val providers = ServiceLoader.load(LoggerWorkspaceProvider::class.java)
             .toList()

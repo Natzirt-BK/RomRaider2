@@ -1239,16 +1239,22 @@ private fun GraphWorkspace(
             }
             displayed.forEachIndexed { index, channel ->
                 val points = history[channel.parameterId].orEmpty()
-                val minimum = points.minOfOrNull { it.rawValue }
+                val finite = points.filter { it.rawValue.isFinite() }
+                val minimum = finite.minOfOrNull { it.rawValue }
                     ?: return@forEachIndexed
-                val maximum = points.maxOfOrNull { it.rawValue }
+                val maximum = finite.maxOfOrNull { it.rawValue }
                     ?: return@forEachIndexed
                 val span = (maximum - minimum).takeIf { it != 0.0 } ?: 1.0
                 val firstTimestamp = points.first().timestampMillis
                 val elapsed = (points.last().timestampMillis - firstTimestamp)
                     .coerceAtLeast(0L)
                 val path = Path()
-                points.forEachIndexed { sampleIndex, sample ->
+                var connected = false
+                points.forEachIndexed point@{ sampleIndex, sample ->
+                    if (!sample.rawValue.isFinite()) {
+                        connected = false
+                        return@point
+                    }
                     val x = if (elapsed == 0L) {
                         if (points.size == 1) 0f else
                             size.width * sampleIndex / (points.size - 1f)
@@ -1258,8 +1264,9 @@ private fun GraphWorkspace(
                     val y = size.height -
                         (size.height * ((sample.rawValue - minimum) / span))
                             .toFloat()
-                    if (sampleIndex == 0) path.moveTo(x, y)
+                    if (!connected) path.moveTo(x, y)
                     else path.lineTo(x, y)
+                    connected = true
                 }
                 drawPath(path, graphColors[index], style = Stroke(
                     width = 2.7f, cap = StrokeCap.Round))
@@ -1939,15 +1946,22 @@ private fun TileSparkline(
             Offset(size.width, size.height / 2f), 1f)
         val values = samples.takeLast(120).map { it.rawValue }
         if (values.size < 2) return@Canvas
-        val minimum = values.minOrNull() ?: return@Canvas
-        val maximum = values.maxOrNull() ?: return@Canvas
+        val finite = values.filter { it.isFinite() }
+        val minimum = finite.minOrNull() ?: return@Canvas
+        val maximum = finite.maxOrNull() ?: return@Canvas
         val span = (maximum - minimum).takeIf { it != 0.0 } ?: 1.0
         val path = Path()
+        var connected = false
         values.forEachIndexed { index, value ->
+            if (!value.isFinite()) {
+                connected = false
+                return@forEachIndexed
+            }
             val x = size.width * index / (values.size - 1f)
             val y = size.height -
                 (size.height * ((value - minimum) / span)).toFloat()
-            if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
+            if (!connected) path.moveTo(x, y) else path.lineTo(x, y)
+            connected = true
         }
         drawPath(path, color, style = Stroke(2.8f, cap = StrokeCap.Round))
     }
@@ -2254,8 +2268,9 @@ private fun gaugeStyle(theme: LoggerGaugeTheme): GaugeStyle = when (theme) {
 }
 
 internal fun measuredProgress(current: Double?, stats: SampleStatistics?): Float? {
-    if (current == null || stats == null) return null
+    if (current == null || !current.isFinite() || stats == null) return null
     val span = stats.maximum - stats.minimum
+    if (!span.isFinite() || !stats.minimum.isFinite()) return null
     return if (span == 0.0) 1f else
         ((current - stats.minimum) / span).coerceIn(0.0, 1.0).toFloat()
 }
@@ -2266,9 +2281,9 @@ internal data class GaugeRange(
 )
 
 internal fun gaugeProgress(current: Double?, range: GaugeRange): Float? {
-    if (current == null) return null
+    if (current == null || !current.isFinite()) return null
     val span = range.maximum - range.minimum
-    if (span <= 0.0) return null
+    if (!span.isFinite() || !range.minimum.isFinite() || span <= 0.0) return null
     return ((current - range.minimum) / span).coerceIn(0.0, 1.0).toFloat()
 }
 
@@ -2400,10 +2415,8 @@ private fun MeasuredRangeBar(
             .semantics { contentDescription = "Position in measured range" }
     ) {
         drawRoundRect(track, cornerRadius = androidx.compose.ui.geometry.CornerRadius(4f))
-        if (current != null && stats != null) {
-            val span = stats.maximum - stats.minimum
-            val progress = if (span == 0.0) 1f else
-                ((current - stats.minimum) / span).coerceIn(0.0, 1.0).toFloat()
+        val progress = measuredProgress(current, stats)
+        if (progress != null) {
             drawRoundRect(
                 fill,
                 size = androidx.compose.ui.geometry.Size(size.width * progress,
@@ -2596,8 +2609,8 @@ internal fun liveValueAccessibilityLabel(
 }
 
 internal fun statistics(samples: List<LiveDataSample>): SampleStatistics? {
-    if (samples.isEmpty()) return null
-    val values = samples.map { it.rawValue }.sorted()
+    val values = samples.map { it.rawValue }.filter { it.isFinite() }.sorted()
+    if (values.isEmpty()) return null
     val average = values.average()
     val median = if (values.size % 2 == 0) {
         val upper = values.size / 2
@@ -2623,6 +2636,7 @@ internal fun percentile(sortedValues: List<Double>, percentile: Double): Double 
 }
 
 private fun Double.formatValue(): String {
+    if (!isFinite()) return "—"
     val magnitude = kotlin.math.abs(this)
     return when {
         magnitude >= 1000 -> "%.0f".format(this)

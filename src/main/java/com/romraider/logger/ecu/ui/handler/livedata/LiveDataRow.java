@@ -23,11 +23,10 @@ import com.romraider.logger.ecu.definition.LoggerData;
 import static com.romraider.util.ParamChecker.checkNotNull;
 
 public final class LiveDataRow {
-    private static final double ZERO = 0.0;
     private final LoggerData loggerData;
-    private double minValue;
-    private double maxValue;
-    private double currentValue;
+    private double minValue = Double.NaN;
+    private double maxValue = Double.NaN;
+    private double currentValue = Double.NaN;
     private boolean updated = false;
 
     public LiveDataRow(LoggerData loggerData) {
@@ -61,6 +60,7 @@ public final class LiveDataRow {
 
     public void updateValue(double value) {
         currentValue = value;
+        if (!Double.isFinite(value)) return;
         if (currentValue < minValue || !updated) {
             minValue = currentValue;
         }
@@ -71,9 +71,9 @@ public final class LiveDataRow {
     }
 
     public void reset() {
-        minValue = ZERO;
-        maxValue = ZERO;
-        currentValue = ZERO;
+        minValue = Double.NaN;
+        maxValue = Double.NaN;
+        currentValue = Double.NaN;
         updated = false;
     }
 }

@@ -19,17 +19,20 @@
 
 package com.romraider.logger.ecu.ui.handler.dash;
 
-import static java.awt.BorderLayout.CENTER;
+import java.awt.CardLayout;
+import javax.swing.JLabel;
+import javax.swing.SwingConstants;
 import javax.swing.JPanel;
 import javax.swing.SwingUtilities;
-import java.awt.BorderLayout;
 
 public final class Gauge extends JPanel {
     private static final long serialVersionUID = 7354117571944547043L;
     private GaugeStyle style;
+    private final CardLayout cards = new CardLayout();
+    private boolean available;
 
     public Gauge(GaugeStyle style) {
-        setLayout(new BorderLayout(0, 0));
+        setLayout(cards);
         setGaugeStyle(style);
     }
 
@@ -38,11 +41,20 @@ public final class Gauge extends JPanel {
     }
 
     public void updateValue(double value) {
-        style.updateValue(value);
+        final boolean valid = Double.isFinite(value);
+        if (valid) style.updateValue(value);
+        SwingUtilities.invokeLater(() -> {
+            available = valid;
+            cards.show(this, available ? "value" : "missing");
+        });
     }
 
     public void resetValue() {
         style.resetValue();
+        SwingUtilities.invokeLater(() -> {
+            available = false;
+            cards.show(this, "missing");
+        });
     }
 
     public void setGaugeStyle(final GaugeStyle style) {
@@ -51,9 +63,14 @@ public final class Gauge extends JPanel {
         SwingUtilities.invokeLater(new Runnable() {
             public void run() {
                 removeAll();
+                available = false;
                 JPanel child = new JPanel();
                 style.apply(child);
-                add(child, CENTER);
+                add(child, "value");
+                add(new JLabel("NO VALID DATA", SwingConstants.CENTER), "missing");
+                cards.show(Gauge.this, available ? "value" : "missing");
+                revalidate();
+                repaint();
             }
         });
     }

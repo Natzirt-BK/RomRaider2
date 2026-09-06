@@ -45,6 +45,7 @@ public final class InjectorUpdateHandler implements DataUpdateHandler {
 
     @Override
     public synchronized void handleDataUpdate(Response response) {
+        if (!response.hasOnlyFiniteValues()) return;
         if (injectorTab!= null && injectorTab.isRecordData()
                 && (containsData(response, PULSE_WIDTH_16, ENGINE_LOAD_16)
                 || containsData(response, PULSE_WIDTH_32, ENGINE_LOAD_32))) {
