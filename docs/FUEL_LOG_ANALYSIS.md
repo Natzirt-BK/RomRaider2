@@ -4,6 +4,10 @@ The JavaFX desktop Logger now exposes **MAF** and **Injector** tabs alongside
 Log Analysis. This is the first read-only migration of the legacy tools, not
 full MAF/injector workflow parity. This feature is part of version 1.1.2.
 
+The 1.1.3 development source also adds an [Accepted samples viewer](ACCEPTED_FUEL_SAMPLES.md)
+to both fuel tabs: inspect original CSV sample numbers and calculate statistics
+over the exact accepted rows. Public 1.1.2 packages do not include this addition.
+
 ## Using a saved log
 
 1. Open a CSV through either tab or the existing Log Analysis command. All three

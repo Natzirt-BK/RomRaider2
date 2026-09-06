@@ -51,7 +51,8 @@ into Log Analysis or creating range-feedback loops.
 
 This connects range selection with Log Analysis's existing cursor, tables,
 charts and range statistics. Inspection/statistics of the exact noncontiguous
-accepted fuel rows remains follow-up work, not a capability implied by this link.
+accepted fuel rows is available separately in the fuel tabs' [Accepted samples
+viewer](ACCEPTED_FUEL_SAMPLES.md), not implicitly applied by this link.
 Large-range statistics also still use the existing calculation path; this is not
 the separate bounded-large-log review implementation.
 

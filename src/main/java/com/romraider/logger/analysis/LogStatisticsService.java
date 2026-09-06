@@ -31,16 +31,21 @@ public final class LogStatisticsService {
 
     private static ChannelStatistics analyzeChannel(LogDataset dataset,
             LogRange range, LogChannel channel) {
-        double[] finite = new double[range.size()];
+        return analyzeSamples(dataset, range.size(), index -> range.getStartInclusive() + index, channel);
+    }
+
+    static ChannelStatistics analyzeSamples(LogDataset dataset, int size,
+            java.util.function.IntUnaryOperator rows, LogChannel channel) {
+        double[] finite = new double[size];
         int count = 0;
-        for (int row = range.getStartInclusive();
-                row < range.getEndExclusive(); row++) {
-            double value = dataset.getValue(row, channel.getIndex());
+        for (int index = 0; index < size; index++) {
+            checkInterrupted();
+            double value = dataset.getValue(rows.applyAsInt(index), channel.getIndex());
             if (!Double.isFinite(value)) continue;
             finite[count++] = value;
         }
 
-        int missing = range.size() - count;
+        int missing = size - count;
         if (count == 0) {
             return new ChannelStatistics(channel, 0, missing,
                     Double.NaN, Double.NaN, Double.NaN, Double.NaN,
@@ -49,6 +54,7 @@ public final class LogStatisticsService {
 
         finite = Arrays.copyOf(finite, count);
         Arrays.sort(finite);
+        checkInterrupted();
         return new ChannelStatistics(channel, count, missing,
                 finite[0], finite[count - 1], mean(finite),
                 percentile(finite, 0.50), standardDeviation(finite),
@@ -58,12 +64,15 @@ public final class LogStatisticsService {
     private static double mean(double[] values) {
         Sum sum = new Sum();
         for (double value : values) {
+            checkInterrupted();
             sum.add(value);
             if (!Double.isFinite(sum.value())) {
                 // Rare extreme-value fallback. Preserve the exact binary-double
                 // inputs, including small residuals after huge cancellations.
                 BigDecimal exact = BigDecimal.ZERO;
-                for (double input : values) exact = exact.add(new BigDecimal(input));
+                for (double input : values) {
+                    checkInterrupted(); exact = exact.add(new BigDecimal(input));
+                }
                 return exact.divide(BigDecimal.valueOf(values.length), MathContext.DECIMAL128).doubleValue();
             }
         }
@@ -79,10 +88,13 @@ public final class LogStatisticsService {
         double origin = Double.isFinite(span) ? minimum : 0.0;
         double scale = Double.isFinite(span) ? span : Math.max(Math.abs(minimum), Math.abs(maximum));
         Sum normalized = new Sum();
-        for (double value : sorted) normalized.add((value - origin) / scale);
+        for (double value : sorted) {
+            checkInterrupted(); normalized.add((value - origin) / scale);
+        }
         double center = normalized.value() / sorted.length;
         Sum squares = new Sum();
         for (double value : sorted) {
+            checkInterrupted();
             double deviation = (value - origin) / scale - center;
             squares.add(deviation * deviation);
         }
@@ -101,6 +113,10 @@ public final class LogStatisticsService {
             sum = next;
         }
         double value() { return sum + correction; }
+    }
+
+    private static void checkInterrupted() {
+        if (Thread.currentThread().isInterrupted()) throw new java.util.concurrent.CancellationException();
     }
 
     private static double percentile(double[] sorted, double fraction) {

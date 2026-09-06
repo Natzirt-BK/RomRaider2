@@ -55,6 +55,7 @@ final class FxFuelAnalysisPane extends BorderPane implements AutoCloseable {
     private final TableView<FuelLogAnalysis.Bin> results = new TableView<>();
     private final ScatterChart<Number, Number> chart;
     private final FxFuelCurvePane curve;
+    private final FxFuelSamplePane acceptedSamples = new FxFuelSamplePane();
     private final FxFuelRateFilterPane rateFilter;
     private final FxFuelOperatingConditionsPane operating;
     private final Button calculate = new Button("Analyze saved log");
@@ -163,7 +164,7 @@ final class FxFuelAnalysisPane extends BorderPane implements AutoCloseable {
         addColumn("Maximum", bin -> number(bin.getMaximum()));
         copy.setDisable(true); copy.setOnAction(event -> copyResults());
         BorderPane table = new BorderPane(results); table.setBottom(copy);
-        TabPane output = new TabPane(tab("Binned results", table), tab("Chart", chart), tab("Curve review", curve));
+        TabPane output = new TabPane(tab("Binned results", table), tab("Chart", chart), tab("Curve review", curve), tab("Accepted samples", acceptedSamples));
         output.setMinSize(0, 0); setCenter(output);
 
         for (ComboBox<LogChannel> mappingChoice : List.of(x, y, correction)) {
@@ -382,6 +383,7 @@ final class FxFuelAnalysisPane extends BorderPane implements AutoCloseable {
         if (pending != null) pending.cancel(true);
         results.getItems().clear(); chart.getData().clear(); copy.setDisable(true);
         curve.setAnalysis(null);
+        acceptedSamples.setAnalysis(null);
         status.setText(dataset == null ? "Open a CSV log to begin."
                 : "Inputs changed. Confirm mappings and analyze to refresh results.");
     }
@@ -406,6 +408,7 @@ final class FxFuelAnalysisPane extends BorderPane implements AutoCloseable {
                     }
                     chart.getData().setAll(List.of(series));
                     curve.setAnalysis(result);
+                    acceptedSamples.setAnalysis(result);
                     copy.setDisable(result.getBins().isEmpty());
                     status.setText(result.getAccepted() + " accepted · " + result.getFiltered()
                             + " filtered · " + result.getInvalid() + " invalid · " + result.getBins().size()
@@ -517,6 +520,7 @@ final class FxFuelAnalysisPane extends BorderPane implements AutoCloseable {
         if (conditionsLink != null) conditionsLink.disconnect();
         closed = true; invalidate(); dataset = null; worker.shutdownNow();
         curve.close();
+        acceptedSamples.close();
         if (conditionsLink != null) conditionsLink.refresh(); else showConditionsLink(false);
         // Complete already-requested atomic exports; closed/load-generation guards
         // prevent any queued import from mutating a disposed pane.

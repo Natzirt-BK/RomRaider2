@@ -8,6 +8,10 @@ https://github.com/Natzirt-BK/RomRaider2/releases/latest
 What changed for 1.1.3
 ---------------------
 
+- MAF/Injector Accepted samples tabs inspect exact original CSV rows and calculate
+  selected-channel statistics across the full accepted set, independently of
+  table paging. Background work, explicit review limits and stale-result guards
+  preserve responsiveness without silently truncating the accepted set.
 - Saved-log statistics avoid intermediate mean/percentile overflow and squared-
   deviation overflow/underflow for extreme finite readings. Finite/missing counts
   and population-deviation semantics are unchanged; captured data is not modified.

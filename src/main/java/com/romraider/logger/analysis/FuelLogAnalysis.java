@@ -13,7 +13,8 @@ public final class FuelLogAnalysis {
     private FuelLogAnalysis() { }
 
     @FunctionalInterface public interface PointConsumer { void accept(double x, double y); }
-    @FunctionalInterface private interface PointSource { void forEach(PointConsumer consumer); }
+    @FunctionalInterface private interface AcceptedPointConsumer { void accept(int row, double x, double y); }
+    @FunctionalInterface private interface PointSource { void forEach(AcceptedPointConsumer consumer); }
 
     /** Inclusive filter limits; an unavailable value rejects the sample. */
     public static final class Filter {
@@ -48,10 +49,14 @@ public final class FuelLogAnalysis {
         private final List<Bin> bins;
         private final int accepted, invalid, filtered;
         private final PointSource points;
-        private Result(List<Bin> bins, int accepted, int invalid, int filtered, PointSource points) {
+        private final LogDataset dataset;
+        private final LogRange range;
+        private Result(List<Bin> bins, int accepted, int invalid, int filtered, PointSource points,
+                LogDataset dataset, LogRange range) {
             this.bins = Collections.unmodifiableList(new ArrayList<Bin>(bins));
             this.accepted = accepted; this.invalid = invalid; this.filtered = filtered;
             this.points = points;
+            this.dataset = dataset; this.range = range;
         }
         public List<Bin> getBins() { return bins; }
         public int getAccepted() { return accepted; }
@@ -60,7 +65,14 @@ public final class FuelLogAnalysis {
         /** Replays the exact accepted raw projections without retaining a second sample array. */
         public void forEachAccepted(PointConsumer consumer) {
             if (consumer == null) throw new IllegalArgumentException("Point consumer is required");
-            points.forEach(consumer);
+            points.forEach((row, x, y) -> consumer.accept(x, y));
+        }
+        public LogDataset getDataset() { return dataset; }
+        public LogRange getRange() { return range; }
+        /** Original zero-based CSV sample indices, in recorded order, using captured conditions. */
+        public void forEachAcceptedRow(java.util.function.IntConsumer consumer) {
+            if (consumer == null) throw new IllegalArgumentException("Row consumer is required");
+            points.forEach((row, x, y) -> consumer.accept(row));
         }
     }
 
@@ -113,7 +125,7 @@ public final class FuelLogAnalysis {
         if (rate != null) rate.validate(data);
         Map<Long, Accumulator> groups = new TreeMap<Long, Accumulator>();
         int[] counts = visitAccepted(data, range, xChannel, yChannel, correction, width, capturedFilters,
-                injector, stoich, density, rate, (x, y) -> {
+                injector, stoich, density, rate, (row, x, y) -> {
                     long key = (long) Math.floor(Math.nextUp(x / width));
                     Accumulator bin = groups.get(key);
                     if (bin == null) {
@@ -127,12 +139,12 @@ public final class FuelLogAnalysis {
             bins.add(new Bin(entry.getKey() * width, (entry.getKey() + 1) * width, entry.getValue()));
         }
         return new Result(bins, counts[0], counts[1], counts[2], consumer -> visitAccepted(data, range,
-                xChannel, yChannel, correction, width, capturedFilters, injector, stoich, density, rate, consumer));
+                xChannel, yChannel, correction, width, capturedFilters, injector, stoich, density, rate, consumer), data, range);
     }
 
     private static int[] visitAccepted(LogDataset data, LogRange range, int xChannel,
             int yChannel, int correction, double width, List<Filter> filters,
-            boolean injector, double stoich, double density, FuelRateFilter rate, PointConsumer consumer) {
+            boolean injector, double stoich, double density, FuelRateFilter rate, AcceptedPointConsumer consumer) {
         int accepted = 0, invalid = 0, filtered = 0;
         for (int row = range.getStartInclusive(); row < range.getEndExclusive(); row++) {
             if (Thread.currentThread().isInterrupted()) throw new java.util.concurrent.CancellationException();
@@ -161,7 +173,7 @@ public final class FuelLogAnalysis {
                     || !Double.isFinite((keyValue + 1) * width)) {
                 invalid++; continue;
             }
-            consumer.accept(x, y); accepted++;
+            consumer.accept(row, x, y); accepted++;
         }
         return new int[] {accepted, invalid, filtered};
     }

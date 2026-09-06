@@ -116,11 +116,18 @@ tracing/comparisons, remaining mobile work and supervised qualification remain o
 [Three-workspace range sharing](SHARED_ANALYSIS_RANGE.md) is implemented in
 1.1.3 source. Reviewed activation and an explicit shared Apply step keep Log
 Analysis's cursor/views/range statistics aligned with the visible MAF/Injector
-range drafts, while preserving independent fuel filters. Exact accepted-row
-inspection/statistics, bounded large-log review, injector transfer and the rest
-of the analysis/mobile backlog remain open.
+range drafts, while preserving independent fuel filters. Accepted-row progress
+is recorded below; general bounded large-log review, injector transfer and the
+rest of the analysis/mobile backlog remain open.
 
 The shared [range-statistics arithmetic](LOG_ANALYSIS_ARCHITECTURE.md#finite-value-arithmetic--113-development-source)
 now handles extreme finite values without the previous intermediate overflow
 and squared-deviation underflow. This is a numerical audit fix, not accepted-row
 inspection or bounded/asynchronous large-log processing.
+
+[Accepted fuel samples](ACCEPTED_FUEL_SAMPLES.md) now provide exact original-row
+inspection and per-channel statistics in both JavaFX fuel workspaces. Paged
+readings, full-accepted-set statistics, explicit work/memory bounds, background
+execution and stale-result disposal are implemented. This does not complete
+general large-log handling, log-to-map tracing, injector transfer, comparisons
+or the remaining mobile work.
