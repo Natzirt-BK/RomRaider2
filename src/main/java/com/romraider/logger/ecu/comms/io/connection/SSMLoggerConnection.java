@@ -33,6 +33,7 @@ import com.romraider.logger.ecu.comms.query.dimemod.DmInit;
 import com.romraider.logger.ecu.comms.query.dimemod.DmInitCallback;
 import com.romraider.logger.ecu.definition.Module;
 import com.romraider.logger.ecu.exception.UnsupportedProtocolException;
+import com.romraider.logger.ecu.exception.InvalidResponseException;
 import org.apache.log4j.Logger;
 
 import com.romraider.Settings;
@@ -60,6 +61,14 @@ public final class SSMLoggerConnection implements LoggerConnection {
         this.protocol = ProtocolFactory.getProtocol(
                 settings.getLoggerProtocol(),
                 settings.getTransportProtocol());
+    }
+
+    /** Package-local seam for synthetic transport qualification; never opens a device. */
+    SSMLoggerConnection(ConnectionManager manager, LoggerProtocol protocol) {
+        checkNotNull(manager, "manager");
+        checkNotNull(protocol, "protocol");
+        this.manager = manager;
+        this.protocol = protocol;
     }
 
     @Override
@@ -101,11 +110,11 @@ public final class SSMLoggerConnection implements LoggerConnection {
             byte[] request = protocol.getProtocol().constructReadAddressRequest(module, new byte[][]{new byte[]{0x00, 0x00, 0x60}});
             byte[] response = manager.send(request);
             byte[] processedResponse = protocol.preprocessResponse(request, response, new PollingStateImpl());
-            byte responseType = processedResponse[4];
+            byte responseType = dmResponseType(processedResponse);
             if (responseType != SSMProtocol.READ_ADDRESS_RESPONSE) {
                 return;
             }
-            resetState = processedResponse[5];
+            resetState = dmPayload(processedResponse, SSMProtocol.READ_ADDRESS_RESPONSE, 1, 1)[0];
             request = protocol.constructWriteAddressRequest(module, new byte[]{0x00, 0x00, 0x60}, (byte) 0xDE);
             if (LOGGER.isDebugEnabled())
                 LOGGER.debug(module + " Init DM Request  ---> " + asHex(request));
@@ -114,38 +123,38 @@ public final class SSMLoggerConnection implements LoggerConnection {
             processedResponse = protocol.preprocessResponse(request, response, new PollingStateImpl());
             if (LOGGER.isDebugEnabled())
                 LOGGER.debug(module + " Init DM Response <--- " + asHex(processedResponse));
-            responseType = processedResponse[4];
+            responseType = dmResponseType(processedResponse);
             if (responseType != SSMProtocol.WRITE_ADDRESS_RESPONSE) {
                 // error
                 return;
             }
-            if (processedResponse[5] == (byte) 0xAD) {
+            if (dmPayload(processedResponse, SSMProtocol.WRITE_ADDRESS_RESPONSE, 1, 1)[0] == (byte) 0xAD) {
                 request = protocol.getProtocol().constructReadAddressRequest(module, new byte[][]{new byte[]{0x00, 0x00, 0x60}});
                 Thread.sleep(100);
                 response = manager.send(request);
                 processedResponse = protocol.preprocessResponse(request, response, new PollingStateImpl());
-                responseType = processedResponse[4];
+                responseType = dmResponseType(processedResponse);
                 if (responseType != SSMProtocol.READ_ADDRESS_RESPONSE) {
                     return;
                 }
-                int length = (processedResponse[5] & 0xFF) << 8;
+                int length = (dmPayload(processedResponse, SSMProtocol.READ_ADDRESS_RESPONSE, 1, 1)[0] & 0xFF) << 8;
                 Thread.sleep(100);
                 response = manager.send(request);
                 processedResponse = protocol.preprocessResponse(request, response, new PollingStateImpl());
-                responseType = processedResponse[4];
+                responseType = dmResponseType(processedResponse);
                 if (responseType != SSMProtocol.READ_ADDRESS_RESPONSE) {
                     return;
                 }
-                length |= processedResponse[5] & 0xFF;
+                length |= dmPayload(processedResponse, SSMProtocol.READ_ADDRESS_RESPONSE, 1, 1)[0] & 0xFF;
                 int startAddress = 0x00;
                 Thread.sleep(100);
                 response = manager.send(request);
                 processedResponse = protocol.preprocessResponse(request, response, new PollingStateImpl());
-                responseType = processedResponse[4];
+                responseType = dmResponseType(processedResponse);
                 if (responseType != SSMProtocol.READ_ADDRESS_RESPONSE) {
                     return;
                 }
-                int highAddrByte = processedResponse[5] & 0xFF;
+                int highAddrByte = dmPayload(processedResponse, SSMProtocol.READ_ADDRESS_RESPONSE, 1, 1)[0] & 0xFF;
                 if (highAddrByte > 0x0F && highAddrByte != 0xFF) {
                     // error reading address
                     return;
@@ -154,25 +163,25 @@ public final class SSMLoggerConnection implements LoggerConnection {
                 Thread.sleep(100);
                 response = manager.send(request);
                 processedResponse = protocol.preprocessResponse(request, response, new PollingStateImpl());
-                responseType = processedResponse[4];
+                responseType = dmResponseType(processedResponse);
                 if (responseType != SSMProtocol.READ_ADDRESS_RESPONSE) {
                     return;
                 }
-                startAddress |= (processedResponse[5] & 0xFF) << 8;
+                startAddress |= (dmPayload(processedResponse, SSMProtocol.READ_ADDRESS_RESPONSE, 1, 1)[0] & 0xFF) << 8;
                 Thread.sleep(100);
                 response = manager.send(request);
                 processedResponse = protocol.preprocessResponse(request, response, new PollingStateImpl());
-                responseType = processedResponse[4];
+                responseType = dmResponseType(processedResponse);
                 if (responseType != SSMProtocol.READ_ADDRESS_RESPONSE) {
                     return;
                 }
-                startAddress |= processedResponse[5] & 0xFF;
+                startAddress |= dmPayload(processedResponse, SSMProtocol.READ_ADDRESS_RESPONSE, 1, 1)[0] & 0xFF;
 
                 request = protocol.constructWriteAddressRequest(module, new byte[]{0x00, 0x00, 0x00}, (byte) 0x00);
                 Thread.sleep(100);
                 response = manager.send(request);
                 processedResponse = protocol.preprocessResponse(request, response, new PollingStateImpl());
-                responseType = processedResponse[4];
+                responseType = dmResponseType(processedResponse);
                 if (responseType != SSMProtocol.WRITE_ADDRESS_RESPONSE) {
                     // error, skipping for CAN...
                     if (!(protocol.getProtocol() instanceof com.romraider.io.protocol.ssm.iso15765.SSMProtocol)) {
@@ -180,50 +189,9 @@ public final class SSMLoggerConnection implements LoggerConnection {
                     }
                 }
 
-                int maxResponseSize = 96;
-                int remaining = length;
-                byte[] dmInitBytes = new byte[length];
-                int addr = startAddress;
-                try {
-                    while (remaining > 0) {
-                        request = protocol.getProtocol().constructReadMemoryRequest(module,
-                                new byte[]{(byte) (addr >> 16), (byte) (addr >> 8), (byte) addr},
-                                Math.min(remaining, maxResponseSize)
-                        );
-                        Thread.sleep(100);
-                        response = manager.send(request);
-                        processedResponse = protocol.preprocessResponse(request, response, new PollingStateImpl());
-                        int readBytes = processedResponse.length - 6;
-                        System.arraycopy(processedResponse, 5, dmInitBytes, dmInitBytes.length - remaining, readBytes);
-                        remaining -= readBytes;
-                        addr += readBytes;
-                    }
-                } catch (UnsupportedProtocolException e) {
-                    // try CAN A8 reading
-                    maxResponseSize = 32;
-                    int idx = 0;
-                    while (remaining > 0) {
-                        byte[][] addresses = new byte[Math.min(maxResponseSize, remaining)][3];
-                        for (byte[] barr : addresses) {
-                            barr[0] = (byte) (addr >> 16);
-                            barr[1] = (byte) (addr >> 8);
-                            barr[2] = (byte) addr;
-                            addr++;
-                            remaining--;
-                            if (remaining == 0) {
-                                break;
-                            }
-                        }
-                        request = protocol.getProtocol().constructReadAddressRequest(module, addresses);
-                        Thread.sleep(100);
-                        response = manager.send(request);
-                        processedResponse = protocol.preprocessResponse(request, response, new PollingStateImpl());
-                        int readBytes = processedResponse.length - 5;
-                        System.arraycopy(processedResponse, 5, dmInitBytes, dmInitBytes.length - remaining - readBytes, readBytes);
-                    }
-                }
-
-                dmInit = new DmInit(dmInitBytes);
+                if (responseType == SSMProtocol.WRITE_ADDRESS_RESPONSE)
+                    dmPayload(processedResponse, SSMProtocol.WRITE_ADDRESS_RESPONSE, 1, 1);
+                dmInit = new DmInit(readDmDiscovery(module, startAddress, length));
             } else {
                 // restoring Reset state
                 request = protocol.constructWriteAddressRequest(module, new byte[]{0x00, 0x00, 0x60}, resetState);
@@ -234,7 +202,7 @@ public final class SSMLoggerConnection implements LoggerConnection {
 
         boolean forceUpdate = false;
         // read runtime params
-        if (dmInit != null) {
+        if (dmInit != null && dmInit.getMajorVer() == 2) {
             int aiAddr = dmInit.getActiveInputsAddress();
             int afAddr = dmInit.getActiveFeaturesAddress();
             int cerrAddr = dmInit.getCurrentErrorCodesAddress();
@@ -264,11 +232,12 @@ public final class SSMLoggerConnection implements LoggerConnection {
                 byte[] processedResponse = protocol.preprocessResponse(request, response, new PollingStateImpl());
                 if (LOGGER.isDebugEnabled())
                     LOGGER.debug(module + " Init DM Runtime Params Response <--- " + asHex(processedResponse));
-                byte responseType = processedResponse[4];
+                byte responseType = dmResponseType(processedResponse);
                 if (responseType != SSMProtocol.READ_ADDRESS_RESPONSE) {
                     // error
                     return;
                 }
+                dmPayload(processedResponse, SSMProtocol.READ_ADDRESS_RESPONSE, 14, 14);
                 forceUpdate = dmInit.updateRuntimeData(getIntFromResponse(processedResponse, 5),
                         getShortFromResponse(processedResponse, 9),
                         new int[]{getIntFromResponse(processedResponse, 11)},
@@ -323,11 +292,12 @@ public final class SSMLoggerConnection implements LoggerConnection {
                 byte[] processedResponse = protocol.preprocessResponse(request, response, new PollingStateImpl());
                 if (LOGGER.isDebugEnabled())
                     LOGGER.debug(module + " Init DM Runtime Params Response <--- " + asHex(processedResponse));
-                byte responseType = processedResponse[4];
+                byte responseType = dmResponseType(processedResponse);
                 if (responseType != SSMProtocol.READ_ADDRESS_RESPONSE) {
                     // error
                     return;
                 }
+                dmPayload(processedResponse, SSMProtocol.READ_ADDRESS_RESPONSE, 38, 38);
                 forceUpdate = dmInit.updateRuntimeData(getIntFromResponse(processedResponse, 5),
                         getShortFromResponse(processedResponse, 9),
                         new int[]{
@@ -354,6 +324,59 @@ public final class SSMLoggerConnection implements LoggerConnection {
             }
         }
         callback.callback(dmInit, forceUpdate);
+    }
+
+    /** Read the advertised block without wrapping addresses or accepting empty progress. */
+    byte[] readDmDiscovery(Module module, int startAddress, int length) throws InterruptedException {
+        if (length < 4 || length > 0xffff || startAddress < 0
+                || (long) startAddress + length > 0x1000000L)
+            throw new InvalidResponseException("Invalid DimeMod discovery address/length");
+        byte[] discovery = new byte[length];
+        int offset = 0;
+        boolean addressReads = false;
+        while (offset < length) {
+            int requested = Math.min(length - offset, addressReads ? 32 : 96);
+            byte[] request;
+            if (!addressReads) {
+                try {
+                    request = protocol.getProtocol().constructReadMemoryRequest(module,
+                            getThreeByteAddr(startAddress + offset), requested);
+                } catch (UnsupportedProtocolException unsupported) {
+                    // Only CAN's unsupported memory command selects the address-read path.
+                    if (!(protocol.getProtocol() instanceof com.romraider.io.protocol.ssm.iso15765.SSMProtocol))
+                        throw unsupported;
+                    addressReads = true;
+                    continue;
+                }
+            } else {
+                byte[][] addresses = new byte[requested][];
+                for (int i = 0; i < requested; i++) addresses[i] = getThreeByteAddr(startAddress + offset + i);
+                request = protocol.getProtocol().constructReadAddressRequest(module, addresses);
+            }
+            Thread.sleep(100);
+            byte[] processed = protocol.preprocessResponse(request, manager.send(request), new PollingStateImpl());
+            byte[] data = dmPayload(processed, addressReads ? SSMProtocol.READ_ADDRESS_RESPONSE
+                    : SSMProtocol.READ_MEMORY_RESPONSE, addressReads ? requested : 1, requested);
+            System.arraycopy(data, 0, discovery, offset, data.length);
+            offset += data.length;
+        }
+        return discovery;
+    }
+
+    private byte[] dmPayload(byte[] processed, byte expectedType, int minimum, int maximum) {
+        if (dmResponseType(processed) != expectedType)
+            throw new InvalidResponseException("Unexpected DimeMod response type or truncated header");
+        // Native validators check IDs, frame lengths and the K-line checksum.
+        byte[] data = protocol.getProtocol().parseResponseData(processed);
+        if (data.length < minimum || data.length > maximum)
+            throw new InvalidResponseException("Unexpected DimeMod payload length: " + data.length);
+        return data;
+    }
+
+    private static byte dmResponseType(byte[] processed) {
+        if (processed == null || processed.length < 5)
+            throw new InvalidResponseException("Truncated DimeMod response header");
+        return processed[4];
     }
 
     private static int getShortFromResponse(byte[] processedResponse, int offset) {

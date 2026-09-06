@@ -57,7 +57,9 @@ The [DimeMod channel audit](DIMEMOD_CHANNEL_AUDIT.md) repairs desktop channels
 that could be exposed without their discovered address block, old-layout oil
 inputs and the FFS/failsafe bit mix-up. It also confirms that the legacy discovery
 handshake uses writes; it must not be copied into Android's read-only logger.
-Continue bounded response/metadata validation and portable typed-channel work.
+Native frame/payload checks, bounded chunk assembly and unknown-version runtime
+guards are now implemented and synthetically tested. Continue metadata/cache/
+negotiation-error validation and portable typed-channel work.
 
 ## Then
 
