@@ -50,8 +50,18 @@ public class TableAction extends GenericAction {
 	}
 
 	public boolean isCurrentlyValid(Map<String, Double> variables) {
-		return (input_x.isEmpty() ? true : variables.containsKey(input_x))
-				&& (input_y.isEmpty() ? true : variables.containsKey(input_y));
+		return resolvedTable != null && finiteInput(variables, input_x) && finiteInput(variables, input_y);
+	}
+
+	private boolean finiteInput(Map<String, Double> variables, String name) {
+		return name.isEmpty() || (variables.get(name) != null && Double.isFinite(variables.get(name)));
+	}
+
+	@Override
+	public void invalidate() {
+		currentInputs.clear();
+		currentInputText = "NO VALID DATA";
+		currentOutputText = super.getOutputName() + ": NO VALID DATA";
 	}
 
 	private String updateInputText(Double inputXValue, Double inputYValue) {
@@ -71,6 +81,10 @@ public class TableAction extends GenericAction {
 	}
 
 	public Double calculate(Map<String, Double> variables) {
+		if (!isCurrentlyValid(variables)) {
+			invalidate();
+			return Double.NaN;
+		}
 		if (resolvedTable != null) {
 			Double inputXValue = variables.get(input_x);
 			Double inputYValue = variables.get(input_y);
@@ -87,7 +101,7 @@ public class TableAction extends GenericAction {
 			return output;
 		} else {
 			DataflowSimulation.LOGGER.warn("Failed to find table " + this.refTable);
-			return 0.0;
+			return Double.NaN;
 		}
 	}
 

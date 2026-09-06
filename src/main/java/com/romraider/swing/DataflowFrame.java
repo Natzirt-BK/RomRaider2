@@ -168,7 +168,7 @@ public final class DataflowFrame extends AbstractFrame {
 
 		for (int i = 0; i < sim.getNumberOfActions(); i++) {
 			GenericAction a = sim.getAction(i);
-			sim.simulate(i);
+			Double result = sim.simulate(i);
 
 			inputs.get(i).setText(a.getInputText());
 			outputs.get(i).setText(a.getOutputText());
@@ -184,6 +184,10 @@ public final class DataflowFrame extends AbstractFrame {
 
 				v.setOverlayLog(true);
 				v.clearLiveDataTrace();
+				if (result == null || !Double.isFinite(result)) {
+					v.drawTable();
+					continue;
+				}
 				if (v instanceof Table3DView) {
 					Table3DView view3D = (Table3DView) v;
 					view3D.getXAxis().highlightLiveData(a.getInputs().get(0).toString());

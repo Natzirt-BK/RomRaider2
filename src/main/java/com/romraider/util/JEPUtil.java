@@ -24,6 +24,9 @@ import org.nfunk.jep.JEP;
 import java.util.Collections;
 import java.util.Map;
 import java.util.LinkedHashMap;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
 
 public final class JEPUtil {
 	@SuppressWarnings("serial")
@@ -37,44 +40,51 @@ public final class JEPUtil {
 
 		@Override
 		protected boolean removeEldestEntry(Map.Entry<K, V> eldest) {
-			return size() >= cacheSize;
+			return size() > cacheSize;
 		}
 	};
 
-	private static final Map<String, JEP> parserCache = Collections.synchronizedMap(new LRUCache<String, JEP>(32));
+	private static final Map<ExpressionKey, JEP> parserCache = new LRUCache<ExpressionKey, JEP>(32);
+
+	/** Parsed symbol bindings belong to the complete variable-name set, not just the expression. */
+	private static final class ExpressionKey {
+		private final String expression;
+		private final List<String> names;
+		ExpressionKey(String expression, Map<String, Double> values) {
+			this.expression = Objects.requireNonNull(expression, "expression");
+			this.names = new ArrayList<String>(values.keySet());
+			Collections.sort(names);
+		}
+		@Override public boolean equals(Object other) {
+			if (!(other instanceof ExpressionKey)) return false;
+			ExpressionKey key = (ExpressionKey) other;
+			return expression.equals(key.expression) && names.equals(key.names);
+		}
+		@Override public int hashCode() { return 31 * expression.hashCode() + names.hashCode(); }
+	}
 
 	public static synchronized double evaluate(String expression, double value) {
-		JEP parser = parserCache.get(expression);
+		return evaluate(expression, Collections.singletonMap("x", value));
+	}
+
+	public static synchronized double evaluate(String expression, Map<String, Double> valueMap) {
+		Map<String, Double> values = new LinkedHashMap<String, Double>(valueMap);
+		ExpressionKey key = new ExpressionKey(expression, values);
+		JEP parser = parserCache.get(key);
 		if (parser == null) {
 			parser = new JEP();
 			parser.addStandardFunctions();
 			parser.addFunction("BitWise", new BitWise());
 			parser.initSymTab(); // clear the contents of the symbol table
-			parser.addVariable("x", value);
-			parser.parseExpression(expression);
-			parserCache.put(expression, parser);
-		} else {
-			parser.setVarValue("x", value);
-		}
-		return parser.getValue();
-	}
-
-	public static synchronized double evaluate(String expression, Map<String, Double> valueMap) {
-		JEP parser = parserCache.get(expression);
-		if (parser == null) {
-			parser = new JEP();
-			parser.initSymTab(); // clear the contents of the symbol table
-			for (String id : valueMap.keySet()) {
-				parser.addVariable(id, valueMap.get(id));
+			for (String id : values.keySet()) {
+				parser.addVariable(id, values.get(id) == null ? Double.NaN : values.get(id));
 			}
 			parser.parseExpression(expression);
-			parserCache.put(expression, parser);
+			parserCache.put(key, parser);
 		} else {
 
-			for (String id : valueMap.keySet()) {
-				if (parser.getSymbolTable().containsKey(id)) {
-					parser.setVarValue(id, valueMap.get(id));
-				}
+			for (String id : values.keySet()) {
+				parser.setVarValue(id, values.get(id) == null ? Double.NaN : values.get(id));
 			}
 
 		}

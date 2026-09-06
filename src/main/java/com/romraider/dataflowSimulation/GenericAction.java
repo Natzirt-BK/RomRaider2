@@ -49,6 +49,9 @@ public abstract class GenericAction {
 
 	public abstract Double calculate(Map<String, Double> variables);
 
+	/** Clear presentation state when an input or result is unavailable. */
+	public void invalidate() { }
+
 	public abstract boolean isCurrentlyValid(Map<String, Double> variables);
 
 	public boolean isSetupValid() {

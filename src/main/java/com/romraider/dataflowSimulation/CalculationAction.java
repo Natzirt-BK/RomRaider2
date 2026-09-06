@@ -82,12 +82,25 @@ public class CalculationAction extends GenericAction {
 	public boolean isCurrentlyValid(Map<String, Double> variables) {
 		try {
 			synchronized (variables) {
+				for (Map.Entry<String, Double> entry : variables.entrySet()) {
+					if (java.util.regex.Pattern.compile("(?<![A-Za-z0-9_])"
+							+ java.util.regex.Pattern.quote(entry.getKey()) + "(?![A-Za-z0-9_])")
+							.matcher(expression).find()
+							&& (entry.getValue() == null || !Double.isFinite(entry.getValue()))) return false;
+				}
 				Double value = JEPUtil.evaluate(expression, variables);
 				return !Double.isNaN(value) && !Double.isInfinite(value);
 			}
 		} catch (NullPointerException e) {
 			return false;
 		}
+	}
+
+	@Override
+	public void invalidate() {
+		currentInputText = "NO VALID DATA";
+		currentOutputText = super.getOutputName() + ": NO VALID DATA";
+		currentCenterText = expression;
 	}
 
 	@Override

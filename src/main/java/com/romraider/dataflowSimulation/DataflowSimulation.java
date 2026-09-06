@@ -124,14 +124,19 @@ public class DataflowSimulation {
 	}
 
 	public Double simulate(int index) {
-		Double result = 0.0;
+		Double result = Double.NaN;
 		GenericAction a = dataflow.get(index);
 		if (a.isCurrentlyValid(variables)) {
 			result = a.calculate(variables);
-			variables.put(a.outputName, result);
 		} else {
 			LOGGER.warn("Action with output " + a.getOutputName() + " is not valid!");
 		}
+		if (result == null || !Double.isFinite(result)) {
+			result = Double.NaN;
+			a.invalidate();
+		}
+		// Never leave a previous successful output available to downstream actions.
+		variables.put(a.outputName, result);
 
 		return result;
 	}

@@ -49,9 +49,39 @@ invalid statistics/progress and valid zero recovery. The full core suite and
 desktop build pass (three existing opt-in skips); 60 JavaFX and 35 Compose tests
 pass locally. No adapter, editor write or physical vehicle was used.
 
+## Dataflow and shared expression cache follow-up
+
+Dataflow simulation now invalidates the stored output and presentation after an
+invalid input/result, instead of returning zero and leaving a previous output
+available downstream. Table actions reject missing/non-finite inputs and missing
+tables, clear old input markers, and never perform a lookup with invalid inputs.
+The simulation window clears table overlays for unavailable results. Four tests
+cover chains, real zero/recovery, referenced-invalid versus unrelated variables,
+missing tables and a synthetic table lookup that asserts all inputs are finite.
+
+Running those tests together with logger tests exposed a real cross-feature
+cache collision: `JEPUtil` keyed parsers only by expression text. A map-based
+constant expression could leave a parser without `x`, making a later scalar
+logger call throw; removing map variables could also reuse their previous values.
+The cache now keys on expression plus the complete sorted variable-name set,
+updates all bindings, provides the same standard/BitWise functions in both call
+modes, and maintains its declared 32-entry LRU limit. Five ordered regression
+tests cover cross-mode calls, removed/new/null bindings, standard functions and
+eviction. The full core suite passes with these tests and the dataflow/logger
+tests in one process, not only when run independently.
+
 These checks do not detect every semantically wrong definition or establish
-vehicle-specific conversion correctness. Legacy editor table-overlay behavior
-and dataflow simulations need separate missing-data review; they are not gauge
-or CSV acceptance evidence. Android's hosted lifecycle run at `4e2fcc88` failed
-while the instrumentation used a terminated Activity worker; app/lifecycle
-diagnostics were added for investigation. That run is not counted as a pass.
+vehicle-specific conversion correctness. Legacy editor logger table-overlay
+behavior still needs separate missing-data review; it is not gauge/CSV evidence.
+
+## Android lifecycle evidence
+
+Hosted run `34013543594` at `4e2fcc88` failed while instrumentation used a terminated
+Activity worker. Run `34013852775` at `73ea5783` passed after adding diagnostic
+capture, but that alone does not resolve the intermittent failure. The harness
+follow-up tracks resumed/recreated Activities instead of keeping the initial
+instance, retries only a superseded/destroyed worker (not a live-worker failure),
+and explicitly recreates an Activity before importing fixtures. It also draws
+actual Android gauges through invalid/recovered samples and checks their
+accessibility status. Local automation assembly, all 44 unit tests, portable
+checks and lint pass; hosted recreation qualification is tracked separately.

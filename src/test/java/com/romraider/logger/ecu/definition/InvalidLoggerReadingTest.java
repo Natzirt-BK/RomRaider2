@@ -147,8 +147,12 @@ public class InvalidLoggerReadingTest {
             handler[0] = new com.romraider.logger.ecu.ui.handler.graph.GraphUpdateHandler(new JPanel());
             handler[0].registerData(data);
         });
+        long timestamp = 0;
         for (double value : new double[] {12, Double.NaN, Double.POSITIVE_INFINITY, 0, 14}) {
-            ResponseImpl response = new ResponseImpl();
+            final long sampleTimestamp = timestamp++;
+            ResponseImpl response = new ResponseImpl() {
+                @Override public long getTimestamp() { return sampleTimestamp; }
+            };
             response.setDataValue(data, value);
             handler[0].handleDataUpdate(response);
         }
