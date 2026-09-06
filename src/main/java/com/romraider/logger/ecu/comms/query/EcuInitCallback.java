@@ -23,4 +23,9 @@ public interface EcuInitCallback {
 
     void callback(EcuInit ecuInit);
 
+    /** Owners with a state lock must recheck the token while holding that lock. */
+    default void callback(EcuInit ecuInit, InitializationAttempt attempt) {
+        if (attempt.isActive()) callback(ecuInit);
+    }
+
 }

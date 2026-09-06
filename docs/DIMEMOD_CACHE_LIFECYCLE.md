@@ -121,12 +121,70 @@ build/unit suite passes with the three existing optional/native skips.
 Shared-core checks and all 281 desktop UI tests (246 JavaFX, 35 Compose) pass,
 with no UI test skips; Linux JavaFX staging succeeds.
 
-The callback interface still carries **no originating session token**. These
-guards reject superseded queued UI work and closed owners; they cannot identify
-an old transport result first delivered after a newer ECU callback on an open
-owner. Full ECU/module/transport/session binding remains open, as does broader
-in-flight catalog/profile reload cancellation. No physical reconnect test or
-write-based discovery qualification is claimed.
+At that checkpoint the callback interface still carried no originating attempt
+token. The next follow-up below adds that lifetime boundary. Full firmware/cache
+identity binding and broader in-flight catalog/profile reload cancellation
+remain open. No physical reconnect test or write-based discovery qualification
+is claimed.
+
+## Initialization-attempt lifetime
+
+The query manager now creates a unique `InitializationAttempt` for each
+`initConnection` call and binds both ECU and DimeMod callbacks to it. The token
+expires on completion or failure, **before connection cleanup**, and immediately
+when Stop is requested. Replacement of an active attempt expires its predecessor.
+This is an initialization-operation token, not a physical ECU identity or the
+lifetime of the later polling connection.
+
+Callbacks arriving after expiry are ignored. Both desktop owners recheck the
+token while holding their own state monitor, so a callback waiting for that
+monitor cannot apply after its attempt expires. Scoped cache getters also check
+the token under the owner monitor. An expired lookup throws rather than returning
+null, which could otherwise select the legacy discovery handshake. Closing a
+token does not clear the retained metadata or invalidate accepted UI work.
+The ordinary same-ID metadata reuse policy and successful handshake bytes are
+unchanged. SSM cached runtime refresh now works on an independent metadata copy:
+a late reply cannot mutate the retained object's runtime arrays/channels before
+callback rejection. A successful refresh publishes the new object, so a normal
+reconnect may rebuild its channel catalog even if metadata bytes are unchanged.
+
+The query manager checks cancellation before connection creation, before ECU
+initialization, and before/after DimeMod initialization. A Stop during creation
+closes the resulting connection without initializing it. Interruption during
+DimeMod initialization stops the attempt, preserves the thread flag and returns
+failure rather than success; cancellation does not report a false initialization
+error or queue the retry delay. Other optional DimeMod failures still leave
+standard logging available, preserving existing behavior.
+
+Synthetic tests run the actual initialization orchestration with an injected
+connection factory, without starting its worker. They cover successful cleanup,
+late callbacks from a completed attempt, successive attempts on one owner,
+Stop before/during connection creation and ECU initialization, existing thread
+interruption, ECU failure, optional DimeMod failure, and interrupted DimeMod
+initialization. Native SSM tests confirm that an expired token cannot start any
+K-line/CAN discovery command. Swing and modern-desktop tests deliberately block
+callbacks and cache lookups on the owner monitor, expire the token, then release
+them; positive active-token and cache-reuse cases are also covered. Native
+K-line/CAN 2.0/2.3 fixtures expire an attempt while returning a valid runtime
+reply and assert that the retained errors, active inputs and channels do not
+change; the corresponding successful cases publish independent fresh state.
+Running those new native tests against the compiled pre-copy implementation
+reproduced two failures: a cancelled reply changed cached error `1` to `0`, and
+a successful reply published the original mutable object rather than a snapshot.
+
+Qualification: all 66 focused initialization, runtime and metadata tests pass.
+The full Ant unit suite and Linux/Windows core builds pass (three existing
+optional/native skips). The combined desktop run passes 284 UI tests without
+skips, including the concurrent seamless-gauge work. Shared checks and Linux
+JavaFX staging also pass. All transport fixtures are synthetic.
+
+The overloads retain compatibility with callers using unscoped callbacks, but
+only the query-manager-bound path supplies this lifetime guarantee. Third-party
+callback owners with their own locks must implement the documented inside-lock
+check; the default overload alone cannot synchronize their state. A transport
+operation already executing is not rolled back by token expiry. Firmware bytes,
+module/transport/adapter identity, and dynamic-address validity across reconnects
+are still not part of the retained metadata key.
 
 ## Existing cache boundary
 
@@ -138,7 +196,8 @@ The remaining cache is **ECU-ID keyed, not fully ECU/session bound**:
   of this cache key.
 - The retained Swing logger follows the same ID comparison. Its owner-scoped
   synchronous cache and guarded UI notifications are qualified above; the
-  callback interface still does not bind results to their originating session.
+  query-manager path now binds initialization results to their attempt lifetime,
+  but not cached addresses to a verified firmware/session identity.
 - `QueryManagerImpl.initConnection` identifies the ECU and then calls DimeMod
   initialization on each connection attempt. `SSMLoggerConnection.dmInit`
   obtains its cache from `getDmInit()`: a non-null entry takes the runtime-read

@@ -292,6 +292,59 @@ class FxLoggerSetupTransferTest {
         }
     }
 
+    @Test void expiredAttemptIsRecheckedInsideTheRuntimeOwnerLock() throws Exception {
+        try (Fixture fixture = new Fixture(); DimeStateSnapshot ignored = new DimeStateSnapshot()) {
+            EcuInit original = syntheticEcu("1111111111");
+            DmInit metadata = syntheticDime();
+            EcuInitCallback ecu = ecuCallback(fixture.runtime);
+            DmInitCallback dime = dmCallback(fixture.runtime);
+            ecu.callback(original);
+            dime.callback(metadata, true);
+            for (int operation = 0; operation < 3; operation++) {
+                var attempt = new com.romraider.logger.ecu.comms.query.InitializationAttempt();
+                final int selected = operation;
+                AtomicReference<Throwable> failure = new AtomicReference<>();
+                Thread callback = new Thread(() -> {
+                    try {
+                        if (selected == 0) ecu.callback(syntheticEcu("2222222222"), attempt);
+                        else if (selected == 1) dime.callback(null, true, attempt);
+                        else assertThrows(IllegalStateException.class, () -> dime.getDmInit(attempt));
+                    } catch (Throwable error) { failure.set(error); }
+                }, "synthetic callback waiting for desktop owner");
+                callback.setDaemon(true);
+                synchronized (fixture.runtime) {
+                    callback.start();
+                    long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
+                    while (callback.getState() != Thread.State.BLOCKED && System.nanoTime() < deadline) Thread.yield();
+                    assertEquals(Thread.State.BLOCKED, callback.getState());
+                    attempt.close();
+                }
+                callback.join(2000);
+                assertFalse(callback.isAlive());
+                assertNull(failure.get());
+                assertSame(original, fixture.runtime.getEcuInit());
+                assertSame(metadata, dime.getDmInit());
+                assertEquals(DimeModState.ACTIVE, PlatformContext.getInstance().getDimeModState());
+            }
+        }
+    }
+
+    @Test void activeAttemptPreservesCacheAndClosedOwnerRejectsScopedLookup() throws Exception {
+        try (Fixture fixture = new Fixture(); DimeStateSnapshot ignored = new DimeStateSnapshot();
+                var attempt = new com.romraider.logger.ecu.comms.query.InitializationAttempt()) {
+            EcuInitCallback ecu = attempt.bind(ecuCallback(fixture.runtime));
+            DmInitCallback dime = attempt.bind(dmCallback(fixture.runtime));
+            ecu.callback(syntheticEcu("1111111111"));
+            DmInit metadata = syntheticDime();
+            dime.callback(metadata, true);
+            ecu.callback(syntheticEcu("1111111111"));
+            assertSame(metadata, dime.getDmInit());
+            assertFalse(dime.needToInit());
+            fixture.runtime.close();
+            assertThrows(IllegalStateException.class, dime::getDmInit);
+        }
+    }
+
     private static EcuInitCallback ecuCallback(LoggerDesktopRuntime runtime) throws Exception {
         return field(field(field(runtime, "controller"), "queryManager"), "ecuInitCallback");
     }

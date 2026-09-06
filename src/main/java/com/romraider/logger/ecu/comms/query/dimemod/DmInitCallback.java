@@ -19,7 +19,7 @@
 
 package com.romraider.logger.ecu.comms.query.dimemod;
 
-import com.romraider.logger.ecu.comms.query.EcuInit;
+import com.romraider.logger.ecu.comms.query.InitializationAttempt;
 
 public interface DmInitCallback {
 
@@ -28,5 +28,20 @@ public interface DmInitCallback {
     boolean needToInit();
 
     DmInit getDmInit();
+
+    /** Owners with a state lock must recheck the token while holding that lock. */
+    default void callback(DmInit dmInit, boolean forceUpdate, InitializationAttempt attempt) {
+        if (attempt.isActive()) callback(dmInit, forceUpdate);
+    }
+
+    default boolean needToInit(InitializationAttempt attempt) {
+        attempt.requireActive();
+        return needToInit();
+    }
+
+    default DmInit getDmInit(InitializationAttempt attempt) {
+        attempt.requireActive();
+        return getDmInit();
+    }
 
 }

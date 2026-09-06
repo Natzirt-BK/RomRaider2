@@ -37,6 +37,8 @@ import java.util.Map;
 import java.util.ResourceBundle;
 import java.util.Set;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
+import java.util.concurrent.atomic.AtomicReference;
 import com.romraider.logger.ecu.comms.query.dimemod.DmInitCallback;
 import org.apache.log4j.Logger;
 
@@ -45,6 +47,7 @@ import com.romraider.io.j2534.api.J2534Library;
 import com.romraider.io.j2534.api.J2534LibraryLocator;
 import com.romraider.logger.ecu.comms.io.connection.LoggerConnection;
 import com.romraider.logger.ecu.comms.query.EcuInitCallback;
+import com.romraider.logger.ecu.comms.query.InitializationAttempt;
 import com.romraider.logger.ecu.comms.query.EcuQuery;
 import com.romraider.logger.ecu.comms.query.EcuQueryImpl;
 import com.romraider.logger.ecu.comms.query.ExternalQuery;
@@ -82,6 +85,8 @@ public final class QueryManagerImpl implements QueryManager {
     private final DmInitCallback dmInitCallback;
     private final MessageListener messageListener;
     private final Consumer<Runnable> notificationExecutor;
+    private final Supplier<LoggerConnection> connectionFactory;
+    private final AtomicReference<InitializationAttempt> activeInitialization = new AtomicReference<>();
     private FileLoggerControllerSwitchMonitor monitor;
     private EcuQuery fileLoggerQuery;
     private Thread queryManagerThread;
@@ -106,14 +111,26 @@ public final class QueryManagerImpl implements QueryManager {
             MessageListener messageListener,
             Consumer<Runnable> notificationExecutor,
             DataUpdateHandler... dataUpdateHandlers) {
+        this(ecuInitCallback, dmInitCallback, messageListener, notificationExecutor,
+                () -> getConnection(settings.getLoggerProtocol(), settings.getLoggerPort(),
+                        settings.getLoggerConnectionProperties()), dataUpdateHandlers);
+    }
+
+    /** Synthetic connection seam; constructing a manager never starts its worker. */
+    QueryManagerImpl(EcuInitCallback ecuInitCallback,
+            DmInitCallback dmInitCallback, MessageListener messageListener,
+            Consumer<Runnable> notificationExecutor, Supplier<LoggerConnection> connectionFactory,
+            DataUpdateHandler... dataUpdateHandlers) {
         checkNotNull(ecuInitCallback,
                 messageListener,
                 notificationExecutor,
+                connectionFactory,
                 dataUpdateHandlers);
         this.ecuInitCallback = ecuInitCallback;
         this.dmInitCallback = dmInitCallback;
         this.messageListener = messageListener;
         this.notificationExecutor = notificationExecutor;
+        this.connectionFactory = connectionFactory;
         this.updateHandlers = dataUpdateHandlers;
         stop = true;
     }
@@ -207,6 +224,7 @@ public final class QueryManagerImpl implements QueryManager {
                     notifyReading();
                     runLogger(null);
                 } else {
+                    if (stop) break;
                     reconnecting = true;
                     notifyReconnecting();
                     messageListener.reportMessage(rb.getString("RECONNECTING"));
@@ -219,6 +237,7 @@ public final class QueryManagerImpl implements QueryManager {
         } finally {
             started = false;
             stop = true;
+            cancelInitialization();
             notifyStopped();
             messageListener.reportMessage(rb.getString("DISCONNECTED"));
             if (LOGGER.isDebugEnabled())
@@ -268,45 +287,66 @@ public final class QueryManagerImpl implements QueryManager {
         return false;
     }
 
-    private boolean initConnection(final Module module, final String name) {
+    boolean initConnection(final Module module, final String name) {
         LoggerConnection connection = null;
         boolean rv = false;
+        InitializationAttempt attempt = new InitializationAttempt();
+        InitializationAttempt previous = activeInitialization.getAndSet(attempt);
+        if (previous != null) previous.close();
+        // Covers stop racing with installation of the new token.
+        if (Thread.currentThread().isInterrupted()) stop = true;
+        if (stop) attempt.close();
         try {
+            attempt.requireActive();
             messageListener.reportMessage(MessageFormat.format(
                     rb.getString("SENDINIT"), module.getName(), name));
-            connection = getConnection(settings.getLoggerProtocol(),
-                    settings.getLoggerPort(),
-                    settings.getLoggerConnectionProperties());
-            connection.ecuInit(ecuInitCallback, module);
+            connection = connectionFactory.get();
+            attempt.requireActive();
+            connection.ecuInit(attempt.bind(ecuInitCallback), module);
+            attempt.requireActive();
             messageListener.reportMessage(MessageFormat.format(
                     rb.getString("INITDONE"), module.getName(), name));
             try {
                 if (dmInitCallback != null) {
                     messageListener.reportMessage(MessageFormat.format(
                             rb.getString("SENDDMINIT"), module.getName(), name));
-                    connection.dmInit(dmInitCallback, module);
+                    attempt.requireActive();
+                    connection.dmInit(attempt.bind(dmInitCallback), module);
+                    attempt.requireActive();
                     messageListener.reportMessage(MessageFormat.format(
                             rb.getString("INITDMDONE"), module.getName(), name));
                 }
             }
+            catch (InterruptedException interrupted) {
+                stop = true;
+                attempt.close();
+                Thread.currentThread().interrupt();
+                throw interrupted;
+            }
             catch (Exception e) {
+                if (!attempt.isActive()) throw e;
                 messageListener.reportMessage(MessageFormat.format(
                         rb.getString("INITDMFAIL"), module.getName()));
                 LOGGER.error("Error in DimeMod init: ", e);
             }
 
+            attempt.requireActive();
             rv = true;
         } catch (Exception e) {
-            messageListener.reportMessage(MessageFormat.format(
-                    rb.getString("INITFAIL"), module.getName()));
-            if (!initFailureReported) {
-                LOGGER.error("Error sending init: ", e);
-                initFailureReported = true;
-            } else if (LOGGER.isDebugEnabled()) {
-                LOGGER.debug("ECU init still unavailable: " + e.getMessage());
+            if (attempt.isActive() && !(e instanceof InterruptedException)) {
+                messageListener.reportMessage(MessageFormat.format(
+                        rb.getString("INITFAIL"), module.getName()));
+                if (!initFailureReported) {
+                    LOGGER.error("Error sending init: ", e);
+                    initFailureReported = true;
+                } else if (LOGGER.isDebugEnabled()) {
+                    LOGGER.debug("ECU init still unavailable: " + e.getMessage());
+                }
             }
         }
         finally {
+            attempt.close();
+            activeInitialization.compareAndSet(attempt, null);
             if (connection != null) connection.close();
         }
         return rv;
@@ -520,6 +560,12 @@ public final class QueryManagerImpl implements QueryManager {
     @Override
     public void stop() {
         stop = true;
+        cancelInitialization();
+    }
+
+    private void cancelInitialization() {
+        InitializationAttempt attempt = activeInitialization.get();
+        if (attempt != null) attempt.close();
     }
 
     private String buildQueryId(String callerId, LoggerData loggerData) {

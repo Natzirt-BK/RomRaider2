@@ -3,6 +3,7 @@ package com.romraider.logger.ecu;
 
 import com.romraider.logger.ecu.comms.query.EcuInit;
 import com.romraider.logger.ecu.comms.query.EcuInitCallback;
+import com.romraider.logger.ecu.comms.query.InitializationAttempt;
 import com.romraider.logger.ecu.comms.query.dimemod.DmInit;
 import com.romraider.logger.ecu.comms.query.dimemod.DmInitCallback;
 import java.util.Objects;
@@ -35,11 +36,30 @@ final class SwingLoggerInitialization {
     private final Consumer<Snapshot> listener;
     private Snapshot current = new Snapshot(null, null, false, 0);
     private boolean closed;
-    private final EcuInitCallback ecuCallback = this::acceptEcu;
+    private final EcuInitCallback ecuCallback = new EcuInitCallback() {
+        public void callback(EcuInit next) { acceptEcu(next); }
+        public void callback(EcuInit next, InitializationAttempt attempt) {
+            synchronized (SwingLoggerInitialization.this) {
+                if (attempt.isActive()) acceptEcu(next);
+            }
+        }
+    };
     private final DmInitCallback dimeCallback = new DmInitCallback() {
         public void callback(DmInit next, boolean forceUpdate) { acceptDime(next, forceUpdate); }
         public boolean needToInit() { return cacheForConnection() == null; }
         public DmInit getDmInit() { return cacheForConnection(); }
+        public void callback(DmInit next, boolean forceUpdate, InitializationAttempt attempt) {
+            synchronized (SwingLoggerInitialization.this) {
+                if (attempt.isActive()) acceptDime(next, forceUpdate);
+            }
+        }
+        public boolean needToInit(InitializationAttempt attempt) { return getDmInit(attempt) == null; }
+        public DmInit getDmInit(InitializationAttempt attempt) {
+            synchronized (SwingLoggerInitialization.this) {
+                attempt.requireActive();
+                return cacheForConnection();
+            }
+        }
     };
 
     SwingLoggerInitialization(Consumer<Runnable> uiExecutor,

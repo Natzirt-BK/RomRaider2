@@ -5,6 +5,7 @@ import com.romraider.io.connection.ConnectionManager;
 import com.romraider.logger.ecu.comms.io.protocol.LoggerProtocol;
 import com.romraider.logger.ecu.comms.manager.PollingState;
 import com.romraider.logger.ecu.comms.query.dimemod.DmInit;
+import com.romraider.logger.ecu.comms.query.InitializationAttempt;
 import com.romraider.logger.ecu.comms.query.dimemod.DmInitCallback;
 import com.romraider.logger.ecu.definition.Module;
 import com.romraider.logger.ecu.exception.InvalidResponseException;
@@ -176,6 +177,72 @@ public class SSMDmDiscoveryTest {
     }
 
     @Test
+    public void cancelledReplyCannotMutateTheCachedRuntimeBeforeCallbackRejection() throws Exception {
+        for (boolean can : new boolean[] {false, true}) for (int minor : new int[] {0, 3}) {
+            Fixture f = new Fixture(can);
+            f.runtimeOnly = true;
+            DmInit cached = new DmInit(discovery(minor));
+            int[] errors = new int[minor == 0 ? 1 : 8];
+            errors[0] = 1;
+            cached.updateRuntimeData(0, 1, errors, errors);
+            int channels = cached.getEcuParams().size();
+            Callback callback = new Callback(cached);
+            InitializationAttempt attempt = new InitializationAttempt();
+            f.onRuntimeRead = attempt::close;
+            f.connection.dmInit(attempt.bind(callback), f.module);
+            assertEquals(0, callback.calls);
+            assertSame(cached, callback.value);
+            assertArrayEquals(errors, cached.getRuntimeCurrentErrors());
+            assertArrayEquals(errors, cached.getRuntimeMemErrors());
+            assertEquals(1, cached.getRuntimeActiveInputs());
+            assertEquals(channels, cached.getEcuParams().size());
+            assertEquals(1, f.requests.size());
+            assertEquals(0, f.writes);
+        }
+    }
+
+    @Test
+    public void successfulCachedRefreshPublishesIndependentRuntimeState() throws Exception {
+        for (boolean can : new boolean[] {false, true}) for (int minor : new int[] {0, 3}) {
+            Fixture f = new Fixture(can);
+            f.runtimeOnly = true;
+            DmInit cached = new DmInit(discovery(minor));
+            int[] errors = new int[minor == 0 ? 1 : 8];
+            errors[0] = 1;
+            cached.updateRuntimeData(0, 1, errors, errors);
+            Callback callback = new Callback(cached);
+            try (InitializationAttempt attempt = new InitializationAttempt()) {
+                f.connection.dmInit(attempt.bind(callback), f.module);
+            }
+            assertEquals(1, callback.calls);
+            assertNotSame(cached, callback.value);
+            assertArrayEquals(cached.getDmInitBytes(), callback.value.getDmInitBytes());
+            assertArrayEquals(new int[errors.length], callback.value.getRuntimeCurrentErrors());
+            assertArrayEquals(new int[errors.length], callback.value.getRuntimeMemErrors());
+            assertArrayEquals(errors, cached.getRuntimeCurrentErrors());
+            assertEquals(1, cached.getRuntimeActiveInputs());
+            assertEquals(1, f.requests.size());
+            assertEquals(0, f.writes);
+        }
+    }
+
+    @Test
+    public void expiredAttemptCacheLookupCannotStartTheLegacyHandshake() throws Exception {
+        for (boolean can : new boolean[] {false, true}) {
+            Fixture f = new Fixture(can);
+            Callback callback = new Callback(null);
+            InitializationAttempt attempt = new InitializationAttempt();
+            DmInitCallback bound = attempt.bind(callback);
+            attempt.close();
+            try { f.connection.dmInit(bound, f.module); fail("Expired attempt initialized DimeMod"); }
+            catch (IllegalStateException expected) { }
+            assertTrue(f.requests.isEmpty());
+            assertEquals(0, f.writes);
+            assertEquals(0, callback.calls);
+        }
+    }
+
+    @Test
     public void runtimeOnlyRejectsMissingUnsupportedMetadataAndModuleBeforeIo() throws Exception {
         for (boolean can : new boolean[] {false, true}) {
             Fixture f = new Fixture(can);
@@ -332,6 +399,7 @@ public class SSMDmDiscoveryTest {
         final List<byte[]> requests = new ArrayList<>();
         byte[] block = new byte[256];
         byte[] runtimeData;
+        Runnable onRuntimeRead = () -> { };
         int readOffset, writes, runtimeReads, scalar, memoryLimit = 256;
         int startAddress = 0x1000, faultOnRequest = 1;
         boolean handshake, runtimeOnly;
@@ -371,6 +439,7 @@ public class SSMDmDiscoveryTest {
                     runtimeReads++;
                     assertTrue(requested == 14 || requested == 38);
                     data = runtimeData == null ? new byte[requested] : runtimeData.clone();
+                    onRuntimeRead.run();
                 } else {
                     assertEquals(startAddress + readOffset, target);
                     assertTrue(requested <= (can ? 32 : 96));

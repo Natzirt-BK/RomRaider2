@@ -105,6 +105,10 @@ public final class SSMLoggerConnection implements LoggerConnection {
             return;
         }
         DmInit dmInit = callback.getDmInit();
+        // A late reply must not mutate the owner's retained runtime state before
+        // its scoped callback has a chance to reject the expired attempt.
+        if (dmInit != null && dmInit.getMajorVer() == 2)
+            dmInit = new DmInit(dmInit.getDmInitBytes());
         byte resetState;
         if (dmInit == null) {
             byte[] request = protocol.getProtocol().constructReadAddressRequest(module, new byte[][]{new byte[]{0x00, 0x00, 0x60}});

@@ -39,6 +39,7 @@ import com.romraider.logger.ecu.comms.query.EcuInit;
 import com.romraider.logger.ecu.comms.query.EcuInitCallback;
 import com.romraider.logger.ecu.comms.query.dimemod.DmInit;
 import com.romraider.logger.ecu.comms.query.dimemod.DmInitCallback;
+import com.romraider.logger.ecu.comms.query.InitializationAttempt;
 import com.romraider.logger.ecu.definition.EcuDataConvertor;
 import com.romraider.logger.ecu.definition.EcuDataLoader;
 import com.romraider.logger.ecu.definition.EcuDataLoaderImpl;
@@ -125,6 +126,12 @@ public final class LoggerDesktopRuntime implements EcuRelatedMessageListener,
             public void callback(EcuInit next) {
                 handleEcuInit(next);
             }
+            @Override
+            public void callback(EcuInit next, InitializationAttempt attempt) {
+                synchronized (LoggerDesktopRuntime.this) {
+                    if (attempt.isActive()) handleEcuInit(next);
+                }
+            }
         };
         DmInitCallback dmCallback = new DmInitCallback() {
             @Override
@@ -140,6 +147,22 @@ public final class LoggerDesktopRuntime implements EcuRelatedMessageListener,
             @Override
             public DmInit getDmInit() {
                 return dmInit;
+            }
+            @Override
+            public void callback(DmInit next, boolean forceUpdate, InitializationAttempt attempt) {
+                synchronized (LoggerDesktopRuntime.this) {
+                    if (attempt.isActive()) handleDimeModInit(next, forceUpdate);
+                }
+            }
+            @Override
+            public boolean needToInit(InitializationAttempt attempt) { return getDmInit(attempt) == null; }
+            @Override
+            public DmInit getDmInit(InitializationAttempt attempt) {
+                synchronized (LoggerDesktopRuntime.this) {
+                    attempt.requireActive();
+                    if (closed) throw new IllegalStateException("Logger runtime is closed");
+                    return dmInit;
+                }
             }
         };
         controller = new LoggerControllerImpl(ecuCallback, dmCallback, this,

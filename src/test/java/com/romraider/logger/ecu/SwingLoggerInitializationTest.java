@@ -2,6 +2,7 @@
 package com.romraider.logger.ecu;
 
 import com.romraider.logger.ecu.comms.query.EcuInit;
+import com.romraider.logger.ecu.comms.query.InitializationAttempt;
 import com.romraider.logger.ecu.comms.query.dimemod.DmInit;
 import com.romraider.platform.DimeModState;
 import com.romraider.platform.PlatformContext;
@@ -19,6 +20,58 @@ import static org.junit.Assert.*;
 
 /** Production callback owner with controlled EDT delivery; no JFrame, controller or device. */
 public class SwingLoggerInitializationTest {
+    @Test(timeout = 10000)
+    public void expiredAttemptIsRecheckedAfterWaitingForTheOwnerLock() throws Exception {
+        for (int operation = 0; operation < 3; operation++) {
+            Fixture f = initialized();
+            EcuInit original = f.owner.getEcuInit();
+            DmInit metadata = f.owner.getDmInit();
+            InitializationAttempt attempt = new InitializationAttempt();
+            final int selected = operation;
+            AtomicReference<Throwable> failure = new AtomicReference<>();
+            Thread callback = new Thread(() -> {
+                try {
+                    if (selected == 0) f.owner.ecuCallback().callback(ecu("2222222222"), attempt);
+                    else if (selected == 1) f.owner.dimeCallback().callback(null, true, attempt);
+                    else {
+                        try { f.owner.dimeCallback().getDmInit(attempt); fail("Expired cache lookup succeeded"); }
+                        catch (IllegalStateException expected) { }
+                    }
+                } catch (Throwable error) { failure.set(error); }
+            }, "synthetic callback waiting for Swing owner");
+            callback.setDaemon(true);
+            synchronized (f.owner) {
+                callback.start();
+                long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
+                while (callback.getState() != Thread.State.BLOCKED && System.nanoTime() < deadline) Thread.yield();
+                assertEquals(Thread.State.BLOCKED, callback.getState());
+                attempt.close();
+            }
+            callback.join(2000);
+            assertFalse(callback.isAlive());
+            assertNull(failure.get());
+            assertSame(original, f.owner.getEcuInit());
+            assertSame(metadata, f.owner.getDmInit());
+            assertTrue(f.pending.isEmpty());
+        }
+    }
+
+    @Test
+    public void activeAttemptDeliversStateAndReusesTheExistingCache() throws Exception {
+        Fixture f = new Fixture();
+        try (InitializationAttempt attempt = new InitializationAttempt()) {
+            EcuInit identity = ecu("1111111111");
+            DmInit metadata = dime();
+            attempt.bind(f.owner.ecuCallback()).callback(identity);
+            attempt.bind(f.owner.dimeCallback()).callback(metadata, false);
+            assertSame(identity, f.owner.getEcuInit());
+            assertSame(metadata, attempt.bind(f.owner.dimeCallback()).getDmInit());
+            assertFalse(attempt.bind(f.owner.dimeCallback()).needToInit());
+        }
+        f.drain(); // Accepted state remains renderable after the transport attempt ends.
+        assertEquals(1, f.published.size());
+    }
+
     @Test
     public void dimeCacheIsVisibleBeforeUiDeliveryAndClearsImmediatelyForNewEcu() throws Exception {
         Fixture f = new Fixture();
