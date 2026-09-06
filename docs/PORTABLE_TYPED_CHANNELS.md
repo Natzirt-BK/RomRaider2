@@ -63,6 +63,8 @@ the ten-pulse observation. The other nineteen repetitions pass. This reopens
 the window-placement investigation; the earlier timing-only test change does
 not establish reliable native sizing. The retained 35 Compose results pass.
 This finding must not be hidden by reporting only the focused numeric run.
+The subsequent [window-placement audit](WINDOW_PLACEMENT_AUDIT.md) records the
+reproduction and production repair separately from this numeric checkpoint.
 
 ## Still missing for dynamic DimeMod parity
 

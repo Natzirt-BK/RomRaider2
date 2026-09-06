@@ -59,6 +59,12 @@ bounds at that point, keeps the same one-pixel boundary assertions, and includes
 geometry transitions in any failure. Experimental production workarounds were
 removed; no delayed resizing policy was added to the app.
 
+Follow-up: the later typed-channel audit reproduced the oversize state even
+after ten pulses, so the timing-only conclusion above did not hold. The
+[window-placement repair](WINDOW_PLACEMENT_AUDIT.md) now bounds the first native
+request and strengthens the first-show checks as well as retaining the settled
+boundary assertions.
+
 Desktop/package hosted checks and real-device acceptance remain separate from
 these local results. Physical phone power management, older Android fallback and
 vehicle logging acceptance remain supervised tasks.

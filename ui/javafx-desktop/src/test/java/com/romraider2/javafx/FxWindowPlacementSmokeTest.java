@@ -26,19 +26,23 @@ class FxWindowPlacementSmokeTest {
             stage.heightProperty().addListener((observable, before, after) -> transitions.append(" h=").append(after));
             Rectangle2D work = Screen.getPrimary().getVisualBounds();
             Rectangle2D[] visibleBounds = new Rectangle2D[1];
+            Rectangle2D[] firstBounds = new Rectangle2D[1];
             stage.setScene(new Scene(new StackPane(), work.getWidth() + 200, work.getHeight() + 200));
-            stage.setOnShown(event -> new javafx.animation.AnimationTimer() {
-                private int pulses;
-                @Override public void handle(long now) {
-                    // Inspect after native size acknowledgements, not a closed
-                    // window that disappeared in the same turn as WINDOW_SHOWN.
-                    if (++pulses < 10) return;
-                    visibleBounds[0] = new Rectangle2D(stage.getX(), stage.getY(), stage.getWidth(), stage.getHeight());
-                    transitions.append(" closing;");
-                    stop();
-                    stage.close();
-                }
-            }.start());
+            stage.setOnShown(event -> {
+                firstBounds[0] = new Rectangle2D(stage.getX(), stage.getY(), stage.getWidth(), stage.getHeight());
+                new javafx.animation.AnimationTimer() {
+                    private int pulses;
+                    @Override public void handle(long now) {
+                        // Inspect after native size acknowledgements, not a closed
+                        // window that disappeared in the same turn as WINDOW_SHOWN.
+                        if (++pulses < 10) return;
+                        visibleBounds[0] = new Rectangle2D(stage.getX(), stage.getY(), stage.getWidth(), stage.getHeight());
+                        transitions.append(" closing;");
+                        stop();
+                        stage.close();
+                    }
+                }.start();
+            });
             try {
                 FxWindowPlacement.showAndWait(stage);
                 assertTrue(visibleBounds[0] != null, "Window closed before native geometry was observed");
@@ -48,6 +52,7 @@ class FxWindowPlacementSmokeTest {
                 assertTrue(observed.getMinY() >= work.getMinY() - 1, geometry);
                 assertTrue(observed.getMaxX() <= work.getMaxX() + 1, geometry);
                 assertTrue(observed.getMaxY() <= work.getMaxY() + 1, geometry);
+                assertFits(firstBounds[0], work, "The first native request must already fit");
             } finally { stage.close(); }
         });
     }
@@ -84,5 +89,98 @@ class FxWindowPlacementSmokeTest {
                 stage.close();
             }
         });
+    }
+
+    @Test void ordinaryWindowIsBoundedBeforeShownHandlersRun() throws Exception {
+        FxTestRuntime.run(() -> {
+            Stage stage = new Stage();
+            Rectangle2D work = Screen.getPrimary().getVisualBounds();
+            Rectangle2D[] first = new Rectangle2D[1];
+            stage.setScene(new Scene(new StackPane(), work.getWidth() + 200, work.getHeight() + 200));
+            stage.setMinWidth(work.getWidth() + 100);
+            stage.setMinHeight(work.getHeight() + 100);
+            stage.setOnShown(event -> first[0] = bounds(stage));
+            try {
+                FxWindowPlacement.show(stage);
+                assertFits(first[0], work, "Oversized minimums must not reach the first native request");
+            } finally { stage.close(); }
+        });
+    }
+
+    @Test void inferredSceneSizeAndExplicitStageSizeAreBounded() throws Exception {
+        FxTestRuntime.run(() -> {
+            Rectangle2D work = Screen.getPrimary().getVisualBounds();
+            for (boolean explicit : new boolean[] {false, true}) {
+                Stage stage = new Stage();
+                StackPane root = new StackPane();
+                root.setPrefSize(work.getWidth() + 200, work.getHeight() + 200);
+                stage.setScene(new Scene(root));
+                if (explicit) { stage.setWidth(500); stage.setHeight(300); }
+                Rectangle2D[] first = new Rectangle2D[1];
+                stage.setOnShown(event -> first[0] = bounds(stage));
+                try {
+                    FxWindowPlacement.show(stage);
+                    assertFits(first[0], work, "Inferred content is bounded before showing");
+                    if (explicit) {
+                        assertEquals(500, first[0].getWidth());
+                        assertEquals(300, first[0].getHeight());
+                    }
+                } finally { stage.close(); }
+            }
+        });
+    }
+
+    @Test void modalUserPlacementRemainsAfterInitialFit() throws Exception {
+        FxTestRuntime.run(() -> {
+            Stage stage = new Stage();
+            Rectangle2D work = Screen.getPrimary().getVisualBounds();
+            Rectangle2D[] observed = new Rectangle2D[1];
+            Rectangle2D[] accepted = new Rectangle2D[1];
+            stage.setScene(new Scene(new StackPane(), work.getWidth() + 200, work.getHeight() + 200));
+            stage.setOnShown(event -> new javafx.animation.AnimationTimer() {
+                private int pulses;
+                @Override public void handle(long now) {
+                    if (++pulses == 10) {
+                        stage.setWidth(500); stage.setHeight(300);
+                    }
+                    if (pulses == 20) {
+                        // Separate shrink and move requests so a pending
+                        // screen-sized frame does not confound this check.
+                        stage.setX(work.getMinX() + 20); stage.setY(work.getMinY() + 30);
+                    }
+                    if (pulses < 30) return;
+                    if (pulses == 30) {
+                        // Some window managers ignore requested coordinates.
+                        // Retain the placement they actually acknowledged.
+                        accepted[0] = bounds(stage);
+                        FxWindowPlacement.show(stage);
+                    }
+                    if (pulses < 40) return;
+                    observed[0] = bounds(stage);
+                    stop(); stage.close();
+                }
+            }.start());
+            try {
+                FxWindowPlacement.showAndWait(stage);
+                assertTrue(accepted[0] != null, "Native user placement was observed");
+                assertEquals(500, accepted[0].getWidth());
+                assertEquals(300, accepted[0].getHeight());
+                assertEquals(accepted[0], observed[0],
+                        "Initial fitting must not later recenter or resize a user's window");
+                assertEquals(Double.MAX_VALUE, stage.getMaxWidth(), "No lasting maximum-width restriction");
+                assertEquals(Double.MAX_VALUE, stage.getMaxHeight(), "No lasting maximum-height restriction");
+            } finally { stage.close(); }
+        });
+    }
+
+    private static Rectangle2D bounds(Stage stage) {
+        return new Rectangle2D(stage.getX(), stage.getY(), stage.getWidth(), stage.getHeight());
+    }
+
+    private static void assertFits(Rectangle2D bounds, Rectangle2D work, String message) {
+        assertTrue(bounds != null, message + ": WINDOW_SHOWN was not observed");
+        assertTrue(bounds.getMinX() >= work.getMinX() - 1 && bounds.getMinY() >= work.getMinY() - 1
+                && bounds.getMaxX() <= work.getMaxX() + 1 && bounds.getMaxY() <= work.getMaxY() + 1,
+                message + ": " + bounds + " outside " + work);
     }
 }
