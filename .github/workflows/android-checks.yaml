@@ -48,9 +48,14 @@ jobs:
         run: |
           set -euo pipefail
           sudo chmod a+rw /dev/kvm
+          # SDK tools and emulator versions may choose different default AVD roots.
+          export ANDROID_USER_HOME="$RUNNER_TEMP/rr2-android-user"
+          export ANDROID_AVD_HOME="$ANDROID_USER_HOME/avd"
+          mkdir -p "$ANDROID_AVD_HOME"
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'system-images;android-36;default;x86_64'
           printf 'no\n' | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd \
             --name rr2-automation --package 'system-images;android-36;default;x86_64'
+          test -f "$ANDROID_AVD_HOME/rr2-automation.ini"
           nohup "$ANDROID_HOME/emulator/emulator" -avd rr2-automation -no-window -no-audio \
             -no-snapshot -no-boot-anim -gpu swiftshader_indirect -memory 2048 -cores 2 -port 5554 \
             > "$RUNNER_TEMP/emulator.log" 2>&1 &
