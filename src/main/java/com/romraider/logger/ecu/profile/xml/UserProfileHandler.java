@@ -46,6 +46,8 @@ public final class UserProfileHandler extends DefaultHandler {
     private Map<String, UserProfileItem> external;
     private String protocol;
     private boolean foundProfile;
+    private final java.util.List<String> selectedIds = new java.util.ArrayList<>();
+    private final java.util.Map<Integer, String> orderedIds = new java.util.TreeMap<>();
 
     public void startDocument() {
         params = new LinkedHashMap<String, UserProfileItem>();
@@ -53,6 +55,7 @@ public final class UserProfileHandler extends DefaultHandler {
         external = new LinkedHashMap<String, UserProfileItem>();
         protocol = null;
         foundProfile = false;
+        selectedIds.clear(); orderedIds.clear();
     }
 
     public void startElement(String uri, String localName, String qName, Attributes attributes) throws SAXException {
@@ -62,17 +65,34 @@ public final class UserProfileHandler extends DefaultHandler {
             foundProfile = true;
             protocol = attributes.getValue(ATTR_PROTOCOL);
         } else if (TAG_PARAMETER.equals(qName)) {
-            params.put(attributes.getValue(ATTR_ID), getUserProfileItem(attributes));
+            add(params, attributes);
         } else if (TAG_SWITCH.equals(qName)) {
-            switches.put(attributes.getValue(ATTR_ID), getUserProfileItem(attributes));
+            add(switches, attributes);
         } else if (TAG_EXTERNAL.equals(qName)) {
-            external.put(attributes.getValue(ATTR_ID), getUserProfileItem(attributes));
+            add(external, attributes);
         }
     }
 
     public UserProfile getUserProfile() {
         if (!foundProfile) throw new IllegalArgumentException("Logger profile is missing");
-        return new UserProfileImpl(params, switches, external, protocol);
+        if (!orderedIds.isEmpty() && (orderedIds.size() != selectedIds.size()
+                || !orderedIds.keySet().equals(new java.util.HashSet<>(java.util.stream.IntStream.range(0, selectedIds.size()).boxed().toList()))))
+            throw new IllegalArgumentException("Profile selection order is incomplete");
+        return new UserProfileImpl(params, switches, external, protocol,
+                orderedIds.isEmpty() ? selectedIds : new java.util.ArrayList<>(orderedIds.values()));
+    }
+
+    private void add(Map<String, UserProfileItem> group, Attributes attributes) throws SAXException {
+        String id = attributes.getValue(ATTR_ID);
+        UserProfileItem item = getUserProfileItem(attributes);
+        if (id == null || id.isEmpty() || group.put(id, item) != null) throw new SAXException("Missing or duplicate profile ID");
+        boolean selected = item.isLiveDataSelected() || item.isGraphSelected() || item.isDashSelected();
+        if (selected) selectedIds.add(id);
+        String order = attributes.getValue("rr2-order");
+        if (order != null) {
+            if (!selected || !order.matches("0|[1-9][0-9]{0,8}")) throw new SAXException("Invalid profile selection order");
+            if (orderedIds.put(Integer.parseInt(order), id) != null) throw new SAXException("Duplicate profile selection order");
+        }
     }
 
     private UserProfileItem getUserProfileItem(Attributes attributes) {

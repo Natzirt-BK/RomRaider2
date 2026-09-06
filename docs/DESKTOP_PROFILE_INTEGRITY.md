@@ -20,9 +20,10 @@ items are copied into immutable snapshots. Existing ISO-8859-1 profiles remain
 readable; no source file is migrated or rewritten merely by loading it.
 
 Switch conversion units are retained alongside parameter and external units.
-The parser preserves encounter order within each section. This does **not**
-establish a global parameter/switch/external order across desktop restart or
-change the existing desktop channel-selection/CSV-order machinery.
+The parser preserves encounter order within each section. The subsequent
+[desktop setup-transfer integration](PORTABLE_LOGGER_SETUP.md) also preserves
+cross-category selected order with an optional `rr2-order` attribute and restores
+that order in the replacement desktop Logger's CSV registrations.
 
 Missing protocol stays explicitly unspecified rather than being borrowed from
 global settings. Non-profile roots and nested profiles reject rather than
@@ -63,7 +64,7 @@ profile tests, 155 JavaFX tests (including the three cross-reader cases), 35
 Compose tests, shared-core checks and Linux JavaFX staging. Optional private
 corpus tests remain conditional; these checks do not access a vehicle.
 
-Desktop portable transfer still needs an identity tied to the definition bytes
-actually loaded, a reviewed all-or-nothing application of channel/unit choices,
-stale-session guards, and deliberate selection-order persistence. Those must be
-verified before desktop exchange controls are described as complete.
+Those repairs were prerequisites for the subsequent
+[desktop exchange controls](PORTABLE_LOGGER_SETUP.md), which add loaded-byte
+identity, reviewed replacements, stale-session guards and selection-order
+persistence. See that guide for current workflow and qualification limits.

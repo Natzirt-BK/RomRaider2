@@ -80,6 +80,7 @@ final class FxLoggerWindow {
     private final Stage stage = new Stage();
     private final Runnable closed;
     private final LoggerDesktopRuntime runtime;
+    private final FxLoggerSetupTransfer setupTransfer;
     private final LoggerWorkspaceContext context;
     private final BorderPane root = new BorderPane();
     private final SplitPane workspace = new SplitPane();
@@ -153,6 +154,7 @@ final class FxLoggerWindow {
                             FxDialogs.rootMessage(failure));
                 });
         runtime = new LoggerDesktopRuntime();
+        setupTransfer = new FxLoggerSetupTransfer(stage, runtime, status::setText);
         context = runtime.getWorkspaceContext();
         channelRail = new FxLoggerChannelPane(context.getChannels(),
                 (title, message) -> FxDialogs.confirm(stage, title, message, "Clear selection"),
@@ -245,6 +247,8 @@ final class FxLoggerWindow {
                 item("Open CSV log…", event -> openLog()),
                 new SeparatorMenuItem(),
                 item("Logger Setup…", event -> showSetup()),
+                item("Import channel setup…", event -> setupTransfer.showImport()),
+                item("Export channel setup…", event -> setupTransfer.showExport()),
                 item("Close", event -> close()));
         Menu logger = new Menu("Logger", null,
                 item("Connect", event -> context.getSession().connect()),
@@ -1151,6 +1155,7 @@ final class FxLoggerWindow {
         gaugeClock.stop();
         gaugeMotions.clear();
         logLoads.close();
+        setupTransfer.close();
         context.getChannels().removeListener(channelListener);
         context.getSession().removeStateListener(stateListener);
         context.getMessages().removeListener(messageListener);

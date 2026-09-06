@@ -164,3 +164,11 @@ setup-transfer prerequisite: UTF-8/escaped attributes, captured protocol and
 immutable items, preserved switch units, read-only loading, and synced atomic
 save/backup replacement. This does not complete desktop `.rr2logger` controls,
 global selection-order persistence or transactional live-runtime application.
+
+The subsequent [desktop setup-transfer integration](PORTABLE_LOGGER_SETUP.md)
+adds JavaFX File-menu import/export using the Android-compatible format, exact
+loaded-definition bytes, reviewed replacement and cross-category order restored
+into CSV registration. Stale/active-session rejection, rollback fault inhibition,
+atomic export and separate persistence-failure reporting are implemented. Query
+queues now use channel IDs and the last selection intent. Continue large-log
+review and remaining mobile/service work; no hardware gate is discharged.

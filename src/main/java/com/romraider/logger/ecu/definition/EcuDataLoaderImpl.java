@@ -86,6 +86,18 @@ public final class EcuDataLoaderImpl implements EcuDataLoader {
                                   String protocol,
                                   String fileLoggingControllerSwitchId,
                                   EcuInit ecuInit) {
+        loadConfig(loggerConfigFilePath, protocol, fileLoggingControllerSwitchId, ecuInit, null);
+    }
+
+    /** Parse caller-captured bytes, retaining the source URI without reopening it. */
+    public void loadConfigFromSnapshot(String sourcePath, byte[] snapshot, String protocol,
+            String fileLoggingControllerSwitchId, EcuInit ecuInit) {
+        checkNotNull(snapshot, "snapshot");
+        loadConfig(sourcePath, protocol, fileLoggingControllerSwitchId, ecuInit, snapshot.clone());
+    }
+
+    private void loadConfig(String loggerConfigFilePath, String protocol,
+            String fileLoggingControllerSwitchId, EcuInit ecuInit, byte[] snapshot) {
         checkNotNullOrEmpty(loggerConfigFilePath, "loggerConfigFilePath");
         checkNotNullOrEmpty(protocol, "protocol");
         checkNotNullOrEmpty(fileLoggingControllerSwitchId, "fileLoggingControllerSwitchId");
@@ -95,7 +107,9 @@ public final class EcuDataLoaderImpl implements EcuDataLoader {
         boolean valid = true;
         
         try {
-            InputStream inputStream = new BufferedInputStream(new FileInputStream(new File(loggerConfigFilePath)));
+            InputStream inputStream = snapshot == null
+                    ? new BufferedInputStream(new FileInputStream(new File(loggerConfigFilePath)))
+                    : new java.io.ByteArrayInputStream(snapshot);
             try {
                 LoggerDefinitionHandler handler = new LoggerDefinitionHandler(
                         protocol, fileLoggingControllerSwitchId, ecuInit);
@@ -148,8 +162,8 @@ public final class EcuDataLoaderImpl implements EcuDataLoader {
         // re-call the function with the new (available) protocol
         // because only the loaded protocol gets parsed fully
         if(!valid && isCurrentProtocolValid()) {
-        	loadConfigFromXml(loggerConfigFilePath,s.getLoggerProtocol(),
-        			fileLoggingControllerSwitchId, ecuInit);
+            loadConfig(loggerConfigFilePath, s.getLoggerProtocol(),
+                    fileLoggingControllerSwitchId, ecuInit, snapshot);
         }
     }
     

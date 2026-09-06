@@ -235,6 +235,17 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
         waitForIdleSync();
     }
     private void verifyXmlImportSecurity() throws Exception {
+        String orderedProfile = "<profile protocol='SSM'><parameters>"
+                + "<parameter id='P8' livedata='selected' units='rpm' rr2-order='2'/>"
+                + "<parameter id='P1' livedata='selected' units='V' rr2-order='0'/></parameters>"
+                + "<switches><switch id='S1' dash='selected' rr2-order='1'/></switches></profile>";
+        PortableLoggerProfile ordered = PortableLoggerProfileReader.read(new ByteArrayInputStream(orderedProfile.getBytes(StandardCharsets.UTF_8)));
+        check(ordered.selections().get(0).getId().equals("P1") && ordered.selections().get(1).getId().equals("S1")
+                && ordered.selections().get(2).getId().equals("P8"), "Android lost the desktop cross-category profile order");
+        try {
+            PortableLoggerProfileReader.read(new ByteArrayInputStream(orderedProfile.replace("rr2-order='2'", "rr2-order='0'").getBytes(StandardCharsets.UTF_8)));
+            throw new AssertionError("Android accepted duplicate profile order");
+        } catch (IOException expected) { }
         String ecu = "<roms><rom><romid><xmlid>TEST</xmlid><filesize>8</filesize>"
                 + "<internalidaddress>0</internalidaddress><internalidstring>TEST</internalidstring>"
                 + "</romid><table type='2D' name='Fixture' storageaddress='4' storagetype='uint8' sizey='1'>"

@@ -141,6 +141,7 @@ public final class QueryManagerImpl implements QueryManager {
 
         //FIXME: This is a hack!!
         String queryId = buildQueryId(callerId, loggerData);
+        removeList.remove(queryId);
         if (loggerData.getDataType() == EXTERNAL) {
             addList.put(queryId, new ExternalQueryImpl((ExternalData) loggerData));
         } else {
@@ -158,7 +159,9 @@ public final class QueryManagerImpl implements QueryManager {
         queryCounter = 1;
         queryStart = currentTimeMillis();
 
-        removeList.add(buildQueryId(callerId, loggerData));
+        String queryId = buildQueryId(callerId, loggerData);
+        addList.remove(queryId);
+        removeList.add(queryId);
         if (loggerData.getDataType() != EXTERNAL) {
             pollState.setNewQuery(true);
         }
@@ -520,7 +523,7 @@ public final class QueryManagerImpl implements QueryManager {
     }
 
     private String buildQueryId(String callerId, LoggerData loggerData) {
-        return callerId + "_" + loggerData.getName();
+        return callerId + "\0" + loggerData.getId();
     }
 
     private synchronized void updateQueryList() {

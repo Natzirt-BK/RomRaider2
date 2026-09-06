@@ -90,15 +90,16 @@ support independent CSV/range selection, count-aware means/differences, bounded
 second-log imports and gap-aware overlays. Continue injector transfer.
 Android [portable channel-setup export/import](PORTABLE_LOGGER_SETUP.md) is now
 implemented with a platform-neutral bounded codec, exact-definition matching,
-explicit review and stale-work guards. Desktop exchange controls remain pending;
-this does not yet establish desktop-to-phone setup transfer. Continue that
-integration and bounded large-log review.
+explicit review and stale-work guards. JavaFX desktop exchange controls now use
+the same format, exact loaded-definition snapshots, reviewed channel/unit
+replacement and cross-category order persistence. Continue bounded large-log
+review and the remaining mobile/service work.
 
 The [desktop profile persistence prerequisite](DESKTOP_PROFILE_INTEGRITY.md) now
 preserves Unicode, escaped attributes, captured protocol and immutable snapshots,
-and saves through atomic replacement. Continue desktop transfer with exact
-loaded-definition identity, transactional selection changes and explicit order
-persistence; these controls are not implemented by the persistence repair alone.
+and saves through atomic replacement. The desktop transfer integration builds
+on those repairs, with explicit rollback/persistence failure handling; neither
+feature establishes hardware qualification or production ECU writes.
 
 Background recording still needs its own Android
 service/USB/notification and failure-recovery design; switching to GAUGES is not

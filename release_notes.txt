@@ -8,14 +8,18 @@ https://github.com/Natzirt-BK/RomRaider2/releases/latest
 What changed for 1.1.3
 ---------------------
 
+- JavaFX desktop Logger adds Android-compatible channel-setup import/export.
+  Transfers use exact loaded-definition bytes, reviewed replacements, idle/stale
+  guards and explicit rollback/persistence-failure reporting. XML recovery
+  profiles preserve cross-category selected order; pending polling changes use
+  stable channel IDs and the last selection intent. No connection starts on import.
 - Desktop XML profiles preserve Unicode and escaped attributes, captured protocol,
   immutable selections and switch units. Saves/backups use synced atomic
-  replacement; loading never rewrites the source. This prepares desktop setup
-  transfer but does not yet add its exchange controls or global order persistence.
+  replacement; loading never rewrites the source.
 - Android adds reviewed channel-setup import/export using a bounded shared
   format. Protocol, ordered IDs/units and an exact definition fingerprint transfer
   without ROMs, definition contents, recordings or connection state. Failed/stale
-  imports retain the current selection. Desktop exchange controls remain pending.
+  imports retain the current selection.
 - Run comparison aligns independent CSV ranges in explicit common X bins.
   Counts, qualified means, B-minus-A differences and gap-aware plots distinguish
   missing/low-count coverage. B imports are bounded, local to the comparison tab,

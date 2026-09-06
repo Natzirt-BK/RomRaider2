@@ -107,6 +107,10 @@ public final class LoggerDesktopRuntime implements EcuRelatedMessageListener,
     private volatile EcuInit ecuInit;
     private volatile DmInit dmInit;
     private volatile boolean closed;
+    private LoggerDefinitionSource definitionSource;
+    private String loadedProtocol = "";
+    private long channelRevision;
+    private boolean setupRecoveryRequired;
 
     public LoggerDesktopRuntime() {
         settings = SettingsManager.getSettings();
@@ -147,7 +151,7 @@ public final class LoggerDesktopRuntime implements EcuRelatedMessageListener,
                 }));
         fileHandler.addListener(liveData);
         session = new LoggerSessionService(liveData,
-                controller::start, controller::stop,
+                this::startController, controller::stop,
                 fileHandler::start, fileHandler::stop,
                 failure -> reportError("Logger command failed", failure));
         channels = new LoggerChannelService(this::setSelected,
@@ -168,6 +172,90 @@ public final class LoggerDesktopRuntime implements EcuRelatedMessageListener,
 
     public Settings getSettings() {
         return settings;
+    }
+
+    private synchronized void startController() {
+        if (setupRecoveryRequired) throw new IllegalStateException("Close and reopen the Logger after the failed setup rollback");
+        if (!closed) controller.start();
+    }
+
+    public synchronized LoggerSetupSnapshot captureChannelSetup() {
+        requireSetupTransferIdle();
+        if (definitionSource == null || isNullOrEmpty(settings.getLoggerDefinitionFilePath()) || !loadedProtocol.equals(settings.getLoggerProtocol())
+                || !definitionSource.path.equals(new File(settings.getLoggerDefinitionFilePath()).toPath().toAbsolutePath().normalize().toString()))
+            throw new IllegalStateException("Load a logger definition before transferring a setup");
+        Map<String, LoggerChannel> catalog = new LinkedHashMap<>();
+        for (LoggerChannel channel : channels.getChannels()) catalog.put(channel.getParameterId(), channel);
+        List<LoggerChannel> selected = new ArrayList<>();
+        for (String id : selectedIds) selected.add(catalog.get(id));
+        return new LoggerSetupSnapshot(this, channelRevision, definitionSource, loadedProtocol, selected);
+    }
+
+    public synchronized void requireCurrentChannelSetup(LoggerSetupSnapshot snapshot) {
+        requireSetupTransferIdle();
+        if (snapshot == null || snapshot.owner != this || snapshot.revision != channelRevision
+                || snapshot.source != definitionSource || !snapshot.protocol().equals(settings.getLoggerProtocol())
+                || isNullOrEmpty(settings.getLoggerDefinitionFilePath())
+                || !definitionSource.path.equals(new File(settings.getLoggerDefinitionFilePath()).toPath().toAbsolutePath().normalize().toString()))
+            throw new IllegalStateException("Logger setup changed. Start the transfer again");
+    }
+
+    private void requireSetupTransferIdle() {
+        if (closed || setupRecoveryRequired || controller.isStarted() || session.getState() != com.romraider.logger.api.LoggerSessionState.STOPPED
+                || session.isCommandPending())
+            throw new IllegalStateException("Disconnect the Logger and wait for pending commands before transferring a setup");
+    }
+
+    /** Validates the entire ordered replacement before touching any registrations. */
+    public synchronized boolean applyChannelSetup(LoggerSetupSnapshot snapshot, Map<String, String> orderedUnits) {
+        requireCurrentChannelSetup(snapshot);
+        if (orderedUnits == null || orderedUnits.size() > 256) throw new IllegalArgumentException("Setup must contain at most 256 channels");
+        Map<String, EcuDataConvertor> requested = new LinkedHashMap<>();
+        for (Map.Entry<String, String> entry : orderedUnits.entrySet()) {
+            LoggerData data = dataById.get(entry.getKey());
+            if (data == null || data instanceof ExternalData || entry.getValue() == null)
+                throw new IllegalArgumentException("Setup channel is missing or external: " + entry.getKey());
+            EcuDataConvertor exact = null; int matches = 0;
+            for (EcuDataConvertor conversion : data.getConvertors()) {
+                if (entry.getValue().equalsIgnoreCase(conversion.getUnits())) matches++;
+                if (entry.getValue().equals(conversion.getUnits())) exact = conversion;
+            }
+            if (exact == null || matches != 1) throw new IllegalArgumentException("Setup units are missing or ambiguous: " + entry.getKey());
+            requested.put(entry.getKey(), exact);
+        }
+        List<String> before = new ArrayList<>(selectedIds);
+        Map<String, EcuDataConvertor> previousUnits = new LinkedHashMap<>();
+        for (String id : requested.keySet()) previousUnits.put(id, dataById.get(id).getSelectedConvertor());
+        try {
+            for (String id : before) select(id, false);
+            for (Map.Entry<String, EcuDataConvertor> entry : requested.entrySet())
+                dataById.get(entry.getKey()).selectConvertor(entry.getValue());
+            for (String id : requested.keySet()) select(id, true);
+        } catch (RuntimeException failure) {
+            // Never report partial application as success. If backend restoration
+            // itself fails, inhibit connection until the runtime is recreated.
+            try {
+                for (String id : new ArrayList<>(selectedIds)) select(id, false);
+                for (Map.Entry<String, EcuDataConvertor> entry : previousUnits.entrySet())
+                    dataById.get(entry.getKey()).selectConvertor(entry.getValue());
+                for (String id : before) select(id, true);
+            } catch (RuntimeException rollback) {
+                setupRecoveryRequired = true;
+                failure.addSuppressed(rollback);
+            }
+            publishChannels();
+            throw new IllegalStateException(setupRecoveryRequired
+                    ? "Setup restoration failed. Close and reopen the Logger before connecting"
+                    : "Setup was not applied; previous channel selection and units restored", failure);
+        }
+        publishChannels();
+        if (!backupCurrentProfile()) return false;
+        settings.setLoggerProfileFilePath(LoggerProfileStorage.backupPath(SettingsManager.getSettingsDirectory()).toString());
+        try { SettingsManager.save(settings); return true; }
+        catch (RuntimeException failure) {
+            LOGGER.warn("Channel setup applied, but recovery-profile preference could not be saved", failure);
+            return false;
+        }
     }
 
     public synchronized List<LoggerExternalSensor> getExternalSensors() {
@@ -364,6 +452,9 @@ public final class LoggerDesktopRuntime implements EcuRelatedMessageListener,
 
     private synchronized void reloadDefinitionAndChannels(boolean startup) {
         if (closed) return;
+        String previousProtocol = loadedProtocol;
+        definitionSource = null;
+        loadedProtocol = "";
         Set<String> restore = new LinkedHashSet<String>(selectedIds);
         clearRegistrations();
 
@@ -377,8 +468,9 @@ public final class LoggerDesktopRuntime implements EcuRelatedMessageListener,
                     + "are unavailable");
         } else {
             try {
-                EcuDataLoader loader = new EcuDataLoaderImpl();
-                loader.loadConfigFromXml(definitionPath,
+                LoggerDefinitionSource source = LoggerDefinitionSource.read(definitionPath);
+                EcuDataLoaderImpl loader = new EcuDataLoaderImpl();
+                loader.loadConfigFromSnapshot(source.path, source.bytes(),
                         settings.getLoggerProtocol(),
                         settings.getFileLoggingControllerSwitchId(), ecuInit);
                 parameters.addAll(loader.getEcuParameters());
@@ -389,11 +481,13 @@ public final class LoggerDesktopRuntime implements EcuRelatedMessageListener,
                         loader.getConnectionProperties());
                 configureDestination(loader);
                 installFileLoggingSwitch(loader.getFileLoggingControllerSwitch());
+                definitionSource = source;
+                loadedProtocol = settings.getLoggerProtocol();
                 LOGGER.info("Loaded Logger protocol "
                         + settings.getLoggerProtocol() + ": "
                         + parameters.size() + " parameters, "
                         + switches.size() + " switches");
-            } catch (ConfigurationException failure) {
+            } catch (ConfigurationException | IOException failure) {
                 settings.setDestinationTarget(null);
                 settings.setLogExternalsOnly(true);
                 reportError("Unable to load Logger definition", failure);
@@ -417,7 +511,14 @@ public final class LoggerDesktopRuntime implements EcuRelatedMessageListener,
         LoggerSearchCatalog.publish(parameters, diagnosticCodes);
 
         UserProfile profile = loadProfile();
+        if (!previousProtocol.isEmpty() && !previousProtocol.equalsIgnoreCase(loadedProtocol)) restore.clear();
+        if (profile != null && !isNullOrEmpty(profile.getProtocol())
+                && !profile.getProtocol().equalsIgnoreCase(settings.getLoggerProtocol())) {
+            LOGGER.warn("Saved Logger profile protocol does not match the current definition; selections were not imported");
+            profile = null;
+        }
         if (profile != null) {
+            if (startup) restore.addAll(profile.getSelectedIds());
             for (LoggerData data : dataById.values()) {
                 applyUnits(profile, data);
                 if (startup && (profile.isSelectedOnLiveDataTab(data)
@@ -551,10 +652,25 @@ public final class LoggerDesktopRuntime implements EcuRelatedMessageListener,
         if (data == null || selectedIds.contains(id) == selected) return;
         data.setSelected(selected);
         if (selected) {
-            liveDataHandler.registerData(data);
-            fileHandler.registerData(data);
-            controller.addLogger(CALLER_ID, data);
-            selectedIds.add(id);
+            boolean fileAttempted = false, queryAttempted = false;
+            try {
+                liveDataHandler.registerData(data);
+                fileAttempted = true;
+                fileHandler.registerData(data);
+                queryAttempted = true;
+                controller.addLogger(CALLER_ID, data);
+                selectedIds.add(id);
+            } catch (RuntimeException failure) {
+                try {
+                    if (queryAttempted) controller.removeLogger(CALLER_ID, data);
+                    if (fileAttempted) fileHandler.deregisterData(data);
+                    liveDataHandler.deregisterData(data);
+                    data.setSelected(false);
+                } catch (RuntimeException cleanup) {
+                    setupRecoveryRequired = true; failure.addSuppressed(cleanup);
+                }
+                throw failure;
+            }
         } else {
             controller.removeLogger(CALLER_ID, data);
             fileHandler.deregisterData(data);
@@ -571,6 +687,7 @@ public final class LoggerDesktopRuntime implements EcuRelatedMessageListener,
     }
 
     private void publishChannels() {
+        channelRevision++;
         List<LoggerChannel> catalog = new ArrayList<LoggerChannel>();
         for (LoggerData data : dataById.values()) {
             EcuDataConvertor convertor = data.getSelectedConvertor();
@@ -635,10 +752,12 @@ public final class LoggerDesktopRuntime implements EcuRelatedMessageListener,
             }
         }
         return new UserProfileImpl(parameters, switches, externals,
-                settings.getLoggerProtocol());
+                settings.getLoggerProtocol(), new ArrayList<>(selectedIds));
     }
 
-    private void backupCurrentProfile() {
+    private boolean backupCurrentProfile() {
+        // A rollback fault must not overwrite the last usable recovery profile.
+        if (setupRecoveryRequired) return false;
         Path target = LoggerProfileStorage.backupPath(
                 SettingsManager.getSettingsDirectory());
         try {
@@ -648,8 +767,10 @@ public final class LoggerDesktopRuntime implements EcuRelatedMessageListener,
             if (LOGGER.isDebugEnabled()) {
                 LOGGER.debug("Backup profile saved");
             }
+            return true;
         } catch (IOException | RuntimeException failure) {
             LOGGER.warn("Unable to save the current Logger profile", failure);
+            return false;
         }
     }
 

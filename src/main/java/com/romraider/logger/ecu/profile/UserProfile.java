@@ -37,4 +37,7 @@ public interface UserProfile {
     byte[] getBytes();
 
     String getProtocol();
+
+    /** Selected IDs in capture order; legacy implementations may omit ordering. */
+    default java.util.List<String> getSelectedIds() { return java.util.Collections.emptyList(); }
 }

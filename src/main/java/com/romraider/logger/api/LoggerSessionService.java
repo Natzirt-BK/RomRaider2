@@ -72,6 +72,8 @@ public final class LoggerSessionService implements LoggerLiveDataListener,
         return state;
     }
 
+    public boolean isCommandPending() { return commandPending.get(); }
+
     public void addStateListener(Consumer<LoggerSessionState> listener) {
         if (listener == null || listeners.contains(listener)) return;
         listeners.add(listener);

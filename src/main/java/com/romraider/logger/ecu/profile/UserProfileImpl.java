@@ -45,12 +45,20 @@ public final class UserProfileImpl implements UserProfile {
     private final Map<String, UserProfileItem> switches;
     private final Map<String, UserProfileItem> external;
     private final String protocol;
+    private final java.util.List<String> selectedIds;
+    private final Map<String, Integer> selectedPositions;
 
     public UserProfileImpl(
             Map<String, UserProfileItem> params,
             Map<String, UserProfileItem> switches,
             Map<String, UserProfileItem> external,
             String protocol) {
+        this(params, switches, external, protocol, null);
+    }
+
+    public UserProfileImpl(Map<String, UserProfileItem> params,
+            Map<String, UserProfileItem> switches, Map<String, UserProfileItem> external,
+            String protocol, java.util.List<String> selectedOrder) {
 
         checkNotNull(params, "params");
         checkNotNull(switches, "switches");
@@ -59,6 +67,26 @@ public final class UserProfileImpl implements UserProfile {
         this.switches = snapshot(switches);
         this.external = snapshot(external);
         this.protocol = protocol == null ? "" : protocol;
+        Map<String, UserProfileItem> all = new LinkedHashMap<>();
+        for (Map<String, UserProfileItem> group : java.util.List.of(this.params, this.switches, this.external)) {
+            group.forEach((id, item) -> {
+                if (all.put(id, item) != null) throw new IllegalArgumentException("Duplicate profile ID across categories: " + id);
+            });
+        }
+        java.util.List<String> selected = new java.util.ArrayList<>();
+        for (Map.Entry<String, UserProfileItem> entry : all.entrySet()) {
+            UserProfileItem item = entry.getValue();
+            if (item.isLiveDataSelected() || item.isGraphSelected() || item.isDashSelected()) selected.add(entry.getKey());
+        }
+        if (selectedOrder != null) {
+            if (selectedOrder.size() != selected.size() || !new java.util.HashSet<>(selectedOrder).equals(new java.util.HashSet<>(selected)))
+                throw new IllegalArgumentException("Profile selection order does not match selected IDs");
+            selected = new java.util.ArrayList<>(selectedOrder);
+        }
+        this.selectedIds = Collections.unmodifiableList(selected);
+        Map<String, Integer> positions = new LinkedHashMap<>();
+        for (int i = 0; i < selected.size(); i++) positions.put(selected.get(i), i);
+        this.selectedPositions = Collections.unmodifiableMap(positions);
     }
 
     public boolean contains(LoggerData loggerData) {
@@ -108,6 +136,8 @@ public final class UserProfileImpl implements UserProfile {
         return protocol;
     }
 
+    @Override public java.util.List<String> getSelectedIds() { return selectedIds; }
+
     private String buildXml() {
         StringBuilder builder = new StringBuilder();
         builder.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>").append(NEW_LINE);
@@ -142,6 +172,7 @@ public final class UserProfileImpl implements UserProfile {
             if (item.isLiveDataSelected()) builder.append(" livedata=\"selected\"");
             if (item.isGraphSelected()) builder.append(" graph=\"selected\"");
             if (item.isDashSelected()) builder.append(" dash=\"selected\"");
+            if (selectedPositions.containsKey(id)) builder.append(" rr2-order=\"").append(selectedPositions.get(id)).append("\"");
             if (showUnits && !isNullOrEmpty(item.getUnits()))
                 builder.append(" units=\"").append(attribute(item.getUnits())).append("\"");
             builder.append("/>").append(NEW_LINE);
