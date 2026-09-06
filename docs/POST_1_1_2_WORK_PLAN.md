@@ -96,8 +96,10 @@ replacement and cross-category order persistence. Normal JavaFX CSV imports now
 use [bounded, cancellable parsing](BOUNDED_CSV_IMPORT.md), including actual worker
 interruption and stale-delivery guards. JavaFX [range statistics](LOG_ANALYSIS_ARCHITECTURE.md#background-range-statistics--113-development-source)
 also run on a bounded, cancellable worker with explicit range status and stale
-result/error rejection. Continue large-log table setup/sorting, marker loading,
-legacy Swing handling and the remaining mobile/service work.
+result/error rejection. [Table responsiveness](LOG_TABLE_RESPONSIVENESS.md) adds
+allocation-free source indexing and cancellable stable sorting with direct
+sample lookup. Continue marker loading, legacy Swing handling and the remaining
+mobile/service work.
 
 The [desktop profile persistence prerequisite](DESKTOP_PROFILE_INTEGRITY.md) now
 preserves Unicode, escaped attributes, captured protocol and immutable snapshots,

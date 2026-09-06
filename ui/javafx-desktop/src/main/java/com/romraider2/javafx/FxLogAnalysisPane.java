@@ -59,6 +59,11 @@ final class FxLogAnalysisPane extends BorderPane implements AutoCloseable {
     private final LogCursorModel cursor = new LogCursorModel();
     private final LogPlaybackService playback = new LogPlaybackService(cursor);
     private final TableView<Integer> values = new TableView<>();
+    private final Label tableStatus = new Label();
+    private boolean installingRows;
+    private final FxLogTableTask tableTask = new FxLogTableTask(javafx.application.Platform::runLater,
+            rows -> { installRows(rows); tableStatus.setText("Sorted " + rows.size() + " samples · original sample identities preserved"); },
+            failure -> tableStatus.setText("Sort unavailable; current order retained: " + FxDialogs.rootMessage(failure)));
     private final TableView<ChannelStatistics> statistics = new TableView<>();
     private final Label statisticsStatus = new Label();
     private final FxLogStatisticsTask statisticsTask = new FxLogStatisticsTask(javafx.application.Platform::runLater,
@@ -106,7 +111,9 @@ final class FxLogAnalysisPane extends BorderPane implements AutoCloseable {
         yChannel = channelBox(false);
         clock.setCycleCount(Timeline.INDEFINITE);
         setTop(header());
-        setCenter(new TabPane(tab("Table", values),
+        tableStatus.setWrapText(true);
+        VBox tableWorkspace = new VBox(8, tableStatus, values); VBox.setVgrow(values, Priority.ALWAYS);
+        setCenter(new TabPane(tab("Table", tableWorkspace),
                 tab("Time Series", timelineWorkspace()),
                 tab("X/Y Plot", scatterWorkspace()),
                 tab("Statistics", statisticsTable()),
@@ -194,14 +201,13 @@ final class FxLogAnalysisPane extends BorderPane implements AutoCloseable {
         rangeStatus.setText(range.size() + (range.size() == 1 ? " sample selected" : " samples selected"));
         movingSlider = true;
         try {
-            List<Integer> rows = new ArrayList<>();
-            for (int row = range.getStartInclusive(); row < range.getEndExclusive(); row++) rows.add(row);
-            values.getItems().setAll(rows);
-            values.sort();
+            tableTask.cancel();
+            installRows(FxLogRows.sourceOrder(range));
             position.setMin(range.getStartInclusive());
             position.setMax(range.getEndExclusive() - 1);
             playback.setRange(range);
         } finally { movingSlider = false; }
+        sortRows();
         refreshStatistics();
         rebuildTimeline();
         rebuildScatter();
@@ -224,7 +230,8 @@ final class FxLogAnalysisPane extends BorderPane implements AutoCloseable {
         binned.setRange(selectedRange, true);
         comparison.setRange(selectedRange, true);
         statisticsTask.cancel(); statisticsStatus.setText("Apply range to calculate statistics.");
-        values.getItems().clear(); statistics.getItems().clear(); timelineChart.getData().clear(); scatterChart.getData().clear();
+        tableTask.cancel(); installRows(FxLogRows.empty()); tableStatus.setText("Apply range to refresh the table.");
+        statistics.getItems().clear(); timelineChart.getData().clear(); scatterChart.getData().clear();
         positionLabel.setText("Apply range to resume"); rangeStatus.setText("Range draft · apply to refresh views and playback");
     }
     void showRangeLink(boolean linked, boolean applied) {
@@ -325,12 +332,10 @@ final class FxLogAnalysisPane extends BorderPane implements AutoCloseable {
     }
 
     private void configureTable() {
-        List<Integer> rows = new ArrayList<>();
-        for (int row = 0; row < dataset.getRowCount(); row++) rows.add(row);
-        values.setItems(FXCollections.observableArrayList(rows));
-        addValueColumn("Sample", row -> row + 1, 85);
+        installRows(FxLogRows.sourceOrder(selectedRange));
+        addValueColumn("Sample", -1, row -> row + 1, 85);
         for (LogChannel channel : dataset.getChannels()) {
-            addValueColumn(channel.getLabel(), row -> dataset.getValue(
+            addValueColumn(channel.getLabel(), channel.getIndex(), row -> dataset.getValue(
                     row, channel.getIndex()), 145);
         }
         values.getSelectionModel().selectedItemProperty().addListener(
@@ -339,12 +344,47 @@ final class FxLogAnalysisPane extends BorderPane implements AutoCloseable {
                         playback.seek(newRow.intValue());
                     }
                 });
+        values.setSortPolicy(table -> {
+            if (!installingRows && !closed && !rangePending.get()) sortRows();
+            return true;
+        });
+        sortRows();
     }
 
-    private void addValueColumn(String title,
+    private void installRows(FxLogRows rows) {
+        boolean before = movingSlider;
+        movingSlider = true; installingRows = true;
+        try {
+            // TableView clears its sort order when the items object is replaced.
+            // Preserve the requested columns without launching a recursive sort.
+            List<TableColumn<Integer, ?>> sortOrder = new ArrayList<>(values.getSortOrder());
+            values.setItems(rows);
+            values.getSortOrder().setAll(sortOrder);
+            Integer selected = cursor.getSampleIndex();
+            if (rows.contains(selected)) { values.getSelectionModel().select(selected); values.scrollTo(selected); }
+            else values.getSelectionModel().clearSelection();
+        } finally { installingRows = false; movingSlider = before; }
+    }
+
+    private void sortRows() {
+        if (closed || rangePending.get()) return;
+        List<FxLogRows.SortKey> keys = new ArrayList<>();
+        for (TableColumn<Integer, ?> column : values.getSortOrder())
+            keys.add(new FxLogRows.SortKey((Integer) column.getUserData(), column.getSortType() == TableColumn.SortType.DESCENDING));
+        if (keys.isEmpty()) {
+            tableTask.cancel(); installRows(FxLogRows.sourceOrder(selectedRange));
+            tableStatus.setText(selectedRange.size() + " samples · original capture order");
+        } else {
+            tableStatus.setText("Sorting " + selectedRange.size() + " samples… Current order remains visible; playback is unchanged.");
+            tableTask.request(dataset, selectedRange, keys);
+        }
+    }
+
+    private void addValueColumn(String title, int channelIndex,
             java.util.function.Function<Integer, Number> function,
             double width) {
         TableColumn<Integer, Number> column = new TableColumn<>(title);
+        column.setUserData(channelIndex);
         column.setCellValueFactory(row -> new ReadOnlyObjectWrapper<>(
                 function.apply(row.getValue())));
         column.setComparator(java.util.Comparator.comparingDouble(Number::doubleValue));
@@ -563,6 +603,7 @@ final class FxLogAnalysisPane extends BorderPane implements AutoCloseable {
         if (rangeLink != null) rangeLink.close();
         closed = true;
         statisticsTask.close();
+        tableTask.close();
         mapTrace.close();
         binned.close();
         comparison.close();

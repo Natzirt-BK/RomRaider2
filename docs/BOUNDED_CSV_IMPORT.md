@@ -49,8 +49,9 @@ active recording, source CSV, definition or ROM.
 
 This bounds parsing; it does not make the complete analysis workspace constant
 memory. Subsequent [JavaFX range-statistics scheduling](LOG_ANALYSIS_ARCHITECTURE.md#background-range-statistics--113-development-source)
-now moves that calculation off the UI thread. Large-log table setup/sorting and
-marker-sidecar loading still need their own responsiveness work. Existing legacy parser overloads and the Swing analysis
+now moves that calculation off the UI thread. [Table indexing/sorting](LOG_TABLE_RESPONSIVENESS.md)
+now also avoids per-row UI allocation and sorts on a cancellable worker.
+Marker-sidecar loading still needs responsiveness work. Existing legacy parser overloads and the Swing analysis
 entry point remain unbounded; Android's separate parser is unchanged.
 
 Automated checks cover compatible files, rejected oversized fields and records,

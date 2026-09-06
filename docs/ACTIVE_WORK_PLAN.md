@@ -184,3 +184,9 @@ moves initial and applied-range calculations off the UI thread with bounded
 work, actual cancellation and late result/error rejection. Range drafts clear
 old results, and completed output identifies its sample range and finite/missing
 counts. Table setup/sorting, marker loading and legacy Swing work remain open.
+
+[Log-table responsiveness](LOG_TABLE_RESPONSIVENESS.md) now avoids a boxed entry
+for every source row and performs bounded stable sorting on a cancellable worker.
+Requested sort headers and original sample/cursor identities survive row-list
+replacement, range changes and source-order restoration. Marker loading and
+legacy Swing behavior remain open; no hardware qualification is implied.

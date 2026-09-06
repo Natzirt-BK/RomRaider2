@@ -81,9 +81,10 @@ completed sample range identified in the status label.
 The numeric service checks interruption during scanning and arithmetic. Its
 bounded primitive-array percentile sort is not interruptible mid-sort; the next
 request waits on the same worker, and the preceding result is still rejected.
-This change does not make all large-log work asynchronous: table row allocation
-and sorting, marker-sidecar reads, and legacy Swing range statistics remain
-separate follow-ups. No CSV, ROM, live logger or gauge state is modified.
+Subsequent [table responsiveness work](LOG_TABLE_RESPONSIVENESS.md) supplies
+allocation-free source-row indexing and cancellable background sorting.
+Marker-sidecar reads and legacy Swing range statistics remain separate
+follow-ups. No CSV, ROM, live logger or gauge state is modified.
 
 Regression checks exercise exact range/missing-value semantics, actual worker
 interruption, a burst of 100 superseded requests, queued/stale result and error

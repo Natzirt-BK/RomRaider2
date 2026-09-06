@@ -16,6 +16,9 @@ class FxLogStatisticsSmokeTest {
     /** Let normal UI delivery run while awaiting background work, without blocking JavaFX. */
     static void awaitStatistics(FxLogAnalysisPane pane) throws Exception {
         FxLogStatisticsTask task = field(pane, "statisticsTask"); Future<?> pending = task.pending();
+        awaitWork(pending);
+    }
+    static void awaitWork(Future<?> pending) {
         if (pending == null) return;
         Object key = new Object();
         Thread waiter = new Thread(() -> {

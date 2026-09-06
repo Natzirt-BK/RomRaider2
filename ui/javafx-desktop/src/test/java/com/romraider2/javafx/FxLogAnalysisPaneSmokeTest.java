@@ -33,6 +33,7 @@ class FxLogAnalysisPaneSmokeTest {
                 TableView<Integer> table = field(pane[0], "values");
                 table.getSortOrder().setAll(table.getColumns().get(2));
                 table.sort();
+                FxLogTableSmokeTest.awaitTable(pane[0]);
                 assertEquals(List.of(0, 2, 1, 3), table.getItems());
                 table.getSelectionModel().select(1);
                 LogCursorModel cursor = field(pane[0], "cursor");
@@ -44,6 +45,7 @@ class FxLogAnalysisPaneSmokeTest {
                 TableView<Integer> table = field(pane[0], "values");
                 assertEquals(Integer.valueOf(1), table.getSelectionModel().getSelectedItem());
                 pane[0].selectRange(LogRange.of(1, 3, 4));
+                FxLogTableSmokeTest.awaitTable(pane[0]);
                 assertEquals(List.of(2, 1), table.getItems());
                 TableView<ChannelStatistics> stats = field(pane[0], "statistics");
                 FxLogStatisticsSmokeTest.awaitStatistics(pane[0]);
@@ -58,6 +60,7 @@ class FxLogAnalysisPaneSmokeTest {
                 assertEquals(List.of(2, 1), table.getItems());
                 pane[0].selectRange(LogRange.all(new RomRaiderCsvLogParser().parse(
                         "synthetic.csv", new StringReader("Value\n1\n2\n3\n4\n"))));
+                FxLogTableSmokeTest.awaitTable(pane[0]);
                 assertEquals(List.of(0, 2, 1, 3), table.getItems());
             });
         } finally { FxTestRuntime.run(() -> { if (pane[0] != null) pane[0].close(); }); }

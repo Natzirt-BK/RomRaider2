@@ -121,6 +121,8 @@ bins, with count-aware overlays/differences and bounded second-log imports.
 size limits and cancellable background parsing.
 [Range statistics](docs/LOG_ANALYSIS_ARCHITECTURE.md#background-range-statistics--113-development-source)
 run on a bounded worker and reject results from superseded ranges.
+[Log tables](docs/LOG_TABLE_RESPONSIVENESS.md) retain original sample identities
+with lightweight source indexing and cancellable background sorting.
 [Desktop profile persistence](docs/DESKTOP_PROFILE_INTEGRITY.md) preserves Unicode
 units and captured protocol, with escaped XML and atomic save/backup replacement.
 These follow-ups are not in the published 1.1.2 downloads.
