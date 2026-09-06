@@ -224,3 +224,10 @@ the same recording, latest values, peaks and original receipt age. Notification
 Stop, one-use requests, non-sticky restart behavior and cleanup guards are in
 place. Continue service qualification and retained-recording recovery audits;
 public packages and physical acceptance remain separate gates.
+
+The retained-recording audit found that an unfinished final spool record could
+block the entire export. [Reviewed recovery](ANDROID_RECORDING_RECOVERY.md) now
+freezes and validates the completed prefix before destination writes, preserves
+the original, reports omitted tail bytes and invalidates stale Activity reviews.
+Continue larger-log mobile review and remaining platform/fork audits; provider
+and physical USB acceptance remain separate from synthetic qualification.

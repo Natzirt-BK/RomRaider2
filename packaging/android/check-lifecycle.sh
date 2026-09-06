@@ -51,6 +51,7 @@ run_phase corrupt
 run_phase verify-corrupt
 run_phase calculated-gauges
 run_phase channel-transfer
+run_phase recording-recovery
 run_phase background-service
 "$adb_command" -s "$serial" shell pm revoke com.romraider.mobile.automation android.permission.POST_NOTIFICATIONS
 run_phase background-denied
@@ -68,3 +69,4 @@ service_after_death=$("$adb_command" -s "$serial" shell dumpsys activity service
 run_phase background-after-death
 echo 'PASS: setup restoration, source removal, same-key upgrade, retained log export, gauge view/session/CSV continuity, calculated channels, reviewed channel transfer, clear selection, corrupt setup, and no automatic logging.'
 echo 'PASS: service-owned synthetic capture through Home/screen-off and recreation, notification/in-app Stop, stale requests, denied notifications, and retained spool prefix with no restart after process death.'
+echo 'PASS: retained recording validation, reviewed incomplete-tail recovery, source preservation, cancellation and stale Activity cleanup.'

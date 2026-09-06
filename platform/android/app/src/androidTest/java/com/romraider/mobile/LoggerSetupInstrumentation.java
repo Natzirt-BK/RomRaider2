@@ -62,6 +62,7 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
             else if (phase.equals("background-denied")) verifyBackgroundDenied();
             else if (phase.equals("background-process-death")) prepareBackgroundProcessDeath();
             else if (phase.equals("background-after-death")) verifyBackgroundAfterDeath();
+            else if (phase.equals("recording-recovery")) verifyRecordingRecovery();
             else if (phase.equals("gauge-gallery")) captureGaugeGallery();
             else if (phase.equals("verify")) verify(2);
             else if (phase.equals("clear")) {
@@ -887,9 +888,115 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
         byte[] retained = Files.readAllBytes(spool.toPath());
         check(retained.length >= prefix.length, "Process death removed a flushed recording prefix");
         for (int i = 0; i < prefix.length; i++) check(prefix[i] == retained[i], "Flushed recording prefix changed after process death");
+        try (com.romraider.portable.PortableRecordingRecovery.Prepared recovery =
+                com.romraider.portable.PortableRecordingRecovery.prepare(spool, getTargetContext().getCacheDir())) {
+            StringWriter csv = new StringWriter(); recovery.writeTo(csv);
+            check(csv.toString().startsWith("Time (msec),Engine Speed (rpm),Battery Voltage (V)\n")
+                    && recovery.values() >= 2, "Post-kill spool could not export its completed records");
+        }
         check(getTargetContext().getSystemService(android.app.NotificationManager.class).getActiveNotifications().length == 0,
                 "A dead recording's notification reappeared");
         System.out.println("PASS: abrupt process death retains the flushed spool prefix and restart creates no recording or USB session.");
+    }
+
+    private void verifyRecordingRecovery() throws Exception {
+        File folder = getTargetContext().getFilesDir();
+        File source = new File(folder, "automation-recovery-source.csv.part");
+        File destination = new File(folder, "automation-recovery-export.csv");
+        String prefix = "500,a,Engine Speed,750,rpm\n500,b,Battery Voltage,13.25,V\n"
+                + "600,a,Engine Speed,800,rpm\n600,b,Battery Voltage,13.24,V\n";
+        String csv = "Time (msec),Engine Speed (rpm),Battery Voltage (V)\n0,750,13.25\n100,800,13.24\n";
+        String partial = prefix + "700,c,\"unfinished";
+        String sentinel = "Existing destination must survive validation and cancellation";
+        try {
+            Files.write(source.toPath(), prefix.getBytes(StandardCharsets.UTF_8));
+            setField("archiveToExport", source);
+            invoke("onActivityResult", new Class<?>[] {int.class, int.class, Intent.class}, 18, Activity.RESULT_CANCELED, null);
+            check(field("archiveToExport") == null, "Cancelled document picker retained an export request");
+            setField("archiveToExport", source);
+            invoke("onActivityResult", new Class<?>[] {int.class, int.class, Intent.class}, 18, Activity.RESULT_OK,
+                    new Intent().setData(Uri.fromFile(destination)));
+            awaitArchiveExport(false);
+            check(csv.equals(new String(Files.readAllBytes(destination.toPath()), StandardCharsets.UTF_8)),
+                    "Clean retained export changed RomRaider CSV format");
+            Files.write(source.toPath(), partial.getBytes(StandardCharsets.UTF_8));
+            Files.write(destination.toPath(), sentinel.getBytes(StandardCharsets.UTF_8));
+            invoke("prepareArchivedExport", new Class<?>[] {File.class, Uri.class}, source, Uri.fromFile(destination));
+            awaitArchiveExport(true);
+            check(sentinel.equals(new String(Files.readAllBytes(destination.toPath()), StandardCharsets.UTF_8)),
+                    "Recovery opened destination before review");
+            clickDialogText("Cancel");
+            awaitArchiveExport(false);
+            check(sentinel.equals(new String(Files.readAllBytes(destination.toPath()), StandardCharsets.UTF_8)),
+                    "Cancelled recovery changed destination");
+            invoke("prepareArchivedExport", new Class<?>[] {File.class, Uri.class}, source, Uri.fromFile(destination));
+            awaitArchiveExport(true);
+            clickDialogText("Export recovered data");
+            awaitArchiveExport(false);
+            check(csv.equals(new String(Files.readAllBytes(destination.toPath()), StandardCharsets.UTF_8)),
+                    "Reviewed partial-tail export lost completed values");
+            Files.copy(destination.toPath(), new File(folder, "automation-recovered-export.csv").toPath(),
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            check(partial.equals(new String(Files.readAllBytes(source.toPath()), StandardCharsets.UTF_8)),
+                    "Recovery changed original source");
+            Files.write(destination.toPath(), sentinel.getBytes(StandardCharsets.UTF_8));
+            Files.write(source.toPath(), (prefix + "600,c,C,bad,V\n").getBytes(StandardCharsets.UTF_8));
+            invoke("prepareArchivedExport", new Class<?>[] {File.class, Uri.class}, source, Uri.fromFile(destination));
+            awaitArchiveExport(false);
+            check(sentinel.equals(new String(Files.readAllBytes(destination.toPath()), StandardCharsets.UTF_8)),
+                    "Corrupt completed row damaged destination");
+            check(field("pendingArchiveRecovery") == null, "Corrupt completed row produced a recovery review");
+            Files.write(source.toPath(), partial.getBytes(StandardCharsets.UTF_8));
+            invoke("prepareArchivedExport", new Class<?>[] {File.class, Uri.class}, source, Uri.fromFile(destination));
+            awaitArchiveExport(true);
+            com.romraider.portable.PortableRecordingRecovery.Prepared stale =
+                    (com.romraider.portable.PortableRecordingRecovery.Prepared) field("pendingArchiveRecovery");
+            android.app.AlertDialog staleDialog = (android.app.AlertDialog) field("archiveRecoveryDialog");
+            check(staleDialog != null && staleDialog.isShowing(), "Recovery review was not displayed");
+            verifyActivityRecreation();
+            check(!staleDialog.isShowing(), "Recreation leaked the old recovery review window");
+            check(field("pendingArchiveRecovery") == null && !(Boolean) field("archiveExportPending"),
+                    "Recreation retained stale recovery authority");
+            try { stale.writeTo(new StringWriter()); throw new AssertionError("Recreation leaked prepared export"); }
+            catch (IOException expected) { }
+            check(sentinel.equals(new String(Files.readAllBytes(destination.toPath()), StandardCharsets.UTF_8)),
+                    "Recreation accepted an unreviewed export");
+            ExecutorService oldWorker = (ExecutorService) field("workerExecutor");
+            CountDownLatch releasePreparation = new CountDownLatch(1);
+            Future<?> preparationGate = oldWorker.submit(() -> {
+                if (!releasePreparation.await(15, TimeUnit.SECONDS)) throw new AssertionError("Recovery preparation gate timed out");
+                return null;
+            });
+            try {
+                invoke("prepareArchivedExport", new Class<?>[] {File.class, Uri.class}, source, Uri.fromFile(destination));
+                Future<?> pending = (Future<?>) field("archivePreparation");
+                check(pending != null && !pending.isDone(), "Preparation was not queued behind the test gate");
+                verifyActivityRecreation();
+                check(pending.isCancelled(), "Destroyed Activity did not cancel queued recovery preparation");
+            } finally { releasePreparation.countDown(); }
+            preparationGate.get(10, TimeUnit.SECONDS);
+            check(oldWorker.awaitTermination(10, TimeUnit.SECONDS), "Old Activity worker did not finish cleanup");
+            check(sentinel.equals(new String(Files.readAllBytes(destination.toPath()), StandardCharsets.UTF_8)),
+                    "Late preparation wrote an unreviewed destination");
+            Files.write(source.toPath(), prefix.getBytes(StandardCharsets.UTF_8));
+            invoke("prepareArchivedExport", new Class<?>[] {File.class, Uri.class}, source, Uri.fromFile(folder));
+            awaitArchiveExport(false);
+            check(prefix.equals(new String(Files.readAllBytes(source.toPath()), StandardCharsets.UTF_8)),
+                    "Failed destination damaged recovery source");
+            verifyNotRunning();
+            System.out.println("PASS: native recovery validates before destination writes, requires tail review, preserves originals, and rejects stale Activity authority.");
+        } finally { Files.deleteIfExists(source.toPath()); Files.deleteIfExists(destination.toPath()); }
+    }
+
+    private void awaitArchiveExport(boolean review) throws Exception {
+        long deadline = SystemClock.uptimeMillis() + 15_000;
+        while (SystemClock.uptimeMillis() < deadline) {
+            if (review ? field("pendingArchiveRecovery") != null : !(Boolean) field("archiveExportPending")) {
+                waitForIdleSync(); return;
+            }
+            SystemClock.sleep(30);
+        }
+        throw new AssertionError("Recording export/review did not finish");
     }
 
     private void waitForServiceIdle(ReadOnlyLoggingService service) {

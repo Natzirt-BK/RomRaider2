@@ -120,6 +120,11 @@ wake-lock handling are implemented. Continue qualification and retained-recordin
 recovery audits. Gauges-only switching and background capture remain distinct
 features; real USB/background behavior is not established by synthetic tests.
 
+[Reviewed interrupted-recording recovery](ANDROID_RECORDING_RECOVERY.md) is now
+implemented in 1.1.3 source. Completed records are validated from a private
+snapshot before destination writes; omission of an unfinished tail requires
+review. Continue larger-log mobile import/review and provider acceptance audits.
+
 Forester/EVO/OpenPort in-car acceptance, phone document-provider behavior and
 physical Windows/Mac/Deck tests remain supervised tasks. No production ECU
 writing or live tuning is enabled by completion of this plan.

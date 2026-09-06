@@ -110,6 +110,9 @@ jobs:
             src/main/java/com/romraider/logger/analysis/RomRaiderCsvLogParser.java \
             packaging/android/DesktopCsvCompatibilityCheck.java
           java -cp "$RUNNER_TEMP/csv-check" DesktopCsvCompatibilityCheck "$RUNNER_TEMP/android-export.csv"
+          "$ANDROID_HOME/platform-tools/adb" -s emulator-5554 exec-out run-as com.romraider.mobile.automation \
+            cat files/automation-recovered-export.csv > "$RUNNER_TEMP/android-recovered-export.csv"
+          java -cp "$RUNNER_TEMP/csv-check" DesktopCsvCompatibilityCheck "$RUNNER_TEMP/android-recovered-export.csv"
       - name: Capture Android app and lifecycle diagnostics
         if: failure()
         run: |

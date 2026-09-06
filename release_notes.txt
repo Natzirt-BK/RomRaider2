@@ -8,6 +8,10 @@ https://github.com/Natzirt-BK/RomRaider2/releases/latest
 What changed for 1.1.3
 ---------------------
 
+- Android retained-recording export validates a private snapshot before writing
+  the destination. An unfinished last sample can be omitted only after explicit
+  review; corrupt completed records still fail. Originals remain unchanged,
+  and stale Activity reviews cannot authorize later writes.
 - Android live recording now belongs to a non-exported connected-device
   foreground service. Explicit start, notification Stop, same-recording screen
   reattachment, finite-only session peaks and original receipt age support

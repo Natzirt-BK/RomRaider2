@@ -37,6 +37,7 @@ public final class PortableCoreCheck {
         PortableOpenPortControlCheck.main(new String[0]);
         PortableMut2Check.main(new String[0]);
         PortableRomRaiderCsvCheck.main(new String[0]);
+        PortableRecordingRecoveryCheck.main(new String[0]);
         PortableXmlSecurityCheck.main(new String[0]);
         PortableInvalidReadingCheck.main(new String[0]);
         PortableGaugeCheck.main(new String[0]);

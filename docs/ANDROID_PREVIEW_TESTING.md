@@ -3,6 +3,9 @@
 Development-source follow-up: [calculated logger channels](CALCULATED_LOGGER_CHANNELS.md)
 are implemented for 1.1.3. The public-package instructions and limits below still
 describe 1.1.2 until the next verified release is published.
+Version 1.1.3 source also adds [reviewed interrupted-recording recovery](ANDROID_RECORDING_RECOVERY.md).
+It preserves the original spool and validates completed records before exporting;
+omitting an unfinished tail requires explicit review.
 
 This guide covers Android **1.1.2**. Check the
 [latest release](https://github.com/Natzirt-BK/RomRaider2/releases/latest)

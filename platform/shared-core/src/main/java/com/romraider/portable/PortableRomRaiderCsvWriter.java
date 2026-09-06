@@ -4,6 +4,7 @@ package com.romraider.portable;
 import java.io.*;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
+import java.nio.charset.CodingErrorAction;
 import java.util.*;
 
 /** Wide, relative-time CSV compatible with the desktop RomRaider logger.
@@ -107,10 +108,13 @@ public final class PortableRomRaiderCsvWriter {
         private final PushbackReader input;
         SpoolCursor(File file) throws IOException {
             input = new PushbackReader(new BufferedReader(new InputStreamReader(
-                    new FileInputStream(file), StandardCharsets.UTF_8)), 1);
+                    new FileInputStream(file), StandardCharsets.UTF_8.newDecoder()
+                            .onMalformedInput(CodingErrorAction.REPORT)
+                            .onUnmappableCharacter(CodingErrorAction.REPORT))), 1);
         }
         public void close() throws IOException { input.close(); }
         public PortableLogSample next() throws IOException {
+            if (Thread.currentThread().isInterrupted()) throw new InterruptedIOException("Recording export cancelled");
             int first = input.read();
             if (first == -1) return null;
             input.unread(first);

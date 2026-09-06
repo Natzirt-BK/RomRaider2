@@ -136,6 +136,9 @@ Android 1.1.3 source also adds [service-owned background recording](docs/ANDROID
 with explicit start, notification Stop and same-recording screen reattachment.
 Physical OpenPort/background acceptance is still pending; synthetic service tests
 do not qualify phone power management or vehicle compatibility.
+[Interrupted-recording recovery](docs/ANDROID_RECORDING_RECOVERY.md) validates a
+private snapshot before export and requires review before omitting an unfinished
+final record; the original recovery file remains unchanged.
 
 - Tabbed calibration workspace with favorites, recent and changed maps, ROM
   comparison, grouped undo/redo, notes, and crash recovery.

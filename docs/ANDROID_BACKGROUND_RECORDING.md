@@ -140,6 +140,9 @@ process kill expects a crashed instrumentation result after a readiness marker;
 the next launch verifies the flushed spool prefix remains and no recording,
 notification or USB session resumes. It does not certify a partially written
 last row or prove recovery of bytes that had not reached storage.
+The later [offline recovery path](ANDROID_RECORDING_RECOVERY.md) separately
+validates completed records and offers reviewed omission of an unfinished tail;
+the process-death fixture also checks conversion of its surviving records.
 
 The automation-only manifest substitutes `dataSync` for `connectedDevice` so a
 USB-free emulator can exercise Android's real foreground-service lifecycle. Only

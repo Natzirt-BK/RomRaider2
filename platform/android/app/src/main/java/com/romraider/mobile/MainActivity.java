@@ -46,7 +46,7 @@ import android.widget.Toast;
 import com.romraider.portable.PortableLogCsvReader;
 import com.romraider.portable.PortableLogSample;
 import com.romraider.portable.PortableLogSession;
-import com.romraider.portable.PortableRomRaiderCsvWriter;
+import com.romraider.portable.PortableRecordingRecovery;
 import com.romraider.portable.PortableRomDocument;
 import com.romraider.portable.editor.PortableEcuDefinition;
 import com.romraider.portable.editor.PortableEcuDefinitionReader;
@@ -214,6 +214,11 @@ public final class MainActivity extends Activity {
         }
     };
     private File archiveToExport;
+    private PortableRecordingRecovery.Prepared pendingArchiveRecovery;
+    private AlertDialog archiveRecoveryDialog;
+    private java.util.concurrent.Future<?> archivePreparation;
+    private int archiveExportGeneration;
+    private boolean archiveExportPending;
     private boolean loggerVisible;
     private volatile String usbState = "OpenPort not prepared.";
     private volatile PortableLoggerDefinition loggerDefinition;
@@ -317,6 +322,13 @@ public final class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        archiveExportGeneration++;
+        if (archivePreparation != null) archivePreparation.cancel(true);
+        if (archiveRecoveryDialog != null) {
+            archiveRecoveryDialog.dismiss();
+            archiveRecoveryDialog = null;
+        }
+        discardArchiveRecovery();
         setupTransferGeneration++;
         setupExportBytes = null;
         stopLoggerPreview(null);
@@ -960,6 +972,10 @@ public final class MainActivity extends Activity {
             setupExportBytes = null;
             return;
         }
+        if (requestCode == SAVE_ARCHIVED_LOG && (resultCode != RESULT_OK || data == null || data.getData() == null)) {
+            archiveToExport = null;
+            return;
+        }
         if (resultCode != RESULT_OK || data == null || data.getData() == null) return;
         Uri uri = data.getData();
         if (requestCode == OPEN_ROM) {
@@ -1032,17 +1048,88 @@ public final class MainActivity extends Activity {
         } else if (requestCode == SAVE_ARCHIVED_LOG && archiveToExport != null) {
             File source = archiveToExport;
             archiveToExport = null;
-            workerExecutor.execute(() -> {
-                try {
-                    try (OutputStreamWriter writer = openCsvWriter(uri)) {
-                        PortableRomRaiderCsvWriter.writeSpool(source, writer);
-                    }
-                    runOnUiThread(() -> notice("Recording exported; the recovery copy is retained."));
-                } catch (Exception ex) {
-                    fileFailure(ex, "The recording could not be exported.");
-                }
-            });
+            prepareArchivedExport(source, uri);
         }
+    }
+
+    private void prepareArchivedExport(File source, Uri destination) {
+        if (archiveExportPending || isDestroyed()) return;
+        archiveExportPending = true;
+        int generation = ++archiveExportGeneration;
+        notice("Validating the retained recording before export...");
+        archivePreparation = workerExecutor.submit(() -> {
+            try {
+                PortableRecordingRecovery.Prepared prepared = PortableRecordingRecovery.prepare(source, getCacheDir());
+                runOnUiThread(() -> {
+                    if (isDestroyed() || generation != archiveExportGeneration) { closeArchiveRecovery(prepared); return; }
+                    archivePreparation = null;
+                    pendingArchiveRecovery = prepared;
+                    if (prepared.omittedBytes() == 0) {
+                        writePreparedArchive(destination, prepared, generation);
+                        return;
+                    }
+                    archiveRecoveryDialog = new AlertDialog.Builder(this).setTitle("Review interrupted recording")
+                            .setMessage(prepared.values() + " complete sample records can be exported. "
+                                    + prepared.omittedBytes() + " bytes in the unfinished final record will be omitted.\n\n"
+                                    + "The original recovery file will not change. The last cycle may have missing channels; "
+                                    + "unwritten readings cannot be recovered. Export the validated data?")
+                            .setPositiveButton("Export recovered data", (dialog, which) ->
+                                    writePreparedArchive(destination, prepared, generation))
+                            .setNegativeButton("Cancel", null)
+                            .setOnDismissListener(dialog -> {
+                                if (archiveRecoveryDialog == dialog) archiveRecoveryDialog = null;
+                                if (pendingArchiveRecovery == prepared) {
+                                    discardArchiveRecovery(); archiveExportPending = false;
+                                }
+                            }).show();
+                });
+            } catch (Exception failure) {
+                runOnUiThread(() -> {
+                    if (isDestroyed() || generation != archiveExportGeneration) return;
+                    archivePreparation = null;
+                    archiveExportPending = false;
+                    notice("Recording was not exported: " + (failure.getMessage() == null
+                            ? "Recovery validation failed." : failure.getMessage())
+                            + " The original recovery file is unchanged.");
+                });
+            }
+        });
+    }
+
+    private void writePreparedArchive(Uri destination, PortableRecordingRecovery.Prepared prepared, int generation) {
+        if (isDestroyed() || generation != archiveExportGeneration || pendingArchiveRecovery != prepared) return;
+        pendingArchiveRecovery = null; // Accepted export owns the immutable copy through destination close.
+        workerExecutor.execute(() -> {
+            try (PortableRecordingRecovery.Prepared recovery = prepared;
+                 OutputStreamWriter writer = openCsvWriter(destination)) {
+                recovery.writeTo(writer);
+            } catch (Exception failure) {
+                runOnUiThread(() -> {
+                    if (isDestroyed() || generation != archiveExportGeneration) return;
+                    archiveExportPending = false;
+                    notice("Export did not finish; the destination may be incomplete. The original recovery file is unchanged.");
+                });
+                return;
+            }
+            runOnUiThread(() -> {
+                if (isDestroyed() || generation != archiveExportGeneration) return;
+                archiveExportPending = false;
+                notice(prepared.omittedBytes() == 0 ? "Recording exported; the recovery copy is retained."
+                        : "Recovered recording exported with the reviewed unfinished tail omitted. Original file retained.");
+            });
+        });
+    }
+
+    private void discardArchiveRecovery() {
+        PortableRecordingRecovery.Prepared prepared = pendingArchiveRecovery;
+        pendingArchiveRecovery = null;
+        if (prepared != null) closeArchiveRecovery(prepared);
+    }
+
+    private static void closeArchiveRecovery(PortableRecordingRecovery.Prepared prepared) {
+        // No writer owns this object here; close only unlinks its private temporary file.
+        try { prepared.close(); }
+        catch (java.io.IOException failure) { android.util.Log.w("RomRaider2", "Recovery temporary cleanup failed", failure); }
     }
 
     private void saveLogAsync(Uri uri, PortableLogSession session,
@@ -1650,6 +1737,10 @@ public final class MainActivity extends Activity {
     }
 
     private void chooseArchivedLog() {
+        if (archiveExportPending) {
+            notice("Finish the pending recording export first.");
+            return;
+        }
         if (isLiveActive()) {
             notice("Stop logging and wait for the recording to finish first.");
             return;
@@ -1667,6 +1758,10 @@ public final class MainActivity extends Activity {
         }
         new AlertDialog.Builder(this).setTitle("Export a retained recording")
                 .setItems(names, (dialog, which) -> {
+                    if (isLiveActive() || archiveExportPending) {
+                        notice("Stop logging and finish the pending export first.");
+                        return;
+                    }
                     archiveToExport = files[which];
                     Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
                     intent.addCategory(Intent.CATEGORY_OPENABLE);

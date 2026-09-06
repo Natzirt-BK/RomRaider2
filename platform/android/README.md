@@ -12,6 +12,9 @@ transfer and [service-owned background recording](../../docs/ANDROID_BACKGROUND_
 The foreground-only and calculated-channel limitations below describe public
 1.1.2, not that newer source. Background USB behavior still needs supervised
 physical-device qualification.
+Retained exports in 1.1.3 also provide
+[reviewed incomplete-tail recovery](../../docs/ANDROID_RECORDING_RECOVERY.md),
+without modifying original recordings.
 
 ## Features
 
