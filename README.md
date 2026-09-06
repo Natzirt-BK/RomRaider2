@@ -98,7 +98,8 @@ path without changing the vendor driver.
 Features below describe **1.1.2**. Consult the selected release's notes for its
 package verification and platform-specific limits.
 
-Development source is now **1.1.3**, adding reusable/linked
+Development source is now **1.1.3**, adding
+[Android channel-setup transfer](docs/PORTABLE_LOGGER_SETUP.md), reusable/linked
 [MAF/Injector analysis setups](docs/FUEL_LOG_ANALYSIS.md#reusable-setups-113-development-source),
 [curve review](docs/FUEL_CURVE_REVIEW.md), explicitly confirmed
 [offline MAF-table transfer](docs/REVIEWED_MAF_TRANSFER.md),

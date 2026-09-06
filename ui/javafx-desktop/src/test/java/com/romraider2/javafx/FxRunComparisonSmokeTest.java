@@ -152,10 +152,15 @@ class FxRunComparisonSmokeTest {
             var log = new FxLogAnalysisPane(null, data); Stage stage = new Stage();
             try {
                 FxRunComparisonPane pane = field(log, "comparison"); pane.installB(data); map(pane, data, data);
+                // Default font metrics differ between hosts; fitting without scrolling is valid.
+                // Deliberately enlarged text must overflow and remain usable in this window.
+                pane.setStyle("-fx-font-size: 20px;");
                 Scene scene = new Scene(log, 1000, 640); FxTheme.apply(stage, scene); stage.setScene(scene); stage.show();
                 TabPane views = (TabPane) log.getCenter(); views.getSelectionModel().select(views.getTabs().stream().filter(tab -> tab.getText().equals("Run comparison")).findFirst().orElseThrow());
                 log.applyCss(); log.layout(); ScrollPane settings = (ScrollPane) pane.getTop();
-                assertTrue(settings.getContent().getLayoutBounds().getHeight() > settings.getViewportBounds().getHeight());
+                assertTrue(settings.getContent().getLayoutBounds().getHeight() > settings.getViewportBounds().getHeight(),
+                        "Enlarged setup should exercise overflow: content=" + settings.getContent().getLayoutBounds()
+                                + ", viewport=" + settings.getViewportBounds());
                 settings.setVvalue(1); log.layout(); TableView<?> table = field(pane, "table"); assertTrue(table.getHeight() > 70);
                 Button compare = field(pane, "compare"); assertTrue(compare.localToScene(compare.getBoundsInLocal()).getMaxY() < 600);
             } finally { log.close(); stage.close(); }

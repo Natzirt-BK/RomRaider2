@@ -88,8 +88,11 @@ explicit axis origins/widths, counts, gap-preserving tables/plots and bounded
 background aggregation. [Common-bin run comparisons](RUN_COMPARISONS.md) now
 support independent CSV/range selection, count-aware means/differences, bounded
 second-log imports and gap-aware overlays. Continue injector transfer.
-Portable logger-setup export/import and
-bounded large-log review follow. Background recording needs its own Android
+Android [portable channel-setup export/import](PORTABLE_LOGGER_SETUP.md) is now
+implemented with a platform-neutral bounded codec, exact-definition matching,
+explicit review and stale-work guards. Desktop exchange controls remain pending;
+this does not yet establish desktop-to-phone setup transfer. Continue that
+integration and bounded large-log review. Background recording needs its own Android
 service/USB/notification and failure-recovery design; switching to GAUGES is not
 background recording.
 

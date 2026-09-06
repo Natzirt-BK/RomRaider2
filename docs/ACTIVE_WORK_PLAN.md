@@ -150,3 +150,11 @@ means/differences, shared-scale overlays, bounded second-log imports and stale
 work guards. This advances item 6 without claiming automatic pull/time alignment
 or statistical/vehicle qualification. Injector transfer, general large-log
 review, portable setup transfer and remaining mobile work are still open.
+
+[Portable channel setups](PORTABLE_LOGGER_SETUP.md) now have a shared bounded
+codec and Android review/import/export controls. Ordered IDs/explicit units and
+an exact definition fingerprint transfer without definition contents or live
+state. Failed/stale imports preserve selection; intentional empty setups remain
+empty and imports persist across restart without starting logging. Desktop
+exchange controls, background recording, broad large-log handling and supervised
+provider/hardware acceptance remain open.

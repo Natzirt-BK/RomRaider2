@@ -43,4 +43,5 @@ run_phase verify-empty
 run_phase corrupt
 run_phase verify-corrupt
 run_phase calculated-gauges
-echo 'PASS: setup restoration, source removal, same-key upgrade, retained log export, gauge view/session/CSV continuity, calculated channels, clear selection, corrupt setup, and no automatic logging.'
+run_phase channel-transfer
+echo 'PASS: setup restoration, source removal, same-key upgrade, retained log export, gauge view/session/CSV continuity, calculated channels, reviewed channel transfer, clear selection, corrupt setup, and no automatic logging.'

@@ -8,6 +8,10 @@ https://github.com/Natzirt-BK/RomRaider2/releases/latest
 What changed for 1.1.3
 ---------------------
 
+- Android adds reviewed channel-setup import/export using a bounded shared
+  format. Protocol, ordered IDs/units and an exact definition fingerprint transfer
+  without ROMs, definition contents, recordings or connection state. Failed/stale
+  imports retain the current selection. Desktop exchange controls remain pending.
 - Run comparison aligns independent CSV ranges in explicit common X bins.
   Counts, qualified means, B-minus-A differences and gap-aware plots distinguish
   missing/low-count coverage. B imports are bounded, local to the comparison tab,

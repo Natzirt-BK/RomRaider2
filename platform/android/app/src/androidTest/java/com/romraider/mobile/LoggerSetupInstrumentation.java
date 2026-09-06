@@ -16,6 +16,8 @@ import com.romraider.portable.logger.definition.PortableLoggerDefinition;
 import com.romraider.portable.logger.definition.PortableLoggerDefinitionReader;
 import com.romraider.portable.logger.definition.PortableLoggerProfile;
 import com.romraider.portable.logger.definition.PortableLoggerProfileReader;
+import com.romraider.portable.logger.definition.PortableLoggerSetup;
+import com.romraider.portable.logger.PortableLoggerProtocol;
 import java.io.*;
 import java.lang.reflect.*;
 import java.nio.charset.StandardCharsets;
@@ -54,6 +56,7 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
             else if (phase.equals("gauges")) verifyGaugesOnly();
             else if (phase.equals("live-gauges")) verifyReadOnlySessionViewSwitch();
             else if (phase.equals("calculated-gauges")) verifyCalculatedGauges();
+            else if (phase.equals("channel-transfer")) verifyChannelTransfer();
             else if (phase.equals("gauge-gallery")) captureGaugeGallery();
             else if (phase.equals("verify")) verify(2);
             else if (phase.equals("clear")) {
@@ -123,6 +126,113 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
                 + "600,P8,Engine Speed,800.0,rpm\n600,P1,Battery Voltage,13.24,V\n")
                         .getBytes(StandardCharsets.UTF_8));
         verify(2);
+    }
+
+    private void verifyChannelTransfer() throws Exception {
+        File folder = getTargetContext().getFilesDir();
+        File definitionFile = new File(folder, "transfer-definition.xml");
+        File source = new File(folder, "transfer.rr2logger");
+        File bad = new File(folder, "bad-transfer.rr2logger");
+        File exported = new File(folder, "exported.rr2logger");
+        byte[] definitionBytes = DEFINITION.getBytes(StandardCharsets.UTF_8);
+        Files.write(definitionFile.toPath(), definitionBytes);
+        invoke("loadLoggerDefinition", new Class<?>[] {Uri.class, String.class}, Uri.fromFile(definitionFile), definitionFile.getName());
+        awaitImports();
+        PortableLoggerProfile desired = new PortableLoggerProfile("SSM", java.util.Arrays.asList(
+                new PortableLoggerProfile.Selection("P1", "V"),
+                new PortableLoggerProfile.Selection("P8", "rpm")), java.util.Collections.emptyList());
+        PortableLoggerSetup setup = PortableLoggerSetup.capture(PortableLoggerProtocol.SSM, definitionBytes,
+                (PortableLoggerDefinition) field("loggerDefinition"), desired);
+        Files.write(source.toPath(), setup.encode());
+        Object original = field("loggerProfile");
+        invoke("loadPortableLoggerSetup", new Class<?>[] {Uri.class}, Uri.fromFile(source));
+        awaitTransfer();
+        clickDialogText("Cancel");
+        check(field("loggerProfile") == original, "Cancel changed the selected profile");
+        invoke("loadPortableLoggerSetup", new Class<?>[] {Uri.class}, Uri.fromFile(source));
+        awaitTransfer();
+        clickDialogText("Use setup");
+        PortableLoggerProfile imported = (PortableLoggerProfile) field("loggerProfile");
+        check(imported.selections().get(0).getId().equals("P1")
+                && imported.selections().get(1).getId().equals("P8"), "Import changed channel order");
+        verifyNotRunning();
+        Files.write(bad.toPath(), new byte[] {1, 2, 3});
+        invoke("loadPortableLoggerSetup", new Class<?>[] {Uri.class}, Uri.fromFile(bad));
+        awaitTransfer();
+        check(field("loggerProfile") == imported, "Invalid import changed selection");
+        String mismatch = new String(setup.encode(), StandardCharsets.UTF_8)
+                .replace(setup.definitionSha256(), String.join("", java.util.Collections.nCopies(64, "0")));
+        Files.write(bad.toPath(), mismatch.getBytes(StandardCharsets.UTF_8));
+        invoke("loadPortableLoggerSetup", new Class<?>[] {Uri.class}, Uri.fromFile(bad));
+        awaitTransfer();
+        check(field("loggerProfile") == imported, "Wrong definition import changed selection");
+        // A reviewed dialog cannot apply after an intervening configuration change.
+        invoke("loadPortableLoggerSetup", new Class<?>[] {Uri.class}, Uri.fromFile(source));
+        awaitTransfer();
+        setField("loggerSetupRevision", (Integer) field("loggerSetupRevision") + 1);
+        clickDialogText("Use setup");
+        check(field("loggerProfile") == imported, "Stale review replaced selection");
+        CountDownLatch release = new CountDownLatch(1);
+        Future<?> blocker = ((ExecutorService) field("workerExecutor")).submit(() -> {
+            if (!release.await(10, TimeUnit.SECONDS)) throw new AssertionError("Transfer gate timed out");
+            return null;
+        });
+        try {
+            invoke("loadPortableLoggerSetup", new Class<?>[] {Uri.class}, Uri.fromFile(source));
+            setField("loggerSetupRevision", (Integer) field("loggerSetupRevision") + 1);
+        } finally { release.countDown(); }
+        blocker.get(10, TimeUnit.SECONDS);
+        awaitTransfer();
+        check(field("loggerProfile") == imported, "Late worker replaced edited selection");
+        invoke("toggleLoggerPreview", new Class<?>[0]);
+        check((Boolean) field("previewRunning"), "Synthetic logger did not start");
+        invoke("loadPortableLoggerSetup", new Class<?>[] {Uri.class}, Uri.fromFile(source));
+        check((Boolean) field("previewRunning") && field("loggerProfile") == imported,
+                "Transfer interrupted active synthetic logging");
+        invoke("stopLoggerPreview", new Class<?>[] {String.class}, (Object) null);
+        invoke("preparePortableLoggerSetupExport", new Class<?>[0]);
+        awaitTransfer();
+        clickDialogText("Cancel");
+        check(field("setupExportBytes") == null, "Cancelled export retained a pending destination write");
+        // Exercise the Activity's actual stream writer with a frozen, reviewed snapshot.
+        setField("setupExportBytes", setup.encode());
+        invoke("savePortableLoggerSetup", new Class<?>[] {Uri.class}, Uri.fromFile(exported));
+        ((ExecutorService) field("workerExecutor")).submit(() -> {}).get(10, TimeUnit.SECONDS);
+        check(java.util.Arrays.equals(setup.encode(), Files.readAllBytes(exported.toPath())), "Export bytes changed");
+        check(java.util.Arrays.equals(setup.encode(), Files.readAllBytes(source.toPath())), "Import altered source file");
+        check(field("setupExportBytes") == null, "Export snapshot was not consumed");
+        // Clear is intentional and survives restart; restore the fixture afterward.
+        PortableLoggerSetup empty = PortableLoggerSetup.capture(PortableLoggerProtocol.SSM, definitionBytes,
+                (PortableLoggerDefinition) field("loggerDefinition"), new PortableLoggerProfile("SSM",
+                        java.util.Collections.emptyList(), java.util.Collections.emptyList()));
+        Files.write(source.toPath(), empty.encode());
+        invoke("loadPortableLoggerSetup", new Class<?>[] {Uri.class}, Uri.fromFile(source));
+        awaitTransfer();
+        clickDialogText("Use setup");
+        check(((PortableLoggerProfile) field("loggerProfile")).size() == 0, "Empty setup selected default channels");
+        Files.write(source.toPath(), setup.encode());
+        invoke("loadPortableLoggerSetup", new Class<?>[] {Uri.class}, Uri.fromFile(source));
+        awaitTransfer();
+        clickDialogText("Use setup");
+        ((ExecutorService) field("LOGGER_SETUP_IO")).submit(() -> {}).get(10, TimeUnit.SECONDS);
+        Activity closing = activity;
+        runOnMainSync(closing::finish);
+        waitForIdleSync();
+        startActivitySync(new Intent().setClassName(getTargetContext(), MainActivity.class.getName())
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        awaitImports();
+        check(((PortableLoggerProfile) field("loggerProfile")).selections().get(0).getId().equals("P1"),
+                "Imported order did not survive restart");
+        verifyNotRunning();
+        for (File file : new File[] {definitionFile, source, bad, exported}) Files.deleteIfExists(file.toPath());
+        System.out.println("PASS: channel transfer review, cancel, invalid/mismatched files, stale worker/dialog, active logger guard, stream export, empty selection and restart.");
+    }
+
+    private void awaitTransfer() throws Exception {
+        long deadline = SystemClock.uptimeMillis() + 15_000;
+        while ((Boolean) field("setupTransferLoading") && SystemClock.uptimeMillis() < deadline) SystemClock.sleep(30);
+        check(!(Boolean) field("setupTransferLoading"), "Setup transfer timed out");
+        waitForIdleSync();
     }
     private void verifyXmlImportSecurity() throws Exception {
         String ecu = "<roms><rom><romid><xmlid>TEST</xmlid><filesize>8</filesize>"

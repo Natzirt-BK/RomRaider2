@@ -31,6 +31,7 @@ import com.romraider.portable.logger.definition.PortableLoggerSelectionService;
 
 public final class PortableCoreCheck {
     public static void main(String[] args) throws Exception {
+        PortableLoggerSetupCheck.main(new String[0]);
         PortableCalculatedChannelCheck.main(new String[0]);
         PortableOpenPortControlCheck.main(new String[0]);
         PortableMut2Check.main(new String[0]);

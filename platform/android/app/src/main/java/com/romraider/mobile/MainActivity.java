@@ -52,6 +52,7 @@ import com.romraider.mobile.usb.OpenPortUsbTransport;
 import com.romraider.mobile.logger.ReadOnlyLoggerSession;
 import com.romraider.mobile.logger.LoggerImportState;
 import com.romraider.mobile.logger.LoggerSetupStore;
+import com.romraider.portable.logger.definition.PortableLoggerSetup;
 import com.romraider.portable.logger.definition.PortableLoggerDefinition;
 import com.romraider.portable.logger.definition.PortableLoggerDefinitionReader;
 import com.romraider.portable.logger.definition.PortableLoggerProfile;
@@ -97,6 +98,8 @@ public final class MainActivity extends Activity {
     private static final int SAVE_LIVE_LOG = 16;
     private static final int OPEN_ECU_DEFINITION = 17;
     private static final int SAVE_ARCHIVED_LOG = 18;
+    private static final int OPEN_PORTABLE_SETUP = 19;
+    private static final int SAVE_PORTABLE_SETUP = 20;
     private static final String ACTION_USB_PERMISSION =
             "com.romraider.mobile.USB_PERMISSION";
     private static final int BACKGROUND = Color.rgb(15, 21, 27);
@@ -177,6 +180,9 @@ public final class MainActivity extends Activity {
     private PortableLoggerProtocol loggerProtocol = PortableLoggerProtocol.SSM;
     private final LoggerImportState loggerImports = new LoggerImportState();
     private int loggerSetupRevision;
+    private int setupTransferGeneration;
+    private boolean setupTransferLoading;
+    private byte[] setupExportBytes;
     private byte[] loggerDefinitionBytes = new byte[0];
     private int liveSessionGeneration;
     private File archiveToExport;
@@ -279,6 +285,8 @@ public final class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        setupTransferGeneration++;
+        setupExportBytes = null;
         stopLoggerPreview(null);
         stopLiveLogger(null);
         unregisterReceiver(usbPermissionReceiver);
@@ -488,6 +496,11 @@ public final class MainActivity extends Activity {
         Button channels = button("CHOOSE CHANNELS");
         channels.setOnClickListener(view -> chooseLoggerChannels());
         setupCard.addView(channels, matchWrap(dp(9)));
+        Button importSetup = button("IMPORT CHANNEL SETUP");
+        importSetup.setOnClickListener(view -> openPortableLoggerSetup());
+        Button exportSetup = button("EXPORT CHANNEL SETUP");
+        exportSetup.setOnClickListener(view -> preparePortableLoggerSetupExport());
+        setupCard.addView(actionRow(importSetup, exportSetup), matchWrap(dp(9)));
         loggerSetupView = statusText(loggerSetupSummary());
         setupCard.addView(loggerSetupView, matchWrap());
         content.addView(setupCard, cardParams(dp(10)));
@@ -902,6 +915,10 @@ public final class MainActivity extends Activity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == SAVE_PORTABLE_SETUP && (resultCode != RESULT_OK || data == null || data.getData() == null)) {
+            setupExportBytes = null;
+            return;
+        }
         if (resultCode != RESULT_OK || data == null || data.getData() == null) return;
         Uri uri = data.getData();
         if (requestCode == OPEN_ROM) {
@@ -958,6 +975,10 @@ public final class MainActivity extends Activity {
             });
         } else if (requestCode == OPEN_LOGGER_DEFINITION) {
             loadLoggerDefinition(uri, displayName(uri));
+        } else if (requestCode == OPEN_PORTABLE_SETUP) {
+            loadPortableLoggerSetup(uri);
+        } else if (requestCode == SAVE_PORTABLE_SETUP) {
+            savePortableLoggerSetup(uri);
         } else if (requestCode == OPEN_LOGGER_PROFILE) {
             loadLoggerProfile(uri, displayName(uri));
         } else if (requestCode == OPEN_ECU_DEFINITION) {
@@ -1348,6 +1369,156 @@ public final class MainActivity extends Activity {
                 }).show();
     }
 
+    private boolean setupTransferAllowed() {
+        if (liveLogger != null || previewRunning) {
+            notice("Stop logging and wait for the recording to finish before transferring a setup.");
+            return false;
+        }
+        if (loggerImportPending()) return false;
+        if (loggerDefinition == null || loggerDefinitionBytes.length == 0) {
+            notice("Load the matching logger definition first.");
+            return false;
+        }
+        return true;
+    }
+
+    private void openPortableLoggerSetup() {
+        if (!setupTransferAllowed()) return;
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("*/*");
+        startActivityForResult(intent, OPEN_PORTABLE_SETUP);
+    }
+
+    private void loadPortableLoggerSetup(Uri uri) {
+        if (!setupTransferAllowed()) return;
+        final int generation = ++setupTransferGeneration;
+        final int revision = loggerSetupRevision;
+        final PortableLoggerDefinition definition = loggerDefinition;
+        final byte[] definitionBytes = loggerDefinitionBytes;
+        final PortableLoggerProtocol protocol = loggerProtocol;
+        setupTransferLoading = true;
+        workerExecutor.execute(() -> {
+            try (InputStream input = getContentResolver().openInputStream(uri)) {
+                PortableLoggerSetup setup = PortableLoggerSetup.read(input);
+                setup.validateAgainst(protocol, definitionBytes, definition);
+                runOnUiThread(() -> {
+                    if (isDestroyed() || generation != setupTransferGeneration) return;
+                    setupTransferLoading = false;
+                    if (!setupTransferCurrent(generation, revision, definition)) {
+                        notice("Logger setup changed while importing. Select the setup file again.");
+                        return;
+                    }
+                    StringBuilder review = new StringBuilder("Replace the selected channels with these ordered choices?\n\nProtocol: ")
+                            .append(protocol.name()).append("\nDefinition: exact SHA-256 match\nChannels: ")
+                            .append(setup.profile().selections().size()).append("\n");
+                    for (PortableLoggerProfile.Selection choice : setup.profile().selections())
+                        review.append('\n').append(choice.getId()).append(" — ").append(choice.getUnits());
+                    review.append("\n\nNo connection will start. ECU-specific addresses and calculated inputs still require validation when logging starts. Gauge appearance is unchanged.");
+                    new AlertDialog.Builder(this).setTitle("Review channel setup")
+                            .setMessage(review.toString()).setNegativeButton("Cancel", null)
+                            .setPositiveButton("Use setup", (dialog, which) -> {
+                                if (!setupTransferCurrent(generation, revision, definition)) {
+                                    notice("Logger setup changed. Import the file again.");
+                                    return;
+                                }
+                                loggerSetupRevision++;
+                                loggerProfile = setup.profile();
+                                loggerProfileName = "Imported channel setup";
+                                loggerSetupState = "Channel setup imported. Logging has not started.";
+                                clearLoggerGauges();
+                                scheduleLoggerSetupSave();
+                                refreshLoggerSetupStatus();
+                            }).show();
+                });
+            } catch (Exception failure) {
+                runOnUiThread(() -> {
+                    if (isDestroyed() || generation != setupTransferGeneration) return;
+                    setupTransferLoading = false;
+                    notice("Channel setup was not imported: " + transferFailure(failure));
+                });
+            }
+        });
+    }
+
+    private boolean setupTransferCurrent(int generation, int revision, PortableLoggerDefinition definition) {
+        return !isDestroyed() && generation == setupTransferGeneration && revision == loggerSetupRevision
+                && definition == loggerDefinition && !loggerImports.isLoading()
+                && liveLogger == null && !previewRunning;
+    }
+
+    private void preparePortableLoggerSetupExport() {
+        if (!setupTransferAllowed()) return;
+        final int generation = ++setupTransferGeneration;
+        final int revision = loggerSetupRevision;
+        final PortableLoggerDefinition definition = loggerDefinition;
+        final byte[] definitionBytes = loggerDefinitionBytes;
+        final PortableLoggerProtocol protocol = loggerProtocol;
+        final PortableLoggerProfile profile = loggerProfile;
+        setupTransferLoading = true;
+        workerExecutor.execute(() -> {
+            try {
+                byte[] bytes = PortableLoggerSetup.capture(protocol, definitionBytes, definition, profile).encode();
+                runOnUiThread(() -> {
+                    if (isDestroyed() || generation != setupTransferGeneration) return;
+                    setupTransferLoading = false;
+                    if (!setupTransferCurrent(generation, revision, definition)) {
+                        notice("Logger setup changed. Export again.");
+                        return;
+                    }
+                    new AlertDialog.Builder(this).setTitle("Export channel setup")
+                            .setMessage("Exports the protocol, ordered channel IDs and units, and a fingerprint of the loaded definition. The receiving app must load that exact definition. No ROM, definition contents, recordings, private paths, gauge theme or connection state are included. Choose a new file; document providers may not support atomic replacement.")
+                            .setNegativeButton("Cancel", null)
+                            .setPositiveButton("Choose file", (dialog, which) -> {
+                                if (!setupTransferCurrent(generation, revision, definition)) {
+                                    notice("Logger setup changed. Export again.");
+                                    return;
+                                }
+                                setupExportBytes = bytes;
+                                Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+                                intent.addCategory(Intent.CATEGORY_OPENABLE);
+                                intent.setType("application/octet-stream");
+                                intent.putExtra(Intent.EXTRA_TITLE, "RomRaider2-channels.rr2logger");
+                                startActivityForResult(intent, SAVE_PORTABLE_SETUP);
+                            }).show();
+                });
+            } catch (Exception failure) {
+                runOnUiThread(() -> {
+                    if (isDestroyed() || generation != setupTransferGeneration) return;
+                    setupTransferLoading = false;
+                    notice("Channel setup was not exported: " + transferFailure(failure));
+                });
+            }
+        });
+    }
+
+    private void savePortableLoggerSetup(Uri uri) {
+        final byte[] bytes = setupExportBytes;
+        setupExportBytes = null;
+        if (bytes == null) {
+            notice("The export snapshot expired. Start Export channel setup again.");
+            return;
+        }
+        workerExecutor.execute(() -> {
+            try (java.io.OutputStream output = getContentResolver().openOutputStream(uri, "wt")) {
+                if (output == null) throw new java.io.IOException("Destination is unavailable");
+                output.write(bytes);
+                output.flush();
+            } catch (Exception failure) {
+                runOnUiThread(() -> {
+                    if (!isDestroyed()) notice("Setup export failed; the destination may be incomplete. Choose a new file and retry.");
+                });
+                return;
+            }
+            runOnUiThread(() -> { if (!isDestroyed()) notice("The reviewed channel setup was exported."); });
+        });
+    }
+
+    private static String transferFailure(Exception failure) {
+        String message = failure.getMessage();
+        return message == null ? "The file is unavailable or invalid." : message.substring(0, Math.min(240, message.length()));
+    }
+
     private static PortableLoggerDefinition parseLoggerDefinition(byte[] bytes,
             PortableLoggerProtocol protocol) throws Exception {
         java.io.ByteArrayInputStream input = new java.io.ByteArrayInputStream(bytes);
@@ -1479,8 +1650,8 @@ public final class MainActivity extends Activity {
     }
 
     private boolean loggerImportPending() {
-        if (!loggerImports.isLoading()) return false;
-        notice("Wait for the logger definition and profile to finish loading.");
+        if (!loggerImports.isLoading() && !setupTransferLoading) return false;
+        notice("Wait for the logger definition, profile or setup transfer to finish loading.");
         return true;
     }
 
