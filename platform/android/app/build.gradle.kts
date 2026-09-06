@@ -6,6 +6,7 @@ import org.gradle.api.tasks.InputFile
 import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.TaskAction
 import javax.inject.Inject
+import java.util.Properties
 
 plugins {
     id("com.android.application")
@@ -25,6 +26,10 @@ if (hasDistributionSigning && gradle.startParameter.isConfigurationCacheRequeste
     throw GradleException("Use --no-configuration-cache for signed distribution builds to avoid caching credentials.")
 }
 
+val releaseVersion = Properties().apply {
+    file("../../../version.properties").inputStream().use { load(it) }
+}
+
 android {
     namespace = "com.romraider.mobile"
     compileSdk = 36
@@ -38,11 +43,19 @@ android {
         applicationId = "com.romraider.mobile"
         minSdk = 26
         targetSdk = 36
-        versionCode = providers.gradleProperty("rr2AndroidVersionCode").orNull?.toInt() ?: 110405
-        versionName = providers.gradleProperty("rr2AndroidVersionName").orNull ?: "1.1.1"
+        versionCode = providers.gradleProperty("rr2AndroidVersionCode").orNull?.toInt()
+            ?: releaseVersion.getProperty("version.android.code").toInt()
+        versionName = providers.gradleProperty("rr2AndroidVersionName").orNull
+            ?: releaseVersion.getProperty("version.buildnumber")
         testInstrumentationRunner = "com.romraider.mobile.LoggerSetupInstrumentation"
         require(versionCode!! > 0 && versionName!!.matches(Regex("[0-9]+\\.[0-9]+\\.[0-9]+"))) {
             "Android versions must use positive versionCode and numeric major.minor.patch"
+        }
+        if (hasDistributionSigning) {
+            require(versionName == releaseVersion.getProperty("version.buildnumber") &&
+                versionCode == releaseVersion.getProperty("version.android.code").toInt()) {
+                "Signed distribution builds must use the shared release version and versionCode"
+            }
         }
     }
 

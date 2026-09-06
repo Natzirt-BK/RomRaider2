@@ -638,7 +638,7 @@ public class ECUEditor extends AbstractFrame {
 
         JPanel heading = new JPanel(new GridLayout(2, 1, 0, 3));
         heading.setOpaque(false);
-        JLabel title = new JLabel("WHAT'S NEW IN 1.1.1");
+        JLabel title = new JLabel("WHAT'S NEW IN " + VERSION);
         title.setFont(title.getFont().deriveFont(Font.BOLD,
                 title.getFont().getSize2D() + 3.0f));
         title.setForeground(UiThemeService.getInstance().color(

@@ -6,12 +6,16 @@ on:
     paths:
       - 'platform/android/**'
       - 'platform/shared-core/**'
+      - 'version.properties'
+      - 'packaging/verify-version.sh'
       - 'packaging/android/**'
       - '.github/workflows/android-checks.yaml'
   pull_request:
     paths:
       - 'platform/android/**'
       - 'platform/shared-core/**'
+      - 'version.properties'
+      - 'packaging/verify-version.sh'
       - 'packaging/android/**'
       - '.github/workflows/android-checks.yaml'
 
@@ -33,9 +37,23 @@ jobs:
       - uses: gradle/actions/setup-gradle@v5
         with:
           gradle-version: '9.5.0'
+      - name: Reject signed version overrides without accessing a real key
+        run: |
+          set -euo pipefail
+          if output=$(env RR2_ANDROID_KEYSTORE=/nonexistent-romraider2-synthetic-key \
+            RR2_ANDROID_KEYSTORE_PASSWORD=synthetic-not-secret RR2_ANDROID_KEY_ALIAS=synthetic \
+            RR2_ANDROID_KEY_PASSWORD=synthetic-not-secret \
+            gradle --no-daemon --no-configuration-cache -p platform/android \
+            -Prr2AndroidVersionCode=1 help 2>&1); then
+            echo 'Signed version override was unexpectedly accepted.' >&2; exit 1
+          fi
+          grep -Fq 'Signed distribution builds must use the shared release version and versionCode' <<< "$output" || {
+            printf '%s\n' "$output"; exit 1;
+          }
       - name: Unit tests and isolated automation packages
         run: |
           set -euo pipefail
+          bash packaging/verify-version.sh
           gradle --no-daemon -p platform/android -Prr2AndroidTestBuildType=automation \
             -Prr2AndroidVersionCode=900001 -Prr2AndroidVersionName=1.1.2 \
             :shared-core:check :app:testAutomationUnitTest :app:lintAutomation \

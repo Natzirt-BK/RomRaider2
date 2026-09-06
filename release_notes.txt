@@ -1,5 +1,30 @@
-RomRaider2 ECU Studio 1.1.1
+RomRaider2 ECU Studio 1.1.2
 ================================
+
+Development source — not a newly published release. Public downloads remain
+1.1.1 until a separately verified release is published.
+
+What changed for 1.1.2
+---------------------
+
+- Android retains unsaved ROM edits/recovery until the destination closes
+  successfully. Failed output no longer marks edits as saved.
+- Portable XML imports reject entity declarations after strict decoding across
+  supported encodings, while retaining legitimate non-entity DTD syntax.
+- Desktop custom gauge limits are bound to conversion identity. Legacy limits
+  remain stored but inactive until configured again; units are not guessed.
+- JavaFX and Compose retain warning hysteresis across readings. Invalid readings
+  are unavailable, and detached JavaFX gauges share the main warning state.
+- JavaFX gains validated gauge scale/warning controls, alongside category/unit
+  controls and rolling statistics from the earlier development work.
+- Android saved logger setup survives restart and same-key upgrades in automated
+  tests. A new permanent distribution key cannot upgrade the old public 1.1.1
+  APK in place: export/recover recordings before any manual migration.
+- Active Android wording uses numeric releases and clearly separates simulated
+  offline values from read-only vehicle logging. No ECU writes or live tuning.
+
+Earlier public release 1.1.1
+---------------------------
 
 Desktop and Android now share numeric patch releases without stage suffixes.
 Platform-specific hardware checks remain open; numbering does not change those

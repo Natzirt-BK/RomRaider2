@@ -61,4 +61,6 @@ hysteresis 5 in both attached and detached views, then tests clearing at 95,
 invalid data, conversion change and removal. The initial test exposed an older
 queued catalog callback clearing newer readings; filtering now occurs in event
 order before queuing the UI refresh. Compose's 34 tests and portable-core checks
-also pass. Hosted verification is recorded after completion.
+also pass. Source `e1e660aa` passes the expanded
+[Linux/Windows workflow](https://github.com/Natzirt-BK/RomRaider2/actions/runs/34012197197),
+including portable-core and Compose checks, and is integrated into GitHub master.

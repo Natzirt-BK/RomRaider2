@@ -1,9 +1,13 @@
+import java.util.Properties
+
 plugins {
     `java-library`
 }
 
 group = "com.romraider2"
-version = "1.1.1"
+version = Properties().apply {
+    file("../../version.properties").inputStream().use { load(it) }
+}.getProperty("version.buildnumber")
 
 java {
     toolchain {

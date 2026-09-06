@@ -2,6 +2,8 @@
 set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
+bash "$repo_root/packaging/verify-version.sh"
+release_version=$(awk -F= '$1 == "version.buildnumber" {print $2}' "$repo_root/version.properties")
 jdk_root=${JAVA_HOME:?Set JAVA_HOME to a Java 21 JDK}
 application_jar=${ROMRAIDER2_JAR:-$repo_root/build/linux/lib/RomRaider2.jar}
 javafx_root=$repo_root/build/javafx/linux
@@ -25,7 +27,7 @@ done
     echo "Build RomRaider2 first; jar not found: $application_jar" >&2
     exit 1
 }
-[[ -f "$javafx_root/romraider2-javafx-desktop-1.1.1.jar" ]] || {
+[[ -f "$javafx_root/romraider2-javafx-desktop-1.1.2.jar" ]] || {
     echo "Stage the JavaFX desktop workspace before packaging." >&2
     exit 1
 }
@@ -33,6 +35,10 @@ class_version=$(
     "$jdk_root/bin/javap" -verbose -classpath "$application_jar" \
         com.romraider.ECUExec | sed -n 's/^[[:space:]]*major version: //p'
 )
+version_constants=$("$jdk_root/bin/javap" -constants -classpath "$application_jar" com.romraider.Version)
+grep -Fq "public static final java.lang.String VERSION = \"$release_version\";" <<< "$version_constants" || {
+    echo "The core application jar does not match version.properties; rebuild it." >&2; exit 4;
+}
 [[ "$class_version" = 65 ]] || {
     echo "RomRaider2.jar is not Java 21 bytecode (major version 65): $class_version" >&2
     echo "Run a clean Java 21 build before packaging." >&2
@@ -106,7 +112,7 @@ detected_modules=$(JAVA_HOME="$jdk_root" \
     --input "$input" \
     --main-jar RomRaider2.jar \
     --main-class com.romraider.ECUExec \
-    --app-version 1.1.1 \
+    --app-version 1.1.2 \
     --vendor NatZirt \
     --description "RomRaider2 ECU Studio" \
     --icon "$repo_root/packaging/branding/linux/hicolor/128x128/apps/romraider2.png" \

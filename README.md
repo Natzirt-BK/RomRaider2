@@ -67,6 +67,10 @@ The [full-project audit](docs/PROJECT_AUDIT_2026-09-06.md) separates current
 and [encoding-safe XML imports](docs/XML_IMPORT_HARDENING.md) are documented
 separately, along with [gauge warning/conversion repairs](docs/GAUGE_WARNING_REPAIRS.md). New
 Android source work is not yet in the public downloads.
+Development builds now use **1.1.2**, with [shared-version and package checks](docs/RELEASE_VERSIONING.md).
+The next Android distribution uses a permanent signing key that differs from
+public 1.1.1; follow the [migration precautions](docs/ANDROID_UPDATE_RELIABILITY.md)
+before any manual uninstall. No 1.1.2 release has been published.
 
 | Area | Current status |
 | --- | --- |

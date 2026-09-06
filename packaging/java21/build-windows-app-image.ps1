@@ -72,7 +72,7 @@ if ($JavaSettings -notmatch "os\.arch\s*=\s*(amd64|x86_64)(?:\s|$)") {
 if (-not (Test-Path -LiteralPath $ApplicationJar -PathType Leaf)) {
     throw "Build RomRaider2 for Windows first; jar not found: $ApplicationJar"
 }
-if (-not (Test-Path -LiteralPath (Join-Path $JavaFxRoot "romraider2-javafx-desktop-1.1.1.jar") -PathType Leaf)) {
+if (-not (Test-Path -LiteralPath (Join-Path $JavaFxRoot "romraider2-javafx-desktop-1.1.2.jar") -PathType Leaf)) {
     throw "Stage the JavaFX desktop workspace before packaging."
 }
 foreach ($BridgeFile in @(
@@ -85,6 +85,13 @@ foreach ($BridgeFile in @(
 }
 
 Write-Host "Auditing Java bytecode and retired graph references."
+$ReleaseVersion = (Get-Content -LiteralPath (Join-Path $RepoRoot "version.properties") |
+    Select-String '^version.buildnumber=(.+)$').Matches.Groups[1].Value
+$VersionConstants = (& $Javap -constants -classpath $ApplicationJar com.romraider.Version) -join "`n"
+if ($LASTEXITCODE -ne 0 -or $VersionConstants -notmatch [regex]::Escape(
+        "public static final java.lang.String VERSION = `"$ReleaseVersion`";")) {
+    throw "The core application jar does not match version.properties; rebuild it."
+}
 $ClassVersion = (& $Javap -verbose -classpath $ApplicationJar com.romraider.ECUExec |
     Select-String -Pattern "major version:\s*(\d+)" |
     Select-Object -First 1).Matches.Groups[1].Value
@@ -210,7 +217,7 @@ try {
         --input $InputRoot `
         --main-jar RomRaider2.jar `
         --main-class com.romraider.ECUExec `
-        --app-version 1.1.1 `
+        --app-version 1.1.2 `
         --vendor NatZirt `
         --description "RomRaider2 ECU Studio" `
         --icon (Join-Path $RepoRoot "packaging/branding/windows/RomRaider2.ico") `

@@ -3,6 +3,9 @@
 Subsequent work: [data-preservation repairs](DATA_PRESERVATION_FIXES.md) addresses
 A1 and A2; [portable XML hardening](XML_IMPORT_HARDENING.md) addresses A5.
 [Gauge warning/conversion repairs](GAUGE_WARNING_REPAIRS.md) address A3/A4.
+[Version safeguards](RELEASE_VERSIONING.md#development-safeguards) prepare 1.1.2
+source for A6; active Android RC/preview-era wording from A7 is removed. Actual
+release publication, signing migration/backup and hardware gates remain open.
 The findings and evidence below describe the audited `7c2f0ce4`
 snapshot and remain historical evidence, not a claim that those source fixes
 are already in the public Android APK. Other findings remain open.

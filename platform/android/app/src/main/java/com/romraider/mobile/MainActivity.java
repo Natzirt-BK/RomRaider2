@@ -330,7 +330,7 @@ public final class MainActivity extends Activity {
         scroll.addView(content, matchWrap());
         page.addView(scroll, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
-        TextView footer = text("ECU writing is unavailable in this preview.",
+        TextView footer = text("ECU writing is unavailable in this version.",
                 11, MUTED);
         footer.setGravity(Gravity.CENTER);
         footer.setPadding(0, dp(9), 0, 0);
@@ -442,8 +442,8 @@ public final class MainActivity extends Activity {
 
         LinearLayout liveCard = sectionCard("READ-ONLY LIVE LOGGER",
                 "Identify the ECU, resolve profile addresses, display values, "
-                        + "and record CSV. Connected qualification remains "
-                        + "scheduled for RC5.");
+                        + "and record CSV. Compatibility depends on the vehicle, "
+                        + "protocol, definition, selected channels, and adapter.");
         liveLoggerButton = button(getString(R.string.logger_live_start));
         styleButton(liveLoggerButton, POSITIVE, POSITIVE);
         liveLoggerButton.setOnClickListener(view -> toggleLiveLogger());
@@ -454,9 +454,9 @@ public final class MainActivity extends Activity {
         Button archive = button("RECOVER / EXPORT RECORDINGS");
         archive.setOnClickListener(view -> chooseArchivedLog());
         liveCard.addView(archive, matchWrap(dp(9)));
-        liveLoggerView = statusText("RC5 QUALIFICATION PENDING\nPrepare the "
-                + "OpenPort and load a definition and profile before a future "
-                + "connected test.");
+        liveLoggerView = statusText("READ-ONLY LOGGER\nPrepare the OpenPort and "
+                + "load a matching definition and profile. Live logging reads the "
+                + "vehicle; offline preview uses simulated values.");
         liveCard.addView(liveLoggerView, matchWrap());
         content.addView(liveCard, cardParams(dp(12)));
     }

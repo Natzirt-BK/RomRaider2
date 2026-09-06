@@ -1,4 +1,5 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.util.Properties
 
 plugins {
     kotlin("jvm") version "2.4.10"
@@ -7,7 +8,9 @@ plugins {
 }
 
 group = "com.romraider2"
-version = "1.1.1"
+version = Properties().apply {
+    file("../../version.properties").inputStream().use { load(it) }
+}.getProperty("version.buildnumber")
 
 val hostOs = when {
     System.getProperty("os.name").lowercase().contains("win") -> "windows"

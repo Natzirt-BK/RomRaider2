@@ -9,7 +9,15 @@ permissions:
   contents: read
 
 jobs:
+  version-consistency:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Verify shared versions and rejection fixtures
+        run: bash packaging/test-version-check.sh
+
   linux-test:
+    needs: version-consistency
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -33,20 +41,21 @@ jobs:
           ant clean build-linux
           xvfb-run -a env RR2_FX_WINDOW_SMOKE=1 gradle --no-daemon :platform:shared-core:check :ui:compose-logger:test :ui:javafx-desktop:test :ui:javafx-desktop:stageJavaFxLinux
           packaging/java21/audit-runtime-modules.sh build/linux/lib/RomRaider2.jar
-          packaging/java21/build-linux-app-image.sh build/release-1.1.1
+          packaging/java21/build-linux-app-image.sh build/release-1.1.2
           packaging/java21/build-linux-release.sh
       - name: Check whitespace
         run: git diff --check
       - name: Upload Linux x64 package
         uses: actions/upload-artifact@v4
         with:
-          name: RomRaider2-1.1.1-Linux-x64
+          name: RomRaider2-1.1.2-Linux-x64
           path: |
-            build/releases/RomRaider2_ECU_Studio_1.1.1_Linux_x64.zip
-            build/releases/RomRaider2_ECU_Studio_1.1.1_Linux_x64.zip.sha256
+            build/releases/RomRaider2_ECU_Studio_1.1.2_Linux_x64.zip
+            build/releases/RomRaider2_ECU_Studio_1.1.2_Linux_x64.zip.sha256
           if-no-files-found: error
 
   windows-x64-package:
+    needs: version-consistency
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v5
@@ -100,8 +109,8 @@ jobs:
       - name: Upload Windows x64 package
         uses: actions/upload-artifact@v4
         with:
-          name: RomRaider2-1.1.1-Windows-x64
+          name: RomRaider2-1.1.2-Windows-x64
           path: |
-            build/releases-windows/RomRaider2_ECU_Studio_1.1.1_Windows_x64.zip
-            build/releases-windows/RomRaider2_ECU_Studio_1.1.1_Windows_x64.zip.sha256
+            build/releases-windows/RomRaider2_ECU_Studio_1.1.2_Windows_x64.zip
+            build/releases-windows/RomRaider2_ECU_Studio_1.1.2_Windows_x64.zip.sha256
           if-no-files-found: error

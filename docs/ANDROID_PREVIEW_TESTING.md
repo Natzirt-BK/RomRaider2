@@ -1,13 +1,16 @@
 # Android testing
 
-The current Android version is **1.1.1**. The APK remains debug-signed and is
-installed by sideloading, so Android or Play Protect may warn that it is an
-unknown application. Existing application IDs are unchanged. Debug signing keys
-can change between builds, so an in-place update may be refused. **Export your
-recordings before uninstalling or clearing app data.** A side-by-side APK named
+The currently published Android version is **1.1.1**; development source uses
+**1.1.2**, which is not yet a published release. Packages are sideloaded and
+remain debuggable, so Android or Play Protect may warn about an unknown app.
+The next distribution uses a permanent signing key, unlike the older public
+1.1.1 APK. That key change prevents an in-place update from the old APK.
+Existing application IDs are unchanged. **Export your recordings before
+uninstalling or clearing app data.** A side-by-side APK named
 **RomRaider2 OpenPort Test** leaves the standard app untouched. An existing test
 app may also refuse updates from a different signing key. Choose only one app
 for USB access and import the logger setup separately when using the test app.
+See [update reliability and migration precautions](ANDROID_UPDATE_RELIABILITY.md).
 
 Version 1.1.1 includes the OpenPort filter-response repair, retains imported
 profile selections when definitions are reloaded, and exports normal wide-column

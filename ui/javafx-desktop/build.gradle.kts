@@ -1,9 +1,13 @@
+import java.util.Properties
+
 plugins {
     java
 }
 
 group = "com.romraider2"
-version = "1.1.1"
+version = Properties().apply {
+    file("../../version.properties").inputStream().use { load(it) }
+}.getProperty("version.buildnumber")
 
 val javafxVersion = "21.0.10"
 val hostPlatform = when {
