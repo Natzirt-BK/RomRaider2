@@ -33,12 +33,24 @@ class FxLoggerLogLoadSmokeTest {
         byte[] originalSidecar = Files.readAllBytes(markers.sidecar(first));
         Harness h = new Harness();
         try {
-            FxTestRuntime.run(() -> { h.open(); h.window.openLog(first); h.window.openLog(second); });
+            FxTestRuntime.run(() -> {
+                h.open();
+                TabPane views = field(h.window, "views");
+                assertEquals("MAF", views.getTabs().get(6).getText());
+                assertEquals("Injector", views.getTabs().get(7).getText());
+                views.getSelectionModel().select(6);
+                h.window.openLog(first); h.window.openLog(second);
+            });
             h.pending.get(1).complete(new RomRaiderCsvLogParser().parse(second));
             FxTestRuntime.run(() -> {
                 FxLogAnalysisPane pane = field(h.window, "analysisPane");
                 assertEquals(second, field(pane, "source"));
                 assertEquals("second.csv", ((LogDataset) field(pane, "dataset")).getSourceName());
+                FxFuelAnalysisPane maf = field(h.window, "mafAnalysis");
+                FxFuelAnalysisPane injector = field(h.window, "injectorAnalysis");
+                assertEquals(6, ((TabPane) field(h.window, "views")).getSelectionModel().getSelectedIndex());
+                assertSame(field(pane, "dataset"), field(maf, "dataset"));
+                assertSame(field(pane, "dataset"), field(injector, "dataset"));
                 TabPane tabs = (TabPane) pane.getCenter();
                 HBox controls = (HBox) ((BorderPane) tabs.getTabs().get(4).getContent()).getTop();
                 Button add = controls.getChildren().stream().filter(node -> node instanceof Button)
@@ -80,6 +92,8 @@ class FxLoggerLogLoadSmokeTest {
                 assertEquals(Boolean.FALSE, field(panes[1], "closed"));
                 h.close();
                 assertEquals(Boolean.TRUE, field(panes[1], "closed"));
+                assertEquals(Boolean.TRUE, field(field(h.window, "mafAnalysis"), "closed"));
+                assertEquals(Boolean.TRUE, field(field(h.window, "injectorAnalysis"), "closed"));
                 assertEquals(1, h.closes.get());
             });
         } finally { FxTestRuntime.run(h::close); }

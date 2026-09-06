@@ -87,6 +87,8 @@ final class FxLoggerWindow {
     private final FlowPane dashboard = new FlowPane(12, 12);
     private final BorderPane analysis = new BorderPane();
     private FxDynoPane dyno;
+    private FxFuelAnalysisPane mafAnalysis;
+    private FxFuelAnalysisPane injectorAnalysis;
     private final Label sessionState = new Label();
     private final Label status = new Label("Ready");
     private final Label statistics = new Label();
@@ -302,7 +304,7 @@ final class FxLoggerWindow {
         Label title = styled("LOGGER WORKSPACE", "section-kicker");
         Region fill = new Region();
         HBox.setHgrow(fill, Priority.ALWAYS);
-        Label hint = styled("Overview · Data · Graph · Dashboard · Dyno · Log Analysis",
+        Label hint = styled("Live views · Dyno · Log Analysis · MAF · Injector",
                 "muted");
         hint.visibleProperty().bind(
                 root.widthProperty().greaterThanOrEqualTo(1050));
@@ -329,7 +331,9 @@ final class FxLoggerWindow {
                 fixedTab("Graph", graph),
                 fixedTab("Dashboard", dashboardWorkspace(dashboardScroll)),
                 fixedTab("Dyno", dynoWorkspace()),
-                fixedTab("Log Analysis", analysisWorkspace()));
+                fixedTab("Log Analysis", analysisWorkspace()),
+                fixedTab("MAF", mafAnalysis = new FxFuelAnalysisPane(FxFuelAnalysisPane.Mode.MAF, this::openLog)),
+                fixedTab("Injector", injectorAnalysis = new FxFuelAnalysisPane(FxFuelAnalysisPane.Mode.INJECTOR, this::openLog)));
         views.getSelectionModel().select(tabFor(
                 context.getPreferences().getView()));
         views.getSelectionModel().selectedIndexProperty().addListener(
@@ -976,7 +980,9 @@ final class FxLoggerWindow {
         if (analysisPane != null) analysisPane.close();
         analysisPane = replacement;
         analysis.setCenter(analysisPane);
-        views.getSelectionModel().select(5);
+        mafAnalysis.setDataset(dataset);
+        injectorAnalysis.setDataset(dataset);
+        if (views.getSelectionModel().getSelectedIndex() < 6) views.getSelectionModel().select(5);
         status.setText("Loaded " + dataset.getSourceName());
     }
 
@@ -1019,6 +1025,8 @@ final class FxLoggerWindow {
         ApplicationThemeService.getInstance().removeListener(themeListener);
         runtime.close();
         if (analysisPane != null) analysisPane.close();
+        mafAnalysis.close();
+        injectorAnalysis.close();
         new ArrayList<>(detachedGauges.values()).forEach(Stage::close);
         detachedGauges.clear();
         closed.run();

@@ -32,6 +32,7 @@ public class UiNeutralArchitectureTest {
 
         inspect(sourceRoot.resolve("logger/external/core/ExternalDataSource.java"),
                 violations);
+        inspect(sourceRoot.resolve("logger/analysis/FuelLogAnalysis.java"), violations);
         inspect(sourceRoot.resolve(
                 "logger/ecu/comms/manager/QueryManagerImpl.java"),
                 violations);
