@@ -12,7 +12,9 @@ logging and unfinished ECU-write research.
 
 ## Downloads
 
-The current release is **RomRaider2 1.1.1** for desktop and Android. Version
+This branch documents **RomRaider2 1.1.2** for desktop and Android. Check the
+[Releases page](https://github.com/Natzirt-BK/RomRaider2/releases/latest) for
+published package availability; a source checkout is not a release. Version
 numbers use patch increments for routine updates, minor increments for milestones,
 and rare major increments for substantial changes. Only the latest release is
 kept on the Releases page; older source tags remain in Git history. See the
@@ -21,32 +23,36 @@ platform-specific; a version number is not a claim of completed vehicle testing.
 
 | Platform | Package |
 | --- | --- |
-| Windows 10/11 x64 | [Download the portable Windows ZIP](https://github.com/Natzirt-BK/RomRaider2/releases/download/romraider2-1.1.1/RomRaider2_ECU_Studio_1.1.1_Windows_x64.zip) |
-| Linux x64 | [Download the portable Linux ZIP](https://github.com/Natzirt-BK/RomRaider2/releases/download/romraider2-1.1.1/RomRaider2_ECU_Studio_1.1.1_Linux_x64.zip) |
-| SteamOS Desktop Mode x64 | [Download the SteamOS ZIP](https://github.com/Natzirt-BK/RomRaider2/releases/download/romraider2-1.1.1/RomRaider2_SteamOS_1.1.1_x64.zip) |
-| macOS Apple silicon | [Download the unsigned ARM64 package](https://github.com/Natzirt-BK/RomRaider2/releases/download/romraider2-1.1.1/RomRaider2_1.1.1_macOS_arm64.zip) |
-| macOS Intel | [Download the unsigned x64 package](https://github.com/Natzirt-BK/RomRaider2/releases/download/romraider2-1.1.1/RomRaider2_1.1.1_macOS_x64.zip) |
+| Windows 10/11 x64 | Portable Windows ZIP |
+| Linux x64 | Portable Linux ZIP |
+| SteamOS Desktop Mode x64 | SteamOS ZIP |
+| macOS Apple silicon | Unsigned ARM64 package |
+| macOS Intel | Unsigned x64 package |
 
 Java 21 is included in every desktop package. Extract the ZIP before running
 it. On Windows, open `RomRaider2.exe`. On Linux, open `bin/RomRaider2`. The Mac
 packages are unsigned and have not completed physical Mac testing.
 
-[Release notes, checksums, and all downloads](https://github.com/Natzirt-BK/RomRaider2/releases/tag/romraider2-1.1.1)
+[Release notes, checksums, and all downloads](https://github.com/Natzirt-BK/RomRaider2/releases/latest)
 
 ### Android
 
-Android 8.0 and newer users can also
-[download Android 1.1.1](https://github.com/Natzirt-BK/RomRaider2/releases/download/romraider2-1.1.1/RomRaider2_1.1.1_Android-debug.apk).
+Android 8.0 and newer users can download the standard APK or separate
+**RomRaider2 OpenPort Test** APK from the
+[latest release](https://github.com/Natzirt-BK/RomRaider2/releases/latest).
 
-Version 1.1.1 preserves imported channel selections when reloading definitions
-and exports recordings in the normal RomRaider CSV layout. It includes the
-OpenPort receive-filter repair. The [same release](https://github.com/Natzirt-BK/RomRaider2/releases/tag/romraider2-1.1.1)
-also provides a **side-by-side test APK**, labeled **RomRaider2 OpenPort Test**,
-which leaves the standard app and its recordings untouched. Debug signing
-keys can differ between builds: export recordings before any uninstall, and
-use the side-by-side option if it is not already installed. Either package may
-refuse an update if its existing installation has a different signing key.
-The Android package remains debug-signed and is installed by sideloading.
+**The permanent signing key used by 1.1.2 cannot update the old public 1.1.1
+installation in place.** Export recordings and preserve unsaved ROM work,
+definitions and profiles before any manual replacement. Follow the
+[migration checklist](docs/ANDROID_1_1_2_MIGRATION.md); do not uninstall or clear
+storage to work around a signature mismatch. An unused separate-test package
+can coexist with the standard app, but does not copy its private data. An old
+test installation may also have the incompatible key. Distribution APKs remain
+debuggable and are installed by sideloading.
+
+The app preserves imported channel selections when reloading definitions,
+exports recordings in the normal RomRaider CSV layout and includes the
+OpenPort receive-filter repair.
 It supports exact definition-backed calibration table editing, advanced ROM
 byte editing, RomRaider CSV review, Logger definition and profile import,
 simulated logging, and read-only OpenPort 2.0 SSM K-Line and Mitsubishi MUT-II
@@ -61,21 +67,17 @@ sideloading it or connecting an adapter.
 
 ## Where it stands
 
-The [automated audit repair status](docs/AUDIT_REPAIR_STATUS_2026-09-06.md)
-records the tested 1.1.2 source candidate, completed platform checks and remaining
-signing-migration/hardware gates. These source fixes are not in the public 1.1.1
-downloads yet.
-
-The [full-project audit](docs/PROJECT_AUDIT_2026-09-06.md) separates current
-`master` from the published 1.1.1 packages. Source repairs for
+The [gauge/editor and companion audit](docs/GAUGE_EDITOR_AUDIT_2026-09-06.md)
+records automated checks, ECUFlash/Forester/EVO findings and remaining hardware
+gates. The [earlier full-project audit](docs/PROJECT_AUDIT_2026-09-06.md) and
+[repair qualification](docs/AUDIT_REPAIR_STATUS_2026-09-06.md) are dated records,
+not a live release inventory. Repairs for
 [installer migration and Android ROM-save failure handling](docs/DATA_PRESERVATION_FIXES.md)
 and [encoding-safe XML imports](docs/XML_IMPORT_HARDENING.md) are documented
-separately, along with [gauge warning/conversion repairs](docs/GAUGE_WARNING_REPAIRS.md). New
-Android source work is not yet in the public downloads.
-Development builds now use **1.1.2**, with [shared-version and package checks](docs/RELEASE_VERSIONING.md).
-The next Android distribution uses a permanent signing key that differs from
-public 1.1.1; follow the [migration precautions](docs/ANDROID_UPDATE_RELIABILITY.md)
-before any manual uninstall. No 1.1.2 release has been published.
+separately, along with [gauge warning/conversion repairs](docs/GAUGE_WARNING_REPAIRS.md).
+See [shared-version and package checks](docs/RELEASE_VERSIONING.md) for versioning
+and [Android update reliability](docs/ANDROID_UPDATE_RELIABILITY.md) for signing
+and saved-setup protections.
 
 | Area | Current status |
 | --- | --- |
@@ -86,7 +88,7 @@ before any manual uninstall. No 1.1.2 release has been published.
 | Android | Basic Forester logging reported working; profile retention and desktop-format CSV fixed; broader qualification remains open |
 | DimeMod | Discovery, diagnostics, and Logger parameters retained; RAM writing stays hidden and disabled |
 | ROM mod recognition | DimeMod, CarBerry, and MerpMod recognized from explicit loaded-definition evidence |
-| ECU flashing | Not available in RomRaider2 1.1.1 |
+| ECU flashing | Not available in RomRaider2 1.1.2 |
 
 Do not disable Windows driver-signing protection. Install the normal signed
 driver for the interface. RomRaider2 chooses the direct or bundled J2534 bridge
@@ -94,8 +96,8 @@ path without changing the vendor driver.
 
 ## Highlights
 
-Current source is preparing **1.1.2**; the download links above remain on the
-published release until replacement packages are qualified and uploaded.
+Features below describe **1.1.2**. Consult the selected release's notes for its
+package verification and platform-specific limits.
 
 - Tabbed calibration workspace with favorites, recent and changed maps, ROM
   comparison, grouped undo/redo, notes, and crash recovery.
@@ -110,7 +112,7 @@ published release until replacement packages are qualified and uploaded.
 - Saved Gauge/Value/Trend/Alarm desktop layouts with conversion-bound limits.
   Nine original [new gauge designs](docs/GAUGE_DESIGN.md), STI Night and Evolution
   Night styles, and gauges-only views are available
-  in current Android, JavaFX and Compose source. Switching views preserves the
+  on Android, JavaFX and Compose. Switching views preserves the
   logger; desktop and Android configuration options are not identical.
 - Initial read-only [MAF and injector log analysis](docs/FUEL_LOG_ANALYSIS.md)
   in JavaFX. Full legacy analysis parity remains in progress.

@@ -2,7 +2,7 @@
 
 The JavaFX desktop Logger now exposes **MAF** and **Injector** tabs alongside
 Log Analysis. This is the first read-only migration of the legacy tools, not
-full MAF/injector workflow parity. It is not yet in the public 1.1.1 release.
+full MAF/injector workflow parity. This feature is part of version 1.1.2.
 
 ## Using a saved log
 

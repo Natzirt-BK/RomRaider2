@@ -1,12 +1,23 @@
 RomRaider2 ECU Studio 1.1.2
 ================================
 
-Development source — not a newly published release. Public downloads remain
-1.1.1 until a separately verified release is published.
+Version 1.1.2 changes. For published packages and their verification record:
+https://github.com/Natzirt-BK/RomRaider2/releases/latest
 
 What changed for 1.1.2
 ---------------------
 
+- Eleven new native gauge faces, including premium STI Night and Evolution
+  Night clusters. Bounded needle motion never changes readings or CSV values.
+- Gauges-only views preserve the logger session and recording when switching
+  views. Android still stops logging when the app leaves the foreground.
+- Compact JavaFX calibration layout, selection multiplication, custom adjustment
+  steps, guarded saved-ROM reload and read-only ROM properties.
+- Initial read-only MAF/injector saved-log analysis. Full fitting and reviewed
+  table-transfer workflows remain follow-ups, not production live tuning.
+- Shared calibration aliases refresh across every overlapping byte; legacy
+  checksum warnings use the active desktop shell. Definition sizes reject overflow.
+- Android includes software-license and STI attribution notices with native access.
 - Android retains unsaved ROM edits/recovery until the destination closes
   successfully. Failed output no longer marks edits as saved.
 - Portable XML imports reject entity declarations after strict decoding across
