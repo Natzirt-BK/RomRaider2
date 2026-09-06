@@ -21,6 +21,13 @@ public class JavaFxSettingsMigrationTest {
     @Test public void legacyTableDimensionsDoNotShrinkJavaFxDefaults() throws Exception {
         Settings settings = load("<settings><tabledisplay><cellsize width='42' height='18'/></tabledisplay></settings>");
         assertEquals(new Dimension(42, 18), settings.getCellSize());
+        assertEquals(new Dimension(84, 34), settings.getJavaFxCellSize());
+    }
+    @Test public void freshSettingsUseCompactJavaFxCells() {
+        assertEquals(new Dimension(84, 34), new Settings().getJavaFxCellSize());
+    }
+    @Test public void explicitlySavedWidthsArePreserved() throws Exception {
+        Settings settings = load("<settings><tabledisplay><cellsize fx-width='124' fx-height='34'/></tabledisplay></settings>");
         assertEquals(new Dimension(124, 34), settings.getJavaFxCellSize());
     }
     @Test public void dimensionsAreBoundedAndDefensivelyCopied() throws Exception {

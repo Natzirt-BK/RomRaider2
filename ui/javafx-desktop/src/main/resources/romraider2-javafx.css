@@ -61,14 +61,19 @@
 .surface { -fx-background-color: -fx-background; -fx-border-color: -rr-border; }
 .raised { -fx-background-color: -rr-raised; -fx-background-radius: 7; }
 .command-deck { -fx-background-color: -fx-control-inner-background; -fx-border-color: transparent transparent -rr-border transparent; -fx-padding: 7 12 7 12; }
+.editor-window .brand-header { -fx-padding: 5 12; }
+.editor-window .command-deck { -fx-padding: 3 12; }
+.calibration-pane .title { -fx-font-size: 16px; }
+.calibration-pane .axis-strip { -fx-padding: 3 8; }
+.editor-window .tab-pane > .tab-header-area > .headers-region > .tab { -fx-padding: 3 9; }
 .status-bar { -fx-background-color: -fx-control-inner-background; -fx-border-color: -rr-border transparent transparent transparent; -fx-padding: 4 12 4 12; }
 .nav-pane { -fx-background-color: -fx-control-inner-background; -fx-border-color: transparent -rr-border transparent transparent; }
 .workspace-empty { -fx-padding: 36; }
 .metric { -fx-background-color: -rr-raised; -fx-background-radius: 4; -fx-padding: 4 7 4 7; -fx-font-size: 10px; -fx-font-weight: bold; }
 .dyno-metric { -fx-min-width: 124; -fx-alignment: center; }
-.calibration-cell { -fx-background-radius: 3; -fx-padding: 0 9; -fx-alignment: center-left; }
+.calibration-cell { -fx-background-radius: 3; -fx-padding: 0 4; -fx-alignment: center; }
 .calibration-row-headers { -fx-border-width: 1 0 1 1; }
-.calibration-row-headers .table-cell { -fx-padding: 0 4; -fx-alignment: center-left; }
+.calibration-row-headers .table-cell { -fx-padding: 0 4; -fx-alignment: center; }
 .calibration-row-headers .scroll-bar:horizontal,
 .calibration-row-headers .scroll-bar:vertical {
     -fx-opacity: 0;

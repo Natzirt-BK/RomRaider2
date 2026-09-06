@@ -66,7 +66,9 @@ final class FxSettingsWindow {
         editor.add(check("Save debug tables", settings.isSaveDebugTables(), settings::setSaveDebugTables, changes), 1, 5);
         editor.add(check("Enable diagnostic logging", settings.isDebug(), settings::setDebug, changes), 1, 6);
         editor.add(check("Sort the calibration catalog", settings.isTableTreeSorted(), settings::setTableTreeSorted, changes), 1, 7);
-        editor.add(check("Open ROM categories expanded", settings.isOpenExpanded(), settings::setOpenExpanded, changes), 1, 8);
+        Label catalogHint = new Label("ROM categories start collapsed. Use View to expand or collapse all.");
+        catalogHint.setWrapText(true);
+        editor.add(catalogHint, 1, 8);
         ComboBox<Integer> clicks = new ComboBox<>(FXCollections.observableArrayList(1, 2));
         clicks.setValue(settings.getTableClickCount());
         editor.addRow(9, new Label("Clicks to open a table"), clicks);

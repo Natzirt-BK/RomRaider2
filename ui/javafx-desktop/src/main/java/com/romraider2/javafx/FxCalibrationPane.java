@@ -58,7 +58,6 @@ final class FxCalibrationPane extends BorderPane implements AutoCloseable {
     private static final double MAX_TABLE_SCALE = 1.6;
     private static final double TABLE_SCALE_STEP = .1;
     private static final double AXIS_COLUMN_WIDTH = 100;
-    private static final double VALUE_COLUMN_WIDTH = 124;
 
     private final Table table;
     private final CalibrationEditController controller;
@@ -88,7 +87,7 @@ final class FxCalibrationPane extends BorderPane implements AutoCloseable {
         this.table = table;
         controller = new TableCalibrationEditController(table);
         snapshot = controller.getSnapshot();
-        getStyleClass().add("surface");
+        getStyleClass().addAll("surface", "calibration-pane");
         setTop(header());
         setCenter(isDiagnosticTroubleCode(snapshot)
                 ? diagnosticControl() : calibrationWorkspace());
@@ -97,20 +96,19 @@ final class FxCalibrationPane extends BorderPane implements AutoCloseable {
     }
 
     private Node header() {
-        Label kind = new Label(snapshot.getTableType().replace('_', ' '));
-        kind.getStyleClass().add("section-kicker");
         Label title = new Label(snapshot.getTableName());
         title.getStyleClass().add("title");
         title.setWrapText(true);
         title.setTooltip(new Tooltip(snapshot.getTableName()));
         Label detail = new Label(String.format(Locale.ROOT,
-                "%d × %d  ·  %s  ·  address 0x%X",
+                "%s  ·  %d × %d  ·  %s  ·  address 0x%X",
+                snapshot.getTableType().replace('_', ' '),
                 snapshot.getColumns(), snapshot.getRows(),
                 snapshot.getUnit().isBlank() ? "raw scale" : snapshot.getUnit(),
                 table.getStorageAddress()));
         detail.getStyleClass().add("muted");
         detail.setWrapText(true);
-        VBox identity = new VBox(1, kind, title, detail);
+        VBox identity = new VBox(1, title, detail);
         identity.setMinWidth(0);
         HBox.setHgrow(identity, Priority.ALWAYS);
         changed.getStyleClass().add("metric");
@@ -118,7 +116,7 @@ final class FxCalibrationPane extends BorderPane implements AutoCloseable {
         redo.setOnAction(event -> runEdit(() -> controller.redo(), "Redo applied"));
         HBox row = new HBox(9, identity, changed, undo, redo);
         row.setAlignment(Pos.CENTER_LEFT);
-        row.setPadding(new Insets(12, 14, 12, 14));
+        row.setPadding(new Insets(6, 10, 6, 10));
         updateChangedLabel();
         return row;
     }
@@ -140,7 +138,7 @@ final class FxCalibrationPane extends BorderPane implements AutoCloseable {
         inspectorScroll.setMinHeight(0);
         content.setRight(inspectorScroll);
         BorderPane.setMargin(inspectorScroll, new Insets(0, 0, 0, 10));
-        content.setPadding(new Insets(10));
+        content.setPadding(new Insets(6));
         return content;
     }
 
@@ -238,7 +236,6 @@ final class FxCalibrationPane extends BorderPane implements AutoCloseable {
             header.setTooltip(new Tooltip(label));
             valueColumn.setText(null);
             valueColumn.setGraphic(header);
-            valueColumn.setPrefWidth(VALUE_COLUMN_WIDTH);
             valueColumn.setSortable(false);
             valueColumn.setCellFactory(ignored -> valueCell(index));
             view.getColumns().add(valueColumn);

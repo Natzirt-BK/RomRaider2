@@ -19,6 +19,31 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
 @EnabledIfEnvironmentVariable(named = "RR2_FX_WINDOW_SMOKE", matches = "1")
 class FxEditorControlsSmokeTest {
+    @Test void saveOptionsUsesOneNativeDropdownArrow() throws Exception {
+        FxTestRuntime.run(() -> {
+            FxEditorWindow window = new FxEditorWindow(() -> {}, () -> {});
+            Stage stage = field(window, "stage");
+            try {
+                FxWindowPlacement.show(stage);
+                Parent root = stage.getScene().getRoot();
+                root.applyCss();
+                root.layout();
+                MenuButton save = root.lookupAll(".menu-button").stream()
+                        .filter(MenuButton.class::isInstance)
+                        .map(MenuButton.class::cast)
+                        .filter(menu -> menu.getItems().stream().anyMatch(
+                                item -> "Save Now".equals(item.getText())))
+                        .findFirst().orElseThrow();
+                assertEquals("Save Options", save.getText());
+                assertEquals(java.util.List.of("Save Now", "Save As…"),
+                        save.getItems().stream().map(MenuItem::getText).toList());
+                assertEquals(1, save.lookupAll(".arrow").size());
+                assertTrue(save.getItems().stream().allMatch(
+                        item -> item.getOnAction() != null));
+            } finally { window.close(); }
+        });
+    }
+
     @SuppressWarnings("unchecked") static <T> T field(Object owner, String name) throws Exception {
         Field field = owner.getClass().getDeclaredField(name); field.setAccessible(true); return (T) field.get(owner);
     }

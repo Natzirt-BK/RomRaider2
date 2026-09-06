@@ -3,10 +3,12 @@ package com.romraider2.javafx;
 
 import java.io.File;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 import com.romraider.Settings;
 import com.romraider.Version;
@@ -89,6 +91,9 @@ final class FxEditorWindow {
     private final ProgressBar progress = new ProgressBar(0);
     private final Map<Table, FxCalibrationPane> calibrationPanes =
             new HashMap<>();
+    private final Map<Rom, Set<String>> expandedCategories = new HashMap<>();
+    private Rom navigationRom;
+    private Table navigationTable;
     private EditorDocumentSnapshot snapshot;
     private boolean rebuilding;
     private boolean closing;
@@ -121,6 +126,7 @@ final class FxEditorWindow {
                     }
                 });
 
+        root.getStyleClass().add("editor-window");
         root.setTop(new VBox(menuBar(), brandHeader(), commandDeck()));
         root.setCenter(workspace());
         root.setBottom(statusBar());
@@ -185,6 +191,9 @@ final class FxEditorWindow {
             rebuildNavigation();
         });
         view.getItems().add(showHigher);
+        view.getItems().addAll(new SeparatorMenuItem(),
+                item("Expand all categories", event -> expandAll(navigation.getRoot())),
+                item("Collapse all categories", event -> collapseCategories(navigation.getRoot())));
 
         Menu levels = new Menu("User Level");
         ToggleGroup group = new ToggleGroup();
@@ -217,13 +226,11 @@ final class FxEditorWindow {
     }
 
     private Node brandHeader() {
-        Label studio = new Label("ECU CALIBRATION STUDIO · JAVAFX DESKTOP");
-        studio.getStyleClass().add("studio-kicker");
-        VBox brand = new VBox(4, FxTheme.brandLogo(150), studio);
+        VBox brand = new VBox(FxTheme.brandLogo(110));
         Button open = new Button("Open ROM");
         open.setDefaultButton(true);
         open.setOnAction(event -> chooseRom());
-        MenuButton save = new MenuButton("Save As ▾", null,
+        MenuButton save = new MenuButton("Save Options", null,
                 item("Save Now", event -> save(false)),
                 item("Save As…", event -> save(true)));
         Button definitions = new Button("Definitions Manager");
@@ -310,9 +317,9 @@ final class FxEditorWindow {
         search.textProperty().addListener((value, oldText, newText) ->
                 rebuildNavigation());
         Label heading = styled("CALIBRATION MAP CATALOG", "section-kicker");
-        VBox nav = new VBox(9, heading, search, navigation);
+        VBox nav = new VBox(6, heading, search, navigation);
         VBox.setVgrow(navigation, Priority.ALWAYS);
-        nav.setPadding(new Insets(12));
+        nav.setPadding(new Insets(8, 12, 8, 12));
         nav.setMinWidth(240);
         nav.setPrefWidth(310);
         nav.getStyleClass().add("nav-pane");
@@ -320,7 +327,12 @@ final class FxEditorWindow {
         calibrationTabs.setTabClosingPolicy(
                 TabPane.TabClosingPolicy.ALL_TABS);
         romTabs.setTabClosingPolicy(TabPane.TabClosingPolicy.ALL_TABS);
-        romTabs.setMaxHeight(46);
+        romTabs.setMinHeight(34);
+        romTabs.setPrefHeight(34);
+        romTabs.setMaxHeight(34);
+        romTabs.visibleProperty().bind(javafx.beans.binding.Bindings.size(
+                romTabs.getTabs()).greaterThan(1));
+        romTabs.managedProperty().bind(romTabs.visibleProperty());
         center.setTop(romTabs);
         center.setCenter(emptyWorkspace());
         SplitPane split = new SplitPane(nav, center);
@@ -478,6 +490,8 @@ final class FxEditorWindow {
 
     private void render(EditorDocumentSnapshot next) {
         snapshot = next;
+        expandedCategories.keySet().retainAll(next.getDocuments().stream()
+                .map(EditorDocument::getRom).toList());
         stage.setTitle(editorTitle());
         activeRom.setText(next.getActiveRom() == null ? "No ROM open"
                 : next.getActiveRom().getFileName());
@@ -547,11 +561,16 @@ final class FxEditorWindow {
         try {
             TreeItem<NavigationItem> rootItem = new TreeItem<>(
                     new NavigationItem("root", null));
+            rootItem.setExpanded(true);
             Rom rom = snapshot.getActiveRom();
             if (rom != null) {
                 String query = search.getText() == null ? ""
                         : search.getText().trim().toLowerCase(Locale.ROOT);
                 Settings settings = SettingsManager.getSettings();
+                Set<String> expanded = expandedCategories.computeIfAbsent(rom,
+                        ignored -> new HashSet<>());
+                boolean revealActive = rom != navigationRom
+                        || snapshot.getActiveTable() != navigationTable;
                 Map<String, TreeItem<NavigationItem>> categories =
                         new LinkedHashMap<>();
                 for (Table table : rom.getTableCatalog()) {
@@ -572,6 +591,13 @@ final class FxEditorWindow {
                         TreeItem<NavigationItem> existing = categories.get(path);
                         if (existing == null) {
                             existing = new TreeItem<>(new NavigationItem(segment, null));
+                            existing.setExpanded(expanded.contains(path));
+                            String categoryPath = path;
+                            existing.expandedProperty().addListener((value, oldState, newState) -> {
+                                if (rebuilding || !query.isEmpty()) return;
+                                if (newState) expanded.add(categoryPath);
+                                else expanded.remove(categoryPath);
+                            });
                             categories.put(path, existing);
                             parent.getChildren().add(existing);
                         }
@@ -580,12 +606,21 @@ final class FxEditorWindow {
                     TreeItem<NavigationItem> entry = new TreeItem<>(
                             new NavigationItem(table.getName(), table));
                     parent.getChildren().add(entry);
-                    if (table == snapshot.getActiveTable()) expandParents(entry);
+                    if (revealActive && table == snapshot.getActiveTable()) {
+                        expandParents(entry);
+                        if (query.isEmpty()) {
+                            for (var categoryEntry : categories.entrySet()) {
+                                if (categoryEntry.getValue().isExpanded()) expanded.add(categoryEntry.getKey());
+                            }
+                        }
+                    }
                 }
-                if (!query.isEmpty() || settings.isOpenExpanded()) expandAll(rootItem);
+                if (!query.isEmpty()) expandAll(rootItem);
                 if (settings.isTableTreeSorted()) sortNavigation(rootItem);
             }
             navigation.setRoot(rootItem);
+            navigationRom = rom;
+            navigationTable = snapshot.getActiveTable();
         } finally {
             rebuilding = false;
         }
@@ -779,6 +814,7 @@ final class FxEditorWindow {
         RomUserInteractionService.removeHandler(romInteraction);
         calibrationPanes.values().forEach(FxCalibrationPane::close);
         calibrationPanes.clear();
+        expandedCategories.clear();
         controller.close();
         closed.run();
     }
@@ -830,8 +866,17 @@ final class FxEditorWindow {
     }
 
     private static void expandAll(TreeItem<?> item) {
+        if (item == null) return;
         item.setExpanded(true);
         item.getChildren().forEach(FxEditorWindow::expandAll);
+    }
+
+    private static void collapseCategories(TreeItem<?> root) {
+        if (root == null) return;
+        for (TreeItem<?> child : root.getChildren()) {
+            collapseCategories(child);
+            child.setExpanded(false);
+        }
     }
 
     private record NavigationItem(String label, Table table) {
