@@ -29,6 +29,13 @@ faces both scale proportionally. See the [display guide](ANDROID_MOUNTED_DISPLAY
   desktop parser's exact time/value/unit compatibility check.
 - Shared version and whitespace checks pass. No physical adapter or vehicle was
   accessed; no production ECU writes were enabled.
+- Desktop: 216 JavaFX and 35 Compose tests pass without skips, plus the shared
+  checks and Linux JavaFX staging. The JavaFX count includes twenty repeated
+  modal-window openings rather than a single opening.
+
+Both fresh hosted Android lifecycle/upgrade/CSV runs pass at `77910c37`:
+[master](https://github.com/Natzirt-BK/RomRaider2/actions/runs/34053019391) and
+[feature branch](https://github.com/Natzirt-BK/RomRaider2/actions/runs/34053019276).
 
 ## Regression repairs and remaining qualification
 
@@ -38,9 +45,15 @@ and assert that imports were actually queued before checking cancellation. The
 immediate-cancel case performs start/cancel within one UI turn. No production
 cancellation or stale-result checks were weakened.
 
-The desktop audit also exposed intermittent initial modal-window placement on
-GTK. That investigation is separate from the verified Android layout work;
-one passing rerun is not evidence that the intermittent problem is fixed.
-Fresh hosted checks and real-device acceptance remain separate from these local
-results. Physical phone power management, older Android fallback and vehicle
-logging acceptance remain supervised tasks.
+The desktop audit also exposed a timing error in the modal-window smoke test.
+Geometry traces showed an old native size acknowledgement arriving after the
+initial fit; the test immediately closed the window before it could settle.
+A controlled run with the unchanged production placement code passed twenty
+openings when observed after ten animation pulses. The test now captures visible
+bounds at that point, keeps the same one-pixel boundary assertions, and includes
+geometry transitions in any failure. Experimental production workarounds were
+removed; no delayed resizing policy was added to the app.
+
+Desktop/package hosted checks and real-device acceptance remain separate from
+these local results. Physical phone power management, older Android fallback and
+vehicle logging acceptance remain supervised tasks.
