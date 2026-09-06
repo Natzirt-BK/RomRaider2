@@ -113,11 +113,12 @@ on those repairs, with explicit rollback/persistence failure handling; neither
 feature establishes hardware qualification or production ECU writes.
 
 The [Android background-recording contract](ANDROID_BACKGROUND_RECORDING.md)
-now has a tested screen-independent recording owner. This internal foundation is
-not yet wired into the Activity and does not enable background capture. Next
-implement and qualify service/USB ownership, notifications, screen reattachment,
-power handling and process-death recovery. Switching to GAUGES is not background
-recording.
+now has a screen-independent recording owner and connected-device foreground
+service integrated with the Activity. Explicit starts, notification Stop,
+same-owner reattachment, finite-only peaks, original receipt age and bounded
+wake-lock handling are implemented. Continue qualification and retained-recording
+recovery audits. Gauges-only switching and background capture remain distinct
+features; real USB/background behavior is not established by synthetic tests.
 
 Forester/EVO/OpenPort in-car acceptance, phone document-provider behavior and
 physical Windows/Mac/Deck tests remain supervised tasks. No production ECU

@@ -43,8 +43,10 @@ mixed calculated/address-backed definitions are unsupported.
 
 Nonfinite raw values, nonfinite inputs/results and invalid division propagate
 as unavailable, not measured zero. A failed batch publishes no partial cycle;
-the next successful cycle cannot reuse an earlier cycle's inputs. Existing
-foreground-only Android lifecycle and read-only transport restrictions remain.
+the next successful cycle cannot reuse an earlier cycle's inputs. Read-only
+transport restrictions remain. Android 1.1.3 source uses
+[service-owned background recording](ANDROID_BACKGROUND_RECORDING.md); public
+1.1.2 remains foreground-only and does not include calculated-channel support.
 
 ## Verification and remaining work
 

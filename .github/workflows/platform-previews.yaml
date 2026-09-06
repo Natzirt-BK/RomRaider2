@@ -104,6 +104,10 @@ jobs:
           gradle --no-daemon --no-configuration-cache -p platform/android \
             :shared-core:check :app:testDebugUnitTest :app:assembleDebug :app:lintDebug \
             :app:assembleOpenportDiagnostic :app:lintOpenportDiagnostic
+          AAPT="$ANDROID_HOME/build-tools/36.0.0/aapt" bash packaging/android/check-service-manifest.sh \
+            production platform/android/app/build/outputs/apk/debug/app-debug.apk
+          AAPT="$ANDROID_HOME/build-tools/36.0.0/aapt" bash packaging/android/check-service-manifest.sh \
+            production platform/android/app/build/outputs/apk/openportDiagnostic/app-openportDiagnostic.apk
           AAPT="$ANDROID_HOME/build-tools/36.0.0/aapt" bash packaging/android/verify-package-version.sh \
             com.romraider.mobile.preview platform/android/app/build/outputs/apk/debug/app-debug.apk
           AAPT="$ANDROID_HOME/build-tools/36.0.0/aapt" bash packaging/android/verify-package-version.sh \

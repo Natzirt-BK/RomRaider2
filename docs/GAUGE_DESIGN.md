@@ -58,8 +58,9 @@ manufacturer font asset is embedded.
 - Demonstration data is explicitly labeled **SIMULATED**. Opening the gauges
   view never initiates a connection, starts recording or generates live data.
 - Android switches reuse the existing gauge views, logger session and CSV writer.
-  Returning to the logger does not stop the session. Leaving the Android app
-  still stops foreground-only logging; this feature is not background recording.
+  Returning to the logger does not stop the session. Public Android 1.1.2 stops
+  logging when leaving the app; 1.1.3 source separately adds
+  [service-owned background recording](ANDROID_BACKGROUND_RECORDING.md).
 
 ## Implementation and validation
 

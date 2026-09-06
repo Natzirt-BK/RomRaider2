@@ -10,6 +10,7 @@ import com.romraider.portable.logger.definition.PortableLoggerProfile;
 
 import java.io.Closeable;
 import java.util.List;
+import java.util.ArrayList;
 import java.util.Objects;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
@@ -63,10 +64,18 @@ public final class ReadOnlyRecording implements AutoCloseable {
         private final List<PortableLoggerValue> values;
         private final int samples;
         private final String message;
+        private final List<Extrema> peaks;
 
         private Snapshot(Phase phase, String ecuId, int ready, int unavailable,
                 long timestampMillis, long receivedAtNanos, List<PortableLoggerValue> values,
                 int samples, String message) {
+            this(phase, ecuId, ready, unavailable, timestampMillis, receivedAtNanos,
+                    values, samples, message, List.of());
+        }
+
+        private Snapshot(Phase phase, String ecuId, int ready, int unavailable,
+                long timestampMillis, long receivedAtNanos, List<PortableLoggerValue> values,
+                int samples, String message, List<Extrema> peaks) {
             this.phase = phase;
             this.ecuId = ecuId;
             this.ready = ready;
@@ -76,6 +85,7 @@ public final class ReadOnlyRecording implements AutoCloseable {
             this.values = values;
             this.samples = samples;
             this.message = message;
+            this.peaks = peaks;
         }
 
         public Phase phase() { return phase; }
@@ -89,6 +99,8 @@ public final class ReadOnlyRecording implements AutoCloseable {
         /** Recorded values, not CSV rows; one completed cycle may contain several values. */
         public int samples() { return samples; }
         public String message() { return message; }
+        public double minimum(int index) { return peaks.get(index).minimum; }
+        public double maximum(int index) { return peaks.get(index).maximum; }
     }
 
     private final Object lock = new Object();
@@ -150,6 +162,17 @@ public final class ReadOnlyRecording implements AutoCloseable {
     }
 
     public Snapshot snapshot() { return snapshot; }
+    public PortableLoggerProtocol protocol() { return PortableLoggerProtocol.fromId(definition.getProtocol()); }
+
+    /** Reset display peaks to current values without changing CSV or reading freshness. */
+    public void resetPeaks() {
+        synchronized (lock) {
+            Snapshot current = snapshot;
+            snapshot = new Snapshot(current.phase, current.ecuId, current.ready, current.unavailable,
+                    current.timestampMillis, current.receivedAtNanos, current.values, current.samples,
+                    current.message, peaks(current.values, List.of()));
+        }
+    }
 
     /** Returns no writer while acquisition, reading, flushing or transport cleanup is pending. */
     public PortableLogSession completedLog() {
@@ -203,7 +226,7 @@ public final class ReadOnlyRecording implements AutoCloseable {
                         Snapshot previous = snapshot;
                         snapshot = new Snapshot(Phase.RECORDING, ecuId, previous.ready,
                                 previous.unavailable, timestamp, nanoTime.getAsLong(),
-                                List.copyOf(values), samples, "Read-only recording.");
+                                List.copyOf(values), samples, "Read-only recording.", peaks(values, previous.peaks));
                     }
                 }
 
@@ -246,7 +269,7 @@ public final class ReadOnlyRecording implements AutoCloseable {
             Snapshot previous = snapshot;
             snapshot = new Snapshot(Phase.STOPPED, previous.ecuId, previous.ready,
                     previous.unavailable, previous.timestampMillis, previous.receivedAtNanos,
-                    previous.values, log == null ? 0 : log.size(), message);
+                    previous.values, log == null ? 0 : log.size(), message, previous.peaks);
             stopped.countDown();
         }
     }
@@ -256,7 +279,24 @@ public final class ReadOnlyRecording implements AutoCloseable {
         Snapshot previous = snapshot;
         snapshot = new Snapshot(phase, previous.ecuId, previous.ready, previous.unavailable,
                 previous.timestampMillis, previous.receivedAtNanos, previous.values,
-                previous.samples, message);
+                previous.samples, message, previous.peaks);
+    }
+
+    private static List<Extrema> peaks(List<PortableLoggerValue> values, List<Extrema> previous) {
+        List<Extrema> next = new ArrayList<>(values.size());
+        for (int index = 0; index < values.size(); index++) {
+            double value = values.get(index).getValue();
+            Extrema old = index < previous.size() ? previous.get(index) : new Extrema(Double.NaN, Double.NaN);
+            next.add(!Double.isFinite(value) ? old : new Extrema(
+                    Double.isFinite(old.minimum) ? Math.min(old.minimum, value) : value,
+                    Double.isFinite(old.maximum) ? Math.max(old.maximum, value) : value));
+        }
+        return List.copyOf(next);
+    }
+
+    private static final class Extrema {
+        final double minimum, maximum;
+        Extrema(double minimum, double maximum) { this.minimum = minimum; this.maximum = maximum; }
     }
 
     private static String detail(Exception failure) {

@@ -10,6 +10,8 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
+import android.content.ComponentName;
+import android.content.ServiceConnection;
 import android.database.Cursor;
 import android.graphics.Color;
 import android.graphics.Typeface;
@@ -20,6 +22,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.IBinder;
 import android.os.Looper;
 import android.os.SystemClock;
 import android.provider.OpenableColumns;
@@ -49,7 +52,7 @@ import com.romraider.portable.editor.PortableEcuDefinition;
 import com.romraider.portable.editor.PortableEcuDefinitionReader;
 import com.romraider.portable.editor.PortableRomTable;
 import com.romraider.mobile.usb.OpenPortUsbTransport;
-import com.romraider.mobile.logger.ReadOnlyLoggerSession;
+import com.romraider.mobile.logger.ReadOnlyRecording;
 import com.romraider.mobile.logger.LoggerImportState;
 import com.romraider.mobile.logger.LoggerSetupStore;
 import com.romraider.portable.logger.definition.PortableLoggerSetup;
@@ -175,7 +178,6 @@ public final class MainActivity extends Activity {
     private final Object usbLock = new Object();
     private int usbGeneration;
     private boolean activityDestroyed;
-    private volatile ReadOnlyLoggerSession liveLogger;
     private volatile PortableLogSession liveLog;
     private PortableLoggerProtocol loggerProtocol = PortableLoggerProtocol.SSM;
     private final LoggerImportState loggerImports = new LoggerImportState();
@@ -184,7 +186,33 @@ public final class MainActivity extends Activity {
     private boolean setupTransferLoading;
     private byte[] setupExportBytes;
     private byte[] loggerDefinitionBytes = new byte[0];
-    private int liveSessionGeneration;
+    private ReadOnlyLoggingService recordingService;
+    private boolean serviceBound;
+    private boolean activityResumed;
+    private ReadOnlyRecording displayedRecording;
+    private ReadOnlyRecording.Snapshot displayedRecordingState;
+    private boolean displayedRecordingBusy;
+    private final ServiceConnection recordingConnection = new ServiceConnection() {
+        @Override public void onServiceConnected(ComponentName name, IBinder binder) {
+            if (activityDestroyed) return;
+            recordingService = ((ReadOnlyLoggingService.LocalBinder) binder).service();
+            refreshRecording();
+            if (!recordingService.busy()) prepareAttachedOpenPort(getIntent());
+        }
+        @Override public void onServiceDisconnected(ComponentName name) {
+            recordingService = null;
+            liveEcuIdentified = false;
+            if (liveLoggerView != null) liveLoggerView.setText(R.string.logger_service_unavailable);
+            refreshGaugeAvailability();
+        }
+    };
+    private final Runnable recordingTick = new Runnable() {
+        @Override public void run() {
+            if (!activityResumed || activityDestroyed) return;
+            refreshRecording();
+            previewHandler.postDelayed(this, 100);
+        }
+    };
     private File archiveToExport;
     private boolean loggerVisible;
     private volatile String usbState = "OpenPort not prepared.";
@@ -264,7 +292,8 @@ public final class MainActivity extends Activity {
         showLogger();
         restoreLoggerSetup();
         restoreUnsavedWorkspace();
-        previewHandler.post(() -> prepareAttachedOpenPort(getIntent()));
+        serviceBound = bindService(new Intent(this, ReadOnlyLoggingService.class),
+                recordingConnection, BIND_AUTO_CREATE);
     }
 
     @Override
@@ -277,10 +306,13 @@ public final class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        activityResumed = true;
         closeMissingOpenPort();
         refreshUsbStatus();
         previewHandler.removeCallbacks(gaugeMonitor);
         previewHandler.post(gaugeMonitor);
+        previewHandler.removeCallbacks(recordingTick);
+        previewHandler.post(recordingTick);
     }
 
     @Override
@@ -288,7 +320,9 @@ public final class MainActivity extends Activity {
         setupTransferGeneration++;
         setupExportBytes = null;
         stopLoggerPreview(null);
-        stopLiveLogger(null);
+        previewHandler.removeCallbacks(recordingTick);
+        if (serviceBound) { unbindService(recordingConnection); serviceBound = false; }
+        recordingService = null;
         unregisterReceiver(usbPermissionReceiver);
         final OpenPortUsbTransport transport;
         synchronized (usbLock) {
@@ -304,9 +338,10 @@ public final class MainActivity extends Activity {
 
     @Override
     protected void onStop() {
+        activityResumed = false;
         previewHandler.removeCallbacks(gaugeMonitor);
+        previewHandler.removeCallbacks(recordingTick);
         stopLoggerPreview(null);
-        stopLiveLogger("Live logging stopped when RomRaider2 left the foreground.");
         scheduleWorkspaceRecovery();
         super.onStop();
     }
@@ -426,7 +461,6 @@ public final class MainActivity extends Activity {
     private void showLogger() {
         if (gaugesVisible) leaveGaugesOnly();
         stopLoggerPreview(null);
-        stopLiveLogger(null);
         loggerVisible = true;
         loggerSetupView = null;
         loggerPreviewView = null;
@@ -468,6 +502,7 @@ public final class MainActivity extends Activity {
                 .setTitle("Read-only vehicle protocol")
                 .setItems(new String[] {"Subaru SSM (4800 baud)", "Mitsubishi MUT-II (15625 baud)"},
                         (dialog, which) -> {
+                            if (!loggerSetupEditable()) return;
                             PortableLoggerProtocol next = which == 0
                                     ? PortableLoggerProtocol.SSM : PortableLoggerProtocol.MUT2;
                             if (next == loggerProtocol) return;
@@ -552,6 +587,8 @@ public final class MainActivity extends Activity {
                 + "vehicle; offline preview uses simulated values.");
         liveCard.addView(liveLoggerView, matchWrap());
         content.addView(liveCard, cardParams(dp(12)));
+        displayedRecordingState = null;
+        refreshRecording();
     }
 
     private void showUsbDevices() {
@@ -643,6 +680,7 @@ public final class MainActivity extends Activity {
     }
 
     private void prepareOpenPort() {
+        if (!loggerSetupEditable()) return;
         UsbManager manager = (UsbManager) getSystemService(USB_SERVICE);
         UsbDevice device = findOpenPort(manager);
         if (manager == null || device == null) {
@@ -658,6 +696,7 @@ public final class MainActivity extends Activity {
     }
 
     private void prepareAttachedOpenPort(Intent intent) {
+        if (isLiveActive()) return;
         if (intent == null || !UsbManager.ACTION_USB_DEVICE_ATTACHED.equals(
                 intent.getAction())) return;
         UsbDevice device = Build.VERSION.SDK_INT >= 33
@@ -689,7 +728,7 @@ public final class MainActivity extends Activity {
     }
 
     private void openOpenPort(UsbDevice device) {
-        stopLiveLogger(null);
+        if (!loggerSetupEditable()) return;
         final int generation;
         final OpenPortUsbTransport previous;
         synchronized (usbLock) {
@@ -768,7 +807,7 @@ public final class MainActivity extends Activity {
     }
 
     private void showEditor() {
-        if (liveLogger != null || previewRunning) {
+        if (isLiveActive() || previewRunning) {
             notice("Stop logging before opening the editor. LOGGER and GAUGES remain available.");
             return;
         }
@@ -896,10 +935,12 @@ public final class MainActivity extends Activity {
     }
 
     private void openLoggerDefinition() {
+        if (!loggerSetupEditable()) return;
         openXmlDocument(OPEN_LOGGER_DEFINITION);
     }
 
     private void openLoggerProfile() {
+        if (!loggerSetupEditable()) return;
         openXmlDocument(OPEN_LOGGER_PROFILE);
     }
 
@@ -1237,6 +1278,7 @@ public final class MainActivity extends Activity {
     }
 
     private void loadLoggerDefinition(Uri uri, String name) {
+        if (!loggerSetupEditable()) return;
         loggerSetupRevision++;
         stopLoggerPreview(null);
         stopLiveLogger(null);
@@ -1278,6 +1320,7 @@ public final class MainActivity extends Activity {
     }
 
     private void loadLoggerProfile(Uri uri, String name) {
+        if (!loggerSetupEditable()) return;
         loggerSetupRevision++;
         stopLoggerPreview(null);
         stopLiveLogger(null);
@@ -1316,6 +1359,7 @@ public final class MainActivity extends Activity {
     }
 
     private void chooseLoggerChannels() {
+        if (!loggerSetupEditable()) return;
         if (loggerImportPending()) return;
         PortableLoggerDefinition definition = loggerDefinition;
         PortableLoggerProfile originalProfile = loggerProfile;
@@ -1338,6 +1382,7 @@ public final class MainActivity extends Activity {
                 .setMultiChoiceItems(names, checked, (dialog, which, selected) -> checked[which] = selected)
                 .setNegativeButton("Cancel", null)
                 .setNeutralButton("Clear all", (dialog, which) -> {
+                    if (!loggerSetupEditable()) return;
                     if (loggerImports.isLoading() || loggerDefinition != definition
                             || loggerProfile != originalProfile) return;
                     loggerSetupRevision++;
@@ -1349,6 +1394,7 @@ public final class MainActivity extends Activity {
                     refreshLoggerSetupStatus();
                 })
                 .setPositiveButton("Use channels", (dialog, which) -> {
+                    if (!loggerSetupEditable()) return;
                     if (loggerImports.isLoading() || loggerDefinition != definition
                             || loggerProfile != originalProfile) return;
                     loggerSetupRevision++;
@@ -1370,7 +1416,7 @@ public final class MainActivity extends Activity {
     }
 
     private boolean setupTransferAllowed() {
-        if (liveLogger != null || previewRunning) {
+        if (isLiveActive() || previewRunning) {
             notice("Stop logging and wait for the recording to finish before transferring a setup.");
             return false;
         }
@@ -1444,7 +1490,7 @@ public final class MainActivity extends Activity {
     private boolean setupTransferCurrent(int generation, int revision, PortableLoggerDefinition definition) {
         return !isDestroyed() && generation == setupTransferGeneration && revision == loggerSetupRevision
                 && definition == loggerDefinition && !loggerImports.isLoading()
-                && liveLogger == null && !previewRunning;
+                && !isLiveActive() && !previewRunning;
     }
 
     private void preparePortableLoggerSetupExport() {
@@ -1565,7 +1611,7 @@ public final class MainActivity extends Activity {
                         loggerDefinitionName = saved.definitionName;
                         loggerProfile = saved.profile;
                         loggerProfileName = saved.profileName;
-                        loggerSetupState = "Saved logger setup restored. Logging has not started.";
+                        loggerSetupState = "Saved logger setup restored. No new recording was started.";
                         getPreferences(MODE_PRIVATE).edit()
                                 .putString("logger_protocol", loggerProtocol.name()).apply();
                     }
@@ -1604,7 +1650,7 @@ public final class MainActivity extends Activity {
     }
 
     private void chooseArchivedLog() {
-        if (liveLogger != null) {
+        if (isLiveActive()) {
             notice("Stop logging and wait for the recording to finish first.");
             return;
         }
@@ -1660,7 +1706,7 @@ public final class MainActivity extends Activity {
             stopLoggerPreview("Offline preview stopped. The recorded values can be saved as CSV.");
             return;
         }
-        if (liveLogger != null) {
+        if (isLiveActive()) {
             notice("Stop the live logger before starting simulated data.");
             return;
         }
@@ -1717,9 +1763,24 @@ public final class MainActivity extends Activity {
         startActivityForResult(intent, SAVE_PREVIEW_LOG);
     }
 
+    private boolean isLiveActive() {
+        // An unbound screen cannot assume that an existing service is idle.
+        return recordingService == null || recordingService.busy();
+    }
+
+    private boolean loggerSetupEditable() {
+        if (!isLiveActive()) return true;
+        notice(recordingService == null ? "Waiting for recording-service status."
+                : "Stop logging and wait for adapter cleanup before changing setup.");
+        return false;
+    }
+
     private void toggleLiveLogger() {
-        ReadOnlyLoggerSession current = liveLogger;
-        if (current != null) {
+        if (recordingService == null || !activityResumed) {
+            notice("Wait for the recording service while this screen is visible.");
+            return;
+        }
+        if (isLiveActive()) {
             stopLiveLogger("Stopping after the current read...");
             return;
         }
@@ -1727,117 +1788,112 @@ public final class MainActivity extends Activity {
         OpenPortUsbTransport transport = openPort;
         PortableLoggerDefinition definition = loggerDefinition;
         PortableLoggerProfile profile = loggerProfile;
-        if (transport == null) {
-            notice("Prepare an OpenPort 2.0 first.");
-            return;
-        }
+        if (transport == null) { notice("Prepare an OpenPort 2.0 first."); return; }
         if (definition == null || profile == null) {
-            notice("Open a logger definition and profile first.");
+            notice("Open a logger definition and profile first."); return;
+        }
+        if (Build.VERSION.SDK_INT >= 33
+                && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
+                    != android.content.pm.PackageManager.PERMISSION_GRANTED
+                && !getPreferences(MODE_PRIVATE).getBoolean("recording_notification_requested", false)) {
+            getPreferences(MODE_PRIVATE).edit().putBoolean("recording_notification_requested", true).apply();
+            requestPermissions(new String[] {android.Manifest.permission.POST_NOTIFICATIONS}, 24);
+            notice("After choosing notification permission, press Start again. Logging has not started.");
             return;
         }
         stopLoggerPreview(null);
-
-        if (liveLoggerButton != null) {
-            liveLoggerButton.setText(R.string.logger_live_stop);
-        }
-        if (liveLoggerView != null) {
-            liveLoggerView.setText(getString(R.string.logger_live_opening, loggerProtocol.name()));
-        }
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        final PortableLogSession recording;
         try {
-            File folder = new File(getFilesDir(), "recordings");
-            if (!folder.isDirectory() && !folder.mkdirs()) {
-                throw new java.io.IOException("Recording folder is unavailable");
+            UsbDevice selected = findOpenPort((UsbManager) getSystemService(USB_SERVICE));
+            if (!recordingService.start(transport, selected, definition, profile)) {
+                notice("Adapter permission or recording state changed. Prepare the OpenPort again.");
+                return;
             }
-            recording = PortableLogSession.streaming(File.createTempFile(
-                    "live-" + System.currentTimeMillis() + "-", ".csv.part", folder), 10_000);
-        } catch (Exception failure) {
-            notice(failure.getMessage() == null
-                    ? "Live-log storage could not be prepared."
-                    : failure.getMessage());
-            getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-            if (liveLoggerButton != null) liveLoggerButton.setText(R.string.logger_live_start);
-            return;
+            synchronized (usbLock) {
+                usbGeneration++;
+                openPort = null; // Exclusive ownership transferred; Activity must never close it.
+            }
+            usbState = "OpenPort is owned by the read-only recording service.";
+            clearLoggerGauges();
+            displayedRecording = null;
+            displayedRecordingState = null;
+            refreshRecording();
+            refreshUsbStatus();
+            if (!getSystemService(android.app.NotificationManager.class).areNotificationsEnabled()) {
+                notice("Notifications are disabled. Return to RomRaider2 to stop recording; Android's Active apps Stop terminates the app.");
+            }
+        } catch (RuntimeException failure) {
+            notice(failure.getMessage() == null ? "Recording could not start." : failure.getMessage());
         }
-        final int generation = ++liveSessionGeneration;
-        clearLoggerGauges();
-        ReadOnlyLoggerSession session = new ReadOnlyLoggerSession(transport,
-                definition, profile, recording,
-                new ReadOnlyLoggerSession.Listener() {
-                    private long lastDisplayTimestamp = -100;
-                    @Override
-                    public void onIdentified(String ecuId, int ready,
-                            int unavailable) {
-                        runOnUiThread(() -> {
-                            if (isDestroyed() || generation != liveSessionGeneration) return;
-                            liveEcuIdentified = true;
-                            if (liveLoggerView != null) {
-                                liveLoggerView.setText(getString(
-                                        R.string.logger_live_identified,
-                                        ecuId, ready, unavailable));
-                            }
-                        });
-                    }
-
-                    @Override
-                    public void onValues(String ecuId, long timestamp,
-                            List<PortableLoggerValue> values, int samples) {
-                        // Record every cycle; cap display work to 10 updates/sec.
-                        if (timestamp - lastDisplayTimestamp < 100) return;
-                        lastDisplayTimestamp = timestamp;
-                        String display = liveValueSummary(ecuId, timestamp,
-                                values, samples);
-                        runOnUiThread(() -> {
-                            if (isDestroyed() || generation != liveSessionGeneration) return;
-                            if (liveLoggerView != null) {
-                                liveLoggerView.setText(display);
-                            }
-                            updateLoggerGauges(values);
-                        });
-                    }
-
-                    @Override
-                    public void onStopped(String message) {
-                        runOnUiThread(() -> {
-                            if (isDestroyed() || generation != liveSessionGeneration) return;
-                            liveEcuIdentified = false;
-                            liveLog = recording;
-                            liveLogger = null;
-                            getWindow().clearFlags(
-                                    WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-                            if (liveLoggerButton != null) {
-                                liveLoggerButton.setText(
-                                        R.string.logger_live_start);
-                            }
-                            if (liveLoggerView != null) {
-                                int recorded = recording.size();
-                                String recordedSummary = getResources()
-                                        .getQuantityString(
-                                                R.plurals.logger_live_recorded,
-                                                recorded, recorded);
-                                liveLoggerView.setText(getString(
-                                        R.string.logger_live_stopped,
-                                        message, recordedSummary));
-                            }
-                        });
-                    }
-                });
-        liveLogger = session;
-        workerExecutor.execute(session::run);
     }
 
     private void stopLiveLogger(String message) {
-        ReadOnlyLoggerSession session = liveLogger;
-        if (session == null) return;
-        session.stop();
-        if (message != null && liveLoggerView != null) {
-            liveLoggerView.setText(message);
+        if (recordingService != null && recordingService.busy()) recordingService.stop();
+        if (message != null && liveLoggerView != null) liveLoggerView.setText(message);
+    }
+
+    private void refreshRecording() {
+        if (recordingService == null || activityDestroyed) return;
+        ReadOnlyRecording current = recordingService.recording();
+        if (current == null) return;
+        ReadOnlyRecording.Snapshot state = current.snapshot();
+        boolean busy = recordingService.busy();
+        if (current == displayedRecording && state == displayedRecordingState
+                && !busy && !displayedRecordingBusy) return;
+        if (current != displayedRecording) {
+            clearLoggerGauges();
+            displayedRecording = current;
+            displayedRecordingState = null;
         }
+        if (state != displayedRecordingState) {
+            if (!state.values().isEmpty()) {
+                for (int index = 0; index < Math.min(MOBILE_GAUGE_LIMIT, state.values().size()); index++) {
+                    PortableLoggerValue value = state.values().get(index);
+                    PortableSelectedParameter selected = value.getSelection();
+                    String id = selected.getParameter().getId();
+                    MobileGaugeSnapshot gauge = loggerGaugeSnapshots.get(id);
+                    if (gauge == null) {
+                        gauge = new MobileGaugeSnapshot(id, selected.getParameter().getName(),
+                                selected.getConversion().getUnits(), selected.getConversion().getFormat(), value.getValue());
+                        loggerGaugeSnapshots.put(id, gauge);
+                    }
+                    gauge.minimum = state.minimum(index);
+                    gauge.maximum = state.maximum(index);
+                }
+                updateLoggerGauges(state.values());
+                for (PortableLoggerValue value : state.values()) {
+                    gaugeReceivedAt.put(value.getSelection().getParameter().getId(),
+                            state.receivedAtNanos() / 1_000_000L);
+                }
+            }
+            displayedRecordingState = state;
+        }
+        liveEcuIdentified = busy && state.phase() == ReadOnlyRecording.Phase.RECORDING;
+        if (busy && activityResumed) getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        if (liveLoggerButton != null) liveLoggerButton.setText(busy
+                ? R.string.logger_live_stop : R.string.logger_live_start);
+        if (liveLoggerView != null) {
+            String message = !recordingService.failure().isEmpty() ? recordingService.failure()
+                    : !busy ? getString(R.string.logger_live_stopped, state.message(),
+                            getResources().getQuantityString(R.plurals.logger_live_recorded, state.samples(), state.samples()))
+                    : state.phase() == ReadOnlyRecording.Phase.STOPPED ? "Releasing the adapter..."
+                    : state.phase() == ReadOnlyRecording.Phase.RECORDING
+                            ? liveValueSummary(state.ecuId(), state.timestampMillis(), state.values(), state.samples())
+                            : state.phase() == ReadOnlyRecording.Phase.CONNECTING
+                                ? state.ecuId().isEmpty()
+                                    ? getString(R.string.logger_live_opening, current.protocol().name())
+                                    : getString(R.string.logger_live_identified, state.ecuId(), state.ready(), state.unavailable())
+                                : state.message();
+            if (!message.contentEquals(liveLoggerView.getText())) liveLoggerView.setText(message);
+        }
+        if (!busy) liveLog = current.completedLog();
+        displayedRecordingBusy = busy;
+        refreshGaugeAvailability();
     }
 
     private void saveLiveLog() {
-        if (liveLogger != null) {
+        refreshRecording();
+        if (isLiveActive()) {
             notice("Stop the live logger and wait for the current read before saving.");
             return;
         }
@@ -2010,7 +2066,7 @@ public final class MainActivity extends Activity {
     }
 
     private void showLoggerGaugeDemo() {
-        if (liveLogger != null) {
+        if (isLiveActive()) {
             notice("Stop the live logger before showing simulated gauges.");
             return;
         }
@@ -2039,6 +2095,12 @@ public final class MainActivity extends Activity {
     }
 
     private void resetLoggerGaugePeaks() {
+        if (!gaugeDemo && !previewRunning && recordingService != null
+                && recordingService.recording() != null) {
+            recordingService.recording().resetPeaks();
+            refreshRecording();
+            return;
+        }
         for (MobileGaugeSnapshot snapshot : loggerGaugeSnapshots.values()) {
             snapshot.resetPeaks();
             MobileGaugeView gauge = loggerGaugeViews.get(snapshot.id);
@@ -2287,14 +2349,23 @@ public final class MainActivity extends Activity {
 
     private void refreshGaugeAvailability() {
         String state = gaugeDemo || previewRunning ? "SIMULATED"
-                : liveLogger != null ? (liveEcuIdentified ? "LIVE • RECORDING" : "CONNECTING") : "STOPPED";
+                : recordingService == null ? "CHECKING RECORDING"
+                : isLiveActive() ? (liveEcuIdentified ? "LIVE • RECORDING" : "CONNECTING / STOPPING") : "STOPPED";
+        if (!gaugeDemo && !previewRunning && displayedRecordingState != null && isLiveActive()) {
+            ReadOnlyRecording.Phase phase = displayedRecordingState.phase();
+            if (phase == ReadOnlyRecording.Phase.STOPPING || phase == ReadOnlyRecording.Phase.STOPPED) state = "STOPPING";
+            else if (phase == ReadOnlyRecording.Phase.RECORDING
+                    && SystemClock.elapsedRealtimeNanos() - displayedRecordingState.receivedAtNanos() > 3_000_000_000L)
+                state = "NO RECENT ECU DATA";
+            else if (phase != ReadOnlyRecording.Phase.RECORDING) state = "CONNECTING";
+        }
         if (gaugesStatus != null) gaugesStatus.setText(state + (loggerGaugeViews.isEmpty()
                 ? "\nSelect channels in LOGGER while parked."
                 : "  •  " + loggerGaugeViews.size() + " gauges"));
         long now = SystemClock.elapsedRealtime();
         for (Map.Entry<String, MobileGaugeView> entry : loggerGaugeViews.entrySet()) {
             if (gaugeDemo) entry.getValue().setDataState("SIMULATED");
-            else if (!previewRunning && liveLogger == null) entry.getValue().markUnavailable("STOPPED");
+            else if (!previewRunning && !isLiveActive()) entry.getValue().markUnavailable("STOPPED");
             else if (now - gaugeReceivedAt.getOrDefault(entry.getKey(), 0L) > 3000)
                 entry.getValue().markUnavailable("NO RECENT DATA");
         }

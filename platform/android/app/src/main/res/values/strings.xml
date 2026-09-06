@@ -14,7 +14,8 @@
     <string name="logger_live_opening">READ-ONLY LOGGER\nOpening %1$s K-line…</string>
     <string name="logger_simulated_gauge_demo">SIMULATED GAUGE DEMO  /  no ECU data</string>
     <string name="logger_live_identified">READ-ONLY LOGGER\nECU %1$s\nReady: %2$d  /  unavailable: %3$d\nWaiting for the first values…</string>
-    <string name="logger_live_stopped">%1$s\n%2$s</string>
+    <string name="logger_live_stopped">%1$s\n%2$s\nPrepare the adapter before another recording.</string>
+    <string name="logger_service_unavailable">Recording service unavailable. No reconnection will be started automatically.</string>
     <plurals name="logger_live_recorded">
         <item quantity="one">%d channel value recorded.</item>
         <item quantity="other">%d channel values recorded.</item>

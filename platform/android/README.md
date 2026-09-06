@@ -7,6 +7,12 @@ This page describes version 1.1.2. See the
 [main download page](../../README.md#downloads) for published packages and migration
 guidance; later source checkpoints are not automatically new APK releases.
 
+Version 1.1.3 source adds calculated channels, reviewed portable logger-setup
+transfer and [service-owned background recording](../../docs/ANDROID_BACKGROUND_RECORDING.md).
+The foreground-only and calculated-channel limitations below describe public
+1.1.2, not that newer source. Background USB behavior still needs supervised
+physical-device qualification.
+
 ## Features
 
 - Open a ROM with Android's document picker and match a RomRaider ECU definition

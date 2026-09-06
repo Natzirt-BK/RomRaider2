@@ -40,6 +40,7 @@ public class ReadOnlyRecordingTest {
 
     @Test public void constructionAndRepeatedSnapshotsNeverAcquireOrStart() throws Exception {
         try (Harness h = new Harness()) {
+            assertEquals(PortableLoggerProtocol.MUT2, h.recording.protocol());
             for (int i = 0; i < 1000; i++) {
                 assertEquals(ReadOnlyRecording.Phase.NEW, h.recording.snapshot().phase());
                 assertFalse(h.recording.snapshot().active());
@@ -140,6 +141,33 @@ public class ReadOnlyRecordingTest {
             assertEquals(ReadOnlyRecording.Phase.STOPPED, h.recording.snapshot().phase());
             assertEquals(1, h.transport.closes.get());
             assertEquals(1, h.releases.get());
+        }
+    }
+
+    @Test public void peaksIncludeUnobservedCyclesAndResetWithoutChangingFreshnessOrCsv() throws Exception {
+        try (Harness h = new Harness()) {
+            h.cycle(); h.recording.start();
+            waitUntil(() -> h.recording.snapshot().samples() == 2);
+            ReadOnlyRecording.Snapshot first = h.recording.snapshot();
+            h.transport.responses.add(160); h.transport.responses.add(180);
+            waitUntil(() -> h.recording.snapshot().samples() == 4);
+            assertEquals(2500, first.maximum(0), 0);
+            assertEquals(5000, h.recording.snapshot().maximum(0), 0);
+            assertEquals(2500, h.recording.snapshot().minimum(0), 0);
+            long received = h.recording.snapshot().receivedAtNanos();
+            h.clock.set(received + 4_000_000_000L);
+            h.recording.resetPeaks();
+            assertEquals(received, h.recording.snapshot().receivedAtNanos());
+            assertEquals(4, h.recording.snapshot().samples());
+            assertEquals(5000, h.recording.snapshot().minimum(0), 0);
+            h.transport.responses.add(40); h.transport.responses.add(180);
+            waitUntil(() -> h.recording.snapshot().samples() == 6);
+            assertEquals(1250, h.recording.snapshot().minimum(0), 0);
+            assertEquals(5000, h.recording.snapshot().maximum(0), 0);
+            h.recording.stop(); h.transport.responses.add(END); await(h.recording);
+            assertEquals(1250, h.recording.snapshot().minimum(0), 0);
+            assertEquals(5000, h.recording.snapshot().maximum(0), 0);
+            assertEquals(6, h.recording.completedLog().size());
         }
     }
 

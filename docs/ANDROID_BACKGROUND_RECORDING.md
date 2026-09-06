@@ -1,15 +1,15 @@
-# Android background-recording foundation
+# Android background recording
 
-Status: **internal foundation in 1.1.3 development source, not an enabled
-background-logging feature**. The Android Activity still owns its existing live
-logger and stops it when leaving the foreground. No foreground service,
-notification permission or wake lock has been added to the production manifest.
-Public downloads remain 1.1.2.
+Status: **implemented in 1.1.3 development source**. An explicitly started live
+recording belongs to a non-exported foreground service, not the Activity. It can
+continue when the screen is replaced, another app is opened or the display is
+off. Public 1.1.2 downloads are unchanged and still stop when backgrounded.
+Physical OpenPort/screen-off acceptance remains deferred.
 
 ## Implemented ownership boundary
 
 `ReadOnlyRecording` is an Android-framework-independent, one-shot recording owner
-for the upcoming service host. It is not yet wired into `MainActivity`. It uses
+used by `ReadOnlyLoggingService`. `MainActivity` displays its snapshots. It uses
 the existing real `ReadOnlyLoggerSession`, SSM/MUT-II query planning, complete
 cycle conversion and `PortableLogSession` recording/export code.
 
@@ -31,8 +31,11 @@ there is no restart/reconnect mechanism or persisted running state.
 The factory owns partial acquisitions until it returns a complete resource set.
 After that, the recording owns the transport and writer exclusively. The factory
 must honor cancellation and use finite device operations; the owner cannot make
-an arbitrary blocking factory interruptible. The future host must also prevent
-two different owners from acquiring the same adapter concurrently.
+an arbitrary blocking factory interruptible. The service rejects overlapping
+recordings and remains busy through final transport release and foreground cleanup.
+An adapter prepared by the Activity transfers exclusively to the service on an
+accepted start. A lease closes that adapter even if recording preparation never
+runs or fails before returning its resources. Prepare it again for a later run.
 
 `stop()` and `close()` are cooperative and nonblocking. Stopping during queued
 startup avoids acquisition; stopping during acquisition prevents subsequent ECU
@@ -41,13 +44,19 @@ The completed-log handle stays unavailable through final flush and full USB
 release. Closing does not discard the spool. `awaitStopped()` is only for worker
 or test code, never an Android lifecycle/main-thread wait.
 
-Snapshots contain an immutable latest complete cycle, identity/readiness counts,
+Snapshots contain an immutable latest complete cycle, finite-only session peaks,
+identity/readiness counts,
 recorded-value count and original monotonic receipt time. They do not retain
 screens, dispatch callbacks or accumulate a queue while no screen is observing.
 Independent readers cannot restart capture or reset reading freshness. Android
 hosts must supply `SystemClock::elapsedRealtimeNanos` and use the same clock for
 stale detection so deep sleep counts toward age. The default JVM clock is for
 non-Android hosts/tests; session CSV timestamps remain unchanged.
+
+Peaks include completed cycles while the Activity is absent. Reset peaks changes
+display state only, preserving CSV, sample count and the original receipt time.
+The service retains no Activity or view callbacks; the visible Activity polls
+snapshots at most ten times per second and stops polling when backgrounded.
 
 The owner retains only the current snapshot; the recording's configured recent
 sample buffer stays bounded while its disk spool retains the full capture.
@@ -56,14 +65,14 @@ snapshots retain the actual last values but are explicitly STOPPED, never live.
 Existing session cleanup now appends adapter/flush failures instead of replacing
 the original read failure.
 
-## Service integration contract — next implementation
+## Service integration
 
-The following are project design requirements, not claims about implemented UI:
+The service preserves these boundaries:
 
 1. A non-exported, locally bound service owns the recording, USB connection and
    writer. The Activity renders snapshots and sends explicit commands. Foreground
-   promotion must succeed before acquisition/ECU reads; the execution type will
-   be `connectedDevice`, with USB permission checked for the actual selected
+   promotion must succeed before recording acquisition/ECU reads; the execution
+   type is `connectedDevice`, with USB permission checked for the actual selected
    adapter. Do not add unrelated network/Bluetooth permissions merely to bypass
    Android's foreground-service prerequisites. Android requires the appropriate
    type/permission and a two-stage foreground-service launch.
@@ -80,18 +89,21 @@ The following are project design requirements, not claims about implemented UI:
    state, open-app action and explicit Stop. Guard Stop against an older
    recording's action stopping a newer session. Handle notification denial
    truthfully: notification permission is not an OS prerequisite for starting
-   the service, but the service still must supply its notification. Decide and
-   test the user-facing denied/disabled-notification path before enabling this.
+   the service, but the service still must supply its notification. The first
+   permission prompt does not start recording: press Start again afterward.
+   If notifications are disabled, the app warns that Stop remains available in
+   the app; it does not claim a visible notification action is available.
    [Notification permission](https://developer.android.com/develop/ui/compose/notifications/notification-permission).
 4. Activity replacement or view switches must attach to the same owner and
    preserve original receipt age, gauges, selected-channel ordering and CSV
    continuity. Activity cleanup must not close a service-owned USB connection.
    Setup/editor mutations stay blocked through PREPARING and STOPPING as well as
    active reading. USB detach is handled by the service, without reconnection.
-5. Screen-off capture needs an explicit power/lifetime policy. Any partial wake
-   lock must use a timeout, be tied to the active foreground recording, and be
-   released on every terminal/error path. No indefinite idle wake lock or blanket
-   battery-optimization exemption is planned.
+5. The partial wake lock has a ten-minute timeout and is renewed at five-minute
+   intervals only while foreground capture is progressing. Stopping or a
+   two-minute absence of progress prevents renewal. Completion releases it
+   immediately. No blanket battery-optimization exemption is requested. This
+   does not guarantee survival of power loss, process termination or OEM policy.
    [Wake-lock release guidance](https://developer.android.com/develop/background-work/background-tasks/awake/wakelock/release).
 6. Treat process death, force-stop and Android's Task Manager Stop differently
    from orderly notification Stop. Task Manager can kill the entire app without
@@ -101,29 +113,41 @@ The following are project design requirements, not claims about implemented UI:
 
 ## Verification and remaining gates
 
-Seventeen new deterministic JVM cases exercise one-use/concurrent starts,
+Local qualification passed all 65 Android JVM tests in both debug and automation
+variants, shared portable checks, debug/diagnostic/automation APK builds and lint.
+Lint retains five existing SDK-update, allocation and text-format warnings;
+there are no lint errors. The complete API 36 emulator lifecycle script passed,
+including notification return and inspection of service state after process
+death, before any test restart. Local reinstall uses the same APK; hosted CI
+separately exercises an increasing-version, same-key upgrade. Production and
+automation manifest checks passed, and deliberately crossed package/type checks
+were rejected. None of these checks accessed a physical device or ECU.
+
+Eighteen deterministic JVM cases exercise one-use/concurrent starts,
 worker rejection, queued and in-flight cancellation, delayed identity/read
 completion, independent snapshot readers, immutable values/original receipt
 time, full-release completion ordering, storage/connection/cleanup failures,
+unobserved peaks and freshness-preserving peak reset,
 SSM and MUT-II CSV order, and 40,000 recorded values with one retained in-memory
 sample and one latest-cycle snapshot. They run real session/conversion/spool
 code with fake transports, not Android USB or a vehicle.
 
-Local qualification passed all 64 Android unit tests in both debug and automation
-variants, portable-core checks, debug/OpenPort-diagnostic/automation APK builds,
-and their lint tasks. Lint has no errors; the existing SDK-version, gauge draw
-allocation and status-text warnings remain. The isolated emulator passed setup
-restoration, source removal, same-key reinstall continuity, retained-log export,
-gauge/session/CSV continuity, calculated gauges, reviewed channel transfer,
-empty/corrupt setup handling and no automatic logging. Reinstalling the same
-local APK is not an increasing-version upgrade test; hosted automation separately
-uses increasing version codes.
+The isolated-emulator tests use the real service and Activity with fake
+transports, exercising Home/screen-off capture, Activity recreation, all gauge
+themes/calculated channels, notification and in-app Stop, denied notifications,
+stale/duplicate/cancelled requests, read failure and process death. The deliberate
+process kill expects a crashed instrumentation result after a readiness marker;
+the next launch verifies the flushed spool prefix remains and no recording,
+notification or USB session resumes. It does not certify a partially written
+last row or prove recovery of bytes that had not reached storage.
 
-These tests do not establish Activity recreation or foreground-service behavior.
-Service integration must add isolated-emulator lifecycle, notification Stop,
-stale-intent, denied-authority and process-death tests. Do not weaken the
-production permission model to make a USB-free emulator pass. Any automation-only
-service fixture must be explicitly separated from the production manifest.
+The automation-only manifest substitutes `dataSync` for `connectedDevice` so a
+USB-free emulator can exercise Android's real foreground-service lifecycle. Only
+the isolated automation package carries this substitution and its permission;
+production remains USB-permission-gated `connectedDevice`. Fake factories enter
+through test reflection, not through an exported component or intent. These
+tests are not evidence that real USB permission, native driver lifetime or
+vehicle traffic works while backgrounded.
 
 Actual OpenPort permission/lifetime behavior, screen-off sustained capture and
 Forester/EVO acceptance remain supervised physical tests. No ECU writing,

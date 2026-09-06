@@ -112,8 +112,8 @@ public final class OpenPortUsbTransport implements Closeable,
             throw new IOException("The OpenPort response was not understood.", ex);
         } finally {
             if (transport == null) {
-                connection.releaseInterface(endpoints.usbInterface);
-                connection.close();
+                try { connection.releaseInterface(endpoints.usbInterface); }
+                finally { connection.close(); }
             }
         }
     }
@@ -222,8 +222,8 @@ public final class OpenPortUsbTransport implements Closeable,
             // Detach and timeout are normal close paths.
         } finally {
             closed = true;
-            connection.releaseInterface(usbInterface);
-            connection.close();
+            try { connection.releaseInterface(usbInterface); }
+            finally { connection.close(); }
         }
     }
 

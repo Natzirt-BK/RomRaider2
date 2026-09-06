@@ -9,6 +9,7 @@ import android.os.Bundle;
 import android.os.SystemClock;
 import android.view.accessibility.AccessibilityNodeInfo;
 import com.romraider.mobile.logger.LoggerImportState;
+import com.romraider.mobile.logger.ReadOnlyRecording;
 import com.romraider.portable.PortableRomRaiderCsvWriter;
 import com.romraider.portable.PortableRomDocument;
 import com.romraider.portable.editor.PortableEcuDefinitionReader;
@@ -57,6 +58,10 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
             else if (phase.equals("live-gauges")) verifyReadOnlySessionViewSwitch();
             else if (phase.equals("calculated-gauges")) verifyCalculatedGauges();
             else if (phase.equals("channel-transfer")) verifyChannelTransfer();
+            else if (phase.equals("background-service")) verifyBackgroundService();
+            else if (phase.equals("background-denied")) verifyBackgroundDenied();
+            else if (phase.equals("background-process-death")) prepareBackgroundProcessDeath();
+            else if (phase.equals("background-after-death")) verifyBackgroundAfterDeath();
             else if (phase.equals("gauge-gallery")) captureGaugeGallery();
             else if (phase.equals("verify")) verify(2);
             else if (phase.equals("clear")) {
@@ -360,8 +365,13 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
         }
     }
     private void verifyNotRunning() throws Exception {
-        check(field("liveLogger") == null && !(Boolean) field("previewRunning"),
+        check(!(Boolean) field("previewRunning"),
                 "Restore started logging automatically");
+        runOnMainSync(() -> {
+            ReadOnlyLoggingService service = (ReadOnlyLoggingService) fieldUnchecked("recordingService");
+            check(service != null && !service.busy() && service.recording() == null,
+                    "Restoration acquired or resumed a service recording");
+        });
     }
     private void awaitImports() throws Exception {
         long deadline = SystemClock.uptimeMillis() + 15_000;
@@ -369,6 +379,7 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
             Activity[] ready = {null};
             runOnMainSync(() -> {
                 if (activity != null && !activity.isDestroyed()
+                        && fieldUnchecked("recordingService") != null
                         && !((LoggerImportState) fieldUnchecked("loggerImports")).isLoading()) ready[0] = activity;
             });
             if (ready[0] != null && settle(ready[0])) return;
@@ -603,23 +614,11 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
             }
             public void closeReadOnlyKLine() { closes.incrementAndGet(); }
         };
-        com.romraider.mobile.logger.ReadOnlyLoggerSession session = new com.romraider.mobile.logger.ReadOnlyLoggerSession(
-                transport, (PortableLoggerDefinition) field("loggerDefinition"),
-                (PortableLoggerProfile) field("loggerProfile"), log,
-                new com.romraider.mobile.logger.ReadOnlyLoggerSession.Listener() {
-                    public void onIdentified(String id, int ready, int unavailable) {
-                        setField("liveEcuIdentified", true);
-                    }
-                    public void onValues(String id, long timestamp,
-                            java.util.List<com.romraider.portable.logger.PortableLoggerValue> values, int samples) {
-                        invoke("updateLoggerGauges", new Class<?>[] {java.util.List.class}, values);
-                    }
-                    public void onStopped(String message) { setField("liveLogger", null); }
-                });
         invoke("clearLoggerGauges", new Class<?>[0]);
-        setField("liveLogger", session); setField("liveLog", log);
-        Thread worker = new Thread(session::run, "synthetic-read-only-gauge-test");
-        worker.start();
+        ReadOnlyLoggingService service = (ReadOnlyLoggingService) field("recordingService");
+        ReadOnlyRecording session = startServiceRecording(service, transport,
+                (PortableLoggerDefinition) field("loggerDefinition"),
+                (PortableLoggerProfile) field("loggerProfile"), log, () -> { }, false);
         try {
             long deadline = SystemClock.uptimeMillis() + 5000;
             while (log.size() < 4 && SystemClock.uptimeMillis() < deadline) SystemClock.sleep(30);
@@ -630,7 +629,7 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
             for (MobileGaugeTheme theme : MobileGaugeTheme.values()) {
                 invoke("setLoggerGaugeTheme", new Class<?>[] {MobileGaugeTheme.class}, theme);
                 invoke("showGaugesOnly", new Class<?>[0]);
-                check(field("liveLogger") == session && field("liveLog") == log && field("loggerGaugeGrid") == grid,
+                check(field("displayedRecording") == session && session.completedLog() == null && field("loggerGaugeGrid") == grid,
                         "Mounted view replaced the running read-only session, writer or gauges");
                 invoke("leaveGaugesOnly", new Class<?>[0]);
                 check(closes.get() == 0 && identifies.get() == 1, "View switching disconnected/reidentified the ECU");
@@ -639,9 +638,9 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
             while (log.size() <= before && SystemClock.uptimeMillis() < deadline) SystemClock.sleep(30);
             check(log.size() > before && spool.length() > bytes, "CSV spool stopped growing during view switches");
         } finally {
-            session.stop(); worker.join(5000);
-            check(!worker.isAlive(), "Synthetic logger failed to stop");
-            setField("liveLogger", null); setField("liveLog", null);
+            runOnMainSync(service::stop);
+            waitForServiceIdle(service);
+            check(session.completedLog() == log, "Service replaced the completed writer");
             try {
                 StringWriter csv = new StringWriter(); log.writeRomRaiderCsv(csv);
                 check(csv.toString().startsWith("Time (msec),"), "Recording no longer exports standard RomRaider CSV");
@@ -660,6 +659,262 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
         }
         System.out.println("PASS: actual read-only session and disk-backed CSV writer survive every theme/view switch with a fake transport.");
     }
+    private void verifyBackgroundService() throws Exception {
+        ReadOnlyLoggingService service = (ReadOnlyLoggingService) field("recordingService");
+        android.content.pm.ServiceInfo info = getTargetContext().getPackageManager().getServiceInfo(
+                new android.content.ComponentName(getTargetContext(), ReadOnlyLoggingService.class), 0);
+        check(!info.exported && info.getForegroundServiceType() == android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC,
+                "Automation must use its isolated USB-free service manifest, never weaken production permissions");
+        ServiceFixture first = new ServiceFixture(service);
+        runOnMainSync(() -> check(!service.start(null, null, first.definition, first.profile)
+                && service.recording() == null, "Idle service accepted missing USB authority"));
+        first.start(false);
+        android.app.PendingIntent oldStop;
+        try {
+            waitForSamples(first, 4);
+            runOnMainSync(() -> {
+                check(service.busy(), "Service not active");
+                check((Boolean) serviceField(service, "foreground"), "Service was not promoted");
+                android.os.PowerManager.WakeLock wake = (android.os.PowerManager.WakeLock) serviceField(service, "wakeLock");
+                check(wake != null && wake.isHeld(), "Recording wake lock missing");
+                check(!service.start(null, null, first.definition, first.profile), "Missing USB authority was accepted");
+            });
+            android.service.notification.StatusBarNotification[] notifications = getTargetContext()
+                    .getSystemService(android.app.NotificationManager.class).getActiveNotifications();
+            check(notifications.length == 1 && notifications[0].getNotification().actions.length == 1,
+                    "Recording notification or Stop action is missing");
+            oldStop = notifications[0].getNotification().actions[0].actionIntent;
+            Object profileBefore = field("loggerProfile");
+            invoke("chooseLoggerChannels", new Class<?>[0]);
+            check(field("loggerProfile") == profileBefore, "Active capture allowed setup replacement");
+            waitForIdleSync();
+            AccessibilityNodeInfo setupRoot = getUiAutomation().getRootInActiveWindow();
+            long setupWindowDeadline = SystemClock.uptimeMillis() + 5000;
+            while (setupRoot == null && SystemClock.uptimeMillis() < setupWindowDeadline) {
+                SystemClock.sleep(50);
+                setupRoot = getUiAutomation().getRootInActiveWindow();
+            }
+            check(setupRoot != null, "Active recording screen was unavailable to accessibility");
+            check(setupRoot.findAccessibilityNodeInfosByText("Channels (fewer = faster cycles)").isEmpty(),
+                    "Active recording opened editable channel controls");
+            invoke("showGaugesOnly", new Class<?>[0]);
+            int before = first.recording.snapshot().samples();
+            shell("input keyevent KEYCODE_HOME");
+            long stoppedDeadline = SystemClock.uptimeMillis() + 10_000;
+            while ((Boolean) field("activityResumed") && SystemClock.uptimeMillis() < stoppedDeadline) SystemClock.sleep(50);
+            check(!(Boolean) field("activityResumed"), "Activity did not leave foreground");
+            waitForSamples(first, before + 4);
+            shell("input keyevent KEYCODE_SLEEP");
+            before = first.recording.snapshot().samples();
+            waitForSamples(first, before + 4);
+            shell("input keyevent KEYCODE_WAKEUP");
+            shell("input keyevent 82");
+            // Exercise the actual notification return action; singleTop can reuse the screen.
+            notifications[0].getNotification().contentIntent.send();
+            long resumedDeadline = SystemClock.uptimeMillis() + 10_000;
+            while (!(Boolean) field("activityResumed") && SystemClock.uptimeMillis() < resumedDeadline) SystemClock.sleep(50);
+            check((Boolean) field("activityResumed"), "Existing Activity did not resume");
+            awaitImports();
+            check(field("recordingService") == service, "Returning to app replaced the service");
+            verifyActivityRecreation();
+            invoke("refreshRecording", new Class<?>[0]);
+            check(field("recordingService") == service && field("displayedRecording") == first.recording,
+                    "Activity replacement restarted the recording owner");
+            check(first.identifies.get() == 1 && first.releases.get() == 0,
+                    "Screen lifecycle disconnected or reidentified the synthetic ECU");
+            oldStop.send();
+            waitForServiceIdle(service);
+            check(first.recording.completedLog() == first.log && first.releases.get() == 1,
+                    "Notification Stop did not finish the same recording and release once");
+            check(first.recording.snapshot().samples() > 4, "Background recording did not accumulate samples");
+            StringWriter csv = new StringWriter(); first.log.writeRomRaiderCsv(csv);
+            check(csv.toString().startsWith("Time (msec),Engine Speed (rpm),Battery Voltage (V)\n"),
+                    "Service recording changed the standard RomRaider CSV layout");
+            runOnMainSync(() -> {
+                check(!(Boolean) serviceField(service, "foreground") && serviceField(service, "wakeLock") == null,
+                        "Foreground notification/wake lock survived completion");
+            });
+            check(getTargetContext().getSystemService(android.app.NotificationManager.class)
+                    .getActiveNotifications().length == 0, "Stopped notification was not removed");
+        } finally { first.stop(); }
+
+        ServiceFixture second = new ServiceFixture(service);
+        second.start(false);
+        try {
+            waitForSamples(second, 4);
+            oldStop.send();
+            SystemClock.sleep(300);
+            check(second.recording.snapshot().active(), "An old notification stopped a newer recording");
+            runOnMainSync(() -> {
+                String token = (String) serviceField(service, "token");
+                service.onStartCommand(new Intent().setAction("com.romraider.mobile.START_RECORDING")
+                        .putExtra("recording_token", token), 0, 999);
+                check(service.recording() == second.recording, "Duplicate start replaced the recording");
+            });
+            check(second.identifies.get() == 1, "Duplicate start probed the ECU again");
+            second.fail = true;
+            waitForServiceIdle(service);
+            check(second.recording.snapshot().message().contains("Synthetic service detach"),
+                    "Read failure was hidden");
+            check(second.releases.get() == 1 && second.log.size() >= 4, "Read failure lost the completed recording");
+        } finally { second.stop(); }
+
+        ServiceFixture cancelled = new ServiceFixture(service);
+        cancelled.start(true); // Cancel on the same main-thread turn, before onStartCommand.
+        try {
+            waitForServiceIdle(service);
+            check(cancelled.identifies.get() == 0 && cancelled.releases.get() == 1,
+                    "Cancelled pending start acquired the ECU or leaked the transferred adapter");
+        } finally { cancelled.stop(); }
+        System.out.println("PASS: real Android service promotion, Home/screen-off capture, Activity recreation, notification Stop, stale/duplicate commands and failure cleanup with a synthetic transport.");
+    }
+
+    private final class ServiceFixture {
+        final ReadOnlyLoggingService service;
+        final PortableLoggerDefinition definition;
+        final PortableLoggerProfile profile;
+        final com.romraider.portable.PortableLogSession log;
+        final File spool;
+        final java.util.concurrent.atomic.AtomicInteger identifies = new java.util.concurrent.atomic.AtomicInteger();
+        final java.util.concurrent.atomic.AtomicInteger releases = new java.util.concurrent.atomic.AtomicInteger();
+        volatile boolean fail;
+        ReadOnlyRecording recording;
+        final com.romraider.portable.logger.ReadOnlyLoggerTransport transport = new com.romraider.portable.logger.ReadOnlyLoggerTransport() {
+            public String identifyEcu(PortableLoggerProtocol protocol) { identifies.incrementAndGet(); return "SYNTHETIC_SERVICE"; }
+            public byte[] read(com.romraider.portable.logger.PortableLoggerQueryBatch batch) throws IOException {
+                SystemClock.sleep(25);
+                if (fail) throw new IOException("Synthetic service detach");
+                byte[] values = new byte[batch.getAddresses().length];
+                java.util.Arrays.fill(values, (byte) 120);
+                return values;
+            }
+            public void closeReadOnlyKLine() { }
+        };
+        ServiceFixture(ReadOnlyLoggingService service) throws Exception {
+            this.service = service;
+            definition = PortableLoggerDefinitionReader.read(new ByteArrayInputStream(DEFINITION.getBytes(StandardCharsets.UTF_8)), "SSM");
+            profile = PortableLoggerProfileReader.read(new ByteArrayInputStream(PROFILE.getBytes(StandardCharsets.UTF_8)));
+            File folder = new File(getTargetContext().getFilesDir(), "recordings");
+            check(folder.isDirectory() || folder.mkdirs(), "Fixture recording directory unavailable");
+            spool = File.createTempFile("automation-service-", ".csv.part", folder);
+            log = com.romraider.portable.PortableLogSession.streaming(spool, 1);
+        }
+        void start(boolean cancelImmediately) {
+            recording = startServiceRecording(service, transport, definition, profile, log,
+                    () -> releases.incrementAndGet(), cancelImmediately);
+        }
+        void stop() throws Exception {
+            runOnMainSync(service::stop);
+            waitForServiceIdle(service);
+            log.finish();
+        }
+    }
+
+    private ReadOnlyRecording startServiceRecording(ReadOnlyLoggingService service,
+            com.romraider.portable.logger.ReadOnlyLoggerTransport transport,
+            PortableLoggerDefinition definition, PortableLoggerProfile profile,
+            com.romraider.portable.PortableLogSession log, Closeable fullClose, boolean cancelImmediately) {
+        ReadOnlyRecording[] result = {null};
+        runOnMainSync(() -> {
+            try {
+                Class<?> leaseType = Class.forName(ReadOnlyLoggingService.class.getName() + "$Lease");
+                Constructor<?> constructor = leaseType.getDeclaredConstructor(Closeable.class);
+                constructor.setAccessible(true);
+                Object lease = constructor.newInstance(fullClose);
+                Method accept = ReadOnlyLoggingService.class.getDeclaredMethod("accept", ReadOnlyRecording.ResourceFactory.class,
+                        leaseType, android.hardware.usb.UsbDevice.class, PortableLoggerDefinition.class, PortableLoggerProfile.class);
+                accept.setAccessible(true);
+                ReadOnlyRecording.ResourceFactory factory = cancellation -> new ReadOnlyRecording.Resources(transport, log, (Closeable) lease);
+                check((Boolean) accept.invoke(service, factory, lease, null, definition, profile), "Fixture start was rejected");
+                result[0] = service.recording();
+                if (cancelImmediately) service.stop();
+            } catch (ReflectiveOperationException failure) { throw new AssertionError(failure); }
+        });
+        return result[0];
+    }
+
+    private static Object serviceField(ReadOnlyLoggingService service, String name) {
+        try {
+            Field field = ReadOnlyLoggingService.class.getDeclaredField(name); field.setAccessible(true);
+            return field.get(service);
+        } catch (ReflectiveOperationException failure) { throw new AssertionError(failure); }
+    }
+
+    private void verifyBackgroundDenied() throws Exception {
+        check(!getTargetContext().getSystemService(android.app.NotificationManager.class).areNotificationsEnabled(),
+                "Notification-denial fixture was not configured");
+        ReadOnlyLoggingService service = (ReadOnlyLoggingService) field("recordingService");
+        ServiceFixture fixture = new ServiceFixture(service);
+        fixture.start(false);
+        try {
+            waitForSamples(fixture, 4);
+            runOnMainSync(() -> check((Boolean) serviceField(service, "foreground"),
+                    "Notification denial incorrectly prevented foreground execution"));
+            invoke("stopLiveLogger", new Class<?>[] {String.class}, "Stopped from app.");
+            waitForServiceIdle(service);
+            check(fixture.releases.get() == 1 && fixture.recording.completedLog() == fixture.log,
+                    "In-app Stop failed with notifications denied");
+        } finally { fixture.stop(); }
+    }
+
+    private void prepareBackgroundProcessDeath() throws Exception {
+        ReadOnlyLoggingService service = (ReadOnlyLoggingService) field("recordingService");
+        ServiceFixture fixture = new ServiceFixture(service);
+        fixture.start(false);
+        waitForSamples(fixture, 4);
+        java.util.List<String> rows = Files.readAllLines(fixture.spool.toPath(), StandardCharsets.UTF_8);
+        check(rows.size() >= 2, "Completed fixture cycle was not flushed");
+        String prefix = rows.get(0) + "\n" + rows.get(1) + "\n";
+        String evidence = fixture.spool.getName() + "\n"
+                + java.util.Base64.getEncoder().encodeToString(prefix.getBytes(StandardCharsets.UTF_8));
+        try (FileOutputStream output = new FileOutputStream(new File(getTargetContext().getFilesDir(), "automation-service-death.evidence"))) {
+            output.write(evidence.getBytes(StandardCharsets.UTF_8)); output.getFD().sync();
+        }
+        Bundle ready = new Bundle(); ready.putString("stream", "READY for synthetic recording process-death check\n");
+        sendStatus(1, ready);
+        android.os.Process.killProcess(android.os.Process.myPid());
+        throw new AssertionError("Synthetic recording process unexpectedly survived SIGKILL");
+    }
+
+    private void verifyBackgroundAfterDeath() throws Exception {
+        verifyNotRunning();
+        String evidence = new String(Files.readAllBytes(new File(getTargetContext().getFilesDir(),
+                "automation-service-death.evidence").toPath()), StandardCharsets.UTF_8);
+        String[] fields = evidence.split("\n");
+        check(fields.length == 2 && fields[0].matches("automation-service-[A-Za-z0-9-]+\\.csv\\.part"), "Unexpected death fixture identity");
+        File spool = new File(new File(getTargetContext().getFilesDir(), "recordings"), fields[0]);
+        byte[] prefix = java.util.Base64.getDecoder().decode(fields[1]);
+        byte[] retained = Files.readAllBytes(spool.toPath());
+        check(retained.length >= prefix.length, "Process death removed a flushed recording prefix");
+        for (int i = 0; i < prefix.length; i++) check(prefix[i] == retained[i], "Flushed recording prefix changed after process death");
+        check(getTargetContext().getSystemService(android.app.NotificationManager.class).getActiveNotifications().length == 0,
+                "A dead recording's notification reappeared");
+        System.out.println("PASS: abrupt process death retains the flushed spool prefix and restart creates no recording or USB session.");
+    }
+
+    private void waitForServiceIdle(ReadOnlyLoggingService service) {
+        long deadline = SystemClock.uptimeMillis() + 10_000;
+        while (SystemClock.uptimeMillis() < deadline) {
+            boolean[] busy = {true}; runOnMainSync(() -> busy[0] = service.busy());
+            if (!busy[0]) return;
+            SystemClock.sleep(25);
+        }
+        throw new AssertionError("Service cleanup did not finish");
+    }
+
+    private void waitForSamples(ServiceFixture fixture, int count) {
+        long deadline = SystemClock.uptimeMillis() + 10_000;
+        while (fixture.recording.snapshot().samples() < count && SystemClock.uptimeMillis() < deadline) SystemClock.sleep(25);
+        check(fixture.recording.snapshot().samples() >= count,
+                "Service did not record: " + fixture.recording.snapshot().message() + " / " + fixture.service.failure());
+    }
+
+    private void shell(String command) throws IOException {
+        try (InputStream output = new android.os.ParcelFileDescriptor.AutoCloseInputStream(getUiAutomation().executeShellCommand(command))) {
+            byte[] bytes = new byte[1024]; while (output.read(bytes) >= 0) { }
+        }
+    }
+
     private void setField(String name, Object value) {
         runOnMainSync(() -> {
             try {

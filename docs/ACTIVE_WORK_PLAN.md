@@ -217,3 +217,10 @@ It is not yet connected to the Activity: background recording remains disabled.
 Next integrate the non-exported connected-device foreground service, explicit
 notification Stop and same-session screen reattachment, then qualify those paths
 on the isolated emulator before any supervised hardware acceptance.
+
+The foreground service is now connected to the Activity in 1.1.3 source. Explicit
+start transfers adapter ownership; Home/screen-off and screen replacement retain
+the same recording, latest values, peaks and original receipt age. Notification
+Stop, one-use requests, non-sticky restart behavior and cleanup guards are in
+place. Continue service qualification and retained-recording recovery audits;
+public packages and physical acceptance remain separate gates.

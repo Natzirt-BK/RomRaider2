@@ -132,6 +132,11 @@ workers for later range calculations and marker saves.
 units and captured protocol, with escaped XML and atomic save/backup replacement.
 These follow-ups are not in the published 1.1.2 downloads.
 
+Android 1.1.3 source also adds [service-owned background recording](docs/ANDROID_BACKGROUND_RECORDING.md),
+with explicit start, notification Stop and same-recording screen reattachment.
+Physical OpenPort/background acceptance is still pending; synthetic service tests
+do not qualify phone power management or vehicle compatibility.
+
 - Tabbed calibration workspace with favorites, recent and changed maps, ROM
   comparison, grouped undo/redo, notes, and crash recovery.
 - JavaFX [selection math and document controls](docs/DESKTOP_EDITOR_COMMANDS.md):

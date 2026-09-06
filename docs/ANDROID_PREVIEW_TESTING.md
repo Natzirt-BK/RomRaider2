@@ -85,9 +85,28 @@ available in this Android version.
    logger. `MUT2_GENERIC` means a plausible battery-PID response, **not** a match
    to a particular ECU calibration. Verify the definition against your vehicle.
 6. Stop and wait for completion, then **Save live CSV**. Switching between
-   LOGGER and GAUGES preserves the session. Backgrounding the app or disconnecting
-   USB stops it; the Editor cannot be opened during recording. The app does not
-   automatically reconnect or resume ECU requests.
+   LOGGER and GAUGES preserves the session. Public 1.1.2 stops on backgrounding;
+   1.1.3 development source uses the background service described below. USB
+   disconnection stops capture, and the Editor cannot be opened during recording.
+   The app does not automatically reconnect or resume ECU requests.
+
+### Background recording in 1.1.3 development source
+
+Start remains explicit. After the first notification-permission prompt, press
+Start again; granting permission alone does not query the ECU. An accepted
+recording uses a foreground service and can continue through Home, screen-off
+and Activity replacement. The recording notification opens the app or stops that
+specific session. If notifications are disabled, return to the app and use Stop;
+Android's Active apps Stop terminates the whole app without an orderly flush.
+Closing/swiping away the screen is not an orderly recording Stop.
+
+Wait for stopping/adapter cleanup before saving or changing setup. The service
+releases the adapter after capture; Prepare OpenPort again for another run. Gauge
+peaks and receipt age belong to the capture, not a recreated screen. Stale readings
+remain unavailable, and peak reset does not make them fresh. Use setup/stop/export
+controls while parked. See [the service contract and test limits](ANDROID_BACKGROUND_RECORDING.md).
+Real OpenPort/background behavior still needs supervised phone/vehicle acceptance;
+the automated service tests use an isolated emulator and synthetic transport.
 
 No pin-voltage, fault-clear, reset, flashing, or ECU memory-write operation is
 exposed. Unsupported logcfg options are rejected, not executed. The importer
