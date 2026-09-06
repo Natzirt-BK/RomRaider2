@@ -21,8 +21,8 @@ foreach ($RequiredFile in @(
     "config/settings.default.xml",
     "config/user/settings.xml",
     "VERSION.txt",
-    "docs/RC4_RELEASE_READINESS.md",
-    "docs/RC4_QUALIFICATION_RECORD.md",
+    "docs/RELEASE_READINESS.md",
+    "docs/RELEASE_QUALIFICATION_RECORD.md",
     "docs/WINDOWS_RELEASE_CHECKLIST.md",
     "customize/j2534Libraries.properties"
     "customize/nameSequences.properties"

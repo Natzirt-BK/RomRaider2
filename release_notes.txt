@@ -3,7 +3,7 @@ RomRaider2 ECU Studio 1.1.3
 
 Development source for the next patch. Public downloads remain 1.1.2 until a
 separately verified release is published. For published packages:
-https://github.com/Natzirt-BK/RomRaider2/releases/latest
+https://github.com/Natzirt-BK/RomRaider2/releases
 
 What changed for 1.1.3
 ---------------------
@@ -288,7 +288,7 @@ Android and SteamOS
   flashed from the preview.
 - Kept the Android Subaru SSM K-Line path foreground-only and read-only. It can
   identify an ECU, resolve a profile, display converted values, and record CSV,
-  but connected qualification remains scheduled for RC5.
+  but connected hardware testing remains pending.
 - Added a SteamOS handheld profile with one dark Steam-like theme, larger touch
   controls, a 1280x800 maximized layout, and a supported Non-Steam Game setup
   guide. The bundle does not change the read-only SteamOS system partition.

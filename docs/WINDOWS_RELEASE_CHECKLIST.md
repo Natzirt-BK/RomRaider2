@@ -1,9 +1,7 @@
 # Windows x64 release checklist
 
-RomRaider2's first Windows artifact is a portable, self-contained Java 21 x64
-application image. It is a release-candidate preview until the clean-machine
-and connected-hardware checks below pass. It must not be described as the
-stable Windows release before then.
+Windows packages include Java 21 x64. They remain release candidates until
+the clean-machine and connected-hardware checks below pass.
 
 ## Automated build gates
 
@@ -24,8 +22,7 @@ stable Windows release before then.
   supplied by audited JARs.
 - Reject retired Graph3d/Java3D JARs and DLLs.
 - Reject ROM, definition, profile, or other owner/vehicle-specific content.
-- Confirm diagnostic reports filter personal data and are never sent automatically
-  or log upload.
+- Confirm diagnostic reports filter personal data and are never uploaded automatically.
 - Verify the complete release tree and publish a SHA-256 for the ZIP.
 
 ## Clean Windows test
@@ -47,7 +44,7 @@ stable Windows release before then.
   confirm settings persist below the release folder's `config/user` directory.
 - Load, edit, save, close, reopen, and compare a non-sensitive test image.
 - Confirm no Defender or SmartScreen result beyond the expected warning for an
-  unsigned preview ZIP. Record the exact result; do not tell users to disable
+  unsigned candidate. Record the exact result; do not tell users to disable
   security software.
 - Trigger a harmless test exception; confirm its report contains no username,
   local path, ROM filename, port, or network identifier and can only be shared
@@ -85,7 +82,5 @@ stable Windows release before then.
 
 ## Promotion rule
 
-The portable ZIP can be published as a Windows x64 preview after automated
-gates pass. Promote it to a stable Windows release only after the clean Windows
-test passes. Logger/J2534 support should remain marked preview until the
-connected Windows test passes with real hardware.
+Publish as RC1 after automated gates pass, with untested hardware clearly noted.
+Stable promotion requires both clean Windows and connected-hardware acceptance.

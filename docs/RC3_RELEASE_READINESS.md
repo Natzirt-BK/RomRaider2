@@ -1,5 +1,8 @@
 # RomRaider2 1.1.0 RC3 release readiness
 
+Historical record. These candidate labels are retired. Use the current
+[release checklist](RELEASE_READINESS.md) and [versioning policy](RELEASE_VERSIONING.md).
+
 Status: RC3 prerelease. Stable promotion remains blocked on the connected
 checks below.
 

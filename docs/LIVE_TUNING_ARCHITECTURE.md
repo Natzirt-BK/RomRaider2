@@ -40,7 +40,7 @@ A plan is ready only when all of these checks pass:
 
 The current Logger session now retains the DimeMod runtime version, RAM Tune
 signature address, and reported lookup-table size separately from the feature
-bit. RC4 only checks and displays that metadata. It does not interpret the LUT
+bit. The application only checks and displays that metadata. It does not interpret the LUT
 as writable ranges, and invalid or out-of-range metadata is never described as
 qualified.
 
@@ -62,4 +62,4 @@ disconnect, rejection, timeout, or readback mismatch fails the session.
 - Build a separately reviewed production executor only after connected testing
   and per-version DimeMod qualification.
 
-Vehicle RAM writes remain an RC5-or-later qualification item.
+Vehicle RAM writes require separate implementation, review and hardware testing.

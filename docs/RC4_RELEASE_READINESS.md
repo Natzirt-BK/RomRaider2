@@ -1,5 +1,8 @@
 # RomRaider2 1.1.0 RC4 release readiness
 
+Historical record. These candidate labels are retired. Use the current
+[release checklist](RELEASE_READINESS.md) and [versioning policy](RELEASE_VERSIONING.md).
+
 Status: public development prerelease. Final qualification is incomplete.
 
 RC4 began as the first release candidate with a replacement Logger workspace.

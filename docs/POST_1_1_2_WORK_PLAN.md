@@ -1,9 +1,8 @@
-# Work after 1.1.2
+# Development roadmap
 
-The gauge/editor release does not complete the remaining analysis and mobile
-backlog. These are software tasks that can progress without a vehicle. New
-application changes belong to the next shared numeric patch version, not silent
-replacement of an already published 1.1.2 binary.
+Current source: **1.1.3**. Current download: **1.1.2 RC1**.
+This roadmap tracks software work toward a stable release. Hardware testing is
+listed separately and can wait until a vehicle is available.
 
 ## Reusable saved-log analysis setups
 
@@ -79,6 +78,12 @@ stores accepted state synchronously, discards superseded UI notifications and
 rejects closed-owner callbacks/cache requests. Full ECU/session binding and
 in-flight UI reload cancellation remain separate work; invalidating a cache
 must not silently increase discovery writes.
+
+Initialization callbacks now carry an attempt-lifetime token through the shared
+query manager. Both desktop owners recheck it under their state lock; expired
+cache lookups fail instead of requesting discovery. Tokens expire before
+connection cleanup and on Stop. This closes the late-attempt callback boundary,
+not the remaining firmware/module/transport binding of cached dynamic addresses.
 
 ## Then
 

@@ -7,20 +7,14 @@ Version 1.1.3 source also adds [reviewed interrupted-recording recovery](ANDROID
 It preserves the original spool and validates completed records before exporting;
 omitting an unfinished tail requires explicit review.
 
-This guide covers Android **1.1.2**. Check the
-[latest release](https://github.com/Natzirt-BK/RomRaider2/releases/latest)
+This guide covers Android **1.1.2 RC1**. Check the
+[release candidate](https://github.com/Natzirt-BK/RomRaider2/releases/tag/romraider2-1.1.2)
 for published downloads. Packages are sideloaded and
 remain debuggable, so Android or Play Protect may warn about an unknown app.
-Version 1.1.2 uses a permanent signing key, unlike the older public
-1.1.1 APK. That key change prevents an in-place update from the old APK.
-Existing application IDs are unchanged. **Export your recordings before
-uninstalling or clearing app data.** A side-by-side APK named
-**RomRaider2 OpenPort Test** leaves the standard app untouched. An existing test
-app may also refuse updates from a different signing key. Choose only one app
-for USB access and import the logger setup separately when using the test app.
-See [update reliability and migration precautions](ANDROID_UPDATE_RELIABILITY.md).
-The [step-by-step 1.1.2 migration checklist](ANDROID_1_1_2_MIGRATION.md) includes
-recordings, unsaved ROM work and logger definitions/profiles, not only APK signing.
+Back up recordings and saved work before replacing an installation.
+The optional **RomRaider2 OpenPort Test** APK installs separately from the main
+app. Import its logger setup separately and give USB access to only one app.
+For build-signing details, see [update reliability](ANDROID_UPDATE_RELIABILITY.md).
 
 The app includes the OpenPort filter-response repair, retains imported
 profile selections when definitions are reloaded, and exports normal wide-column
@@ -127,7 +121,7 @@ lost or incomplete after abrupt process/power loss; this is not a crash-proof
 data recorder. Version 1.1.2 restores saved definitions/channel selections
 after restart or Activity recreation; this does not migrate data across an
 uninstall or automatically restore a USB/logging session. Keep source setup
-files for the old public version and for manual migration. Phone-specific USB,
+files as a backup. Phone-specific USB,
 sleep, rotation, and permission behavior remain part of connected qualification.
 
 Android's [USB host guide](https://developer.android.com/develop/connectivity/usb/host)

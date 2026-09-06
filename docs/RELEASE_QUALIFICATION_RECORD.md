@@ -1,7 +1,4 @@
-# RomRaider2 1.1.0 RC4 qualification record
-
-Historical record. These candidate labels are retired. Use the current
-[release checklist](RELEASE_READINESS.md) and [versioning policy](RELEASE_VERSIONING.md).
+# Release qualification record
 
 Create one copy for each operating-system package pass. Do not edit the copy
 bundled in the candidate.
@@ -53,7 +50,7 @@ same candidate.
 - Logger Light/Dark and normal/narrow layouts: `PASS`, `FAIL`, or `NOT RUN`
 - High Contrast is absent: `PASS`, `FAIL`, or `NOT RUN`
 - Recording controls and offline log analysis: `PASS`, `FAIL`, or `NOT RUN`
-- RC4 version shown in startup log and About screens: `PASS`, `FAIL`, or
+- Numeric application version shown in startup log and About screens: `PASS`, `FAIL`, or
   `NOT RUN`
 - SteamOS welcome, first-run prompt, and 1280x800 handheld shell (SteamOS
   candidate only): `PASS`, `FAIL`, or `NOT RUN`

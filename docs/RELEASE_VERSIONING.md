@@ -1,70 +1,41 @@
 # Release versioning
 
-Desktop and mobile use the same `major.minor.patch` numbering policy.
+Desktop and Android share `major.minor.patch` versions:
 
-- Routine fixes and smaller updates increment the last number: `1.1.1`, `1.1.2`.
-- Significant milestones increment the middle number: `1.2.0`, followed by `1.2.x` fixes.
-- Substantial changes may rarely increment the first number: `2.0.0` (the 2.0 milestone).
-- Do not add Preview, RC, or other development-stage suffixes to version numbers,
-  application display names, release titles, or downloadable package names.
-- Platform/architecture and packaging distinctions such as `Android-debug` and
-  `side-by-side-test` describe artifacts, not separate version sequences.
-- Publish matching platform artifacts together under `romraider2-X.Y.Z`, retaining
-  only the latest public release after replacement downloads are verified.
-- Keep historical source tags and dated audit documents as historical evidence.
+- Patch updates: `1.1.1`, `1.1.2`, `1.1.3`.
+- Milestones: `1.2.0`, followed by `1.2.x` updates.
+- Rare major changes: `2.0.0`.
 
-Android's internal integer versionCode must increase with each published update.
-Keep existing application IDs and signing identities where possible; changing
-display version syntax must not silently relocate or discard saved recordings.
-The legacy `.preview` package-ID segments are retained solely for installation
-identity, not as user-facing version labels.
+The current downloadable candidate is **RomRaider2 1.1.2 RC1**. Current development
+source is **1.1.3**, with Android versionCode **110407**. There is no stable release yet.
 
-Signing, hardware qualification, and unfinished functionality must still be
-documented explicitly. Numbering does not imply safety certification or completed
-in-car testing. Third-party dependency versions are independent of app versions.
+**RC1 describes the release stage.** Keep it separate from application versions,
+package filenames and numeric Android versionName values. Release titles may use
+`RomRaider2 X.Y.Z RC1`; GitHub marks them as prereleases. Routine development
+updates change the numeric version, not an RC2/RC3/RC4 sequence. Do not use Preview
+labels. Stable releases omit RC1 and are published only after qualification.
 
-## Development safeguards
+Keep only the current downloadable release, replacing it after the new packages
+are verified. Preserve source tags and dated audit records as history. Never
+rename an old binary to imply it contains newer source.
 
-Current development source is **1.1.2**, Android versionCode **110406**. The public
-release is still 1.1.1; preparing source/build metadata does not publish it.
+## Build safeguards
 
-`version.properties` supplies the desktop version components, build number and
-Android versionCode. All three portable/desktop Gradle modules and the separate
-Android Gradle build consume that file. Unsigned automation builds may override
-their version for upgrade tests; signed distribution builds must use the shared
-values. The generated desktop What's New heading follows the application version.
+`version.properties` supplies the version to desktop and Android builds.
+Android versionCode must increase for each published update. Preserve application
+IDs and signing identity; historical `.preview` ID segments are installation
+identifiers, not display labels.
 
-Run `bash packaging/verify-version.sh` to check the shared components, Gradle
-consumers, release-notes heading and explicit artifact labels listed in
-`packaging/versioned-paths.txt`. The check enforces numeric naming and a version
-and Android code above the known public 1.1.1 baseline (110405). Update that
-baseline deliberately with future publication work; this is not a live GitHub
-release lookup. Negative fixtures in `packaging/test-version-check.sh` verify
-rejection of unchanged codes, stage suffixes and stale verifier/workflow names.
-Desktop, Android and manual platform-package CI run these checks.
+`packaging/verify-version.sh` checks shared version components, build consumers,
+release-note headings and artifact names. The current development baseline is
+1.1.2 / Android 110406. Update the baseline deliberately when publishing.
+`packaging/test-version-check.sh` tests rejection of inconsistent metadata.
 
-Application-image builders inspect the actual core jar's embedded version before
-packaging. Android distribution CI verifies the built APK's application ID,
-versionName and versionCode against the shared metadata, separately from its
-cryptographic signing check. A correctly named stale artifact is not sufficient.
+Package checks inspect embedded versions, APK identity and signatures, not just
+filenames. Signed builds must use the shared version; isolated automation builds
+may override it for upgrade tests.
 
-Local verification passed the version rejection fixtures, core/portable tests,
-60 JavaFX and 34 Compose tests, and Android unit/build/lint checks. Both rebuilt
-APKs reported 1.1.2/110406; the guard rejected a retained old 1.1.1 APK and a
-swapped application ID. A synthetic signed configuration with an old versionCode
-was rejected before any key access. Android CI repeats that negative check.
-Source `154b6b1d` passes [desktop/version/package CI](https://github.com/Natzirt-BK/RomRaider2/actions/runs/34012714069)
-and [Android regression CI](https://github.com/Natzirt-BK/RomRaider2/actions/runs/34012714103),
-and is integrated into GitHub master. Manual cross-platform distribution
-qualification is recorded separately after completion; these are not public
-release uploads.
-
-Before publication, finish the exact-commit platform qualification, verify all
-download checksums and signing identity, document the one-time old-key Android
-migration, and confirm a recoverable backup of the permanent signing key/password.
-The [migration checklist](ANDROID_1_1_2_MIGRATION.md) now records a verified
-encrypted local backup and the owner's acceptance of same-disk storage; an
-off-device copy is still recommended and is not claimed completed.
-Do not overwrite public 1.1.1 with these development artifacts. No automatic
-uninstall, user-data clearing, key regeneration or GitHub release deletion is
-part of these safeguards.
+Before publishing, verify the source revision, platform checks, checksums and
+Android signing certificate. Keep a recoverable signing-key backup outside Git.
+Document unfinished hardware tests in the release notes. RC or stable labels do
+not establish vehicle compatibility.
