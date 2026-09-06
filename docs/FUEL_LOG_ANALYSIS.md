@@ -49,7 +49,7 @@ cannot publish into a replacement log or a closed window.
   existing Log Analysis cursor/range. In 1.1.3 development source, MAF and Injector
   conditions can optionally be linked as described below.
 
-## Still deferred
+## Public 1.1.2 limits and development follow-ups
 
 Live capture, full legacy operating-condition filtering, MAF interpolation, injector
 regression/scaling/latency fitting, and explicit
@@ -60,8 +60,10 @@ Android and the other desktop shells are unchanged by this JavaFX addition.
 The public 1.1.2 limits above remain applicable to those downloads. In 1.1.3
 development source, [Curve review](FUEL_CURVE_REVIEW.md) adds piecewise bin
 interpolation, raw-sample polynomial/linear fits and explicitly unverified
-injector estimates. Full legacy filtering and reviewed ROM-table transfer remain
-open; these estimates are not measured injector calibration.
+injector estimates. It also adds a separate [reviewed MAF-table transfer](REVIEWED_MAF_TRANSFER.md)
+to the explicitly selected open ROM, with stored-value review and grouped Undo.
+Full legacy filtering and injector transfer remain open; the injector estimates
+are not measured calibration. No analysis action connects to or writes an ECU.
 
 Synthetic regression tests check inherited arithmetic, finite/missing handling,
 range/filter boundaries, bin limits, unit-confirmation gating, stale-result
@@ -130,8 +132,9 @@ Channel mappings, bin widths, stoichiometric AFR and fuel density remain
 independent. The Log Analysis cursor, playback, statistics and charts are not
 linked by this feature. Changing a fuel assumption clears that pane's own
 confirmation without changing the other pane.
-No operating conditions are inferred, and no analysis
-result is applied to a ROM or sent to a vehicle.
+Linking conditions infers no operating conditions, applies no analysis result to
+a ROM and sends nothing to a vehicle. Offline MAF transfer requires its own
+separate review and confirmation.
 
 Unchecking either box disconnects without reverting the current conditions.
 Successfully importing an analysis setup, replacing either dataset or closing a

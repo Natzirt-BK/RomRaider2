@@ -3,7 +3,9 @@
 The JavaFX MAF and Injector workspaces now include **Curve review**. Run the
 normal saved-log analysis first, after reviewing mappings, units, sample range,
 filters and injector assumptions. This source feature is not in public 1.1.2.
-Neither curve action changes a ROM, captured CSV or vehicle.
+Neither calculation action changes a ROM, captured CSV or vehicle. A completed
+MAF curve can now enter a separate [reviewed offline table transfer](REVIEWED_MAF_TRANSFER.md);
+applying that proposal requires explicit acknowledgement and confirmation.
 
 ## Two different operations
 

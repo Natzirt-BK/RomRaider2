@@ -199,7 +199,13 @@ public final class RomEditHistory {
     private void notifyListeners(Rom rom) {
         for (EditHistoryListener listener :
                 new ArrayList<EditHistoryListener>(listeners)) {
-            listener.historyChanged(rom);
+            try { listener.historyChanged(rom); }
+            catch (RuntimeException failure) {
+                // The history operation is already committed. An observer must
+                // not report it as failed or prevent other views refreshing.
+                org.apache.log4j.Logger.getLogger(RomEditHistory.class)
+                        .warn("Edit history observer failed after an operation", failure);
+            }
         }
     }
 

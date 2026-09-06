@@ -26,7 +26,11 @@ What changed for 1.1.3
 - JavaFX Curve review separates observed-bin interpolation from raw-sample
   polynomial/linear fitting. Coverage gaps, residual statistics, work/rank limits
   and stale-worker guards are explicit. Injector line estimates are labeled as
-  unverified; no ROM transfer, extrapolated curve evaluation or ECU write occurs.
+  unverified; calculating curves does not edit a ROM or access an ECU.
+- Completed MAF curves can enter a separate offline table-transfer review for
+  an explicitly selected open ROM. Original/requested/stored values, uncovered
+  cells, stale-context checks, rollback and grouped Undo are explicit. No file
+  is saved automatically; injector transfer and ECU writing remain unavailable.
 
 What changed for 1.1.2
 ---------------------

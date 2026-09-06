@@ -67,7 +67,11 @@ This is not automatic closed-loop/transient filtering or full legacy parity.
 
 Read-only [curve review](FUEL_CURVE_REVIEW.md) is implemented in 1.1.3 source,
 including raw-sample polynomial/linear fits and observed-bin interpolation.
-Continue full legacy operating-condition filtering, reviewed ROM-table transfer, log-to-map
+[Reviewed offline MAF-table transfer](REVIEWED_MAF_TRANSFER.md) is also implemented,
+with explicit target/stored-value review, stale guards and grouped undo/rollback.
+Injector transfer still needs its own evidence-backed mapping; line-fit intercepts
+must not be treated as a voltage-dependent latency curve.
+Continue full legacy operating-condition filtering, injector transfer, log-to-map
 tracing and binned/run-comparison views. Portable logger-setup export/import and
 bounded large-log review follow. Background recording needs its own Android
 service/USB/notification and failure-recovery design; switching to GAUGES is not

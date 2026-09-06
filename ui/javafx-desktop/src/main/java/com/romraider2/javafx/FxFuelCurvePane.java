@@ -3,11 +3,13 @@ package com.romraider2.javafx;
 
 import com.romraider.logger.analysis.FuelCurveAnalysis;
 import com.romraider.logger.analysis.FuelLogAnalysis;
+import com.romraider.editor.calibration.ReviewedMafTransfer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.*;
 import java.util.function.DoubleUnaryOperator;
+import java.util.function.Supplier;
 import javafx.application.Platform;
 import javafx.beans.property.ReadOnlyStringWrapper;
 import javafx.collections.FXCollections;
@@ -36,6 +38,9 @@ final class FxFuelCurvePane extends BorderPane implements AutoCloseable {
     private long generation;
     private boolean closed;
     private String summary = "";
+    private DoubleUnaryOperator completedCurve;
+    private Supplier<FxMafTransferTarget> transferTarget = () -> null;
+    private final Button transfer = new Button("Review MAF table transfer…");
 
     FxFuelCurvePane(boolean injector) {
         this.injector = injector;
@@ -46,9 +51,12 @@ final class FxFuelCurvePane extends BorderPane implements AutoCloseable {
         degree.setPrefWidth(85); degree.setVisible(!injector); degree.setManaged(!injector);
         Label order = new Label(injector ? "Injector: linear fit only" : "Polynomial degree");
         FlowPane actions = new FlowPane(8, 5, interpolate, order, degree, fit, copy);
+        if (!injector) actions.getChildren().add(transfer);
+        transfer.setOnAction(event -> reviewTransfer());
         targets.setPromptText("Optional evaluation inputs (" + xUnits() + "), separated by spaces or commas; blank = chart grid");
         status.setWrapText(true);
-        Label warning = new Label("Review only. Fits can cross unsampled intervals or overfit. Interpolation preserves empty-bin gaps. No extrapolation or ROM changes."
+        Label warning = new Label("Fits can cross unsampled intervals or overfit. Interpolation preserves empty-bin gaps. No extrapolation. Calculating a curve does not edit a ROM."
+                + (!injector ? " MAF transfer requires a separate review and confirmation." : "")
                 + (injector ? " Injector estimates are model-derived, not measured flow or battery-dependent latency." : ""));
         warning.setWrapText(true);
         VBox controls = new VBox(6, actions, targets, warning, status); controls.setPadding(new Insets(8)); setTop(controls);
@@ -74,6 +82,7 @@ final class FxFuelCurvePane extends BorderPane implements AutoCloseable {
     private void clearCurve() {
         generation++; if (pending != null) pending.cancel(true);
         table.getItems().clear(); chart.getData().clear(); summary = ""; copy.setDisable(true);
+        completedCurve = null; transfer.setDisable(true);
         status.setText(analysis == null ? "Analyze saved samples first. Changes to analysis inputs clear curve results."
                 : "Choose interpolation or a fit, then review coverage and residuals. No curve is applied to a ROM.");
     }
@@ -110,11 +119,28 @@ final class FxFuelCurvePane extends BorderPane implements AutoCloseable {
                     table.setItems(FXCollections.observableArrayList(rows));
                     chart.setCreateSymbols(!polynomial); showGrid(drawing);
                     summary = message; status.setText(message); copy.setDisable(false);
+                    completedCurve = evaluate; transfer.setDisable(injector);
                 });
             } catch (RuntimeException failure) {
                 Platform.runLater(() -> { if (!closed && revision == generation) status.setText(FxDialogs.rootMessage(failure)); });
             }
         });
+    }
+    void setTransferTarget(Supplier<FxMafTransferTarget> target) { transferTarget = java.util.Objects.requireNonNull(target); }
+    private void reviewTransfer() {
+        if (injector || closed || completedCurve == null) return;
+        long revision = generation; DoubleUnaryOperator curve = completedCurve;
+        try {
+            FxMafTransferTarget target = transferTarget.get();
+            if (target == null || !target.stillCurrent().getAsBoolean())
+                throw new IllegalArgumentException("Open the matching ROM and its voltage-axis MAF table in the Editor first. The target must be selected, open and idle.");
+            ReviewedMafTransfer review = ReviewedMafTransfer.preview(target.table(), curve, summary);
+            var dialog = FxMafTransferDialog.create(getScene() == null ? null : getScene().getWindow(), target.documentName(), review);
+            if (dialog.showAndWait().orElse(ButtonType.CANCEL) != FxMafTransferDialog.APPLY) return;
+            review.apply(() -> !closed && generation == revision && completedCurve == curve && target.stillCurrent().getAsBoolean());
+            setAnalysis(null);
+            status.setText("Applied " + review.getChangedCount() + " reviewed cells to the open ROM. Undo is available in the Editor. No file was saved and no ECU was accessed. Analyze a fresh log before another transfer.");
+        } catch (RuntimeException failure) { status.setText("Transfer not completed: " + FxDialogs.rootMessage(failure)); }
     }
     private String fitSummary(FuelCurveAnalysis.Polynomial fitted) {
         String result = "Degree " + fitted.getDegree() + " · " + fitted.getSamples() + " raw samples · RMSE " + number(fitted.getRmse())

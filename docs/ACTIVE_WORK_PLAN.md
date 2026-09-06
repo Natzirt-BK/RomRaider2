@@ -73,8 +73,8 @@ The next source patch is 1.1.3 (Android code 110407). Reusable JavaFX analysis
 setups are implemented with strict file validation, explicit import review,
 exact/ambiguity-aware channel matching, retained unresolved filters and guarded
 asynchronous I/O. They do not yet ship in the public 1.1.2 packages. The rest of
-item 5 (synchronized filtering, fitting/interpolation and reviewed transfer),
-item 6 and the remaining mobile items remain open.
+item 5 is tracked in the progress entries below; item 6 and the remaining mobile
+items remain open.
 
 Portable calculated channels are now implemented in 1.1.3 development source,
 including P200/P201, bounded hidden dependencies and explicit input-unit binding.
@@ -85,11 +85,17 @@ background recording, setup transfer or hardware acceptance.
 The 1.1.3 source also provides reviewed, two-way linking of MAF/Injector sample
 ranges and numeric filters. Link activation and condition edits clear affected
 results and confirmations; setup/log replacement disconnects. Full legacy
-operating-condition filters, fitting/interpolation and reviewed ROM-table transfer
-remain open, as does linkage to the separate Log Analysis cursor/statistics view.
+operating-condition filters remain open, as does linkage to the separate Log
+Analysis cursor/statistics view. Curve/transfer progress is recorded below.
 
 Read-only [curve review](FUEL_CURVE_REVIEW.md) is now implemented in 1.1.3 source:
 observed-bin interpolation with gap handling, bounded raw-sample polynomial fits
 and descriptive injector line estimates. This advances fitting/interpolation;
-full legacy filtering, reviewed table transfer and vehicle qualification remain
-separate work. No calculated correction is applied automatically.
+full legacy filtering and vehicle qualification remain separate work. No
+calculated correction is applied automatically.
+
+[Reviewed MAF-table transfer](REVIEWED_MAF_TRANSFER.md) is implemented in 1.1.3
+source: explicit open-target selection, native stored-value/coverage review,
+stale document/analysis/byte guards and one undoable offline edit. No automatic
+ROM save or ECU write occurs. Injector transfer remains separate; a fitted
+intercept is not a voltage-dependent latency curve. Public packages remain 1.1.2.

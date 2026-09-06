@@ -846,6 +846,20 @@ final class FxEditorWindow {
         FxCloseRequest.request(stage);
     }
 
+    FxMafTransferTarget mafTransferTarget() {
+        EditorDocumentSnapshot current = controller.getSession().snapshot();
+        Rom rom = current.getActiveRom();
+        if (closing || current.getActiveDocument() == null || !(current.getActiveTable() instanceof com.romraider.maps.Table2D table)
+                || table.getRom() != rom || controller.isBusy(rom)
+                || current.getActiveDocument().getOpenTables().stream().noneMatch(open -> open == table)) return null;
+        long revision = current.getRevision();
+        return new FxMafTransferTarget(table, current.getActiveDocument().getName(), () -> {
+            EditorDocumentSnapshot next = controller.getSession().snapshot();
+            return !closing && next.getRevision() == revision && next.getActiveRom() == rom
+                    && next.getActiveTable() == table && !controller.isBusy(rom);
+        });
+    }
+
     private void dispose() {
         if (!closing) closing = true;
         controller.getSession().removeListener(documentListener);

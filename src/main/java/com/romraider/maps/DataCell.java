@@ -338,7 +338,17 @@ public class DataCell implements Serializable  {
             java.util.List<DataCell> aliases = rom.byteCellMapping.get(start + offset);
             if (aliases != null) affected.addAll(aliases);
         }
-        for (DataCell cell : affected) cell.updateBinValueFromMemory();
+        RuntimeException failure = null;
+        for (DataCell cell : affected) {
+            try { cell.updateBinValueFromMemory(); }
+            catch (RuntimeException refreshFailure) {
+                // Keep every overlapping cell's cached value consistent even
+                // when one presentation listener fails (including rollback).
+                if (failure == null) failure = refreshFailure;
+                else if (failure != refreshFailure) failure.addSuppressed(refreshFailure);
+            }
+        }
+        if (failure != null) throw failure;
     }
 
     private static int storageByteWidth(Table table) {

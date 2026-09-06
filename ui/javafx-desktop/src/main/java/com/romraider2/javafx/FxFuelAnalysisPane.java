@@ -173,6 +173,8 @@ final class FxFuelAnalysisPane extends BorderPane implements AutoCloseable {
         }
     }
 
+    void setTransferTarget(java.util.function.Supplier<FxMafTransferTarget> target) { curve.setTransferTarget(target); }
+
     void setDataset(LogDataset next) {
         if (closed) return;
         if (conditionsLink != null) conditionsLink.disconnect();
