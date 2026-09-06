@@ -238,6 +238,8 @@ on failure. The owner's additional visual request adds Phosphor 84, Electric Blo
 Sunset GT, Laser LED and Prism Cassette across Android/JavaFX/Compose. Android also
 adds [full-screen mounted gauges](ANDROID_MOUNTED_DISPLAY.md): hidden app/system
 chrome, foreground keep-awake even when stopped, accessible Stop/Exit and retained
-recording identity. These changes are 1.1.3 development source, not a republished
+recording identity. Saved 1–6 gauge layouts fill the mounted viewport without
+scrolling, preserve face proportions and leave recording selections unchanged.
+These changes are 1.1.3 development source, not a republished
 1.1.2 release. Continue native qualification and remaining fork/platform audits;
 physical acceptance stays deferred.

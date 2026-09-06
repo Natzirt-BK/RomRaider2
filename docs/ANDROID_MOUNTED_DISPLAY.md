@@ -6,7 +6,20 @@ reduces outer padding, and keeps the display awake while this Activity is visibl
 It works on phone/tablet portrait and landscape layouts. Display cutout insets
 remain protected on modern Android; the OS can retain window controls in multi-window mode.
 
-**EXIT FULL** or Android Back restores the regular Gauges view. **STOP** remains
+Tap **LAYOUT** to show **1, 2, 3, 4, 5 or 6 gauges**. The choice is saved between
+launches. The display uses the first channels in logger order, up to the chosen
+count; if fewer are available, it fits only those gauges, without empty slots.
+All selected channels continue recording, including those not currently shown.
+Returning to LOGGER or the regular Gauges view shows all channels again.
+
+The mounted grid fills the available area below the compact controls, with no
+scrolling. It compares balanced row arrangements for the current viewport and
+face shape, choosing the largest combined face area. Incomplete rows use their
+full width; faces scale uniformly without stretching or cropping. Portrait,
+landscape and window-size changes trigger a fresh fit. Some space around a face
+is intentional to preserve its proportions.
+
+**EXIT** or Android Back restores the regular Gauges view. **STOP** remains
 accessible and stops the same recording without leaving mounted mode. The display
 stays awake even when stopped or displaying explicitly simulated data. Entering
 mounted mode does not connect USB, identify an ECU, start recording, or create data.
@@ -32,9 +45,24 @@ and [keep-screen-on contract](https://developer.android.com/develop/background-w
 The `mounted-fullscreen` automation phase checks hidden/restored system bars,
 idle/stopped keep-awake, Home/return, Back/LOGGER exit and retained gauge identity.
 The synthetic service tests also switch full screen during disk-backed capture.
+The `mounted-layouts` phase checks every count in portrait and landscape with
+both legacy and custom faces, retains hidden gauges/profile identity, uses the
+native count picker, checks restoration, and captures 24 actual screenshots.
+The `live-gauges` phase also changes counts during synthetic capture and verifies
+the original session and exported CSV. Portable layout checks cover 108
+viewport/count/face combinations, including tiny and zero-sized viewports.
 These checks do not establish real-phone thermal behavior, sunlight readability,
 USB stability or vehicle safety. Set up while parked; do not adjust it while driving.
 This feature is not in the published 1.1.2 packages.
+
+## Actual Android layouts
+
+![Six STI Night gauges fitted into a landscape Android viewport](images/android-mounted-six-landscape.png)
+
+[Five-gauge portrait screenshot](images/android-mounted-five-portrait.png).
+These are native emulator screenshots with explicitly simulated values, not
+vehicle-test results. The complete 24-image set is reproducible with the
+`mounted-layouts` instrumentation phase.
 
 ## Illustration
 
@@ -42,6 +70,7 @@ This feature is not in the published 1.1.2 packages.
 
 This is an AI-generated product mockup using an actual Android screenshot as its
 screen reference, not a photograph of a vehicle test or exact hardware fitment.
+It predates the count-picker controls described above.
 The app display is explicitly simulated. [Generation prompts and method](images/mounted-phone-image-prompt.md)
 are retained with the image. See the [actual native gauge collection](images/all-mobile-gauge-styles.png)
 for ungenerated gauge artwork.

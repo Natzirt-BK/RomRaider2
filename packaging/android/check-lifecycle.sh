@@ -45,6 +45,7 @@ run_phase verify
 run_phase verify
 run_phase gauges
 run_phase mounted-fullscreen
+run_phase mounted-layouts
 run_phase live-gauges
 run_phase clear
 run_phase verify-empty
@@ -74,3 +75,4 @@ echo 'PASS: service-owned synthetic capture through Home/screen-off and recreati
 echo 'PASS: retained recording validation, reviewed incomplete-tail recovery, source preservation, cancellation and stale Activity cleanup.'
 echo 'PASS: streamed CSV summaries beyond the old sample cap, bounded channel paging, retained results on failure/cancel, and workspace/recording isolation.'
 echo 'PASS: mounted full screen and system-bar restoration, portrait/landscape, stopped display keep-awake, Home/return, Back/Exit, and same-writer Stop.'
+echo 'PASS: saved 1–6 gauge layouts fit the viewport without scrolling and preserve hidden gauges, channel selection and recording continuity.'

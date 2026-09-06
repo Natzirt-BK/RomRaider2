@@ -142,7 +142,9 @@ final record; the original recovery file remains unchanged.
 [Large-log Android review](docs/ANDROID_CSV_REVIEW.md) now streams bounded summaries
 off the UI thread, with cancellation and channel pagination. The source also adds
 five vibrant/retro gauge styles and a [full-screen mounted display](docs/ANDROID_MOUNTED_DISPLAY.md)
-that keeps the screen awake while visible, including when logging is stopped.
+that fits 1–6 gauges without scrolling and keeps the screen awake while visible,
+including when logging is stopped. Changing the displayed count does not change
+the channels being recorded.
 
 - Tabbed calibration workspace with favorites, recent and changed maps, ROM
   comparison, grouped undo/redo, notes, and crash recovery.

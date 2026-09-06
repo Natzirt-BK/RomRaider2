@@ -129,7 +129,8 @@ results. Physical document-provider acceptance remains pending.
 
 The owner's additional gauge request adds five vibrant/retro native faces and
 [full-screen mounted mode](ANDROID_MOUNTED_DISPLAY.md), including display keep-awake
-while visible even without active logging. Continue emulator/native visual and
+while visible even without active logging, plus saved 1–6 gauge layouts that fit
+the viewport without changing the recording selection. Continue emulator/native visual and
 lifecycle qualification, then the remaining fork-adoption audit; do not substitute
 synthetic test data for supervised hardware acceptance.
 

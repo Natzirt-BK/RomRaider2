@@ -27,6 +27,7 @@ final class MobileGaugeView extends View {
     private MobileGaugeScale scale = new MobileGaugeScale(0, 1);
     private MobileGaugeTheme theme = MobileGaugeTheme.RR2_CLASSIC;
     private String dataState = "";
+    private boolean fitToViewport;
     private final com.romraider.portable.gauge.GaugeMotion motion = new com.romraider.portable.gauge.GaugeMotion();
 
     void setDataState(String state) {
@@ -49,6 +50,12 @@ final class MobileGaugeView extends View {
         super(context);
         setMinimumHeight(dp(205));
         setLayerType(View.LAYER_TYPE_SOFTWARE, null);
+    }
+
+    void setFitToViewport(boolean fitted) {
+        if (fitToViewport == fitted) return;
+        fitToViewport = fitted;
+        invalidate();
     }
 
     void setTheme(MobileGaugeTheme next) {
@@ -104,6 +111,13 @@ final class MobileGaugeView extends View {
                     && android.animation.ValueAnimator.areAnimatorsEnabled() && motion.isAnimating(System.nanoTime()))
                 postInvalidateOnAnimation();
             return;
+        }
+        if (fitToViewport) {
+            canvas.save();
+            float factor = Math.min(width / 320f, height / 205f);
+            canvas.translate((width - 320 * factor) / 2, (height - 205 * factor) / 2);
+            canvas.scale(factor, factor);
+            width = 320; height = 205; density = 1;
         }
         float corner = 10 * density;
         paint.setStyle(Paint.Style.FILL);
@@ -212,6 +226,7 @@ final class MobileGaugeView extends View {
         canvas.drawText(dataState + "  •  " + compact(scale.minimum) + "–"
                 + compact(scale.maximum), centerX, height - 11 * density, paint);
         paint.setTextAlign(Paint.Align.LEFT);
+        if (fitToViewport) canvas.restore();
     }
 
     private String ellipsize(String value, int limit) {

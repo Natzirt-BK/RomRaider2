@@ -56,6 +56,7 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
             if (phase.equals("seed")) seed();
             else if (phase.equals("gauges")) verifyGaugesOnly();
             else if (phase.equals("mounted-fullscreen")) verifyMountedFullScreen();
+            else if (phase.equals("mounted-layouts")) verifyMountedLayouts();
             else if (phase.equals("live-gauges")) verifyReadOnlySessionViewSwitch();
             else if (phase.equals("calculated-gauges")) verifyCalculatedGauges();
             else if (phase.equals("channel-transfer")) verifyChannelTransfer();
@@ -558,6 +559,74 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
         System.out.println("PASS: immersive gauges hide bars, stay awake when stopped, release awake in background, and exit through Back/LOGGER.");
     }
 
+    private void verifyMountedLayouts() throws Exception {
+        invoke("showLoggerGaugeDemo", new Class<?>[0]);
+        invoke("showGaugesOnly", new Class<?>[0]);
+        invoke("setMountedFullScreen", new Class<?>[]{boolean.class}, true);
+        Object grid = field("loggerGaugeGrid");
+        Object profile = field("loggerProfile");
+        for (MobileGaugeTheme theme : new MobileGaugeTheme[]{MobileGaugeTheme.RR2_CLASSIC, MobileGaugeTheme.STI_NIGHT}) {
+            invoke("setLoggerGaugeTheme", new Class<?>[]{MobileGaugeTheme.class}, theme);
+            for (int orientation : new int[]{android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT,
+                    android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE}) {
+                rotateMountedDisplay(orientation);
+                for (int count = 1; count <= 6; count++) {
+                    invoke("setMountedGaugeCount", new Class<?>[]{int.class}, count);
+                    CountDownLatch frame = new CountDownLatch(1);
+                    runOnMainSync(() -> ((android.view.View) grid).postOnAnimation(
+                            () -> ((android.view.View) grid).postOnAnimation(frame::countDown)));
+                    check(frame.await(5, TimeUnit.SECONDS), "Mounted layout frame did not complete");
+                    final int expected = count;
+                    runOnMainSync(() -> {
+                        android.view.ViewGroup group = (android.view.ViewGroup) grid;
+                        android.view.View viewport = (android.view.View) fieldUnchecked("mountedGaugeViewport");
+                        check(group.getWidth() == viewport.getWidth() && group.getHeight() == viewport.getHeight(),
+                                "Mounted grid does not fill the available viewport");
+                        check(group.getChildCount() == 8, "Changing display count discarded hidden gauges");
+                        int visible = 0;
+                        for (int i = 0; i < group.getChildCount(); i++) {
+                            android.view.View child = group.getChildAt(i);
+                            if (child.getVisibility() != android.view.View.VISIBLE) continue;
+                            visible++;
+                            check(child.getWidth() > 0 && child.getHeight() > 0 && child.getLeft() >= 0 && child.getTop() >= 0
+                                    && child.getRight() <= group.getWidth() && child.getBottom() <= group.getHeight(),
+                                    "Mounted gauge is clipped or requires scrolling");
+                            for (int j = 0; j < i; j++) {
+                                android.view.View other = group.getChildAt(j);
+                                if (other.getVisibility() == android.view.View.VISIBLE)
+                                    check(child.getRight() <= other.getLeft() || other.getRight() <= child.getLeft()
+                                            || child.getBottom() <= other.getTop() || other.getBottom() <= child.getTop(),
+                                            "Mounted gauge cells overlap");
+                            }
+                        }
+                        check(visible == expected, "Wrong visible gauge count");
+                    });
+                    check(field("loggerGaugeGrid") == grid && field("loggerProfile") == profile && screenAwake(),
+                            "Mounted layout replaced profile/grid or released keep-awake");
+                    File renders = new File(getTargetContext().getExternalFilesDir(null), "mounted-layouts");
+                    check(renders.isDirectory() || renders.mkdirs(), "Cannot create mounted render directory");
+                    captureMountedScreenshot(new File(renders, theme.name() + "-"
+                            + (orientation == android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                            ? "portrait" : "landscape") + "-" + count + ".png"));
+                }
+            }
+        }
+        invoke("chooseMountedGaugeCount", new Class<?>[0]);
+        clickDialogText("3 gauges");
+        check((Integer) field("mountedGaugeCount") == 3, "Layout picker did not apply selection");
+        invoke("leaveGaugesOnly", new Class<?>[0]);
+        runOnMainSync(() -> {
+            android.view.ViewGroup group = (android.view.ViewGroup) grid;
+            for (int i = 0; i < group.getChildCount(); i++)
+                check(group.getChildAt(i).getVisibility() == android.view.View.VISIBLE, "LOGGER did not restore hidden gauges");
+        });
+        verifyActivityRecreation();
+        check((Integer) field("mountedGaugeCount") == 3 && !(Boolean) field("mountedFullScreen"),
+                "Display count did not restore independently of mounted/running state");
+        invoke("setMountedGaugeCount", new Class<?>[]{int.class}, 6);
+        System.out.println("PASS: all 1–6 mounted layouts fit portrait/landscape with retained gauges/profile, no scrolling, and count-only persistence.");
+    }
+
     private boolean screenAwake() {
         boolean[] awake = new boolean[1];
         runOnMainSync(() -> awake[0] = (activity.getWindow().getAttributes().flags
@@ -655,30 +724,36 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
         for (MobileGaugeTheme theme : MobileGaugeTheme.values()) {
             if (theme.instrumentStyle() == null) continue;
             invoke("setLoggerGaugeTheme", new Class<?>[] {MobileGaugeTheme.class}, theme);
-            waitForIdleSync();
-            SystemClock.sleep(250); // Allow a native layout/draw frame before screen capture.
-            AccessibilityNodeInfo active = getUiAutomation().getRootInActiveWindow();
-            long deadline = SystemClock.uptimeMillis() + 5000;
-            while ((active == null || !getTargetContext().getPackageName().contentEquals(active.getPackageName()))
-                    && SystemClock.uptimeMillis() < deadline) {
-                // Android can present its one-time immersive-mode tutorial after the first frame.
-                // Acknowledge only that known tutorial; every other obstruction remains a failure.
-                if (active != null && "com.android.systemui".contentEquals(active.getPackageName())
-                        && !active.findAccessibilityNodeInfosByText("Viewing full screen").isEmpty()) {
-                    for (AccessibilityNodeInfo confirm : active.findAccessibilityNodeInfosByText("Got it"))
-                        confirm.performAction(AccessibilityNodeInfo.ACTION_CLICK);
-                }
-                SystemClock.sleep(50);
-                active = getUiAutomation().getRootInActiveWindow();
-            }
-            check(active != null && getTargetContext().getPackageName().contentEquals(active.getPackageName()),
-                    "Gauge render is obstructed by another window: " + (active == null ? "none" : active.getPackageName()));
-            android.graphics.Bitmap bitmap = getUiAutomation().takeScreenshot();
-            check(bitmap != null, "Native screenshot failed");
-            try (OutputStream file = new FileOutputStream(new File(directory, theme.name() + ".png"))) {
-                check(bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, file), "PNG encoding failed");
-            } finally { bitmap.recycle(); }
+            captureMountedScreenshot(new File(directory, theme.name() + ".png"));
         }
+    }
+
+    private void captureMountedScreenshot(File destination) throws Exception {
+        // View bounds can be current while the compositor still presents
+        // the preceding count or Android's rotation animation.
+        waitForIdleSync();
+        SystemClock.sleep(600);
+        AccessibilityNodeInfo active = getUiAutomation().getRootInActiveWindow();
+        long deadline = SystemClock.uptimeMillis() + 5000;
+        while ((active == null || !getTargetContext().getPackageName().contentEquals(active.getPackageName()))
+                && SystemClock.uptimeMillis() < deadline) {
+            // Android can present its one-time immersive-mode tutorial after the first frame.
+            // Acknowledge only that known tutorial; every other obstruction remains a failure.
+            if (active != null && "com.android.systemui".contentEquals(active.getPackageName())
+                    && !active.findAccessibilityNodeInfosByText("Viewing full screen").isEmpty()) {
+                for (AccessibilityNodeInfo confirm : active.findAccessibilityNodeInfosByText("Got it"))
+                    confirm.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+            }
+            SystemClock.sleep(50);
+            active = getUiAutomation().getRootInActiveWindow();
+        }
+        check(active != null && getTargetContext().getPackageName().contentEquals(active.getPackageName()),
+                "Gauge render is obstructed by another window: " + (active == null ? "none" : active.getPackageName()));
+        android.graphics.Bitmap bitmap = getUiAutomation().takeScreenshot();
+        check(bitmap != null, "Native screenshot failed");
+        try (OutputStream file = new FileOutputStream(destination)) {
+            check(bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, file), "PNG encoding failed");
+        } finally { bitmap.recycle(); }
     }
     private void verifyCalculatedGauges() throws Exception {
         String definitionXml = "<logger><protocol id='SSM'><parameters>"
@@ -779,6 +854,7 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
                 invoke("setLoggerGaugeTheme", new Class<?>[] {MobileGaugeTheme.class}, theme);
                 invoke("showGaugesOnly", new Class<?>[0]);
                 invoke("setMountedFullScreen", new Class<?>[]{boolean.class}, true);
+                invoke("setMountedGaugeCount", new Class<?>[]{int.class}, 1 + theme.ordinal() % 6);
                 check(field("displayedRecording") == session, "Mounted view replaced the displayed recording owner");
                 check(session.completedLog() == null, "Mounted view exposed a completed writer: " + session.snapshot().message());
                 check(field("loggerGaugeGrid") == grid, "Mounted view replaced the gauge grid");
@@ -1201,10 +1277,19 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
                     "Paging reimported or replaced the file");
             java.util.concurrent.ThreadPoolExecutor executor = (java.util.concurrent.ThreadPoolExecutor) field("logImportExecutor");
             CountDownLatch release = new CountDownLatch(1);
-            Future<?> gate = executor.submit(() -> { if (!release.await(15, TimeUnit.SECONDS)) throw new AssertionError("CSV gate timed out"); return null; });
+            CountDownLatch entered = new CountDownLatch(1);
+            Future<?> gate = executor.submit(() -> {
+                entered.countDown();
+                if (!release.await(15, TimeUnit.SECONDS)) throw new AssertionError("CSV gate timed out");
+                return null;
+            });
             try {
+                // This executor has only one queue slot. A submitted gate is not
+                // necessarily running yet; otherwise the import may be rejected.
+                check(entered.await(5, TimeUnit.SECONDS), "CSV gate did not start");
                 invoke("loadLogSummary", new Class<?>[] {Uri.class}, Uri.fromFile(large));
                 Future<?> superseded = (Future<?>) field("logImportTask");
+                check(superseded != null, "CSV import was not queued: " + field("logImportStatus"));
                 invoke("loadLogSummary", new Class<?>[] {Uri.class}, Uri.fromFile(second));
                 check(superseded.isCancelled() && executor.getQueue().size() == 1, "Superseded work was not cancelled/purged");
                 invoke("showGaugesOnly", new Class<?>[0]);
@@ -1214,8 +1299,12 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
             check((Boolean) field("gaugesVisible") && field("importedLogSummary") == summary,
                     "Late CSV work replaced the mounted dashboard or previous summary");
             invoke("leaveGaugesOnly", new Class<?>[0]);
-            invoke("loadLogSummary", new Class<?>[] {Uri.class}, Uri.fromFile(large));
-            invoke("cancelLogImport", new Class<?>[] {String.class}, "CSV import cancelled; previous summary retained.");
+            // Keep start/cancel in one UI turn so even a fast parser cannot apply
+            // its completion between the two actions.
+            runOnMainSync(() -> {
+                invokeUnchecked("loadLogSummary", new Class<?>[] {Uri.class}, Uri.fromFile(large));
+                invokeUnchecked("cancelLogImport", new Class<?>[] {String.class}, "CSV import cancelled; previous summary retained.");
+            });
             executor.submit(() -> { }).get(15, TimeUnit.SECONDS); waitForIdleSync();
             check(field("importedLogSummary") == summary && !(Boolean) field("logImportLoading"), "Cancelled import replaced summary");
             invoke("showEditor", new Class<?>[0]);
@@ -1233,10 +1322,17 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
                 check(fixture.identifies.get() == 1, "CSV action restarted live capture");
             } finally { fixture.stop(); }
             CountDownLatch releaseOld = new CountDownLatch(1);
-            Future<?> oldGate = executor.submit(() -> { if (!releaseOld.await(15, TimeUnit.SECONDS)) throw new AssertionError("CSV close gate timed out"); return null; });
+            CountDownLatch enteredOld = new CountDownLatch(1);
+            Future<?> oldGate = executor.submit(() -> {
+                enteredOld.countDown();
+                if (!releaseOld.await(15, TimeUnit.SECONDS)) throw new AssertionError("CSV close gate timed out");
+                return null;
+            });
             try {
+                check(enteredOld.await(5, TimeUnit.SECONDS), "CSV close gate did not start");
                 invoke("loadLogSummary", new Class<?>[] {Uri.class}, Uri.fromFile(large));
                 Future<?> pending = (Future<?>) field("logImportTask");
+                check(pending != null, "Closing CSV import was not queued: " + field("logImportStatus"));
                 verifyActivityRecreation();
                 check(pending.isCancelled(), "Activity destruction did not cancel CSV import");
             } finally { releaseOld.countDown(); }
@@ -1312,13 +1408,14 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
         } catch (ReflectiveOperationException ex) { throw new AssertionError(ex); }
     }
     private void invoke(String name, Class<?>[] types, Object... args) {
-        runOnMainSync(() -> {
-            try {
-                Method method = MainActivity.class.getDeclaredMethod(name, types);
-                method.setAccessible(true);
-                method.invoke(activity, args);
-            } catch (ReflectiveOperationException ex) { throw new AssertionError(ex); }
-        });
+        runOnMainSync(() -> invokeUnchecked(name, types, args));
+    }
+    private void invokeUnchecked(String name, Class<?>[] types, Object... args) {
+        try {
+            Method method = MainActivity.class.getDeclaredMethod(name, types);
+            method.setAccessible(true);
+            method.invoke(activity, args);
+        } catch (ReflectiveOperationException ex) { throw new AssertionError(ex); }
     }
     private void clickDialogText(String text) {
         long deadline = SystemClock.uptimeMillis() + 5000;

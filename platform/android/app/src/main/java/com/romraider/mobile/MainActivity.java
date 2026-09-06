@@ -134,6 +134,11 @@ public final class MainActivity extends Activity {
     private boolean gaugesVisible;
     private boolean mountedFullScreen;
     private Button mountedModeButton;
+    private Button mountedLayoutButton;
+    private int mountedGaugeCount = 6;
+    private FrameLayout mountedGaugeViewport;
+    private ScrollView gaugesScroll;
+    private AlertDialog mountedLayoutDialog;
     private int previousSystemUiVisibility;
     private int previousSystemBarsBehavior;
     private int previousVisibleSystemBars;
@@ -309,6 +314,7 @@ public final class MainActivity extends Activity {
     @SuppressLint("InlinedApi") // The receiver flag is inlined and safe on API 26-32.
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        mountedGaugeCount = Math.max(1, Math.min(6, getPreferences(MODE_PRIVATE).getInt("mounted_gauge_count", 6)));
         loggerProtocol = PortableLoggerProtocol.fromId(getPreferences(MODE_PRIVATE)
                 .getString("logger_protocol", "SSM"));
         IntentFilter permissionFilter = new IntentFilter(ACTION_USB_PERMISSION);
@@ -346,6 +352,7 @@ public final class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        if (mountedLayoutDialog != null) { mountedLayoutDialog.dismiss(); mountedLayoutDialog = null; }
         setMountedFullScreen(false);
         cancelLogImport(null);
         logImportExecutor.shutdownNow();
@@ -2210,7 +2217,7 @@ public final class MainActivity extends Activity {
                 + "read-only logger to populate this dashboard, or show the "
                 + "simulated demo for a visual check.");
         card.addView(loggerGaugeEmpty, matchWrap(dp(8)));
-        loggerGaugeGrid = new GridLayout(this);
+        loggerGaugeGrid = new MountedGaugeGrid(this);
         loggerGaugeGrid.setColumnCount(2);
         loggerGaugeGrid.setAlignmentMode(GridLayout.ALIGN_MARGINS);
         loggerGaugeGrid.setUseDefaultMargins(false);
@@ -2228,6 +2235,7 @@ public final class MainActivity extends Activity {
         for (MobileGaugeView gauge : loggerGaugeViews.values()) {
             gauge.setTheme(theme);
         }
+        configureMountedGaugeLayout();
         styleLoggerGaugeThemeButtons();
     }
 
@@ -2546,6 +2554,8 @@ public final class MainActivity extends Activity {
         gaugeGridHome.removeView(loggerGaugeGrid);
         gaugesPage.removeAllViews();
         gaugesStatus = statusText("");
+        gaugesStatus.setMaxLines(3);
+        gaugesStatus.setEllipsize(android.text.TextUtils.TruncateAt.END);
         Button stop = button("STOP");
         stop.setMinHeight(dp(48));
         stop.setOnClickListener(view -> {
@@ -2557,6 +2567,11 @@ public final class MainActivity extends Activity {
         LinearLayout status = new LinearLayout(this);
         status.setGravity(Gravity.CENTER_VERTICAL);
         status.addView(gaugesStatus, weighted());
+        mountedLayoutButton = button("LAYOUT");
+        mountedLayoutButton.setTextSize(10);
+        mountedLayoutButton.setVisibility(View.GONE);
+        mountedLayoutButton.setOnClickListener(view -> chooseMountedGaugeCount());
+        status.addView(mountedLayoutButton);
         mountedModeButton = button("FULL SCREEN");
         mountedModeButton.setTextSize(11);
         mountedModeButton.setMinHeight(dp(48));
@@ -2565,9 +2580,11 @@ public final class MainActivity extends Activity {
         status.addView(mountedModeButton);
         status.addView(stop);
         gaugesPage.addView(status, matchWrap());
-        ScrollView scroll = new ScrollView(this);
-        scroll.addView(loggerGaugeGrid, matchWrap());
-        gaugesPage.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1f));
+        gaugesScroll = new ScrollView(this);
+        gaugesScroll.addView(loggerGaugeGrid, matchWrap());
+        mountedGaugeViewport = new FrameLayout(this);
+        mountedGaugeViewport.addView(gaugesScroll, new FrameLayout.LayoutParams(-1, -1));
+        gaugesPage.addView(mountedGaugeViewport, new LinearLayout.LayoutParams(-1, 0, 1f));
         gaugesVisible = true;
         layoutGaugeColumns();
         workspaceScroll.setVisibility(View.GONE);
@@ -2610,8 +2627,13 @@ public final class MainActivity extends Activity {
             }
         }
         mountedFullScreen = enabled;
+        ((ViewGroup) loggerGaugeGrid.getParent()).removeView(loggerGaugeGrid);
+        gaugesScroll.setVisibility(enabled ? View.GONE : View.VISIBLE);
+        if (enabled) mountedGaugeViewport.addView(loggerGaugeGrid, new FrameLayout.LayoutParams(-1, -1));
+        else gaugesScroll.addView(loggerGaugeGrid, matchWrap());
+        configureMountedGaugeLayout();
         workspaceTabs.setVisibility(enabled ? View.GONE : View.VISIBLE);
-        mountedModeButton.setText(enabled ? "EXIT FULL" : "FULL SCREEN");
+        mountedModeButton.setText(enabled ? "EXIT" : "FULL SCREEN");
         mountedModeButton.setContentDescription(enabled ? "Exit full screen gauges"
                 : "Full screen gauges; keep the display awake while visible");
         if (Build.VERSION.SDK_INT >= 33) {
@@ -2629,6 +2651,39 @@ public final class MainActivity extends Activity {
                 dp(enabled ? 4 : 20), dp(enabled ? 0 : 12));
         workspacePage.requestApplyInsets();
         updateScreenAwake();
+        refreshGaugeAvailability();
+    }
+
+    private void chooseMountedGaugeCount() {
+        if (!mountedFullScreen) return;
+        if (mountedLayoutDialog != null) mountedLayoutDialog.dismiss();
+        mountedLayoutDialog = new AlertDialog.Builder(this)
+                .setTitle("Gauges shown — logging unchanged")
+                .setSingleChoiceItems(new String[]{"1 gauge", "2 gauges", "3 gauges", "4 gauges", "5 gauges", "6 gauges"},
+                        mountedGaugeCount - 1, (dialog, selected) -> {
+                            setMountedGaugeCount(selected + 1);
+                            dialog.dismiss();
+                        }).setNegativeButton("Cancel", null).create();
+        mountedLayoutDialog.setOnDismissListener(dialog -> mountedLayoutDialog = null);
+        mountedLayoutDialog.show();
+    }
+
+    private void setMountedGaugeCount(int count) {
+        if (count < 1 || count > 6) throw new IllegalArgumentException("Choose one to six gauges");
+        mountedGaugeCount = count;
+        getPreferences(MODE_PRIVATE).edit().putInt("mounted_gauge_count", count).apply();
+        configureMountedGaugeLayout();
+        refreshGaugeAvailability();
+    }
+
+    private void configureMountedGaugeLayout() {
+        if (loggerGaugeGrid instanceof MountedGaugeGrid) ((MountedGaugeGrid) loggerGaugeGrid).configure(
+                mountedFullScreen, mountedGaugeCount, loggerGaugeTheme.instrumentStyle() == null ? 320.0 / 205 : 320.0 / 250);
+        if (mountedLayoutButton != null) {
+            mountedLayoutButton.setVisibility(mountedFullScreen ? View.VISIBLE : View.GONE);
+            mountedLayoutButton.setText(String.format(Locale.ROOT, "LAYOUT %d", mountedGaugeCount));
+            mountedLayoutButton.setContentDescription(String.format(Locale.ROOT, "Display up to %d gauges; choose a one to six gauge layout", mountedGaugeCount));
+        }
     }
 
     @SuppressWarnings("deprecation") // API 26-29 fallback; modern devices use WindowInsetsController.
@@ -2689,6 +2744,7 @@ public final class MainActivity extends Activity {
         }
         if (gaugesStatus != null) gaugesStatus.setText(state + (loggerGaugeViews.isEmpty()
                 ? "\nSelect channels in LOGGER while parked."
+                : mountedFullScreen ? "\n" + Math.min(mountedGaugeCount, loggerGaugeViews.size()) + " of " + loggerGaugeViews.size()
                 : "  •  " + loggerGaugeViews.size() + " gauges"));
         long now = SystemClock.elapsedRealtime();
         for (Map.Entry<String, MobileGaugeView> entry : loggerGaugeViews.entrySet()) {
@@ -2701,6 +2757,7 @@ public final class MainActivity extends Activity {
 
     private void layoutGaugeColumns() {
         if (loggerGaugeGrid == null) return;
+        if (mountedFullScreen) { configureMountedGaugeLayout(); return; }
         int columns = gaugesVisible ? Math.max(1, Math.min(4,
                 loggerGaugeGrid.getWidth() / dp(220))) : 2;
         if (loggerGaugeGrid.getColumnCount() == columns) return;
