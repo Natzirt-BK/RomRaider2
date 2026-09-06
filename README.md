@@ -61,6 +61,11 @@ sideloading it or connecting an adapter.
 
 ## Where it stands
 
+The [full-project audit](docs/PROJECT_AUDIT_2026-09-06.md) separates current
+`master` from the published 1.1.1 packages. Fresh platform checks passed, but
+installer migration and Android ROM-save failure handling need repair before
+the next release. New source work is not yet in the public downloads.
+
 | Area | Current status |
 | --- | --- |
 | Subaru Editor | Available; exact matching definitions are required |
@@ -81,14 +86,14 @@ path without changing the vendor driver.
 - Tabbed calibration workspace with favorites, recent and changed maps, ROM
   comparison, grouped undo/redo, notes, and crash recovery.
 - Search across maps, Logger channels, DTCs, settings, and commands.
-- Light, dark, system, and high-contrast themes with 75%–300% scaling and
-  desktop, touch, garage, dyno, and in-car layouts.
-- A rebuilt Logger workspace with searchable channels, live data, graphs,
-  dashboard gauges, user-set warnings, MAF, injector, dyno, and offline
-  analysis views.
-- Five original gauge styles with fixed scales, measured peaks, optional
-  per-channel limits, saved Gauge/Value/Trend/Alarm dashboard layouts, and a
-  matching Android dashboard preview.
+- Light/dark JavaFX themes, configurable scaling and touch controls. The
+  retained Compose/macOS interface has a different feature set.
+- A rebuilt JavaFX Logger workspace with searchable channels, live data,
+  graphs, dashboard gauges, Dyno and offline analysis. Current source adds
+  channel categories, unit selection and rolling statistics.
+- Saved Gauge/Value/Trend/Alarm dashboard layouts. Custom warning/scale editing,
+  warning correctness, and legacy MAF/injector workspace parity remain work
+  items; desktop and Android dashboards are not feature-identical.
 - RomRaider CSV analysis with linked tables and graphs, statistics, sample
   ranges, playback, markers, and configurable X/Y plotting.
 - Managed Logger-definition install and reload instead of the old forum

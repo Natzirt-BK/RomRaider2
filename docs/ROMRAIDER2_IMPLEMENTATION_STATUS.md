@@ -1,6 +1,10 @@
 # RomRaider2 implementation status
 
-Last updated: 2026-09-04
+Historical snapshot: 2026-09-04. For the current source, release, platform matrix,
+test evidence and remaining findings, use the
+[September 6 full-project audit](PROJECT_AUDIT_2026-09-06.md).
+The RC/Preview publication statements below describe that older snapshot, not
+the current numeric release or default JavaFX feature set.
 
 Latest qualification verdict: **HOLD**. The
 [September 4 desktop audit](DESKTOP_AUDIT_2026-09-04.md) records reproducible
