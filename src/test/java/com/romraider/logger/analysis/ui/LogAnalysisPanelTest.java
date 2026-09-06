@@ -14,21 +14,62 @@ import org.junit.Test;
 
 public class LogAnalysisPanelTest {
     @org.junit.Rule public org.junit.rules.TemporaryFolder temporary = new org.junit.rules.TemporaryFolder();
+    @Test public void publicLoadMarshalsToSwingAndDetachedPanelRejectsQueuedResultsBeforeReattach() throws Exception {
+        var first = temporary.newFile("first.csv"); var second = temporary.newFile("second.csv");
+        java.nio.file.Files.writeString(first.toPath(), "Value\n1\n2\n");
+        java.nio.file.Files.writeString(second.toPath(), "Value\n8\n9\n");
+        LogAnalysisPanel[] panel = {null}; java.util.concurrent.Future<?>[] pending = {null};
+        try {
+            javax.swing.SwingUtilities.invokeAndWait(() -> panel[0] = new LogAnalysisPanel());
+            panel[0].load(first); // Exercise a caller that is not the Swing event thread.
+            javax.swing.SwingUtilities.invokeAndWait(() -> {
+                try { pending[0] = ((SwingLogLoadTask) field(panel[0], "logLoads")).pending(); }
+                catch (Exception failure) { throw new RuntimeException(failure); }
+            });
+            pending[0].get(5, java.util.concurrent.TimeUnit.SECONDS);
+            javax.swing.SwingUtilities.invokeAndWait(() -> {
+                try {
+                    assertEquals(first, field(panel[0], "datasetFile"));
+                    assertTrue(findNamed(panel[0], JButton.class, "LOAD LOG FOR ANALYSIS").isEnabled());
+                    panel[0].load(second);
+                    ((SwingLogLoadTask) field(panel[0], "logLoads")).pending().get(5, java.util.concurrent.TimeUnit.SECONDS);
+                    // Parsing completed, but its event-thread callback is still queued.
+                    panel[0].removeNotify(); assertNull(field(panel[0], "logLoads")); panel[0].load(second);
+                    assertNull(field(panel[0], "logLoads"));
+                } catch (Exception failure) { throw new RuntimeException(failure); }
+            });
+            javax.swing.SwingUtilities.invokeAndWait(() -> {
+                try {
+                    assertEquals(first, field(panel[0], "datasetFile"));
+                    panel[0].addNotify(); panel[0].load(second); pending[0] = ((SwingLogLoadTask) field(panel[0], "logLoads")).pending();
+                } catch (Exception failure) { throw new RuntimeException(failure); }
+            });
+            pending[0].get(5, java.util.concurrent.TimeUnit.SECONDS);
+            javax.swing.SwingUtilities.invokeAndWait(() -> {
+                try {
+                    assertEquals(second, field(panel[0], "datasetFile"));
+                    var table = findNamed(panel[0], JTable.class, "LOG ANALYSIS STATISTICS"); assertEquals(1, table.getRowCount());
+                } catch (Exception failure) { throw new RuntimeException(failure); }
+            });
+        } finally { javax.swing.SwingUtilities.invokeAndWait(() -> { if (panel[0] != null) panel[0].removeNotify(); }); }
+    }
+    private static Object field(Object target, String name) throws Exception {
+        var field = target.getClass().getDeclaredField(name); field.setAccessible(true); return field.get(target);
+    }
     @Test public void malformedOrExternallyChangedMarkersCannotBeOverwrittenFromSwing() throws Exception {
         var source = temporary.newFile("synthetic.csv");
         java.nio.file.Files.writeString(source.toPath(), "Value\n1\n2\n");
-        var data = new com.romraider.logger.analysis.RomRaiderCsvLogParser().parse(source);
         var store = new com.romraider.logger.analysis.LogMarkerStore();
         java.nio.file.Files.writeString(store.sidecar(source), "format.version=99\nmarker.count=0\n");
         javax.swing.SwingUtilities.invokeAndWait(() -> {
             try {
                 LogAnalysisPanel panel = new LogAnalysisPanel();
-                var install = LogAnalysisPanel.class.getDeclaredMethod("setDataset", com.romraider.logger.analysis.LogDataset.class, java.io.File.class);
-                install.setAccessible(true); install.invoke(panel, data, source);
+                var install = LogAnalysisPanel.class.getDeclaredMethod("installLog", SwingLogLoadTask.PreparedLog.class);
+                install.setAccessible(true); install.invoke(panel, SwingLogLoadTask.prepare(source));
                 JButton add = findNamed(panel, JButton.class, "ADD LOG MARKER"); assertFalse(add.isEnabled());
                 assertTrue(add.getToolTipText().contains("Reload the log"));
                 assertTrue(java.nio.file.Files.readString(store.sidecar(source)).contains("99"));
-                java.nio.file.Files.delete(store.sidecar(source)); install.invoke(panel, data, source); assertTrue(add.isEnabled());
+                java.nio.file.Files.delete(store.sidecar(source)); install.invoke(panel, SwingLogLoadTask.prepare(source)); assertTrue(add.isEnabled());
                 store.save(source, java.util.List.of(new com.romraider.logger.analysis.LogMarker(1, com.romraider.logger.analysis.LogMarkerType.CUSTOM, "external")));
                 add.doClick(); assertFalse(add.isEnabled());
                 assertEquals("external", store.load(source, 2).get(0).getLabel());

@@ -69,9 +69,11 @@ sidecar from separate applications simultaneously.
 
 The legacy Swing analysis pane also uses captured snapshots and conflict-checked
 saves. Failed loads disable marker editing; failed saves restore the preceding
-displayed list, retain label text, and require reloading the log. Its marker I/O
-is still synchronous; asynchronous Swing CSV/marker/statistics handling remains
-work to do. The shared store never enables ECU access.
+displayed list, retain label text, and require reloading the log. Subsequent
+[Swing loading work](SWING_LOG_LOADING.md) now prepares the CSV, initial statistics
+and sidecar snapshot off the event thread. Swing marker writes and later manual
+range-statistics calculations still need asynchronous handling. The shared store
+never enables ECU access.
 
 Automated checks cover Unicode/empty round trips, bounds, invalid and unknown
 documents, protected paths, changed/created/deleted sidecars, simultaneous

@@ -196,3 +196,9 @@ and saving, bounded strict version-1 validation, snapshot-based conflict checks
 and required atomic replacement. Failed loads/saves cannot turn a partial list
 into a replacement sidecar. Swing uses the same save guards; its asynchronous
 handling remains open. Empty marker lists persist without deleting a sidecar.
+
+[Swing log loading](SWING_LOG_LOADING.md) now prepares bounded CSVs, initial
+whole-log statistics and marker snapshots off the event thread. New selections
+cancel old work; detached/reopened panels reject late results and errors. Current
+datasets remain usable during loading. Manual range statistics and marker writes
+still need asynchronous Swing handling before moving on to broader mobile work.

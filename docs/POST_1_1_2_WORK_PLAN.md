@@ -100,8 +100,9 @@ result/error rejection. [Table responsiveness](LOG_TABLE_RESPONSIVENESS.md) adds
 allocation-free source indexing and cancellable stable sorting with direct
 sample lookup. [Marker-file I/O](MARKER_FILE_SAFETY.md) now runs on a JavaFX worker
 with bounded strict validation, immutable snapshots and conflict-checked atomic
-saves. Swing gains save guards but still needs asynchronous handling. Continue
-legacy Swing responsiveness and the remaining mobile/service work.
+saves. Swing gains save guards and now [prepares new CSVs, initial statistics and
+marker snapshots on a bounded worker](SWING_LOG_LOADING.md). Continue asynchronous
+Swing range statistics/marker writes and the remaining mobile/service work.
 
 The [desktop profile persistence prerequisite](DESKTOP_PROFILE_INTEGRITY.md) now
 preserves Unicode, escaped attributes, captured protocol and immutable snapshots,

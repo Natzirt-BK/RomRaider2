@@ -12,7 +12,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Collections;
 import java.util.function.Consumer;
-import java.util.concurrent.ExecutionException;
 
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
@@ -29,7 +28,6 @@ import javax.swing.JTextField;
 import javax.swing.JSplitPane;
 import javax.swing.JTable;
 import javax.swing.SpinnerNumberModel;
-import javax.swing.SwingWorker;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 import javax.swing.filechooser.FileNameExtensionFilter;
@@ -46,7 +44,6 @@ import com.romraider.logger.analysis.LogMarkerStore;
 import com.romraider.logger.analysis.LogMarkerType;
 import com.romraider.logger.analysis.LogStatisticsService;
 import com.romraider.logger.analysis.PlaybackState;
-import com.romraider.logger.analysis.RomRaiderCsvLogParser;
 import com.romraider.logger.analysis.RecentLogCaptureService;
 import com.romraider.ui.ThemeToken;
 import com.romraider.ui.ModernTableStyle;
@@ -58,7 +55,9 @@ public final class LogAnalysisPanel extends JPanel {
     private static final long serialVersionUID = 1L;
     private static final DecimalFormat DURATION_FORMAT = new DecimalFormat("0.###");
 
-    private final RomRaiderCsvLogParser parser = new RomRaiderCsvLogParser();
+    private SwingLogLoadTask logLoads;
+    private volatile boolean detached;
+    private volatile long lifecycle;
     private final LogCursorModel cursor = new LogCursorModel();
     private final LogPlaybackService playback = new LogPlaybackService(cursor);
     private final LogAnalysisTableModel tableModel = new LogAnalysisTableModel();
@@ -300,44 +299,26 @@ public final class LogAnalysisPanel extends JPanel {
 
     public void load(File file) {
         if (file == null) throw new IllegalArgumentException("file");
-        loadButton.setEnabled(false);
-        applyRangeButton.setEnabled(false);
+        long ticket = lifecycle;
+        if (detached) return;
+        if (!SwingUtilities.isEventDispatchThread()) {
+            SwingUtilities.invokeLater(() -> { if (ticket == lifecycle) load(file); });
+            return;
+        }
+        if (logLoads == null) logLoads = new SwingLogLoadTask(SwingUtilities::invokeLater,
+                this::installLog, (source, failure) -> showLoadError(failure.getMessage()));
+        // Keep the current dataset usable and allow the user to select a newer file.
         statusLabel.setText("Loading " + file.getName() + "...");
-        new SwingWorker<LogDataset, Void>() {
-            protected LogDataset doInBackground() throws Exception {
-                return parser.parse(file);
-            }
-
-            protected void done() {
-                loadButton.setEnabled(true);
-                try {
-                    setDataset(get(), file);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    showLoadError("Loading was interrupted.");
-                } catch (ExecutionException e) {
-                    Throwable cause = e.getCause();
-                    showLoadError(cause == null ? e.getMessage()
-                            : cause.getMessage());
-                }
-            }
-        }.execute();
+        logLoads.load(file);
     }
 
-    private void setDataset(LogDataset dataset, File sourceFile) {
+    private void installLog(SwingLogLoadTask.PreparedLog prepared) {
+        LogDataset dataset = prepared.dataset();
         this.dataset = dataset;
-        datasetFile = sourceFile == null ? null : sourceFile.getAbsoluteFile();
+        datasetFile = prepared.source();
         markers.clear();
-        markerSnapshot = null;
-        markerProblem = null;
-        if (datasetFile != null) {
-            try {
-                markerSnapshot = markerStore.loadSnapshot(datasetFile, dataset.getRowCount());
-                markers.addAll(markerSnapshot.getMarkers());
-            } catch (IOException failure) {
-                markerProblem = "Markers could not be read. Reload the log before editing: " + failure.getMessage();
-            }
-        }
+        markerSnapshot = prepared.markers(); markerProblem = prepared.markerProblem();
+        if (markerSnapshot != null) markers.addAll(markerSnapshot.getMarkers());
         Collections.sort(markers);
         graph.setMarkers(markers);
         xyGraph.setMarkers(markers);
@@ -348,7 +329,7 @@ public final class LogAnalysisPanel extends JPanel {
         applyRangeButton.setEnabled(true);
         LogRange all = LogRange.all(dataset);
         playback.load(dataset, all);
-        updateStatistics(all);
+        displayStatistics(all, prepared.statistics());
         selectDefaultGraphChannels();
         configureXyAxes();
         updateMarkerControls();
@@ -382,8 +363,12 @@ public final class LogAnalysisPanel extends JPanel {
     }
 
     private void updateStatistics(LogRange range) {
+        displayStatistics(range, LogStatisticsService.analyze(dataset, range));
+    }
+
+    private void displayStatistics(LogRange range, List<ChannelStatistics> statistics) {
         List<LogChannel> graphed = graph.getChannels();
-        tableModel.setStatistics(LogStatisticsService.analyze(dataset, range));
+        tableModel.setStatistics(statistics);
         if (!graphed.isEmpty()) reselectGraphChannels(graphed);
         String duration = describeDuration(dataset, range);
         statusLabel.setText(range.size() + " of " + dataset.getRowCount()
@@ -506,7 +491,6 @@ public final class LogAnalysisPanel extends JPanel {
     }
 
     private void showLoadError(String detail) {
-        playbackTimer.stop();
         statusLabel.setText("Unable to load log: " + detail);
         applyRangeButton.setEnabled(dataset != null);
         JOptionPane.showMessageDialog(this, statusLabel.getText(),
@@ -648,6 +632,7 @@ public final class LogAnalysisPanel extends JPanel {
     @Override
     public void addNotify() {
         super.addNotify();
+        detached = false;
         if (!recentLogAttached) {
             recentLogAttached = true;
             RecentLogCaptureService.getInstance().addListener(
@@ -657,6 +642,8 @@ public final class LogAnalysisPanel extends JPanel {
     }
 
     public void removeNotify() {
+        detached = true; lifecycle++;
+        if (logLoads != null) { logLoads.close(); logLoads = null; }
         if (recentLogAttached) {
             RecentLogCaptureService.getInstance().removeListener(
                     recentLogListener);

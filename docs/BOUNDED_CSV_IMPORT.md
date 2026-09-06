@@ -52,8 +52,10 @@ memory. Subsequent [JavaFX range-statistics scheduling](LOG_ANALYSIS_ARCHITECTUR
 now moves that calculation off the UI thread. [Table indexing/sorting](LOG_TABLE_RESPONSIVENESS.md)
 now also avoids per-row UI allocation and sorts on a cancellable worker.
 [Marker-sidecar I/O](MARKER_FILE_SAFETY.md) now has its own JavaFX worker and save
-guards. Existing legacy parser overloads and the Swing analysis
-entry point remain unbounded; Android's separate parser is unchanged.
+guards. The [Swing Analysis entry point](SWING_LOG_LOADING.md) now also uses the
+same bounded parser and prepares initial statistics/markers on its worker.
+Legacy parser overloads remain unbounded for other callers; Android's separate
+parser is unchanged.
 
 Automated checks cover compatible files, rejected oversized fields and records,
 real worker interruption, a burst of 100 superseded requests, close/caller

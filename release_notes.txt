@@ -34,6 +34,9 @@ What changed for 1.1.3
   saves with unique temporary files. JavaFX marker I/O runs on a worker; failed
   operations retain the prior list and require reload before editing. Swing gains
   the same save guards. Empty lists persist as valid sidecars instead of deletion.
+- Legacy Swing CSV opening now uses bounded, cancellable background preparation
+  for the CSV, initial statistics and marker snapshot. Superseded/detached loads
+  cannot replace a newer workspace; failed CSVs preserve the current log.
 - Run comparison aligns independent CSV ranges in explicit common X bins.
   Counts, qualified means, B-minus-A differences and gap-aware plots distinguish
   missing/low-count coverage. B imports are bounded, local to the comparison tab,
