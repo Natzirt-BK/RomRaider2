@@ -12,7 +12,7 @@ import java.util.List;
 
 /** Strict parser for numeric RomRaider/RomRaider2 CSV capture files. */
 public final class RomRaiderCsvLogParser {
-    /** Opt-in limits for additional review imports; existing callers retain their behavior. */
+    /** Opt-in limits for interactive review imports; legacy overloads remain unbounded. */
     public record Limits(int rows, int channels, long cells, int lineCharacters, long totalCharacters) {
         public Limits {
             if (rows < 1 || channels < 1 || cells < 1 || lineCharacters < 1 || totalCharacters < 1)
@@ -49,7 +49,7 @@ public final class RomRaiderCsvLogParser {
             headerLine = headerLine.substring(1);
         }
 
-        List<String> headers = parseRecord(headerLine, 1);
+        List<String> headers = parseRecord(headerLine, 1, limits, limits == null ? 0 : limits.channels(), 512);
         if (limits != null && headers.size() > limits.channels()) throw new IOException("CSV channel count exceeds the review limit; no partial log was loaded.");
         if (headers.isEmpty()) throw new IOException("Log header is empty");
         List<LogChannel> channels = new ArrayList<LogChannel>(headers.size());
@@ -71,7 +71,7 @@ public final class RomRaiderCsvLogParser {
             if (line.trim().isEmpty()) continue;
             if (limits != null && (rows.size() >= limits.rows() || ((long) rows.size() + 1) * channels.size() > limits.cells()))
                 throw new IOException("CSV sample/cell count exceeds the review limit; no partial log was loaded.");
-            List<String> fields = parseRecord(line, lineNumber);
+            List<String> fields = parseRecord(line, lineNumber, limits, channels.size(), 1024);
             if (fields.size() != channels.size()) {
                 throw new IOException("Line " + lineNumber + " has "
                         + fields.size() + " fields; expected "
@@ -127,12 +127,14 @@ public final class RomRaiderCsvLogParser {
         }
     }
 
-    private static List<String> parseRecord(String line, int lineNumber)
+    private static List<String> parseRecord(String line, int lineNumber, Limits limits, int maxFields, int maxFieldCharacters)
             throws IOException {
         List<String> fields = new ArrayList<String>();
         StringBuilder field = new StringBuilder();
         boolean quoted = false;
         for (int index = 0; index < line.length(); index++) {
+            if (limits != null && (index & 4095) == 0 && Thread.currentThread().isInterrupted())
+                throw new java.util.concurrent.CancellationException();
             char value = line.charAt(index);
             if (value == '"') {
                 if (quoted && index + 1 < line.length()
@@ -143,11 +145,15 @@ public final class RomRaiderCsvLogParser {
                     quoted = !quoted;
                 }
             } else if (value == ',' && !quoted) {
+                if (limits != null && fields.size() + 1 >= maxFields)
+                    throw new IOException("Line " + lineNumber + " exceeds the allowed CSV field count; no partial log was loaded.");
                 fields.add(field.toString());
                 field.setLength(0);
             } else {
                 field.append(value);
             }
+            if (limits != null && field.length() > maxFieldCharacters)
+                throw new IOException("CSV field exceeds " + maxFieldCharacters + " characters; no partial log was loaded.");
         }
         if (quoted) throw new IOException("Unclosed quote on line " + lineNumber);
         fields.add(field.toString());

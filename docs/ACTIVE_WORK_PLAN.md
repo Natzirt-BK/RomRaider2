@@ -172,3 +172,9 @@ into CSV registration. Stale/active-session rejection, rollback fault inhibition
 atomic export and separate persistence-failure reporting are implemented. Query
 queues now use channel IDs and the last selection intent. Continue large-log
 review and remaining mobile/service work; no hardware gate is discharged.
+
+[Normal JavaFX CSV imports](BOUNDED_CSV_IMPORT.md) now use the same explicit
+limits as second-log comparisons and a single owned, cancellable parser worker.
+Superseded requests are interrupted and cancelled queued work is removed; stale
+callbacks cannot replace a newer dataset. Continue large-log table/statistics
+responsiveness and legacy Swing import handling before claiming broad parity.

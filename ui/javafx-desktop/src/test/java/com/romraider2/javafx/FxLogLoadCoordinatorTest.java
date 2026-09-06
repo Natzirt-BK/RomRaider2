@@ -16,6 +16,37 @@ import org.junit.jupiter.api.Test;
 
 /** Exercises controlled completion ordering on every CI OS, without a toolkit. */
 class FxLogLoadCoordinatorTest {
+    @Test void replacementAndCloseCancelPendingOperationsButNotACancelledChooser() {
+        Harness h = new Harness();
+        h.loader.open(new File("first.csv"));
+        h.loader.open(null);
+        assertFalse(h.pending.get(0).isCancelled());
+        h.loader.open(new File("second.csv"));
+        assertTrue(h.pending.get(0).isCancelled());
+        h.loader.close();
+        assertTrue(h.pending.get(1).isCancelled());
+        h.drain(); assertTrue(h.failures.isEmpty());
+    }
+
+    @Test void uncooperativeParserStillCannotPublishAfterReplacementOrClose() throws Exception {
+        Queue<Runnable> queue = new ArrayDeque<>();
+        List<CompletableFuture<LogDataset>> operations = new ArrayList<>();
+        List<String> loaded = new ArrayList<>();
+        var loader = new FxLogLoadCoordinator(file -> {
+            var operation = new CompletableFuture<LogDataset>() {
+                @Override public boolean cancel(boolean interrupt) { return false; }
+            };
+            operations.add(operation); return operation;
+        }, queue::add, (file, data) -> loaded.add(file.getName()), (file, error) -> fail("Stale error"));
+        loader.open(new File("old.csv")); loader.open(new File("current.csv"));
+        operations.get(0).complete(dataset("old")); operations.get(1).complete(dataset("current"));
+        while (!queue.isEmpty()) queue.remove().run();
+        assertEquals(List.of("current.csv"), loaded);
+        loader.open(new File("closed.csv")); loader.close();
+        operations.get(2).completeExceptionally(new IOException("closed"));
+        while (!queue.isEmpty()) queue.remove().run();
+        assertEquals(1, loaded.size());
+    }
     @Test void reversedCompletionOnlyPublishesLatestFileAndDataset() throws Exception {
         Harness h = new Harness();
         h.loader.open(new File("first.csv"));

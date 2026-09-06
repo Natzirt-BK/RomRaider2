@@ -25,6 +25,8 @@ public final class LogDataset {
                 new ArrayList<LogChannel>(channels));
         this.rows = new double[rows.size()][];
         for (int row = 0; row < rows.size(); row++) {
+            if ((row & 1023) == 0 && Thread.currentThread().isInterrupted())
+                throw new java.util.concurrent.CancellationException();
             double[] values = rows.get(row);
             if (values.length != channels.size()) {
                 throw new IllegalArgumentException("row width does not match channels");

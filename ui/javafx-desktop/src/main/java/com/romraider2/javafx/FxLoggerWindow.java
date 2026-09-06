@@ -134,7 +134,7 @@ final class FxLoggerWindow {
     private final FxLoggerStartup startup = new FxLoggerStartup();
 
     FxLoggerWindow(Runnable closed) {
-        this(closed, FxLogLoadCoordinator::parseAsync);
+        this(closed, null);
     }
 
     void setMafTransferTarget(java.util.function.Supplier<FxMafTransferTarget> target) { mafAnalysis.setTransferTarget(target); }

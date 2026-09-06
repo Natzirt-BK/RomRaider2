@@ -25,6 +25,9 @@ surface and does not enable memory reads, writes, resets, or flash operations.
 
 ## Finite-value arithmetic — 1.1.3 development source
 
+JavaFX normal CSV imports now have [bounded, cancellable parsing](BOUNDED_CSV_IMPORT.md).
+This is separate from the still-pending asynchronous large-log statistics work.
+
 The shared statistics service uses compensated summation for the mean. If an
 intermediate sum overflows, it recomputes that channel's sum with exact decimal
 representations of the binary-double inputs, then divides with 34-digit decimal

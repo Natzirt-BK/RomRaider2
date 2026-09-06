@@ -48,5 +48,21 @@ public class BoundedCsvLogParserTest {
         try { parse("A\n" + "invalid".repeat(100) + "\n", RomRaiderCsvLogParser.REVIEW_LIMITS); fail("Expected invalid number"); }
         catch (IOException expected) { assertTrue(expected.getMessage().length() < 180); }
     }
+    @Test public void tokenizerRejectsExcessFieldsAndRawWhitespaceBeforeBuildingLargeLists() throws Exception {
+        reject("A,B\n" + ",".repeat(100_000) + "\n", RomRaiderCsvLogParser.REVIEW_LIMITS);
+        reject(",".repeat(100_000) + "\n1\n", RomRaiderCsvLogParser.REVIEW_LIMITS);
+        reject("A\n" + " ".repeat(1024) + "1\n", RomRaiderCsvLogParser.REVIEW_LIMITS);
+        String label = "A".repeat(512);
+        assertEquals(label, parse("\"" + label + "\"\n1\n", RomRaiderCsvLogParser.REVIEW_LIMITS).getChannels().get(0).getLabel());
+    }
+    @Test public void immutableDatasetFreezeHonorsCancellation() {
+        try {
+            Thread.currentThread().interrupt();
+            try {
+                new LogDataset("cancelled", java.util.List.of(new LogChannel(0, "A")), java.util.List.of(new double[]{1}));
+                fail("Ignored cancellation while freezing the dataset");
+            } catch (CancellationException expected) { }
+        } finally { Thread.interrupted(); }
+    }
     private void reject(String text, RomRaiderCsvLogParser.Limits limits) throws IOException { try { parse(text, limits); fail("Expected bounded import rejection"); } catch (IOException expected) { } }
 }
