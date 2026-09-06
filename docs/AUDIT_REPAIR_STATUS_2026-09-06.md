@@ -47,9 +47,10 @@ the final master run above is the qualification evidence.
 
 ## Remaining gates and limits
 
-- A secure offline backup of the permanent signing key/password is an operational
-  requirement and is **not confirmed completed**. No key material was exposed or
-  regenerated here.
+- Subsequent maintainer work created and restore-tested an encrypted local
+  signing backup. The owner accepted same-disk storage; no off-device copy is
+  confirmed, so disk failure remains a risk. No key material was exposed or
+  regenerated. See the [migration/backup checklist](ANDROID_1_1_2_MIGRATION.md).
 - The permanent Android certificate differs from public 1.1.1. These APKs cannot
   perform a normal in-place upgrade over that old installation. Export/recovery
   and one-time manual migration must preserve recordings and unsaved work;

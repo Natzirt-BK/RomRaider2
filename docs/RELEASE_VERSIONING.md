@@ -61,7 +61,10 @@ release uploads.
 
 Before publication, finish the exact-commit platform qualification, verify all
 download checksums and signing identity, document the one-time old-key Android
-migration, and confirm an offline backup of the permanent signing key/password.
+migration, and confirm a recoverable backup of the permanent signing key/password.
+The [migration checklist](ANDROID_1_1_2_MIGRATION.md) now records a verified
+encrypted local backup and the owner's acceptance of same-disk storage; an
+off-device copy is still recommended and is not claimed completed.
 Do not overwrite public 1.1.1 with these development artifacts. No automatic
 uninstall, user-data clearing, key regeneration or GitHub release deletion is
 part of these safeguards.

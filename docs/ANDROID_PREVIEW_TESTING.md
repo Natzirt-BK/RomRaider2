@@ -11,6 +11,8 @@ uninstalling or clearing app data.** A side-by-side APK named
 app may also refuse updates from a different signing key. Choose only one app
 for USB access and import the logger setup separately when using the test app.
 See [update reliability and migration precautions](ANDROID_UPDATE_RELIABILITY.md).
+The [step-by-step 1.1.2 migration checklist](ANDROID_1_1_2_MIGRATION.md) includes
+recordings, unsaved ROM work and logger definitions/profiles, not only APK signing.
 
 Version 1.1.1 includes the OpenPort filter-response repair, retains imported
 profile selections when definitions are reloaded, and exports normal wide-column
@@ -34,7 +36,7 @@ MUT-II vehicle qualification remain open.
 - Check whether Android detects an attached OpenPort 2.0 and grants USB
   permission.
 - Attach an OpenPort 2.0 while RomRaider2 is closed and confirm Android offers
-  to open the preview. This prepares the adapter only; it does not query the ECU
+  to open RomRaider2. This prepares the adapter only; it does not query the ECU
   or start logging.
 
 The application contains no ECU flash or memory-write command. ROM editing only
@@ -44,20 +46,20 @@ and desktop validation and must not be flashed.
 
 ## Connected Logger warning
 
-The read-only Subaru SSM and Mitsubishi MUT-II K-line loggers are wired into
-preview3 but have not
-completed RC5 vehicle qualification. It is for careful, parked testing only:
+The read-only Subaru SSM and Mitsubishi MUT-II K-line loggers are implemented.
+Basic Forester logging was reported working, but larger-profile/sustained logging
+and exact EVO/MUT-II qualification remain open. Use careful, parked testing only:
 
 - keep the vehicle stationary and do not operate the phone while driving;
 - use a compatible Subaru SSM K-line or Evo VIII/IX MUT-II vehicle and an
   OpenPort 2.0, with the correct protocol explicitly selected;
 - start with ignition on and engine off;
 - stop if the adapter, phone, or vehicle behaves unexpectedly;
-- do not rely on the preview for safety-critical monitoring.
+- do not rely on the app for safety-critical monitoring.
 
 CAN, transmission sessions, calculated
 parameters, serial external sensors, ECU writing, and flashing are not
-available in this Android preview.
+available in this Android version.
 
 ## EVO VIII/IX MUT-II with OpenPort 2.0
 
@@ -92,16 +94,18 @@ export recordings** exports earlier sessions after an app restart; exporting
 does not delete the recovery copy. Back these up before uninstalling or clearing
 app data. Storage use grows with retained recordings. The current cycle may be
 lost or incomplete after abrupt process/power loss; this is not a crash-proof
-data recorder. Definitions/channel selections need reloading after Activity
-recreation. Phone-specific USB, sleep, rotation, and permission behavior remain
-part of connected qualification.
+data recorder. The 1.1.2 candidate restores saved definitions/channel selections
+after restart or Activity recreation; this does not migrate data across an
+uninstall or automatically restore a USB/logging session. Keep source setup
+files for the old public version and for manual migration. Phone-specific USB,
+sleep, rotation, and permission behavior remain part of connected qualification.
 
 Android's [USB host guide](https://developer.android.com/develop/connectivity/usb/host)
 describes host-mode enumeration and permission requirements.
 
 ## Reporting useful results
 
-Open an Android preview issue and include:
+Open an Android issue and include:
 
 - APK version or Git commit;
 - phone or tablet model and Android version;

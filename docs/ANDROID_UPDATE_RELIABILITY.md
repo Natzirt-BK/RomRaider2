@@ -34,12 +34,19 @@ into a previously nonexistent absolute directory. **Do not run it for each
 release.** Preserve the existing identity and keep a secure offline backup of
 the keystore and password. Losing it prevents signing compatible future updates.
 
+Current maintainer status: an encrypted, restore-tested local backup was made
+on September 6 UTC. The owner approved same-disk storage; an off-device copy
+remains recommended but is not confirmed. No private material is in this repo.
+
 The first release using this identity cannot update an older installation signed
 by a different key, including the public 1.1.1 APK. Export recordings before any
 uninstall/data clearing. There is no automated migration or silent removal of an
 old app. Future releases using this identity and an increasing versionCode can
 update their existing installation. Both standard and separate test packages
 retain their own application IDs; the Android packages remain debuggable.
+Use the [1.1.1 to 1.1.2 migration checklist](ANDROID_1_1_2_MIGRATION.md) to preserve
+recordings, unsaved ROM work, definitions and profile selections before considering
+any manual replacement. It does not claim a phone migration has been performed.
 
 References: [Android app signing](https://developer.android.com/studio/publish/app-signing)
 and [GitHub Actions secrets](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-secrets).
