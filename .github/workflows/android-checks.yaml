@@ -108,6 +108,11 @@ jobs:
             src/main/java/com/romraider/logger/analysis/RomRaiderCsvLogParser.java \
             packaging/android/DesktopCsvCompatibilityCheck.java
           java -cp "$RUNNER_TEMP/csv-check" DesktopCsvCompatibilityCheck "$RUNNER_TEMP/android-export.csv"
+      - name: Capture Android app and lifecycle diagnostics
+        if: failure()
+        run: |
+          timeout 15 "$ANDROID_HOME/platform-tools/adb" -s emulator-5554 logcat -d -v threadtime > "$RUNNER_TEMP/android-logcat.log" || true
+          timeout 15 "$ANDROID_HOME/platform-tools/adb" -s emulator-5554 shell dumpsys activity activities > "$RUNNER_TEMP/android-activities.log" || true
       - name: Stop emulator
         if: always()
         run: timeout 10 "$ANDROID_HOME/platform-tools/adb" -s emulator-5554 emu kill || true
@@ -116,6 +121,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: android-emulator-diagnostics
-          path: ${{ runner.temp }}/emulator.log
+          path: |
+            ${{ runner.temp }}/emulator.log
+            ${{ runner.temp }}/android-logcat.log
+            ${{ runner.temp }}/android-activities.log
           retention-days: 3
           if-no-files-found: ignore
