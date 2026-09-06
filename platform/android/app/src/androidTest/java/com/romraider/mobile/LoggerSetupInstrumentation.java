@@ -25,7 +25,7 @@ import java.util.concurrent.*;
 /** Dependency-free framework instrumentation, restricted to the disposable automation app. */
 public final class LoggerSetupInstrumentation extends Instrumentation {
     private String phase;
-    private Activity activity;
+    private volatile Activity activity;
     private static final String DEFINITION = "<logger version=\"370\"><protocols><protocol id=\"SSM\"><parameters>"
             + parameter("P8", "Engine Speed", "rpm", "0x00000E", "x/4")
             + parameter("P1", "Battery Voltage", "V", "0x000010", "x/10")
@@ -48,7 +48,7 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
                     "Refusing to test a non-automation installation");
             Intent intent = new Intent().setClassName(getTargetContext(), MainActivity.class.getName())
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            activity = startActivitySync(intent);
+            startActivitySync(intent);
             awaitImports();
             if (phase.equals("seed")) seed();
             else if (phase.equals("verify")) verify(2);
@@ -66,7 +66,7 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
                     Activity closing = activity;
                     runOnMainSync(closing::finish);
                     waitForIdleSync();
-                    activity = startActivitySync(new Intent().setClassName(getTargetContext(), MainActivity.class.getName())
+                    startActivitySync(new Intent().setClassName(getTargetContext(), MainActivity.class.getName())
                             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
                 } finally { releaseSave.countDown(); }
                 blocker.get(15, TimeUnit.SECONDS);
@@ -95,6 +95,8 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
     private void seed() throws Exception {
         verifyXmlImportSecurity();
         verifyRomSaveRecovery();
+        verifyActivityRecreation();
+        verifyMissingGaugeReading();
         File folder = getTargetContext().getFilesDir();
         File definition = new File(folder, "automation-definition.xml");
         File profile = new File(folder, "automation-profile.xml");
@@ -106,7 +108,6 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
         verifySelection(2);
         invoke("loadLoggerDefinition", new Class<?>[] {Uri.class, String.class}, Uri.fromFile(definition), definition.getName());
         awaitImports();
-        settle();
         verifySelection(2);
         // The next launch must restore independently of both original documents.
         Files.delete(definition.toPath());
@@ -240,19 +241,83 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
     private void awaitImports() throws Exception {
         long deadline = SystemClock.uptimeMillis() + 15_000;
         while (SystemClock.uptimeMillis() < deadline) {
-            boolean[] loading = {true};
-            runOnMainSync(() -> loading[0] = ((LoggerImportState) fieldUnchecked("loggerImports")).isLoading());
-            if (!loading[0]) { settle(); return; }
+            Activity[] ready = {null};
+            runOnMainSync(() -> {
+                if (activity != null && !activity.isDestroyed()
+                        && !((LoggerImportState) fieldUnchecked("loggerImports")).isLoading()) ready[0] = activity;
+            });
+            if (ready[0] != null && settle(ready[0])) return;
             SystemClock.sleep(50);
         }
         throw new AssertionError("Logger setup import timed out");
     }
-    private void settle() throws Exception {
+    private boolean settle(Activity expected) throws Exception {
         waitForIdleSync();
-        ((ExecutorService) field("workerExecutor")).submit(() -> { }).get(15, TimeUnit.SECONDS);
+        ExecutorService[] worker = {null};
+        runOnMainSync(() -> {
+            if (activity == expected && !expected.isDestroyed()) {
+                worker[0] = (ExecutorService) fieldUnchecked("workerExecutor");
+            }
+        });
+        if (worker[0] == null) return false;
+        try { worker[0].submit(() -> { }).get(15, TimeUnit.SECONDS); }
+        catch (RejectedExecutionException failure) {
+            // Only retry a superseded/destroyed Activity, never a live executor failure.
+            if (activity != expected || expected.isDestroyed()) return false;
+            throw failure;
+        }
         waitForIdleSync();
         ((ExecutorService) field("LOGGER_SETUP_IO")).submit(() -> { }).get(15, TimeUnit.SECONDS);
         waitForIdleSync();
+        boolean[] settled = {false};
+        runOnMainSync(() -> settled[0] = activity == expected && !expected.isDestroyed()
+                && !((LoggerImportState) fieldUnchecked("loggerImports")).isLoading());
+        return settled[0];
+    }
+
+    @Override public void callActivityOnResume(Activity resumed) {
+        super.callActivityOnResume(resumed);
+        if (resumed instanceof MainActivity) activity = resumed;
+    }
+
+    @Override public void callActivityOnDestroy(Activity destroyed) {
+        super.callActivityOnDestroy(destroyed);
+        if (activity == destroyed) activity = null;
+    }
+
+    private void verifyActivityRecreation() throws Exception {
+        Activity previous = activity;
+        ExecutorService previousWorker = (ExecutorService) field("workerExecutor");
+        runOnMainSync(previous::recreate);
+        long deadline = SystemClock.uptimeMillis() + 15_000;
+        while ((activity == previous || activity == null) && SystemClock.uptimeMillis() < deadline) {
+            SystemClock.sleep(50);
+        }
+        check(activity != null && activity != previous, "Activity recreation did not resume a replacement");
+        awaitImports();
+        check(previous.isDestroyed() && previousWorker.isShutdown(), "Old Activity worker was not closed");
+        check(!((ExecutorService) field("workerExecutor")).isShutdown(), "Replacement Activity worker is closed");
+        System.out.println("PASS: instrumentation follows recreated Activity and never reuses its closed worker.");
+    }
+
+    private void verifyMissingGaugeReading() {
+        runOnMainSync(() -> {
+            MobileGaugeView gauge = new MobileGaugeView(activity);
+            gauge.layout(0, 0, 400, 450);
+            android.graphics.Bitmap bitmap = android.graphics.Bitmap.createBitmap(400, 450,
+                    android.graphics.Bitmap.Config.ARGB_8888);
+            try {
+                MobileGaugeSnapshot snapshot = new MobileGaugeSnapshot("fixture", "Fixture", "V", "0.0", 12);
+                for (double value : new double[] {Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY, 0}) {
+                    snapshot.accept(value);
+                    gauge.setValue(snapshot.id, snapshot.name, snapshot.displayValue(), snapshot.units,
+                            snapshot.value, snapshot.minimum, snapshot.maximum);
+                    gauge.draw(new android.graphics.Canvas(bitmap));
+                    check(gauge.getContentDescription().toString().contains("no valid data") == !Double.isFinite(value),
+                            "Gauge accessibility did not reflect missing/recovered data");
+                }
+            } finally { bitmap.recycle(); }
+        });
     }
     private Object field(String name) throws Exception {
         Object[] result = {null};
