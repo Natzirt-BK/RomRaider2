@@ -15,6 +15,31 @@ import com.romraider.logger.ecu.ui.handler.dash.GaugeMinMax;
 
 public class LoggerLiveDataBusTest {
     @Test
+    public void resetHistoryRetainsReadingsAndRecordingState() {
+        LoggerLiveDataBus bus = LoggerLiveDataBus.getInstance();
+        bus.clearSamples();
+        try {
+            bus.loggingData();
+            bus.publish(new LiveDataSample("a", "A", 1, "1", "V", 1));
+            bus.publish(new LiveDataSample("a", "A", 2, "2", "V", 2));
+            bus.publish(new LiveDataSample("b", "B", 3, "3", "rpm", 2));
+            bus.resetHistory();
+            assertEquals(LoggerSessionState.RECORDING, bus.getState());
+            assertEquals(2, bus.getLatestSamples().size());
+            assertEquals(1, bus.getRecentSamples().get("a").size());
+            assertEquals(2.0, bus.getRecentSamples().get("a").get(0).getRawValue(), 0);
+            assertEquals(1, bus.getRecentSamples().get("b").size());
+            bus.publish(new LiveDataSample("a", "A", 4, "4", "V", 3));
+            assertEquals(2, bus.getRecentSamples().get("a").size());
+            bus.clearSamples();
+            bus.resetHistory();
+            assertEquals(0, bus.getRecentSamples().size());
+        } finally {
+            bus.clearSamples();
+            bus.stopped();
+        }
+    }
+    @Test
     public void publishesConvertedSamplesAndConnectionState() {
         LoggerLiveDataBus bus = LoggerLiveDataBus.getInstance();
         bus.clearSamples();

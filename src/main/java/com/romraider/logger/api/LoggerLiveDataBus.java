@@ -129,6 +129,18 @@ public final class LoggerLiveDataBus implements LoggerStatusListener {
         }
     }
 
+    /** Reset rolling view statistics, retaining the latest reading per channel.
+     * Does not change connection state, selection, or the file logger.
+     */
+    public synchronized void resetHistory() {
+        history.clear();
+        for (LiveDataSample sample : latest.values()) {
+            LinkedList<LiveDataSample> samples = new LinkedList<LiveDataSample>();
+            samples.add(sample);
+            history.put(sample.getParameterId(), samples);
+        }
+    }
+
     public void connecting() { setState(LoggerSessionState.CONNECTING); }
     public void reconnecting() { setState(LoggerSessionState.RECONNECTING); }
     public void readingData() { setState(LoggerSessionState.LIVE_ECU); }

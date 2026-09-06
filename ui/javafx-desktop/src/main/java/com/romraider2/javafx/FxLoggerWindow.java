@@ -42,7 +42,6 @@ import javafx.scene.Scene;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.control.Button;
-import javafx.scene.control.CheckBox;
 import javafx.scene.control.ColorPicker;
 import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
@@ -57,7 +56,6 @@ import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
-import javafx.scene.control.TextField;
 import javafx.scene.control.ToggleButton;
 import javafx.scene.control.ToggleGroup;
 import javafx.scene.control.Tooltip;
@@ -80,9 +78,7 @@ final class FxLoggerWindow {
     private final LoggerWorkspaceContext context;
     private final BorderPane root = new BorderPane();
     private final SplitPane workspace = new SplitPane();
-    private final VBox channelRail = new VBox();
-    private final TextField channelSearch = new TextField();
-    private final VBox channelList = new VBox(3);
+    private final FxLoggerChannelPane channelRail;
     private final TabPane views = new TabPane();
     private final FlowPane overview = new FlowPane(10, 10);
     private final TableView<LiveDataSample> data = new TableView<>();
@@ -104,6 +100,7 @@ final class FxLoggerWindow {
     private final Map<String, Stage> detachedGauges = new LinkedHashMap<>();
     private final AtomicBoolean refreshPending = new AtomicBoolean();
     private List<LoggerChannel> channelSnapshot = List.of();
+    private Map<String, List<LiveDataSample>> viewHistory = Map.of();
     private String selectedDashboardParameter;
     private final ToggleGroup dashboardRoles = new ToggleGroup();
     private final ToggleGroup dashboardSizes = new ToggleGroup();
@@ -133,10 +130,14 @@ final class FxLoggerWindow {
                 });
         runtime = new LoggerDesktopRuntime();
         context = runtime.getWorkspaceContext();
+        channelRail = new FxLoggerChannelPane(context.getChannels(),
+                (title, message) -> FxDialogs.confirm(stage, title, message, "Clear selection"),
+                () -> context.getSession().getState() == LoggerSessionState.RECORDING);
 
         channelListener = next -> Platform.runLater(() -> {
+            if (disposed) return;
             channelSnapshot = next;
-            rebuildChannels();
+            channelRail.update(next);
             refreshViews();
         });
         stateListener = next -> Platform.runLater(() -> updateState(next));
@@ -294,21 +295,6 @@ final class FxLoggerWindow {
     }
 
     private Node workspace() {
-        channelSearch.setPromptText("Search channels");
-        channelSearch.textProperty().addListener((value, oldText, newText) ->
-                rebuildChannels());
-        ScrollPane channelScroll = new ScrollPane(channelList);
-        channelScroll.setFitToWidth(true);
-        VBox.setVgrow(channelScroll, Priority.ALWAYS);
-        Label channelHeading = styled("CHANNELS", "section-kicker");
-        channelRail.getChildren().addAll(channelHeading, channelSearch,
-                channelScroll);
-        channelRail.setSpacing(9);
-        channelRail.setPadding(new Insets(12));
-        channelRail.setMinWidth(230);
-        channelRail.setPrefWidth(320);
-        channelRail.getStyleClass().add("nav-pane");
-
         overview.setPadding(new Insets(14));
         overview.setAlignment(Pos.TOP_CENTER);
         ScrollPane overviewScroll = new ScrollPane(overview);
@@ -320,7 +306,7 @@ final class FxLoggerWindow {
         configureDataTable();
         views.getTabs().addAll(
                 fixedTab("Overview", overviewScroll),
-                fixedTab("Data", data),
+                fixedTab("Data", dataWorkspace()),
                 fixedTab("Graph", graph),
                 fixedTab("Dashboard", dashboardWorkspace(dashboardScroll)),
                 fixedTab("Dyno", dynoWorkspace()),
@@ -408,30 +394,44 @@ final class FxLoggerWindow {
                 sample.getValue().getUnits()));
         units.setPrefWidth(150);
         data.getColumns().addAll(name, value, units);
+        addStatisticColumn("Minimum", FxLoggerStatistics::minimum);
+        addStatisticColumn("Maximum", FxLoggerStatistics::maximum);
+        addStatisticColumn("Average", FxLoggerStatistics::average);
         data.setPlaceholder(styled(
                 "Select channels from the rail to populate live data.",
                 "muted"));
     }
 
-    private void rebuildChannels() {
-        String query = channelSearch.getText() == null ? ""
-                : channelSearch.getText().trim().toLowerCase();
-        channelList.getChildren().clear();
-        for (LoggerChannel channel : channelSnapshot) {
-            if (!query.isEmpty() && !(channel.getName() + " "
-                    + channel.getParameterId()).toLowerCase().contains(query)) continue;
-            CheckBox selected = new CheckBox(channel.getName()
-                    + (channel.getUnits().isBlank() ? ""
-                    : "  [" + channel.getUnits() + "]"));
-            selected.setSelected(channel.isSelected());
-            selected.setMaxWidth(Double.MAX_VALUE);
-            selected.setTooltip(new Tooltip(channel.getName()
-                    + (channel.getUnits().isBlank() ? ""
-                    : " [" + channel.getUnits() + "]")));
-            selected.setOnAction(event -> context.getChannels().setSelected(
-                    channel.getParameterId(), selected.isSelected()));
-            channelList.getChildren().add(selected);
-        }
+    private Node dataWorkspace() {
+        Button reset = new Button("Reset statistics");
+        reset.setId("logger-reset-statistics");
+        reset.setTooltip(new Tooltip("Reset rolling statistics and graph history; keep current readings and recording"));
+        reset.setOnAction(event -> {
+            context.getLiveData().resetHistory();
+            refreshViews();
+            status.setText("View statistics reset. Recording and saved logs are unchanged.");
+        });
+        Label explanation = new Label("Rolling statistics: up to 2,000 readings per channel");
+        explanation.setWrapText(true);
+        HBox controls = new HBox(10, reset, explanation);
+        controls.setAlignment(Pos.CENTER_LEFT);
+        controls.setPadding(new Insets(10));
+        BorderPane pane = new BorderPane(data);
+        pane.setTop(controls);
+        return pane;
+    }
+
+    private void addStatisticColumn(String title,
+            java.util.function.ToDoubleFunction<FxLoggerStatistics> value) {
+        TableColumn<LiveDataSample, String> column = new TableColumn<>(title);
+        column.setCellValueFactory(cell -> {
+            LiveDataSample sample = cell.getValue();
+            FxLoggerStatistics stats = FxLoggerStatistics.from(viewHistory.getOrDefault(
+                    sample.getParameterId(), List.of()), sample.getUnits());
+            return new ReadOnlyStringWrapper(stats.display(value.applyAsDouble(stats)));
+        });
+        column.setPrefWidth(125);
+        data.getColumns().add(column);
     }
 
     private void scheduleRefresh() {
@@ -443,6 +443,8 @@ final class FxLoggerWindow {
     }
 
     private void refreshViews() {
+        if (disposed) return;
+        viewHistory = context.getLiveData().getRecentSamples();
         List<LiveDataSample> selected = selectedSamples();
         channelsMetric.setText(selected.size() + " SELECTED");
         if (selectedDashboardParameter != null && selected.stream().noneMatch(
@@ -470,7 +472,7 @@ final class FxLoggerWindow {
         }
         updateDashboardControls();
         refreshDetachedGauges(selected);
-        graph.setData(context.getLiveData().getRecentSamples(), selected);
+        graph.setData(viewHistory, selected);
         if (dyno != null) dyno.refresh(channelSnapshot);
     }
 
@@ -837,6 +839,8 @@ final class FxLoggerWindow {
     }
 
     private void updateState(LoggerSessionState next) {
+        if (disposed) return;
+        channelRail.setRecording(next == LoggerSessionState.RECORDING);
         sessionState.setText(next.getDisplayName());
         connect.setDisable(next != LoggerSessionState.STOPPED);
         disconnect.setDisable(next == LoggerSessionState.STOPPED);
@@ -860,7 +864,7 @@ final class FxLoggerWindow {
     private void showSetup() {
         FxLoggerSetup.show(stage, runtime, () -> {
             status.setText("Logger configuration loaded");
-            rebuildChannels();
+            channelRail.update(channelSnapshot);
             considerAutoConnect();
         });
     }
@@ -880,7 +884,7 @@ final class FxLoggerWindow {
             runtime.reloadConfiguration();
             com.romraider.util.SettingsManager.save(runtime.getSettings());
             status.setText("Loaded Logger definition: " + selected.getName());
-            rebuildChannels();
+            channelRail.update(channelSnapshot);
             considerAutoConnect();
         } catch (RuntimeException failure) {
             FxDialogs.error(stage, "Logger definition could not be loaded",
