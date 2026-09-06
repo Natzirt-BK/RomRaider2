@@ -163,7 +163,12 @@ public class SSMDmDiscoveryTest {
                 try { f.connection.dmInit(callback, f.module); fail("Accepted invalid runtime " + fault); }
                 catch (InvalidResponseException expected) { }
                 assertEquals(0, callback.calls);
-                assertSame(errors, cached.getRuntimeCurrentErrors());
+                // Public error arrays are defensive snapshots, not aliases of
+                // caller-owned storage. Invalid frames must preserve contents.
+                assertArrayEquals(errors, cached.getRuntimeCurrentErrors());
+                assertArrayEquals(errors, cached.getRuntimeMemErrors());
+                assertNotSame(errors, cached.getRuntimeCurrentErrors());
+                assertEquals(1, cached.getRuntimeActiveInputs());
                 assertEquals(1, f.requests.size());
                 assertEquals(0, f.writes);
             }

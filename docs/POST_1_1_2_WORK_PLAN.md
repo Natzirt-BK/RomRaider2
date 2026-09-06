@@ -64,6 +64,12 @@ integer/float decoding with definition-to-query tests and native desktop
 comparisons; no new decoder is needed. Continue metadata/cache/negotiation-error
 validation and verified mobile runtime/version/address mapping.
 
+The metadata follow-up now bounds each field read, isolates retained buffers and
+channel collections, rejects runtime-pointer spans that wrap on the wire, and
+aligns DM02C's version gate with its parsed address. Other channel/RAM-tune spans,
+ECU-bound cache identity and negotiation cleanup remain; none of these checks
+qualifies the legacy write handshake for Android's read-only logger.
+
 ## Then
 
 Implemented in 1.1.3 development source: [linked, reviewed conditions](FUEL_LOG_ANALYSIS.md#linked-maf--injector-conditions-113-development-source) between MAF and Injector:

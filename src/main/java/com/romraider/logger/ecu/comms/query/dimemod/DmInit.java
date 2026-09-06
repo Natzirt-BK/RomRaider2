@@ -124,15 +124,18 @@ public class DmInit {
     private List<EcuParameter> params = new ArrayList<>();
 
     public DmInit(byte[] dmInitBytes) {
-        this.dmInitBytes = dmInitBytes;
-        ByteBuffer buf = ByteBuffer.wrap(dmInitBytes);
-        buf.position(0);
+        if (dmInitBytes == null || dmInitBytes.length < 4 || dmInitBytes.length > 0xFFFF) {
+            throw new IllegalStateException("DimeMod metadata requires 4 to 65535 bytes");
+        }
+        this.dmInitBytes = dmInitBytes.clone();
+        MetadataReader buf = new MetadataReader(this.dmInitBytes);
         majorVer = buf.get() & 0xFF;
         minorVer = buf.get() & 0xFF;
         buildNum = buf.getShort() & 0xFFFF;
         if (majorVer > 2) {
             isDmInitReady = false; // unsupported version
         } else if (majorVer == 2) {
+            buf.section("HEADER");
             int ramSize = buf.getInt();
             byte featuresConfig0 = buf.get();
             byte featuresConfig1 = buf.get();
@@ -155,6 +158,7 @@ public class DmInit {
             isValetModeEnabled = (featuresConfig1 & 0x04) != 0;
 
             // INPUTS_CONFIG
+            buf.section("INPUTS_CONFIG");
             int signature = buf.getInt();
             if (signature != 0xDEAD0001) {
                 throw new IllegalStateException("DimeMod params reading failure at INPUTS_CONFIG");
@@ -190,6 +194,7 @@ public class DmInit {
             extMapSwitchVoltageAddress = buf.getInt();
 
             if (isRamTuneEnabled) {
+                buf.section("RAM_TUNE");
                 signature = buf.getInt();
                 if (signature != 0xDEAD0020) {
                     throw new IllegalStateException("DimeMod params reading failure at RAM_TUNE");
@@ -199,6 +204,7 @@ public class DmInit {
             }
 
             if (isFailsafeEnabled) {
+                buf.section("FAILSAFE");
                 signature = buf.getInt();
                 if (signature != 0xDEAD0002) {
                     throw new IllegalStateException("DimeMod params reading failure at FAILSAFE");
@@ -210,6 +216,7 @@ public class DmInit {
             }
 
             if (isCelFlashEnabled) {
+                buf.section("CEL_FLASH");
                 signature = buf.getInt();
                 if (signature != 0xDEAD0004) {
                     throw new IllegalStateException("DimeMod params reading failure at CEL_FLASH");
@@ -218,6 +225,7 @@ public class DmInit {
             }
 
             if (isKsByCylsEnabled) {
+                buf.section("KS_BY_CYLS");
                 signature = buf.getInt();
                 if (signature != 0xDEAD0006) {
                     throw new IllegalStateException("DimeMod params reading failure at KS_BY_CYLS");
@@ -229,6 +237,7 @@ public class DmInit {
             }
 
             if (isMapSwitchEnabled) {
+                buf.section("MAP_SWITCH");
                 signature = buf.getInt();
                 if (signature != 0xDEAD0007) {
                     throw new IllegalStateException("DimeMod params reading failure at MAP_SWITCH");
@@ -259,6 +268,7 @@ public class DmInit {
             }
 
             if (isSpeedDensityEnabled) {
+                buf.section("SPEED_DENSITY");
                 signature = buf.getInt();
                 if (signature != 0xDEAD0009) {
                     throw new IllegalStateException("DimeMod params reading failure at SPEED_DENSITY");
@@ -285,6 +295,7 @@ public class DmInit {
             }
 
             if (isVinLockEnabled) {
+                buf.section("VIN_LOCK");
                 signature = buf.getInt();
                 if (signature != 0xDEAD000C) {
                     throw new IllegalStateException("DimeMod params reading failure at VIN_LOCK");
@@ -303,6 +314,7 @@ public class DmInit {
             }
 
             if (isPwmControlEnabled) {
+                buf.section("PWM_CONTROL");
                 signature = buf.getInt();
                 if (signature != 0xDEAD000D) {
                     throw new IllegalStateException("DimeMod params reading failure at PWM_CONTROL");
@@ -311,6 +323,7 @@ public class DmInit {
             }
 
             if (isAlsEnabled) {
+                buf.section("ALS");
                 signature = buf.getInt();
                 if (signature != 0xDEAD000A) {
                     throw new IllegalStateException("DimeMod params reading failure at ALS");
@@ -328,18 +341,55 @@ public class DmInit {
             }
 
             if (isValetModeEnabled) {
+                buf.section("VALET_MODE");
                 signature = buf.getInt();
                 if (signature != 0xDEAD000E) {
                     throw new IllegalStateException("DimeMod params reading failure at VALET_MODE");
                 }
                 valetCurrentCodeAddress = buf.getInt();
             }
+            // Preserve the existing low-24-bit wire mapping (including SH
+            // upper-byte aliases), but never let runtime reads or the derived
+            // debug channels wrap into a different wire-address region.
+            requireWireSpan(currentErrorCodesAddress, minorVer == 0 ? 13 : 38, "current errors/debug");
+            requireWireSpan(memorizedErrorCodesAddress, minorVer == 0 ? 4 : 16, "memorized errors");
+            requireWireSpan(activeFeaturesAddress, 4, "active features");
+            requireWireSpan(activeInputsAddress, 2, "active inputs");
             isDmInitReady = true;
         } else if (majorVer == 1) {
             isDmInitReady = false; // unsupported version
         } else {
             isDmInitReady = false; // unsupported version
         }
+    }
+
+    private static void requireWireSpan(int address, int length, String field) {
+        if ((long) (address & 0xFFFFFF) + length > 0x1000000L) {
+            throw new IllegalStateException("DimeMod metadata " + field + " span wraps the 24-bit wire address space");
+        }
+    }
+
+    private static final class MetadataReader {
+        private final ByteBuffer bytes;
+        private String section = "VERSION";
+
+        MetadataReader(byte[] source) { bytes = ByteBuffer.wrap(source); }
+        void section(String name) { section = name; }
+        byte get() { require(1); return bytes.get(); }
+        short getShort() { require(2); return bytes.getShort(); }
+        int getInt() { require(4); return bytes.getInt(); }
+
+        private void require(int length) {
+            if (bytes.remaining() < length) {
+                throw new IllegalStateException("Truncated DimeMod metadata in " + section
+                        + " at byte " + bytes.position() + ": need " + length
+                        + ", remaining " + bytes.remaining());
+            }
+        }
+    }
+
+    private static int[] copyErrors(int[] errors) {
+        return errors == null ? null : errors.clone();
     }
 
     public boolean updateRuntimeData(int activeFeatures, int activeInputs, int[] currentErrors, int[] memErrors) {
@@ -351,8 +401,8 @@ public class DmInit {
         if (isDmInitReady) {
             this.runtimeActiveFeatures = activeFeatures;
             this.runtimeActiveInputs = activeInputs;
-            this.runtimeCurrentErrors = currentErrors;
-            this.runtimeMemErrors = memErrors;
+            this.runtimeCurrentErrors = copyErrors(currentErrors);
+            this.runtimeMemErrors = copyErrors(memErrors);
 
             boolean isAfrEnabled = (activeInputs & 0x01) != 0;
             boolean isEgtEnabled = (activeInputs & 0x02) != 0;
@@ -496,7 +546,7 @@ public class DmInit {
                 params.add(getFloatParameter("DM029", "DimeMod: AlphaN Mass Airflow Base", "Base AlphaN Mass Airflow (no compensations applied)", alphaNBaseMassAirflowAddress, "g/s", "x", 0, 300, 50));
                 params.add(getFloatParameter("DM02A", "DimeMod: AlphaN Mass Airflow Final", "Final AlphaN Mass Airflow (all compensations applied)", alphaNFinalMassAirflowAddress, "g/s", "x", 0, 300, 50));
                 params.add(getFloatParameter("DM02B", "DimeMod: Mass Airflow (sensor-based))", "Mass Airflow calculated directly from MAF sensor", sensorMassAirflowAddress, "g/s", "x", 0, 500, 50));
-                if (buildNum > 0) {
+                if (minorVer > 0 || buildNum > 0) {
                     params.add(getFloatMfPressureParameter("DM02C", "DimeMod: SD Atmospheric Pressure", "Atmospheric Pressure used in SD calculations", sdAtmPressAddress));
                 }
             }
@@ -607,11 +657,11 @@ public class DmInit {
     }
 
     public byte[] getDmInitBytes() {
-        return dmInitBytes;
+        return dmInitBytes.clone();
     }
 
     public Collection<? extends EcuParameter> getEcuParams() {
-        return params;
+        return Collections.unmodifiableList(new ArrayList<>(params));
     }
 
     public int getCurrentErrorCodesAddress() {
@@ -627,7 +677,7 @@ public class DmInit {
     }
 
     public int[] getRuntimeCurrentErrors() {
-        return runtimeCurrentErrors;
+        return copyErrors(runtimeCurrentErrors);
     }
 
     public int getRuntimeActiveInputs() {
@@ -635,7 +685,7 @@ public class DmInit {
     }
 
     public int[] getRuntimeMemErrors() {
-        return runtimeMemErrors;
+        return copyErrors(runtimeMemErrors);
     }
 
     public int getActiveFeaturesAddress() {

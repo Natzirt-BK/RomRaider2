@@ -66,6 +66,56 @@ Ant core suite and Linux build; the same three optional/native skips remain.
 The shared checks and all 216 JavaFX / 35 Compose desktop tests also pass with
 the updated reader; no physical protocol acceptance is inferred from them.
 
+## Metadata structure and retained state
+
+The follow-up metadata audit reproduced six failures on the preceding source:
+unhelpful truncation/null errors, caller mutation of retained discovery bytes
+and runtime arrays, acceptance of wrapping runtime spans, and omission of
+DM02C on later minor versions with build zero.
+
+`DmInit` now accepts only the advertised 4–65,535-byte discovery envelope and
+parses its own copy. A bounded reader reports the section and byte offset of a
+truncated field instead of leaking a bare buffer-underflow exception. Existing
+section signatures and version-dependent layouts are retained. Unsupported major
+versions remain unsupported metadata; bounded trailing bytes remain accepted
+for compatibility, not interpreted as newly supported features.
+
+The four runtime pointers are checked before publication: current-error storage
+including the derived debug channels spans 13 bytes on 2.0 and 38 on later
+layouts; memorized errors span 4 or 16 bytes; feature/input flags span 4 and 2.
+None may cross the 24-bit wire boundary. Existing masking of upper address bytes
+is preserved. This is a wire-range check, **not** proof that an address belongs
+to a particular ECU, valid RAM region or discovery source. Other advertised
+channel and RAM-tune spans still need separate validation.
+
+Discovery-byte exports and runtime-error arrays are defensive copies. Published
+channel collections are unmodifiable structural snapshots, so a later update
+cannot clear a previously returned collection. Individual parameter objects
+remain the legacy objects; this does not claim deep immutability or thread-safe
+atomic publication of all runtime state. Existing error-array length/null
+semantics are unchanged; the transport still validates complete runtime frames.
+
+DM02C now uses `minor > 0 || build > 0`, matching the condition that reads its
+atmospheric-pressure address. It still requires the advertised speed-density
+block and active runtime feature. Tests verify its exact synthetic address and
+four-byte width, including 2.0 build 0/1 and later minor versions with build zero.
+
+`DmMetadataTest` adds eight tests covering every truncated prefix of nine
+version/build fixtures with all parsed feature blocks, all eleven section
+signatures, bounded/unknown-version compatibility, buffer/collection ownership,
+runtime-span end boundaries (including retained upper-byte masking), and the
+DM02C version gate. The existing malformed-runtime transport test now compares
+unchanged error-array contents rather than requiring the caller's array identity;
+it additionally checks memorized errors, snapshot separation and retained input
+flags. No malformed-frame acceptance was relaxed.
+
+Qualification: all 3,112 truncated prefixes reject with context. The eight new
+metadata tests, ten channel tests and twelve native-framing transport tests pass
+together (30 tests). Ant Linux build and the complete unit suite pass, retaining
+the three optional/native corpus skips. Shared-core checks and all 222 JavaFX /
+35 Compose tests pass against the rebuilt core with no JavaFX/Compose skips.
+These are synthetic/source results, not physical ECU or release acceptance.
+
 ## Why Android discovery is still separate
 
 The current desktop [`SSMLoggerConnection.dmInit`](../src/main/java/com/romraider/logger/ecu/comms/io/connection/SSMLoggerConnection.java)
@@ -90,9 +140,10 @@ discovery-origin/ECU-identity contract for importing those addresses.
 - Define and verify a genuinely read-only discovery source, or a separately
   authorized handshake with accurate UI wording; do not silently reuse the
   legacy write sequence under a read-only label.
-- Continue malformed/truncated metadata, contained-address validation, cache
-  identity and negotiation-cleanup audits before claiming robust dynamic
-  discovery. The legacy CAN exception for a nonstandard negotiation-exit reply
+- Continue validation of other contained addresses, RAM-tune sizes/regions, cache
+  identity and negotiation cleanup before claiming robust dynamic discovery.
+  Bounded parsing and runtime-pointer spans are covered above, not all metadata
+  semantics. The legacy CAN exception for a nonstandard negotiation-exit reply
   is retained; this pass does not invent new cleanup writes or prove all
   negotiation-error behavior safe. Frame/chunk checks do not validate every
   advertised metadata address.
