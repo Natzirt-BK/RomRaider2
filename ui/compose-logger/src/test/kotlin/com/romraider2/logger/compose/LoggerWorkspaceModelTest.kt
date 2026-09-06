@@ -92,7 +92,7 @@ class LoggerWorkspaceModelTest {
         val workspace = ComposeLoggerWorkspaceProvider().createWorkspace(
             LoggerWorkspaceContext(bus, session, channels, preferences))
 
-        assertEquals("androidx.compose.ui.awt.ComposePanel",
+        assertEquals("com.romraider2.logger.compose.SwingGaugeFullScreenHost",
             workspace.javaClass.name)
     }
 

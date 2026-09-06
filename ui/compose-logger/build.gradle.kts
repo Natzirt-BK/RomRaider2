@@ -67,6 +67,7 @@ dependencyLocking {
 
 tasks.test {
     useJUnitPlatform()
+    inputs.property("nativeWindowSmoke", providers.environmentVariable("RR2_COMPOSE_WINDOW_SMOKE").orElse("0"))
 }
 
 tasks.withType<JavaExec>().configureEach {

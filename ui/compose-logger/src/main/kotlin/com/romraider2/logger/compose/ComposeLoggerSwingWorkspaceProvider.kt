@@ -1,10 +1,12 @@
 /* RomRaider2 ECU Studio - GPL 2.0 or later. */
 package com.romraider2.logger.compose
 
-import androidx.compose.ui.awt.ComposePanel
+import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.awt.LocalAwtWindow
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.mutableIntStateOf
 import com.romraider.logger.ecu.ui.spi.LoggerWorkspaceContext
 import com.romraider.logger.ecu.ui.spi.LoggerWorkspaceProvider
-import java.awt.Dimension
 import javax.swing.JComponent
 import javax.swing.SwingUtilities
 
@@ -19,10 +21,18 @@ class ComposeLoggerWorkspaceProvider : LoggerWorkspaceProvider {
         return checkNotNull(workspace)
     }
 
-    private fun panel(context: LoggerWorkspaceContext): JComponent =
-        ComposePanel().apply {
-            preferredSize = Dimension(1000, 650)
-            minimumSize = Dimension(640, 500)
-            setContent { LoggerWorkspace(context) }
+    @OptIn(ExperimentalComposeUiApi::class)
+    private fun panel(context: LoggerWorkspaceContext): JComponent {
+        val exitRevision = mutableIntStateOf(0)
+        val host = SwingGaugeFullScreenHost { exitRevision.intValue++ }
+        host.composePanel.setContent {
+            CompositionLocalProvider(LocalAwtWindow provides host.currentWindow) {
+                LoggerWorkspace(context, onGaugeFullScreen = { enabled ->
+                    // Never detach a ComposePanel inside its own composition/frame callback.
+                    SwingUtilities.invokeLater { host.setFullScreen(enabled) }
+                }, gaugeFullScreenExitRevision = exitRevision.intValue)
+            }
         }
+        return host
+    }
 }

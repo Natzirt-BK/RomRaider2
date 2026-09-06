@@ -142,7 +142,8 @@ private val graphColors = listOf(
 internal fun LoggerWorkspace(
     context: LoggerWorkspaceContext,
     onOpenSetup: (() -> Unit)? = null,
-    onGaugeFullScreen: ((Boolean) -> Unit)? = null
+    onGaugeFullScreen: ((Boolean) -> Unit)? = null,
+    gaugeFullScreenExitRevision: Int = 0
 ) {
     val steamOs = remember { RuntimeUiProfile.isSteamOs() }
     val gaugeAlerts = remember(context) { LoggerGaugeAlertTracker() }
@@ -172,6 +173,9 @@ internal fun LoggerWorkspace(
     var mountedStyleRevision by remember { mutableStateOf(0) }
     val gaugeWindowFocused = androidx.compose.ui.platform.LocalWindowInfo.current.isWindowFocused
     LaunchedEffect(mountedFullScreen) { onGaugeFullScreen?.invoke(mountedFullScreen) }
+    LaunchedEffect(gaugeFullScreenExitRevision) {
+        if (gaugeFullScreenExitRevision != 0) mountedFullScreen = false
+    }
     LaunchedEffect(mountedMenuTap, mountedFullScreen, gaugeWindowFocused) {
         if (!gaugeWindowFocused) mountedMenuTap = 0
         mountedMenuVisible = mountedFullScreen && gaugeWindowFocused && mountedMenuTap != 0L

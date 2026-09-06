@@ -24,11 +24,16 @@ recording**. The menu hides after five seconds; another tap resets it. Exit
 restores setup and the previous window mode, without stopping the recording.
 Escape also exits full-screen mode. Focus loss hides the temporary controls.
 
+The legacy Swing-embedded Compose bridge also offers **Full screen**. It moves
+the existing view into a borderless window on the host display, hiding the
+surrounding logger tabs and controls. Exit returns that same view to its original
+place; the host window's size and state are not changed. Closing the gauge window
+returns to setup rather than closing the logger. Closing/removing the embedded
+workspace cleans up its full-screen window and composition.
+
 This is not yet full mobile parity: desktop display-awake inhibition remains
-unimplemented. The legacy Swing-embedded Compose bridge has independent setup
-and the fitted grid, but does not yet offer the native-window Full Screen
-button. Neither limitation applies to Android's already verified full-screen
-keep-awake behavior. Configure displays while parked.
+unimplemented. Android's already verified full-screen keep-awake behavior is
+unaffected. Configure displays while parked.
 
 Desktop settings store `gauge-display` schema 1, a count and six bounded channel
 IDs. Old settings start with empty slots. Invalid display settings are ignored;
@@ -40,8 +45,9 @@ trips, persistence callbacks, and independent/unknown Compose display channels.
 JavaFX native checks cover all six layouts at portrait, landscape and tiny
 viewport sizes, missing readings, actual full-screen state, tap/reset/timeout/
 exit, and retained synthetic session/selection/history. Compose native captures
-cover setup and six fitted instruments; full native Compose menu/window/focus
-automation is still a follow-up, alongside display-awake support.
+cover setup and six fitted instruments. The Swing-embedded native checks below
+now cover Compose menu input and focus behavior; qualification of the separate
+Compose-owned window placement remains a follow-up, alongside display-awake support.
 
 September 6 verification: 252 JavaFX tests, 37 Compose tests and 18 focused core
 settings/display tests pass. Render inspection caught and corrected missing
@@ -49,6 +55,31 @@ legacy channel labels and a Compose aspect-ratio overflow between fitted rows.
 Native captures: [JavaFX setup](images/desktop-gauge-display-setup.png),
 [JavaFX full screen with unavailable readings](images/desktop-gauge-display-fullscreen.png),
 and [Compose setup with explicit synthetic values](images/handheld-gauge-display-setup.png).
+
+The Swing bridge's retained-transfer tests additionally check repeated window
+transfers, new state rendering after each transfer, exact original composition
+lifetime, restoration of the original host bounds, and owner-close cleanup.
+Its production-workspace test drives a synthetic recording bus and real pointer
+events through the menu timeout/reset cycle, renders newly arriving readings,
+switches native focus away and back, and exits via menu, Escape and native window
+close. All these view changes leave the recording state, sample identity and
+display assignment intact without issuing a session command. No `LoggerDesktopRuntime`, USB
+provider or vehicle is constructed. Run native checks in a separate Xvfb display
+with `RR2_COMPOSE_WINDOW_SMOKE=1`; ordinary headless runs skip these two tests.
+CI runs these separately from JavaFX so competing test windows cannot steal focus.
+
+The bridge uses Compose's SwingGraphics rendering path: testing the native
+SkiaSurface transfer found a retained but non-refreshing scene. It also keeps
+the current AWT window reference explicit across transfers, preserves the
+composition only during reparenting, and restores normal disposal afterward.
+Native window changes are queued outside composition/frame callbacks. These
+choices are limited to the embedded Swing bridge; the Compose-owned shell's
+renderer is unchanged. The upstream [ComposePanel lifecycle contract](https://github.com/JetBrains/compose-multiplatform-core/blob/jb-main/compose/ui/ui/src/desktopMain/kotlin/androidx/compose/ui/awt/ComposePanel.desktop.kt)
+describes retained removal and the application's cleanup responsibility.
+
+The bridge checkpoint passes all 39 Compose tests, including both opted-in native
+tests. Actual synthetic captures: [full screen](images/swing-gauge-display-fullscreen.png)
+and [tap-revealed exit menu](images/swing-gauge-display-menu.png).
 
 This is development source, not a replacement for the public 1.1.2 RC1 packages.
 No physical adapter or vehicle was used in these checks.
