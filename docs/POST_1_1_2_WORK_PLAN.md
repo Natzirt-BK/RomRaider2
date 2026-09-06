@@ -76,7 +76,10 @@ adjacent-row transient filtering, shared conditions and versioned setup transfer
 The [eight named scalar condition controls](FUEL_OPERATING_CONDITIONS.md) are also
 implemented, with explicit mappings/limits, linked review and strict version-3
 setups. Neither feature infers suitable operating conditions or claims live-capture
-parity. Continue Log Analysis cursor/statistics linkage, injector transfer, log-to-map
+parity. [Reviewed range sharing](SHARED_ANALYSIS_RANGE.md) now connects all three
+workspaces to Log Analysis's cursor and range-only views/statistics; it does not
+apply fuel filters to those statistics. Continue exact accepted-row inspection/
+statistics, injector transfer, log-to-map
 tracing and binned/run-comparison views. Portable logger-setup export/import and
 bounded large-log review follow. Background recording needs its own Android
 service/USB/notification and failure-recovery design; switching to GAUGES is not

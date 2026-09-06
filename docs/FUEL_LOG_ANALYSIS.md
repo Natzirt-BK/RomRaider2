@@ -46,8 +46,9 @@ cannot publish into a replacement log or a closed window.
   filters**. Users must select appropriate conditions and understand the logged
   channel units/state encoding. Three arbitrary numeric filters do not replace
   the full legacy filter pipeline. Sample ranges are independent of the
-  existing Log Analysis cursor/range. In 1.1.3 development source, MAF and Injector
-  conditions can optionally be linked as described below.
+  existing Log Analysis cursor/range in 1.1.2. In 1.1.3 development source,
+  MAF/Injector conditions and the three-workspace sample range have separate,
+  optional reviewed links as described below.
 
 ## Public 1.1.2 limits and development follow-ups
 
@@ -138,8 +139,9 @@ and numeric filters do **not** guarantee identical accepted counts: MAF and
 Injector require different measurements, with their own invalid-value rules.
 
 Channel mappings, bin widths, stoichiometric AFR and fuel density remain
-independent. The Log Analysis cursor, playback, statistics and charts are not
-linked by this feature. Changing a fuel assumption clears that pane's own
+independent. The separate [sample-range link](SHARED_ANALYSIS_RANGE.md) can connect
+Log Analysis's cursor/playback/views and range-only statistics; this condition
+link alone does not affect them. Changing a fuel assumption clears that pane's own
 confirmation without changing the other pane.
 Linking conditions infers no operating conditions, applies no analysis result to
 a ROM and sends nothing to a vehicle. Offline MAF transfer requires its own

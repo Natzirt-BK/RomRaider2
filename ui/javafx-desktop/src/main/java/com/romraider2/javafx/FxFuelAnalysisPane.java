@@ -45,6 +45,10 @@ final class FxFuelAnalysisPane extends BorderPane implements AutoCloseable {
     private final CheckBox linkConditions = new CheckBox("Link MAF / Injector range and filters…");
     private final Label linkStatus = new Label("Independent conditions");
     private FxFuelAnalysisLink conditionsLink;
+    private FxAnalysisRangeLink rangeLink;
+    private boolean copyingSharedRange;
+    private final Button applySharedRange = new Button("Apply shared range");
+    private final Label sharedRangeStatus = new Label();
     private final List<FilterRow> filters = new ArrayList<>();
     private final Label source = new Label("No saved log loaded");
     private final Label status = new Label("Open a CSV log, map its channels, and confirm the units.");
@@ -109,6 +113,13 @@ final class FxFuelAnalysisPane extends BorderPane implements AutoCloseable {
         Label limits = new Label("No automatic operating-condition filters. Choose a suitable sample range and add filters for closed-loop state, temperatures or other conditions as needed. Missing filter values are rejected.");
         limits.setWrapText(true);
         VBox setup = new VBox(10, mapping, limits);
+        applySharedRange.setVisible(false); applySharedRange.setManaged(false);
+        sharedRangeStatus.setVisible(false); sharedRangeStatus.setManaged(false); sharedRangeStatus.setWrapText(true);
+        applySharedRange.setOnAction(event -> {
+            try { if (rangeLink != null) rangeLink.commit(); }
+            catch (IllegalArgumentException failure) { sharedRangeStatus.setText(failure.getMessage()); }
+        });
+        setup.getChildren().addAll(applySharedRange, sharedRangeStatus);
         linkConditions.setDisable(true);
         linkConditions.setWrapText(true); linkStatus.setWrapText(true);
         setup.getChildren().add(new VBox(3, linkConditions, linkStatus));
@@ -167,7 +178,11 @@ final class FxFuelAnalysisPane extends BorderPane implements AutoCloseable {
             });
         }
         for (TextField text : List.of(first, last)) {
-            text.textProperty().addListener((value, oldValue, newValue) -> conditionsChanged());
+            text.textProperty().addListener((value, oldValue, newValue) -> {
+                if (copyingSharedRange) return;
+                if (rangeLink != null && rangeLink.isLinked()) rangeLink.draftChanged(this);
+                else conditionsChanged();
+            });
         }
         confirmed.selectedProperty().addListener((value, oldValue, newValue) -> invalidate());
         for (FilterRow filter : filters) {
@@ -181,6 +196,7 @@ final class FxFuelAnalysisPane extends BorderPane implements AutoCloseable {
 
     void setDataset(LogDataset next) {
         if (closed) return;
+        if (rangeLink != null) rangeLink.close();
         if (conditionsLink != null) conditionsLink.disconnect();
         invalidate(); dataset = next;
         rateFilter.setDataset(next);
@@ -213,7 +229,9 @@ final class FxFuelAnalysisPane extends BorderPane implements AutoCloseable {
             throw new IllegalArgumentException("Conditions do not match this dataset or filter layout.");
         }
         invalidateConditions();
-        first.setText(draft.first()); last.setText(draft.last());
+        copyingSharedRange = true;
+        try { first.setText(draft.first()); last.setText(draft.last()); }
+        finally { copyingSharedRange = false; }
         rateFilter.apply(draft.rate());
         operating.apply(draft.operating());
         for (int i = 0; i < filters.size(); i++) {
@@ -222,6 +240,21 @@ final class FxFuelAnalysisPane extends BorderPane implements AutoCloseable {
             row.channel.setValue(next.channel()); row.channel.setTooltip(null);
             row.minimum.setText(next.minimum()); row.maximum.setText(next.maximum());
         }
+        if (rangeLink != null && rangeLink.isLinked()) rangeLink.draftChanged(this);
+    }
+    FxAnalysisRangeLink.Draft rangeDraft() { return new FxAnalysisRangeLink.Draft(first.getText(), last.getText()); }
+    void attachRangeLink(FxAnalysisRangeLink link) { rangeLink = link; showRangeLink(false, false); }
+    void copySharedRange(FxAnalysisRangeLink.Draft draft) {
+        copyingSharedRange = true;
+        try { first.setText(draft.first()); last.setText(draft.last()); }
+        finally { copyingSharedRange = false; }
+        invalidateConditions();
+    }
+    void showRangeLink(boolean linked, boolean applied) {
+        applySharedRange.setVisible(linked); applySharedRange.setManaged(linked);
+        sharedRangeStatus.setVisible(linked); sharedRangeStatus.setManaged(linked);
+        sharedRangeStatus.setText(applied ? "Shared range applied. Confirm units before analysis. Fuel filters do not change Log Analysis statistics."
+                : "Shared range draft. Apply it to refresh all three workspaces; fuel filters remain separate.");
     }
     void invalidateConditions() { confirmed.setSelected(false); invalidate(); }
     private void conditionsChanged() {
@@ -314,6 +347,7 @@ final class FxFuelAnalysisPane extends BorderPane implements AutoCloseable {
     void applySetup(FuelAnalysisSetup setup) {
         if (closed || dataset == null) throw new IllegalArgumentException("Open a CSV log first");
         if (!setup.kind().name().equals(mode.name())) throw new IllegalArgumentException("This setup belongs in the " + setup.kind() + " tab; existing inputs are unchanged.");
+        if (rangeLink != null) rangeLink.disconnect();
         if (conditionsLink != null) conditionsLink.disconnect();
         invalidate(); confirmed.setSelected(false);
         List<String> unresolved = new ArrayList<>();
@@ -384,6 +418,7 @@ final class FxFuelAnalysisPane extends BorderPane implements AutoCloseable {
     }
 
     private Supplier<FuelLogAnalysis.Result> request() {
+        if (rangeLink != null) rangeLink.requireApplied();
         if (!confirmed.isSelected()) throw new IllegalArgumentException("Confirm the selected units and assumptions first.");
         LogDataset input = dataset;
         int from = integer(first, "First sample"), to = integer(last, "Last sample");
@@ -478,6 +513,7 @@ final class FxFuelAnalysisPane extends BorderPane implements AutoCloseable {
     }
     @Override public void close() {
         if (closed) return;
+        if (rangeLink != null) rangeLink.close();
         if (conditionsLink != null) conditionsLink.disconnect();
         closed = true; invalidate(); dataset = null; worker.shutdownNow();
         curve.close();

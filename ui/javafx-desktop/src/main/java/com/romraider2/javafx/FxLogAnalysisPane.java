@@ -76,6 +76,11 @@ final class FxLogAnalysisPane extends BorderPane implements AutoCloseable {
             Duration.millis(40), event -> playback.advance(40)));
     private boolean movingSlider;
     private boolean closed;
+    private FxAnalysisRangeLink rangeLink;
+    private long rangeRevision;
+    private final javafx.beans.property.BooleanProperty rangePending = new javafx.beans.property.SimpleBooleanProperty(false);
+    private final javafx.scene.control.CheckBox shareRange = new javafx.scene.control.CheckBox("Link sample range with MAF / Injector…");
+    private final Label sharedRangeStatus = new Label();
 
     FxLogAnalysisPane(File source, LogDataset dataset) {
         this.source = source;
@@ -83,6 +88,7 @@ final class FxLogAnalysisPane extends BorderPane implements AutoCloseable {
         selectedRange = LogRange.all(dataset);
         rangeEnd.setText(Integer.toString(dataset.getRowCount()));
         position = new Slider(0, dataset.getRowCount() - 1, 0);
+        position.disableProperty().bind(rangePending); play.disableProperty().bind(rangePending);
         timelineChannel = channelBox(false);
         xChannel = channelBox(true);
         yChannel = channelBox(false);
@@ -110,7 +116,21 @@ final class FxLogAnalysisPane extends BorderPane implements AutoCloseable {
                 + "linked playback cursor");
         detail.getStyleClass().add("muted");
         title.setWrapText(true);
-        VBox box = new VBox(3, title, detail, rangeControls());
+        shareRange.setDisable(true); shareRange.setWrapText(true); sharedRangeStatus.setWrapText(true);
+        sharedRangeStatus.setVisible(false); sharedRangeStatus.setManaged(false);
+        shareRange.setOnAction(event -> {
+            try {
+                if (rangeLink == null) return;
+                if (!shareRange.isSelected()) rangeLink.disconnect();
+                else rangeLink.enable(() -> FxDialogs.confirmScrollable(getScene() == null ? null : getScene().getWindow(),
+                        "Share analysis sample range?", "Use Log Analysis samples " + rangeDraft().first() + " through " + rangeDraft().last()
+                                + " in Log Analysis, MAF and Injector? This replaces both fuel tabs' ranges and clears their results and unit confirmation.\n\n"
+                                + "Only the sample range is shared. Fuel filters and assumptions are not copied; Log Analysis statistics include all rows in the applied range. "
+                                + "Later range edits become shared drafts. Apply the range before playback or new fuel analysis.", "Share range"));
+            } catch (IllegalArgumentException failure) { rangeStatus.setText(failure.getMessage()); }
+            finally { showRangeLink(rangeLink != null && rangeLink.isLinked(), rangeLink != null && rangeLink.isApplied()); }
+        });
+        VBox box = new VBox(3, title, detail, rangeControls(), shareRange, sharedRangeStatus);
         box.setPadding(new Insets(0, 0, 10, 0));
         return box;
     }
@@ -130,6 +150,9 @@ final class FxLogAnalysisPane extends BorderPane implements AutoCloseable {
         end.setOnAction(event -> rangeEnd.setText(Integer.toString(cursor.getSampleIndex() + 1)));
         rangeStart.setOnAction(event -> applyRangeFields());
         rangeEnd.setOnAction(event -> applyRangeFields());
+        for (TextField field : List.of(rangeStart, rangeEnd)) field.textProperty().addListener((value, before, after) -> {
+            rangeRevision++; if (rangeLink != null) rangeLink.draftChanged(this);
+        });
         FlowPane controls = new FlowPane(8, 6, new Label("Samples"), rangeStart,
                 new Label("through"), rangeEnd, apply, all, start, end, rangeStatus);
         controls.setPadding(new Insets(8, 0, 0, 0));
@@ -138,6 +161,7 @@ final class FxLogAnalysisPane extends BorderPane implements AutoCloseable {
 
     private void applyRangeFields() {
         try {
+            if (rangeLink != null && rangeLink.isLinked()) { rangeLink.commit(); return; }
             selectRange(LogRange.of(Integer.parseInt(rangeStart.getText().trim()) - 1,
                     Integer.parseInt(rangeEnd.getText().trim()), dataset.getRowCount()));
         } catch (IllegalArgumentException failure) {
@@ -147,8 +171,11 @@ final class FxLogAnalysisPane extends BorderPane implements AutoCloseable {
     }
 
     void selectRange(LogRange range) {
+        if (closed) throw new IllegalArgumentException("This log workspace is closed.");
+        if (rangeLink != null && rangeLink.isLinked() && !rangeLink.isUpdating()) { rangeLink.select(range); return; }
         // Revalidate against this dataset, not a range constructed for another log.
         selectedRange = LogRange.of(range.getStartInclusive(), range.getEndExclusive(), dataset.getRowCount());
+        rangePending.set(false);
         rangeStart.setText(Integer.toString(range.getStartInclusive() + 1));
         rangeEnd.setText(Integer.toString(range.getEndExclusive()));
         rangeStatus.setText(range.size() + " samples selected");
@@ -166,6 +193,23 @@ final class FxLogAnalysisPane extends BorderPane implements AutoCloseable {
         statistics.sort();
         rebuildTimeline();
         rebuildScatter();
+    }
+
+    LogDataset dataset() { return dataset; }
+    boolean rangeAvailable() { return !closed; }
+    long rangeRevision() { return rangeRevision; }
+    FxAnalysisRangeLink.Draft rangeDraft() { return new FxAnalysisRangeLink.Draft(rangeStart.getText(), rangeEnd.getText()); }
+    void attachRangeLink(FxAnalysisRangeLink link) { rangeLink = link; shareRange.setDisable(link == null); showRangeLink(false, false); }
+    void copySharedRange(FxAnalysisRangeLink.Draft draft) { rangeStart.setText(draft.first()); rangeEnd.setText(draft.last()); }
+    void invalidateSharedRange() {
+        rangePending.set(true); playback.pause(); clock.pause(); play.setText("Play");
+        values.getItems().clear(); statistics.getItems().clear(); timelineChart.getData().clear(); scatterChart.getData().clear();
+        positionLabel.setText("Apply range to resume"); rangeStatus.setText("Range draft · apply to refresh views and playback");
+    }
+    void showRangeLink(boolean linked, boolean applied) {
+        shareRange.setSelected(linked); sharedRangeStatus.setVisible(linked); sharedRangeStatus.setManaged(linked);
+        sharedRangeStatus.setText((applied ? "Shared range applied. " : "Shared range draft; apply to refresh. ")
+                + "Range only: Log Analysis statistics do not apply MAF/Injector filters.");
     }
 
     private Node timelineWorkspace() {
@@ -191,6 +235,7 @@ final class FxLogAnalysisPane extends BorderPane implements AutoCloseable {
         name.setPromptText("Marker label");
         HBox.setHgrow(name, Priority.ALWAYS);
         Button add = new Button("Add at cursor");
+        add.disableProperty().bind(rangePending);
         add.setOnAction(event -> {
             markers.getItems().add(new LogMarker(cursor.getSampleIndex(),
                     type.getValue(), name.getText()));
@@ -217,6 +262,7 @@ final class FxLogAnalysisPane extends BorderPane implements AutoCloseable {
             }
         });
         markers.setOnMouseClicked(event -> {
+            if (rangePending.get()) { rangeStatus.setText("Apply the range before jumping to a marker."); return; }
             LogMarker marker = markers.getSelectionModel().getSelectedItem();
             if (marker != null && event.getClickCount() == 2) {
                 if (marker.getSampleIndex() < selectedRange.getStartInclusive()
@@ -234,6 +280,7 @@ final class FxLogAnalysisPane extends BorderPane implements AutoCloseable {
         previous.setOnAction(event -> playback.step(-1));
         Button next = new Button("+1");
         next.setOnAction(event -> playback.step(1));
+        previous.disableProperty().bind(rangePending); next.disableProperty().bind(rangePending);
         Button stop = new Button("Stop");
         stop.setOnAction(event -> playback.stop());
         ComboBox<Double> speed = new ComboBox<>(FXCollections
@@ -292,11 +339,11 @@ final class FxLogAnalysisPane extends BorderPane implements AutoCloseable {
 
     private void configurePlayback() {
         position.valueProperty().addListener((value, oldRow, newRow) -> {
-            if (!movingSlider) playback.seek(newRow.intValue());
+            if (!movingSlider && !rangePending.get()) playback.seek(newRow.intValue());
         });
         cursor.addListener((loaded, range, row) -> javafx.application.Platform
                 .runLater(() -> {
-                    if (closed || row != cursor.getSampleIndex()) return;
+                    if (closed || rangePending.get() || row != cursor.getSampleIndex()) return;
                     movingSlider = true;
                     try {
                         position.setValue(row);
@@ -309,7 +356,7 @@ final class FxLogAnalysisPane extends BorderPane implements AutoCloseable {
                     }
                 }));
         playback.addListener(snapshot -> javafx.application.Platform.runLater(() -> {
-            if (closed) return;
+            if (closed || rangePending.get() || snapshot.getState() != playback.snapshot().getState()) return;
             boolean running = snapshot.getState() == PlaybackState.PLAYING;
             play.setText(running ? "Pause" : "Play");
             if (running && clock.getStatus() != Timeline.Status.RUNNING) {
@@ -333,6 +380,7 @@ final class FxLogAnalysisPane extends BorderPane implements AutoCloseable {
     }
 
     private void rebuildTimeline() {
+        if (rangePending.get()) return;
         LogChannel channel = timelineChannel.getValue();
         if (channel == null) return;
         XYChart.Series<Number, Number> series = new XYChart.Series<>();
@@ -351,6 +399,7 @@ final class FxLogAnalysisPane extends BorderPane implements AutoCloseable {
     }
 
     private void rebuildScatter() {
+        if (rangePending.get()) return;
         LogChannel x = xChannel.getValue();
         LogChannel y = yChannel.getValue();
         if (x == null || y == null) return;
@@ -477,6 +526,7 @@ final class FxLogAnalysisPane extends BorderPane implements AutoCloseable {
     }
 
     @Override public void close() {
+        if (rangeLink != null) rangeLink.close();
         closed = true;
         clock.stop();
         playback.pause();

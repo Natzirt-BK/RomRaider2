@@ -129,6 +129,7 @@ final class FxLoggerWindow {
     private boolean disposed;
     private final FxLogLoadCoordinator logLoads;
     private FxLogAnalysisPane analysisPane;
+    private FxAnalysisRangeLink analysisRanges;
     private final FxLoggerStartup startup = new FxLoggerStartup();
 
     FxLoggerWindow(Runnable closed) {
@@ -1099,11 +1100,13 @@ final class FxLoggerWindow {
 
     private void showDataset(File source, LogDataset dataset) {
         FxLogAnalysisPane replacement = new FxLogAnalysisPane(source, dataset);
+        if (analysisRanges != null) analysisRanges.close();
         if (analysisPane != null) analysisPane.close();
         analysisPane = replacement;
         analysis.setCenter(analysisPane);
         mafAnalysis.setDataset(dataset);
         injectorAnalysis.setDataset(dataset);
+        analysisRanges = new FxAnalysisRangeLink(analysisPane, mafAnalysis, injectorAnalysis);
         if (views.getSelectionModel().getSelectedIndex() < 6) views.getSelectionModel().select(5);
         status.setText("Loaded " + dataset.getSourceName());
     }

@@ -83,7 +83,9 @@ Recorded-time adjacency is defined separately in the rate-filter guide.
 
 This completes exposing the named scalar gates for explicit saved-log use, not
 live-capture parity, automatic vehicle-specific presets or calibration approval.
-The separate Log Analysis cursor/statistics view is not linked by this feature.
+The separate [shared-range option](SHARED_ANALYSIS_RANGE.md) connects Log Analysis's
+cursor and range-only statistics, but does not apply these fuel conditions to
+them. This named-condition feature alone does not link the Log Analysis view.
 Injector table transfer, log-to-map tracing, broader comparison tools and the
 remaining mobile work continue separately. No vehicle connection, ECU write or
 automatic ROM change is introduced.

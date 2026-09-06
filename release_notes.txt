@@ -8,6 +8,10 @@ https://github.com/Natzirt-BK/RomRaider2/releases/latest
 What changed for 1.1.3
 ---------------------
 
+- Reviewed sample-range sharing links Log Analysis, MAF and Injector. Edits
+  become shared drafts and clear stale views; explicit Apply refreshes the
+  range and bounds playback. Fuel conditions stay separate from Log Analysis's
+  range-only statistics. Setup/log changes have explicit disconnection guards.
 - Named saved-log conditions cover loop state, AFR, RPM, airflow, MAF voltage,
   intake/coolant temperature and tip-in, independently of custom/rate filters.
   Mappings and limits are explicit; missing enabled inputs reject samples.

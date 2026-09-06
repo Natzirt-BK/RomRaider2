@@ -106,6 +106,8 @@ Development source is now **1.1.3**, adding reusable/linked
 [calculated logger channels](docs/CALCULATED_LOGGER_CHANNELS.md). Saved-log
 [named operating conditions](docs/FUEL_OPERATING_CONDITIONS.md) now cover all eight
 legacy scalar gate categories with explicit mappings and limits.
+[Reviewed range sharing](docs/SHARED_ANALYSIS_RANGE.md) connects the three analysis
+workspaces while keeping range-only statistics distinct from filtered fuel results.
 These follow-ups are not in the published 1.1.2 downloads.
 
 - Tabbed calibration workspace with favorites, recent and changed maps, ROM

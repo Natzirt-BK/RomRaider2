@@ -84,14 +84,14 @@ background recording, setup transfer or hardware acceptance.
 
 The 1.1.3 source also provides reviewed, two-way linking of MAF/Injector sample
 ranges and numeric filters. Link activation and condition edits clear affected
-results and confirmations; setup/log replacement disconnects. Full legacy
-operating-condition filters remain open, as does linkage to the separate Log
-Analysis cursor/statistics view. Curve/transfer progress is recorded below.
+results and confirmations; setup/log replacement disconnects. Operating-condition,
+range/statistics and curve/transfer progress is recorded below; remaining legacy
+parity and hardware qualification are separate work.
 
 Read-only [curve review](FUEL_CURVE_REVIEW.md) is now implemented in 1.1.3 source:
 observed-bin interpolation with gap handling, bounded raw-sample polynomial fits
 and descriptive injector line estimates. This advances fitting/interpolation;
-full legacy filtering and vehicle qualification remain separate work. No
+remaining legacy parity and vehicle qualification remain separate work. No
 calculated correction is applied automatically.
 
 [Reviewed MAF-table transfer](REVIEWED_MAF_TRANSFER.md) is implemented in 1.1.3
@@ -110,5 +110,12 @@ remaining analysis/mobile backlog and supervised acceptance remain open.
 for saved logs: all eight scalar gate categories, independent custom/rate filters,
 explicit mappings and limits, strict version-3 setups and linked review. This
 advances the filter migration without claiming automatic presets or live-capture
-parity. Cursor/statistics linkage, injector transfer, tracing/comparisons, remaining
-mobile work and supervised qualification are still open.
+parity. Range/statistics progress is recorded below; injector transfer,
+tracing/comparisons, remaining mobile work and supervised qualification remain open.
+
+[Three-workspace range sharing](SHARED_ANALYSIS_RANGE.md) is implemented in
+1.1.3 source. Reviewed activation and an explicit shared Apply step keep Log
+Analysis's cursor/views/range statistics aligned with the visible MAF/Injector
+range drafts, while preserving independent fuel filters. Exact accepted-row
+inspection/statistics, bounded large-log review, injector transfer and the rest
+of the analysis/mobile backlog remain open.
