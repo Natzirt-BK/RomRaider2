@@ -146,6 +146,10 @@ tasks.jar {
 
 tasks.register<Sync>("stageLoggerWorkspace") {
     dependsOn(tasks.jar)
+    // The renamed artifact files below do not carry their producer tasks.
+    // Keep runtime project dependencies (including the portable gauge core)
+    // in the staging graph so clean/parallel builds cannot copy a stale jar.
+    dependsOn(configurations.runtimeClasspath)
     from(tasks.jar)
     configurations.runtimeClasspath.get().resolvedConfiguration
         .resolvedArtifacts.forEach { artifact ->
