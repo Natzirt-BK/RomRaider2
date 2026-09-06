@@ -7,7 +7,7 @@ certificate or enable/change GitHub repository security settings.
 Run `python3 packaging/security/check_advisories.py` from a Git checkout. It uses
 only Python's standard library. It queries public Maven names/versions from the
 JavaFX and Compose Gradle locks, embedded Maven metadata in tracked bundled JARs,
-and SHA-256-bound mappings for JNA's renamed core/platform JARs. JNA provenance
+and SHA-256-bound mappings for JNA's renamed core/platform JARs and JFreeChart. JNA provenance
 is recorded in `licenses/JNA-5.19.1.txt`. It sends package coordinates and paging
 tokens to the [OSV batch API](https://google.github.io/osv.dev/post-v1-querybatch/),
 not source files, vehicle data, settings, signing material or repository history.
@@ -27,17 +27,22 @@ unknown artifacts, hash drift and empty locks.
 
 ## September 6, 2026 UTC snapshot
 
-The initial check queried **227 unique Maven name/version pairs** and OSV
+The expanded check queried **228 unique Maven name/version pairs** and OSV
 returned no known advisories for that subset. This includes 221 locked pairs,
-JNA/JNA-platform 5.19.1, jSerialComm 2.11.4, and Log4j api/core/1.2-api 2.26.1.
+JNA/JNA-platform 5.19.1, jSerialComm 2.11.4, Log4j api/core/1.2-api 2.26.1 and
+JFreeChart 1.0.9. The bundled JFreeChart SHA-256 was matched against the
+[Maven Central artifact](https://repo.maven.apache.org/maven2/jfree/jfreechart/1.0.9/jfreechart-1.0.9.jar).
 This is a point-in-time database result, not proof that these libraries or this
 application cannot be exploited. A dependency advisory still requires relevance
 and reachability assessment; it is not automatically an application exploit.
 
-Eight bundled JARs currently have no verified Maven mapping in this check:
-args4j, com4j, jama, jamlab, jcommon, JEP, JFreeChart and phidget21. They remain
+Seven bundled JARs currently have no verified Maven mapping in this check:
+args4j, com4j, jama, jamlab, jcommon, JEP and phidget21. They remain
 explicitly unqueried. A Maven Central checksum-search attempt timed out; no
-guessed mapping was accepted as verified. The four retired Graph3d/Java3D/vecmath
+guessed mapping was accepted as verified. Subsequent direct-artifact checks
+resolved JFreeChart; args4j/jcommon/jama differed from the same-named Central
+artifacts and remain unverified rather than being matched by filename.
+The four retired Graph3d/Java3D/vecmath
 JARs excluded by current image builders are listed separately, not marked safe.
 
 Native libraries/drivers, the JDK/OS, unlocked Android/build-tool transitives,

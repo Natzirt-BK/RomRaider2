@@ -1,4 +1,9 @@
 {
+  "lib/common/jfreechart-1.0.9.jar": {
+    "name": "jfree:jfreechart",
+    "version": "1.0.9",
+    "sha256": "4a2a1eb6d188a43e1e97bb7c7d204a5bdd1aaec0d82203cf1b1156ff697d7f8e"
+  },
   "lib/common/jna.jar": {
     "name": "net.java.dev.jna:jna",
     "version": "5.19.1",
