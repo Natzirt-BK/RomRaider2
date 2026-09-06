@@ -190,3 +190,9 @@ for every source row and performs bounded stable sorting on a cancellable worker
 Requested sort headers and original sample/cursor identities survive row-list
 replacement, range changes and source-order restoration. Marker loading and
 legacy Swing behavior remain open; no hardware qualification is implied.
+
+[Marker-file safety](MARKER_FILE_SAFETY.md) now adds asynchronous JavaFX loading
+and saving, bounded strict version-1 validation, snapshot-based conflict checks
+and required atomic replacement. Failed loads/saves cannot turn a partial list
+into a replacement sidecar. Swing uses the same save guards; its asynchronous
+handling remains open. Empty marker lists persist without deleting a sidecar.

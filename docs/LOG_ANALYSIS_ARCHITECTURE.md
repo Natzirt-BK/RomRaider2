@@ -83,8 +83,9 @@ bounded primitive-array percentile sort is not interruptible mid-sort; the next
 request waits on the same worker, and the preceding result is still rejected.
 Subsequent [table responsiveness work](LOG_TABLE_RESPONSIVENESS.md) supplies
 allocation-free source-row indexing and cancellable background sorting.
-Marker-sidecar reads and legacy Swing range statistics remain separate
-follow-ups. No CSV, ROM, live logger or gauge state is modified.
+[Marker-sidecar I/O](MARKER_FILE_SAFETY.md) now also runs on a worker in JavaFX,
+with bounded validation and conflict-checked atomic saves. Legacy Swing
+asynchronous handling remains a follow-up. No CSV, ROM, live logger or gauge state is modified.
 
 Regression checks exercise exact range/missing-value semantics, actual worker
 interruption, a burst of 100 superseded requests, queued/stale result and error

@@ -1,8 +1,7 @@
 /* RomRaider2 ECU Studio - GPL 2.0 or later. */
 package com.romraider.logger.analysis.ui;
 
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.*;
 
 import java.awt.Component;
 import java.awt.Container;
@@ -14,6 +13,28 @@ import javax.swing.JTable;
 import org.junit.Test;
 
 public class LogAnalysisPanelTest {
+    @org.junit.Rule public org.junit.rules.TemporaryFolder temporary = new org.junit.rules.TemporaryFolder();
+    @Test public void malformedOrExternallyChangedMarkersCannotBeOverwrittenFromSwing() throws Exception {
+        var source = temporary.newFile("synthetic.csv");
+        java.nio.file.Files.writeString(source.toPath(), "Value\n1\n2\n");
+        var data = new com.romraider.logger.analysis.RomRaiderCsvLogParser().parse(source);
+        var store = new com.romraider.logger.analysis.LogMarkerStore();
+        java.nio.file.Files.writeString(store.sidecar(source), "format.version=99\nmarker.count=0\n");
+        javax.swing.SwingUtilities.invokeAndWait(() -> {
+            try {
+                LogAnalysisPanel panel = new LogAnalysisPanel();
+                var install = LogAnalysisPanel.class.getDeclaredMethod("setDataset", com.romraider.logger.analysis.LogDataset.class, java.io.File.class);
+                install.setAccessible(true); install.invoke(panel, data, source);
+                JButton add = findNamed(panel, JButton.class, "ADD LOG MARKER"); assertFalse(add.isEnabled());
+                assertTrue(add.getToolTipText().contains("Reload the log"));
+                assertTrue(java.nio.file.Files.readString(store.sidecar(source)).contains("99"));
+                java.nio.file.Files.delete(store.sidecar(source)); install.invoke(panel, data, source); assertTrue(add.isEnabled());
+                store.save(source, java.util.List.of(new com.romraider.logger.analysis.LogMarker(1, com.romraider.logger.analysis.LogMarkerType.CUSTOM, "external")));
+                add.doClick(); assertFalse(add.isEnabled());
+                assertEquals("external", store.load(source, 2).get(0).getLabel());
+            } catch (Exception failure) { throw new RuntimeException(failure); }
+        });
+    }
     @Test
     public void exposesOfflinePlaybackAndGraphControls() {
         LogAnalysisPanel panel = new LogAnalysisPanel();

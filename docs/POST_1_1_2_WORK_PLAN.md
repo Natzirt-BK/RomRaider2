@@ -98,8 +98,10 @@ interruption and stale-delivery guards. JavaFX [range statistics](LOG_ANALYSIS_A
 also run on a bounded, cancellable worker with explicit range status and stale
 result/error rejection. [Table responsiveness](LOG_TABLE_RESPONSIVENESS.md) adds
 allocation-free source indexing and cancellable stable sorting with direct
-sample lookup. Continue marker loading, legacy Swing handling and the remaining
-mobile/service work.
+sample lookup. [Marker-file I/O](MARKER_FILE_SAFETY.md) now runs on a JavaFX worker
+with bounded strict validation, immutable snapshots and conflict-checked atomic
+saves. Swing gains save guards but still needs asynchronous handling. Continue
+legacy Swing responsiveness and the remaining mobile/service work.
 
 The [desktop profile persistence prerequisite](DESKTOP_PROFILE_INTEGRITY.md) now
 preserves Unicode, escaped attributes, captured protocol and immutable snapshots,

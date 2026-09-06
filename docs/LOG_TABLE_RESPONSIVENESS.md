@@ -70,7 +70,8 @@ and Linux JavaFX staging. Actual 800×600 table and statistics renders were
 inspected. Shared numerical code and Android were not changed by this update.
 
 [CSV parsing](BOUNDED_CSV_IMPORT.md) and [range statistics](LOG_ANALYSIS_ARCHITECTURE.md#background-range-statistics--113-development-source)
-have separate bounded workers. Marker-sidecar loading and legacy Swing behavior
-remain follow-ups. This does not promise that every layout or plotting operation
+have separate bounded workers. [Marker-sidecar loading/saving](MARKER_FILE_SAFETY.md)
+now also runs off the JavaFX thread with conflict guards; legacy Swing asynchronous
+handling remains a follow-up. This does not promise that every layout or plotting operation
 has constant cost, nor qualify Android or vehicle hardware. No source CSV, ROM,
 definition, active recording or ECU state is changed.

@@ -2,7 +2,8 @@
 package com.romraider.logger.analysis;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 import static org.junit.Assert.assertSame;
 
 import java.io.File;
@@ -28,13 +29,16 @@ public class LogMarkerStoreTest {
                     new LogMarker(7, LogMarkerType.KNOCK, "FBKC"),
                     new LogMarker(2, LogMarkerType.SHIFT, "")));
 
-            List<LogMarker> markers = store.load(log, 5);
-            assertEquals(1, markers.size());
+            try { store.load(log, 5); fail("Out-of-range markers must reject the whole sidecar, not silently disappear"); }
+            catch (java.io.IOException expected) { assertTrue(expected.getMessage().contains("sample range")); }
+            List<LogMarker> markers = store.load(log, 10);
+            assertEquals(2, markers.size());
             assertEquals(2, markers.get(0).getSampleIndex());
             assertEquals(LogMarkerType.SHIFT, markers.get(0).getType());
 
             store.save(log, java.util.Collections.<LogMarker>emptyList());
-            assertFalse(Files.exists(store.sidecar(log)));
+            assertTrue(Files.exists(store.sidecar(log)));
+            assertTrue(store.load(log, 10).isEmpty());
         } finally {
             Files.deleteIfExists(store.sidecar(log));
             Files.deleteIfExists(log.toPath());

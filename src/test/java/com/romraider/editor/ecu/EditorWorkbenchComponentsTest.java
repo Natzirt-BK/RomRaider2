@@ -72,16 +72,16 @@ import com.romraider.swing.SettingsForm;
 
 public class EditorWorkbenchComponentsTest {
     @Test
-    public void settingsWindowDoesNotCreateASecondEditorShell() {
-        ECUEditorManager.clearECUEditor();
-        SettingsForm form = new SettingsForm();
-        try {
-            assertNull(ECUEditorManager.getECUEditorWithoutCreation());
-            assertTrue(form.getWidth() >= form.getMinimumSize().width);
-            assertTrue(form.getHeight() >= form.getMinimumSize().height);
-        } finally {
-            form.dispose();
-        }
+    public void settingsWindowDoesNotCreateASecondEditorShell() throws Exception {
+        javax.swing.SwingUtilities.invokeAndWait(() -> {
+            ECUEditorManager.clearECUEditor();
+            SettingsForm form = new SettingsForm();
+            try {
+                assertNull(ECUEditorManager.getECUEditorWithoutCreation());
+                assertTrue(form.getWidth() >= form.getMinimumSize().width);
+                assertTrue(form.getHeight() >= form.getMinimumSize().height);
+            } finally { form.dispose(); }
+        });
     }
 
     @Test

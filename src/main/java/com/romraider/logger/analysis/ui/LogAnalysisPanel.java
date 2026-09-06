@@ -93,6 +93,8 @@ public final class LogAnalysisPanel extends JPanel {
     private final JButton deleteMarkerButton = new JButton("Delete Here");
     private final JLabel markerSummary = new JLabel("No markers");
     private final LogMarkerStore markerStore = new LogMarkerStore();
+    private LogMarkerStore.Snapshot markerSnapshot;
+    private String markerProblem;
     private final List<LogMarker> markers = new ArrayList<LogMarker>();
     private final Consumer<File> recentLogListener = this::offerRecentLog;
     private LogDataset dataset;
@@ -326,13 +328,14 @@ public final class LogAnalysisPanel extends JPanel {
         this.dataset = dataset;
         datasetFile = sourceFile == null ? null : sourceFile.getAbsoluteFile();
         markers.clear();
+        markerSnapshot = null;
+        markerProblem = null;
         if (datasetFile != null) {
             try {
-                markers.addAll(markerStore.load(datasetFile,
-                        dataset.getRowCount()));
+                markerSnapshot = markerStore.loadSnapshot(datasetFile, dataset.getRowCount());
+                markers.addAll(markerSnapshot.getMarkers());
             } catch (IOException failure) {
-                statusLabel.setText("Log loaded; marker sidecar could not be read: "
-                        + failure.getMessage());
+                markerProblem = "Markers could not be read. Reload the log before editing: " + failure.getMessage();
             }
         }
         Collections.sort(markers);
@@ -349,6 +352,7 @@ public final class LogAnalysisPanel extends JPanel {
         selectDefaultGraphChannels();
         configureXyAxes();
         updateMarkerControls();
+        if (markerProblem != null) statusLabel.setText(markerProblem);
     }
 
     private static void configureSpinner(JSpinner spinner, int minimum,
@@ -510,16 +514,17 @@ public final class LogAnalysisPanel extends JPanel {
     }
 
     private void addMarker() {
-        if (dataset == null || cursor.getSampleIndex() < 0) return;
+        if (dataset == null || cursor.getSampleIndex() < 0 || markerSnapshot == null) return;
         LogMarkerType type = (LogMarkerType) markerType.getSelectedItem();
         markers.add(new LogMarker(cursor.getSampleIndex(), type,
                 markerLabel.getText()));
         Collections.sort(markers);
-        markerLabel.setText("");
         persistMarkers();
+        if (markerSnapshot != null) markerLabel.setText("");
     }
 
     private void deleteMarkerAtCursor() {
+        if (markerSnapshot == null) return;
         int sample = cursor.getSampleIndex();
         for (int index = 0; index < markers.size(); index++) {
             if (markers.get(index).getSampleIndex() == sample) {
@@ -573,16 +578,17 @@ public final class LogAnalysisPanel extends JPanel {
     }
 
     private void persistMarkers() {
-        graph.setMarkers(markers);
-        xyGraph.setMarkers(markers);
-        if (datasetFile != null) {
+        if (markerSnapshot != null) {
             try {
-                markerStore.save(datasetFile, markers);
+                markerSnapshot = markerStore.saveIfUnchanged(markerSnapshot, markers);
             } catch (IOException failure) {
-                statusLabel.setText("Markers changed but could not be saved: "
-                        + failure.getMessage());
+                markers.clear(); markers.addAll(markerSnapshot.getMarkers()); markerSnapshot = null;
+                markerProblem = "Markers were not saved; prior list retained. Reload the log before editing: " + failure.getMessage();
+                statusLabel.setText(markerProblem);
             }
         }
+        graph.setMarkers(markers);
+        xyGraph.setMarkers(markers);
         updateMarkerControls();
     }
 
@@ -615,12 +621,15 @@ public final class LogAnalysisPanel extends JPanel {
             markerHere |= marker.getSampleIndex() == cursor.getSampleIndex();
             markerInRange |= range != null && contains(range, marker);
         }
-        addMarkerButton.setEnabled(loaded);
+        addMarkerButton.setEnabled(loaded && markerSnapshot != null);
         previousMarkerButton.setEnabled(loaded && markerInRange);
         nextMarkerButton.setEnabled(loaded && markerInRange);
-        deleteMarkerButton.setEnabled(loaded && markerHere);
-        markerSummary.setText(markers.isEmpty() ? "No markers"
-                : markers.size() + (markers.size() == 1 ? " marker" : " markers"));
+        deleteMarkerButton.setEnabled(loaded && markerHere && markerSnapshot != null);
+        markerSummary.setText((markers.isEmpty() ? "No markers"
+                : markers.size() + (markers.size() == 1 ? " marker" : " markers"))
+                + (markerProblem == null ? "" : " • read-only (reload log)"));
+        markerSummary.setToolTipText(markerProblem);
+        addMarkerButton.setToolTipText(markerProblem); deleteMarkerButton.setToolTipText(markerProblem);
     }
 
     private void offerRecentLog(File file) {

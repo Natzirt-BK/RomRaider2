@@ -52,11 +52,14 @@ class FxLoggerLogLoadSmokeTest {
                 assertSame(field(pane, "dataset"), field(maf, "dataset"));
                 assertSame(field(pane, "dataset"), field(injector, "dataset"));
                 TabPane tabs = (TabPane) pane.getCenter();
-                HBox controls = (HBox) ((BorderPane) tabs.getTabs().get(4).getContent()).getTop();
+                FxLogMarkerSession markerSession = field(pane, "markerSession");
+                FxLogStatisticsSmokeTest.awaitWork(markerSession.pending());
+                javafx.scene.layout.FlowPane controls = (javafx.scene.layout.FlowPane) ((javafx.scene.layout.VBox) ((BorderPane) tabs.getTabs().get(4).getContent()).getTop()).getChildren().get(0);
                 Button add = controls.getChildren().stream().filter(node -> node instanceof Button)
                         .map(node -> (Button) node).filter(button -> button.getText().equals("Add at cursor"))
                         .findFirst().orElseThrow();
                 add.fire();
+                FxLogStatisticsSmokeTest.awaitWork(markerSession.pending());
             });
             h.pending.get(0).complete(new RomRaiderCsvLogParser().parse(first));
             FxTestRuntime.run(() -> {

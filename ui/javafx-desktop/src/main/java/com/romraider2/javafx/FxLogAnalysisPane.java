@@ -11,7 +11,6 @@ import com.romraider.logger.analysis.LogChannel;
 import com.romraider.logger.analysis.LogCursorModel;
 import com.romraider.logger.analysis.LogDataset;
 import com.romraider.logger.analysis.LogMarker;
-import com.romraider.logger.analysis.LogMarkerStore;
 import com.romraider.logger.analysis.LogMarkerType;
 import com.romraider.logger.analysis.LogPlaybackService;
 import com.romraider.logger.analysis.LogRange;
@@ -78,7 +77,6 @@ final class FxLogAnalysisPane extends BorderPane implements AutoCloseable {
     private LogRange selectedRange;
     private final Slider position;
     private final Label positionLabel = new Label();
-    private final Label status = new Label();
     private final Button play = new Button("Play");
     private final ComboBox<LogChannel> timelineChannel;
     private final ComboBox<LogChannel> xChannel;
@@ -86,6 +84,10 @@ final class FxLogAnalysisPane extends BorderPane implements AutoCloseable {
     private final LineChart<Number, Number> timelineChart = lineChart();
     private final ScatterChart<Number, Number> scatterChart = scatterChart();
     private final ListView<LogMarker> markers = new ListView<>();
+    private final Label markerStatus = new Label();
+    private final javafx.beans.property.BooleanProperty markersEditable = new javafx.beans.property.SimpleBooleanProperty(false);
+    private final javafx.beans.property.BooleanProperty markersBusy = new javafx.beans.property.SimpleBooleanProperty(false);
+    private final FxLogMarkerSession markerSession;
     private final Timeline clock = new Timeline(new KeyFrame(
             Duration.millis(40), event -> playback.advance(40)));
     private boolean movingSlider;
@@ -99,6 +101,10 @@ final class FxLogAnalysisPane extends BorderPane implements AutoCloseable {
     FxLogAnalysisPane(File source, LogDataset dataset) {
         this.source = source;
         this.dataset = dataset;
+        markerSession = new FxLogMarkerSession(source, dataset.getRowCount(), javafx.application.Platform::runLater, state -> {
+            if (!markers.getItems().equals(state.markers())) markers.getItems().setAll(state.markers());
+            markersEditable.set(state.editable()); markersBusy.set(state.busy()); markerStatus.setText(state.message());
+        });
         mapTrace = new FxLogMapTracePane(dataset);
         binned = new FxBinnedLogPane(dataset);
         comparison = new FxRunComparisonPane(dataset);
@@ -118,12 +124,12 @@ final class FxLogAnalysisPane extends BorderPane implements AutoCloseable {
                 tab("X/Y Plot", scatterWorkspace()),
                 tab("Statistics", statisticsTable()),
                 tab("Markers", markerWorkspace()), tab("Map trace", mapTrace), tab("Binned analysis", binned), tab("Run comparison", comparison)));
-        setBottom(new VBox(5, playbackBar(), status));
+        setBottom(playbackBar());
         setPadding(new Insets(12));
         configureTable();
         configurePlayback();
         configureCharts();
-        loadMarkers();
+        markerSession.load();
         playback.load(dataset, LogRange.all(dataset));
         refreshStatistics();
     }
@@ -131,8 +137,8 @@ final class FxLogAnalysisPane extends BorderPane implements AutoCloseable {
     private Node header() {
         Label title = new Label("Log Analysis · " + dataset.getSourceName());
         title.getStyleClass().add("title");
-        Label detail = new Label(dataset.getRowCount() + " samples  ·  "
-                + dataset.getChannelCount() + " numeric channels  ·  "
+        Label detail = new Label(dataset.getRowCount() + (dataset.getRowCount() == 1 ? " sample  ·  " : " samples  ·  ")
+                + dataset.getChannelCount() + (dataset.getChannelCount() == 1 ? " numeric channel  ·  " : " numeric channels  ·  ")
                 + "linked playback cursor");
         detail.getStyleClass().add("muted");
         title.setWrapText(true);
@@ -263,23 +269,25 @@ final class FxLogAnalysisPane extends BorderPane implements AutoCloseable {
         name.setPromptText("Marker label");
         HBox.setHgrow(name, Priority.ALWAYS);
         Button add = new Button("Add at cursor");
-        add.disableProperty().bind(rangePending);
+        add.disableProperty().bind(rangePending.or(markersEditable.not()));
         add.setOnAction(event -> {
-            markers.getItems().add(new LogMarker(cursor.getSampleIndex(),
+            List<LogMarker> proposed = new ArrayList<>(markers.getItems());
+            proposed.add(new LogMarker(cursor.getSampleIndex(),
                     type.getValue(), name.getText()));
-            FXCollections.sort(markers.getItems());
-            saveMarkers();
-            name.clear();
+            markerSession.replace(proposed);
         });
         Button remove = new Button("Remove selected");
         remove.disableProperty().bind(
-                markers.getSelectionModel().selectedItemProperty().isNull());
+                markers.getSelectionModel().selectedItemProperty().isNull().or(markersEditable.not()));
         remove.setOnAction(event -> {
-            markers.getItems().remove(
+            List<LogMarker> proposed = new ArrayList<>(markers.getItems());
+            proposed.remove(
                     markers.getSelectionModel().getSelectedItem());
-            saveMarkers();
+            markerSession.replace(proposed);
         });
-        HBox controls = new HBox(8, type, name, add, remove);
+        Button reload = new Button("Reload markers"); reload.disableProperty().bind(markersBusy);
+        reload.setOnAction(event -> markerSession.load());
+        FlowPane controls = new FlowPane(8, 6, type, name, add, remove, reload);
         controls.setPadding(new Insets(8));
         markers.setCellFactory(view -> new javafx.scene.control.ListCell<>() {
             @Override protected void updateItem(LogMarker marker, boolean empty) {
@@ -300,7 +308,8 @@ final class FxLogAnalysisPane extends BorderPane implements AutoCloseable {
                 playback.seek(marker.getSampleIndex());
             }
         });
-        return new BorderPane(markers, controls, null, null, null);
+        markerStatus.setWrapText(true);
+        return new BorderPane(markers, new VBox(6, controls, markerStatus), null, null, null);
     }
 
     private Node playbackBar() {
@@ -504,29 +513,6 @@ final class FxLogAnalysisPane extends BorderPane implements AutoCloseable {
         statisticsTask.request(dataset, selectedRange);
     }
 
-    private void loadMarkers() {
-        if (source == null) return;
-        try {
-            markers.setItems(FXCollections.observableArrayList(
-                    new LogMarkerStore().load(source, dataset.getRowCount())));
-        } catch (Exception failure) {
-            status.setText("Markers could not be loaded: "
-                    + FxDialogs.rootMessage(failure));
-        }
-    }
-
-    private void saveMarkers() {
-        if (source == null) return;
-        try {
-            new LogMarkerStore().save(source,
-                    new ArrayList<>(markers.getItems()));
-            status.setText("Marker sidecar saved");
-        } catch (Exception failure) {
-            status.setText("Markers could not be saved: "
-                    + FxDialogs.rootMessage(failure));
-        }
-    }
-
     private ComboBox<LogChannel> channelBox(boolean preferTime) {
         ComboBox<LogChannel> box = new ComboBox<>(FXCollections
                 .observableArrayList(dataset.getChannels()));
@@ -604,6 +590,7 @@ final class FxLogAnalysisPane extends BorderPane implements AutoCloseable {
         closed = true;
         statisticsTask.close();
         tableTask.close();
+        markerSession.close();
         mapTrace.close();
         binned.close();
         comparison.close();
