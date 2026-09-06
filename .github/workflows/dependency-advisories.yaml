@@ -1,0 +1,44 @@
+name: Scoped dependency advisories
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'ui/**/gradle.lockfile'
+      - 'lib/common/**'
+      - 'packaging/security/**'
+      - '.github/workflows/dependency-advisories.yaml'
+  pull_request:
+    paths:
+      - 'ui/**/gradle.lockfile'
+      - 'lib/common/**'
+      - 'packaging/security/**'
+      - '.github/workflows/dependency-advisories.yaml'
+
+permissions:
+  contents: read
+
+jobs:
+  advisory-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Test response validation and inventory boundaries
+        run: python3 -m unittest discover -s packaging/security -p 'test_*.py'
+      - name: Query public package coordinates and report coverage gaps
+        run: |
+          set -euo pipefail
+          python3 packaging/security/check_advisories.py | tee "$RUNNER_TEMP/dependency-advisories.json"
+      - name: Retain scoped evidence, including incomplete scans
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-advisory-evidence
+          path: ${{ runner.temp }}/dependency-advisories.json
+          if-no-files-found: warn

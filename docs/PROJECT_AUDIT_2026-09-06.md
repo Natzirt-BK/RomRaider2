@@ -6,6 +6,8 @@ A1 and A2; [portable XML hardening](XML_IMPORT_HARDENING.md) addresses A5.
 [Version safeguards](RELEASE_VERSIONING.md#development-safeguards) prepare 1.1.2
 source for A6; active Android RC/preview-era wording from A7 is removed. Actual
 release publication, signing migration/backup and hardware gates remain open.
+[Scoped advisory checks](DEPENDENCY_ADVISORY_SCOPE.md) improve A8's evidence while
+keeping unmapped/native/runtime coverage gaps explicit.
 The findings and evidence below describe the audited `7c2f0ce4`
 snapshot and remain historical evidence, not a claim that those source fixes
 are already in the public Android APK. Other findings remain open.

@@ -1,0 +1,12 @@
+{
+  "lib/common/jna.jar": {
+    "name": "net.java.dev.jna:jna",
+    "version": "5.19.1",
+    "sha256": "4fb141dd8ef6b0585ffceea4bc49602fbc6312fa977e2c488794ea3e6aafecae"
+  },
+  "lib/common/platform.jar": {
+    "name": "net.java.dev.jna:jna-platform",
+    "version": "5.19.1",
+    "sha256": "3b3864f5b449e9c3c24b16861524b622b086563f44e0cd8384c8efc5a6052f82"
+  }
+}

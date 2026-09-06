@@ -53,6 +53,11 @@ Local verification passed the version rejection fixtures, core/portable tests,
 APKs reported 1.1.2/110406; the guard rejected a retained old 1.1.1 APK and a
 swapped application ID. A synthetic signed configuration with an old versionCode
 was rejected before any key access. Android CI repeats that negative check.
+Source `154b6b1d` passes [desktop/version/package CI](https://github.com/Natzirt-BK/RomRaider2/actions/runs/34012714069)
+and [Android regression CI](https://github.com/Natzirt-BK/RomRaider2/actions/runs/34012714103),
+and is integrated into GitHub master. Manual cross-platform distribution
+qualification is recorded separately after completion; these are not public
+release uploads.
 
 Before publication, finish the exact-commit platform qualification, verify all
 download checksums and signing identity, document the one-time old-key Android
