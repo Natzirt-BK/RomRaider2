@@ -13,10 +13,17 @@ preferences remain readable but do not add a 26th picker choice.
 Android now consolidates layout, independently assigned display channels,
 explicit Logger-channel copy, per-channel visual style picking and demo Show/Hide
 in Gauges. Only Full Screen keeps the screen awake; a tap reveals an exit menu
-that times out. The next gauge task is equivalent desktop/handheld style picking
-and per-channel persistence, followed by package qualification. Public downloads
+that times out. Desktop/handheld searchable style galleries and per-channel
+persistence are now implemented; see [their contract](DESKTOP_GAUGE_STYLES.md).
+The next gauge task is independent display-slot setup and full-screen layout/menu
+parity on desktop/handheld, followed by package qualification. Public downloads
 remain 1.1.2 RC1. Resume the parked DimeMod channel-pointer span audit afterward;
 neither the gauge work nor synthetic logging tests qualify vehicle writes.
+
+The 25-style checkpoint `a5676f2f` passed both hosted Android regression runs,
+both desktop build runs, and [all platform packages](https://github.com/Natzirt-BK/RomRaider2/actions/runs/34064071712).
+This includes the Android version-increment automation upgrade; no public release
+was replaced by those CI artifacts.
 
 1. Nine additional, original gauge designs (owner expanded the original three
    by six): Rally Precision, Circuit Stack, Retro VFD, Club Sport, Sweep Ribbon,

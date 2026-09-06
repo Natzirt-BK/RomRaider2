@@ -509,7 +509,9 @@ public final class DOMSettingsUnmarshaller {
                                         unmarshallAttribute(tile, "order", 0),
                                         unmarshallAttribute(tile, "color", ""),
                                         optionalDouble(tile, "custom-width"),
-                                        optionalDouble(tile, "custom-height")));
+                                        optionalDouble(tile, "custom-height"),
+                                        LoggerGaugeTheme.optionalFromName(
+                                                unmarshallAttribute(tile, "gauge-theme", ""))));
                     } catch (IllegalArgumentException invalid) {
                         // Ignore one corrupt tile without losing settings.
                     }

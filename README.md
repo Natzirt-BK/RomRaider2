@@ -48,7 +48,7 @@ before connecting an OpenPort 2.0 through a USB host/OTG adapter.
 
 The **1.1.3 source** adds [fullscreen gauges](docs/ANDROID_MOUNTED_DISPLAY.md)
 with seamless layouts for 1–6 instruments, a [25-style gauge collection](docs/GAUGE_DESIGN.md),
-and Android channel-by-channel styles with a visual picker. It also adds
+and channel-by-channel styles with visual pickers on Android and desktop/handheld. It also adds
 [Android background recording](docs/ANDROID_BACKGROUND_RECORDING.md),
 [calculated channels](docs/CALCULATED_LOGGER_CHANNELS.md),
 [portable logger setups](docs/PORTABLE_LOGGER_SETUP.md), and expanded

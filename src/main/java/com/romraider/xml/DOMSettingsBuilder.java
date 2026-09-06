@@ -490,6 +490,9 @@ public final class DOMSettingsBuilder {
             channel.setAttribute("role", tile.getRole().name());
             channel.setAttribute("size", tile.getSize().name());
             channel.setAttribute("order", String.valueOf(tile.getOrder()));
+            if (tile.getGaugeTheme() != null) {
+                channel.setAttribute("gauge-theme", tile.getGaugeTheme().name());
+            }
             if (!tile.getAccentColor().isEmpty()) {
                 channel.setAttribute("color", tile.getAccentColor());
             }

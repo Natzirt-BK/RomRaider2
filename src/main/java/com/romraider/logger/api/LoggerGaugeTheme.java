@@ -55,4 +55,11 @@ public enum LoggerGaugeTheme {
             return RR2_CLASSIC;
         }
     }
+
+    /** Missing or unknown overrides inherit the default; never silently pin Classic. */
+    public static LoggerGaugeTheme optionalFromName(String value) {
+        if (value == null) return null;
+        try { return valueOf(value.trim().toUpperCase(java.util.Locale.ROOT)); }
+        catch (IllegalArgumentException invalid) { return null; }
+    }
 }

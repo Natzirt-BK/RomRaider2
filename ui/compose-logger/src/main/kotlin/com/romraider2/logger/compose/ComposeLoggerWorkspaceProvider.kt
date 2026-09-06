@@ -486,6 +486,7 @@ private fun MountedInstruments(
     LazyVerticalGrid(columns = GridCells.Adaptive(240.dp), modifier = Modifier.fillMaxSize().padding(8.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         gridItems(selected, key = { it.parameterId }) { channel ->
+            val channelTheme = preferences.getDashboardTile(channel.parameterId)?.resolveGaugeTheme(theme) ?: theme
             val sample = samples[channel.parameterId]?.takeIf { it.conversionIdentity == channel.conversionIdentity }
             val values = history[channel.parameterId].orEmpty().filter { it.conversionIdentity == channel.conversionIdentity }
                 .map { it.rawValue }.filter { it.isFinite() }
@@ -504,7 +505,7 @@ private fun MountedInstruments(
                 raw, range.minimum, range.maximum, values.maxOrNull() ?: Double.NaN, status,
                 if (custom) "CUSTOM SCALE" else if (scale.reference) "REFERENCE SCALE" else "RECENT SCALE",
                 raw.isFinite() && (warning == LoggerGaugeConfiguration.AlertState.HIGH || warning == LoggerGaugeConfiguration.AlertState.LOW))
-            val instrument = runCatching { GaugeFaceRenderer.Style.valueOf(theme.name) }.getOrNull()
+            val instrument = runCatching { GaugeFaceRenderer.Style.valueOf(channelTheme.name) }.getOrNull()
             Column(Modifier.fillMaxWidth().aspectRatio(320f / 250f).semantics {
                 contentDescription = "${channel.name}, ${if (raw.isFinite()) reading.display else "no valid data"}, $status"
             }) {
@@ -512,7 +513,7 @@ private fun MountedInstruments(
                     GaugeFaceRenderer.Presentation.SEAMLESS)
                 else {
                     Text(channel.name, Modifier.padding(8.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    GaugeTileBody(gaugeProgress(raw, range), gaugeStyle(theme), if (raw.isFinite()) reading.display else "—",
+                    GaugeTileBody(gaugeProgress(raw, range), gaugeStyle(channelTheme), if (raw.isFinite()) reading.display else "—",
                         false, channel, range, reading.scaleLabel)
                     Text(status, Modifier.padding(8.dp), fontSize = 11.sp)
                 }
@@ -1403,6 +1404,7 @@ private fun DashboardWorkspace(
 ) {
     var showPeaks by remember { mutableStateOf(false) }
     var editingChannel by remember { mutableStateOf<LoggerChannel?>(null) }
+    var stylingChannel by remember { mutableStateOf<LoggerChannel?>(null) }
     var configurationRevision by remember { mutableStateOf(0) }
     var layoutRevision by remember { mutableStateOf(0) }
     var arranging by remember { mutableStateOf(false) }
@@ -1424,9 +1426,7 @@ private fun DashboardWorkspace(
             gaugeLayout, onGaugeLayout, arranging,
             { arranging = !arranging },
             {
-                preferences.dashboardTiles.keys.forEach {
-                    preferences.setDashboardTile(it, null)
-                }
+                resetDashboardLayout(preferences)
                 layoutRevision++
             }
         )
@@ -1458,11 +1458,12 @@ private fun DashboardWorkspace(
                     samples[channel.parameterId]?.takeIf { it.conversionIdentity == channel.conversionIdentity },
                     history[channel.parameterId].orEmpty().filter { it.conversionIdentity == channel.conversionIdentity },
                     graphColors[index % graphColors.size],
-                    gaugeTheme,
+                    tile.resolveGaugeTheme(gaugeTheme),
                     showPeaks,
                     preferences.getGaugeConfiguration(channel.parameterId, channel.conversionIdentity),
                     gaugeAlerts,
                     { editingChannel = channel },
+                    { stylingChannel = channel },
                     tile, arranging,
                     index > 0, index < ordered.lastIndex,
                     {
@@ -1486,6 +1487,18 @@ private fun DashboardWorkspace(
                 )
             }
         }
+    }
+    stylingChannel?.let { channel ->
+        GaugeStyleGallery("Gauge style · ${channel.name}",
+            preferences.getDashboardTile(channel.parameterId)?.gaugeTheme,
+            allowDefault = true, onDismiss = { stylingChannel = null }, onSelect = { theme ->
+                if (selected.any { it.parameterId == channel.parameterId }) {
+                    preferences.setDashboardTile(channel.parameterId,
+                        dashboardTile(channel.parameterId, 0, preferences).withGaugeTheme(theme))
+                    layoutRevision++
+                }
+                stylingChannel = null
+            })
     }
     editingChannel?.let { channel ->
         GaugeConfigurationDialog(
@@ -1524,6 +1537,12 @@ private fun GaugeControls(
     onToggleArrange: () -> Unit,
     onResetLayout: () -> Unit
 ) {
+    var choosingStyle by remember { mutableStateOf(false) }
+    if (choosingStyle) GaugeStyleGallery("Default gauge style", selected,
+        allowDefault = false, onDismiss = { choosingStyle = false }, onSelect = { theme ->
+            if (theme != null) onSelect(theme)
+            choosingStyle = false
+        })
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(
             Modifier.fillMaxWidth(),
@@ -1544,12 +1563,7 @@ private fun GaugeControls(
                 Text("GAUGE STYLE",
                     color = MaterialTheme.colors.onSurface.copy(.50f),
                     fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                LoggerGaugeTheme.selectableValues().forEach { theme ->
-                    val active = theme == selected
-                    GaugeControlChip(theme.displayName, active, true) {
-                        onSelect(theme)
-                    }
-                }
+                GaugeControlChip("${selected.displayName} · Choose…", true, true) { choosingStyle = true }
             }
         }
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
@@ -1574,6 +1588,63 @@ private fun GaugeControls(
                 GaugeControlChip("Reset layout", false, true, onResetLayout)
             }
         }
+    }
+}
+
+@Composable
+internal fun GaugeStyleGallery(title: String, selected: LoggerGaugeTheme?, allowDefault: Boolean,
+    onDismiss: () -> Unit, onSelect: (LoggerGaugeTheme?) -> Unit) {
+    var query by remember { mutableStateOf("") }
+    val choices = gaugeStyleChoices(query)
+    AlertDialog(onDismissRequest = onDismiss, title = { Text(title) },
+        modifier = Modifier.widthIn(max = 760.dp),
+        text = {
+            Column(Modifier.fillMaxWidth()) {
+                Text("SAMPLE · Choose a style while parked", fontSize = 11.sp)
+                TextField(query, { query = it }, label = { Text("Search 25 gauge styles") },
+                    singleLine = true, modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp))
+                if (choices.isEmpty()) Text("No matching gauge styles")
+                LazyVerticalGrid(columns = GridCells.Adaptive(190.dp),
+                    modifier = Modifier.fillMaxWidth().heightIn(max = 380.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    gridItems(choices, key = { it.name }) { theme ->
+                        Column(Modifier.fillMaxWidth().clickable(role = Role.Button) { onSelect(theme) }
+                            .border(if (theme == selected) 2.dp else 1.dp,
+                                if (theme == selected) MaterialTheme.colors.primary else MaterialTheme.colors.onSurface.copy(.2f),
+                                RoundedCornerShape(8.dp)).padding(6.dp)
+                            .semantics { contentDescription = "${theme.displayName}, sample reading" + if (theme == selected) ", selected" else "" }) {
+                            Text(theme.displayName, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 12.sp)
+                            val instrument = runCatching { GaugeFaceRenderer.Style.valueOf(theme.name) }.getOrNull()
+                            val frame = Modifier.fillMaxWidth().aspectRatio(320f / 250f)
+                            if (instrument != null) InstrumentGauge(instrument, GaugeFaceRenderer.Reading(
+                                "Engine Speed", "4200", "rpm", 4200.0, 0.0, 9000.0, 6650.0,
+                                "SAMPLE", "REFERENCE SCALE", false), frame)
+                            else Box(frame, contentAlignment = Alignment.Center) {
+                                GaugeFace(4200f / 9000f, gaugeStyle(theme))
+                                Column(Modifier.background(gaugeStyle(theme).faceColor, RoundedCornerShape(5.dp))
+                                    .padding(horizontal = 8.dp, vertical = 3.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text("4200", color = gaugeStyle(theme).valueColor, fontSize = 24.sp,
+                                        fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                                    Text("rpm", color = gaugeStyle(theme).valueColor, fontSize = 10.sp)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }, confirmButton = { if (allowDefault) TextButton(onClick = { onSelect(null) }) { Text("Use default") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } })
+}
+
+internal fun gaugeStyleChoices(query: String): List<LoggerGaugeTheme> =
+    LoggerGaugeTheme.selectableValues().filter { it.displayName.contains(query.trim(), ignoreCase = true) }
+
+internal fun resetDashboardLayout(preferences: LoggerWorkspacePreferences) {
+    preferences.dashboardTiles.forEach { (id, saved) ->
+        preferences.setDashboardTile(id, saved.gaugeTheme?.let { theme ->
+            LoggerDashboardTile(LoggerDashboardTileRole.GAUGE, LoggerDashboardTileSize.STANDARD, 0)
+                .withGaugeTheme(theme)
+        })
     }
 }
 
@@ -1736,6 +1807,7 @@ private fun LiveGaugeCard(
     configuration: LoggerGaugeConfiguration?,
     gaugeAlerts: LoggerGaugeAlertTracker,
     onConfigure: () -> Unit,
+    onChooseStyle: () -> Unit,
     tile: LoggerDashboardTile,
     arranging: Boolean,
     canMovePrevious: Boolean,
@@ -1789,6 +1861,11 @@ private fun LiveGaugeCard(
                 Spacer(Modifier.width(4.dp))
             }
             if (!arranging) {
+                TextButton(onClick = onChooseStyle,
+                    modifier = Modifier.requiredWidth(48.dp).height(30.dp),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)) {
+                    Text("STYLE", fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                }
                 TextButton(onClick = onConfigure,
                     modifier = Modifier.requiredWidth(44.dp).height(30.dp),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)) {

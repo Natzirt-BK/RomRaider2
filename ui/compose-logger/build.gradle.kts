@@ -1,6 +1,8 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import java.util.Properties
 
+import java.time.Duration
+
 plugins {
     kotlin("jvm") version "2.4.10"
     id("org.jetbrains.compose") version "1.12.0"
@@ -89,6 +91,16 @@ tasks.register<JavaExec>("visualFixture") {
     providers.gradleProperty("uiProfile").orNull?.let {
         systemProperty("romraider2.ui.profile", it)
     }
+}
+
+tasks.register<JavaExec>("gaugeGalleryVisualFixture") {
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("com.romraider2.logger.compose.GaugeStyleGalleryVisualFixtureKt")
+    // This fixture runs under Xvfb; never route captures to the host Wayland portal.
+    systemProperty("awt.robot.screenshotMethod", "x11")
+    timeout.set(Duration.ofSeconds(45))
+    providers.gradleProperty("gaugeGalleryOutput").orNull?.let { args(it) }
 }
 
 tasks.register<JavaExec>("calibrationVisualFixture") {

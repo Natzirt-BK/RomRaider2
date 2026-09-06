@@ -9,8 +9,10 @@ On Android, choose channels, layouts and faces in **Gauges**, using the searchab
 visual picker for the default or an individual channel. Display assignments are
 independent of Logger, with an explicit **Use logger channels** shortcut. Enter
 **Full Screen** for the seamless, awake display; tap it for a temporary exit menu.
-Desktop/handheld currently use the Logger dashboard and **Gauges only** in JavaFX
-or Compose; Android's consolidated setup/picker is not yet ported to those UIs. Configure the display while
+Desktop/handheld use the Logger dashboard and **Gauges only** in JavaFX or Compose,
+with [searchable galleries and saved per-channel styles](DESKTOP_GAUGE_STYLES.md).
+Android's independent display-slot setup and full-screen layout/menu parity remain
+follow-up work for those UIs. Configure the display while
 parked. This view is not a replacement for the vehicle's instruments or warnings.
 
 | Face | Visual structure |

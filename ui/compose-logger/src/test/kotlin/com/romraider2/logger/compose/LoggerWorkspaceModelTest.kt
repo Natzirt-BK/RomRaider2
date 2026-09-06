@@ -22,6 +22,22 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class LoggerWorkspaceModelTest {
+    @Test fun styleSearchExposes25AndResetLayoutPreservesChannelOverrides() {
+        val theme = com.romraider.logger.api.LoggerGaugeTheme.STI_NIGHT
+        assertEquals(25, gaugeStyleChoices("").size)
+        assertEquals(listOf(theme), gaugeStyleChoices(" sti NIGHT "))
+        assertTrue(gaugeStyleChoices("missing gauge style").isEmpty())
+        val preferences = LoggerWorkspacePreferences(LoggerWorkspaceView.DASHBOARD, false) { _, _ -> }
+        val tile = LoggerDashboardTile(LoggerDashboardTileRole.TREND, LoggerDashboardTileSize.WIDE, 3)
+        preferences.setDashboardTile("custom", tile.withGaugeTheme(theme))
+        preferences.setDashboardTile("default", tile)
+        resetDashboardLayout(preferences)
+        assertNull(preferences.getDashboardTile("default"))
+        assertEquals(theme, preferences.getDashboardTile("custom").gaugeTheme)
+        assertEquals(LoggerDashboardTileRole.GAUGE, preferences.getDashboardTile("custom").role)
+        assertEquals(LoggerDashboardTileSize.STANDARD, preferences.getDashboardTile("custom").size)
+        assertEquals(0, preferences.getDashboardTile("custom").order)
+    }
     @Test
     fun invalidReadingsDoNotPoisonStatisticsOrDrawingProgress() {
         val invalid = listOf(Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY)

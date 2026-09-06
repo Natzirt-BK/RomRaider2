@@ -86,8 +86,9 @@ This feature is not in the published 1.1.2 packages.
 
 The collection now contains 25 selectable styles, including Apex 24, Ion OLED,
 Loop Drive and Chrono Roll. [Design references and renderer checks](GAUGE_DESIGN.md)
-cover the shared Android/desktop artwork. The consolidated setup/gallery and
-per-channel Android controls are not yet ported to desktop.
+cover the shared Android/desktop artwork. Desktop/handheld now have their own
+[searchable galleries and saved channel styles](DESKTOP_GAUGE_STYLES.md), but not
+yet the independent display-slot setup and full-screen layout/menu parity.
 
 The calculated-gauge fixture explicitly copies Logger channels into display slots;
 profile loading alone must not perform that action. Instrumentation flushes its
