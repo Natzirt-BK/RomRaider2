@@ -17,7 +17,7 @@ import kotlin.system.exitProcess
 
 /** Isolated native gallery capture. No logger, adapter, preferences or vehicle access. */
 fun main(args: Array<String>) {
-    require(args.size == 1) { "Output PNG path required" }
+    require(args.size in 1..2) { "Output PNG path and optional display mode required" }
     val failure = AtomicReference<Throwable?>()
     Thread.setDefaultUncaughtExceptionHandler { _, error -> failure.set(error) }
     val bounds = GraphicsEnvironment.getLocalGraphicsEnvironment().maximumWindowBounds
@@ -28,7 +28,10 @@ fun main(args: Array<String>) {
         frame.contentPane.add(ComposePanel().apply {
             setContent {
                 MaterialTheme(colors = darkColors()) {
-                    GaugeStyleGallery("Default gauge style", LoggerGaugeTheme.STI_NIGHT, false, {}, {})
+                    if (args.getOrNull(1) == "display") androidx.compose.material.Surface {
+                        GaugeDisplayVisualContent()
+                    }
+                    else GaugeStyleGallery("Default gauge style", LoggerGaugeTheme.STI_NIGHT, false, {}, {})
                 }
             }
         })

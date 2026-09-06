@@ -524,7 +524,9 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
                 getSettings().getLoggerGaugeConfigurations(),
                 getSettings()::setLoggerGaugeConfiguration,
                 getSettings().getLoggerDashboardTiles(),
-                getSettings()::setLoggerDashboardTile);
+                getSettings()::setLoggerDashboardTile,
+                getSettings().getLoggerParameterListState(), getSettings()::setLoggerParameterListState,
+                getSettings().getLoggerGaugeDisplay(), getSettings()::setLoggerGaugeDisplay);
         installChannelCatalogListeners();
     }
 

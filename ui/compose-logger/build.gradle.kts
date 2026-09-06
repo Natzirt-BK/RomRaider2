@@ -101,6 +101,7 @@ tasks.register<JavaExec>("gaugeGalleryVisualFixture") {
     systemProperty("awt.robot.screenshotMethod", "x11")
     timeout.set(Duration.ofSeconds(45))
     providers.gradleProperty("gaugeGalleryOutput").orNull?.let { args(it) }
+    providers.gradleProperty("gaugeFixtureMode").orNull?.let { args(it) }
 }
 
 tasks.register<JavaExec>("calibrationVisualFixture") {

@@ -9,6 +9,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
@@ -80,6 +81,12 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.unit.Constraints
+import com.romraider.logger.api.LoggerGaugeDisplay
+import com.romraider.portable.gauge.GaugeDashboardLayout
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -134,7 +141,8 @@ private val graphColors = listOf(
 @Composable
 internal fun LoggerWorkspace(
     context: LoggerWorkspaceContext,
-    onOpenSetup: (() -> Unit)? = null
+    onOpenSetup: (() -> Unit)? = null,
+    onGaugeFullScreen: ((Boolean) -> Unit)? = null
 ) {
     val steamOs = remember { RuntimeUiProfile.isSteamOs() }
     val gaugeAlerts = remember(context) { LoggerGaugeAlertTracker() }
@@ -157,6 +165,19 @@ internal fun LoggerWorkspace(
         mutableStateOf(context.preferences.view)
     }
     var gaugesOnly by remember { mutableStateOf(false) }
+    var mountedFullScreen by remember { mutableStateOf(false) }
+    var mountedMenuTap by remember { mutableStateOf(0L) }
+    var mountedMenuVisible by remember { mutableStateOf(false) }
+    var gaugeDisplay by remember { mutableStateOf(context.preferences.gaugeDisplay) }
+    var mountedStyleRevision by remember { mutableStateOf(0) }
+    val gaugeWindowFocused = androidx.compose.ui.platform.LocalWindowInfo.current.isWindowFocused
+    LaunchedEffect(mountedFullScreen) { onGaugeFullScreen?.invoke(mountedFullScreen) }
+    LaunchedEffect(mountedMenuTap, mountedFullScreen, gaugeWindowFocused) {
+        if (!gaugeWindowFocused) mountedMenuTap = 0
+        mountedMenuVisible = mountedFullScreen && gaugeWindowFocused && mountedMenuTap != 0L
+        if (mountedMenuVisible) { delay(5000); mountedMenuVisible = false }
+    }
+    DisposableEffect(Unit) { onDispose { onGaugeFullScreen?.invoke(false) } }
     var gaugeNow by remember { mutableStateOf(System.nanoTime()) }
     val gaugeReceivedAt = remember(context) { java.util.concurrent.ConcurrentHashMap<String, Long>() }
     var darkTheme by remember {
@@ -272,8 +293,10 @@ internal fun LoggerWorkspace(
                     if (event.type != KeyEventType.KeyDown) {
                         false
                     } else if (gaugesOnly) {
-                        if (event.key == Key.Escape) gaugesOnly = false
-                        true
+                        if (event.key == Key.Escape) {
+                            if (mountedFullScreen) mountedFullScreen = false else gaugesOnly = false
+                            true
+                        } else false
                     } else if (event.isCtrlPressed) {
                         val next = workspaceForShortcut(event.key)
                         when {
@@ -299,14 +322,29 @@ internal fun LoggerWorkspace(
         ) {
             Column(Modifier.fillMaxSize()) {
               if (gaugesOnly) {
-                Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Button(onClick = { gaugesOnly = false }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Exit gauges") }
-                    Text(sessionState.displayName, modifier = Modifier.weight(1f).padding(horizontal = 16.dp))
-                    Button(onClick = { context.session.stopRecording() }, enabled = sessionState == LoggerSessionState.RECORDING,
-                        modifier = Modifier.heightIn(min = 48.dp)) { Text("Stop recording") }
+                if (!mountedFullScreen) {
+                    Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Button(onClick = { gaugesOnly = false }) { Text("Exit gauges") }
+                        Text(sessionState.displayName, modifier = Modifier.weight(1f).padding(horizontal = 16.dp))
+                        if (onGaugeFullScreen != null) Button(onClick = { mountedMenuTap = 0; mountedFullScreen = true }) { Text("Full screen") }
+                    }
+                    GaugeDisplaySetup(channels, gaugeDisplay, context.preferences, gaugeTheme,
+                        onDisplay = { next -> context.preferences.setGaugeDisplay(next); gaugeDisplay = next },
+                        onStylesChanged = { mountedStyleRevision++ },
+                        onDefaultStyle = { next -> context.preferences.setGaugeTheme(next); gaugeTheme = next })
                 }
-                MountedInstruments(channels, samples, history, gaugeTheme, sessionState,
-                    gaugeReceivedAt, gaugeNow, context.preferences, gaugeAlerts)
+                Box(Modifier.fillMaxWidth().weight(1f).pointerInput(mountedFullScreen) {
+                    detectTapGestures { if (mountedFullScreen) mountedMenuTap = System.nanoTime() }
+                }) {
+                    MountedInstruments(channels, samples, history, gaugeTheme, sessionState,
+                        gaugeReceivedAt, gaugeNow, context.preferences, gaugeAlerts, gaugeDisplay, mountedStyleRevision)
+                    if (mountedFullScreen && mountedMenuVisible) Row(Modifier.align(Alignment.TopCenter)
+                        .background(MaterialTheme.colors.surface).padding(8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Button(onClick = { mountedFullScreen = false }) { Text("Exit full screen") }
+                        Button(onClick = { context.session.stopRecording(); mountedMenuTap = System.nanoTime() },
+                            enabled = sessionState == LoggerSessionState.RECORDING) { Text("Stop recording") }
+                    }
+                }
               } else {
                 if (!context.hasHostSessionControls()) {
                     SessionBar(
@@ -475,18 +513,23 @@ internal fun LoggerWorkspace(
 }
 
 @Composable
-private fun MountedInstruments(
+internal fun MountedInstruments(
     channels: List<LoggerChannel>, samples: Map<String, LiveDataSample>,
     history: Map<String, List<LiveDataSample>>, theme: LoggerGaugeTheme,
     state: LoggerSessionState, receivedAt: Map<String, Long>, now: Long,
-    preferences: LoggerWorkspacePreferences, alerts: LoggerGaugeAlertTracker
+    preferences: LoggerWorkspacePreferences, alerts: LoggerGaugeAlertTracker,
+    display: LoggerGaugeDisplay, styleRevision: Int = 0
 ) {
-    val selected = channels.filter { it.isSelected }.take(8)
-    if (selected.isEmpty()) Text("Select channels in the logger while parked. This view never starts a connection.", Modifier.padding(24.dp))
-    LazyVerticalGrid(columns = GridCells.Adaptive(240.dp), modifier = Modifier.fillMaxSize().padding(8.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        gridItems(selected, key = { it.parameterId }) { channel ->
-            val channelTheme = preferences.getDashboardTile(channel.parameterId)?.resolveGaugeTheme(theme) ?: theme
+    val selected = gaugeDisplayChannels(display, channels)
+    if (selected.isEmpty()) {
+        Text("Assign display channels above, or use the explicit Logger copy. This view never starts a connection.", Modifier.padding(24.dp))
+        return
+    }
+    Layout(modifier = Modifier.fillMaxSize(), content = {
+        selected.forEach { channel -> androidx.compose.runtime.key(channel.parameterId) {
+            val channelTheme = remember(channel.parameterId, theme, styleRevision) {
+                preferences.getDashboardTile(channel.parameterId)?.resolveGaugeTheme(theme) ?: theme
+            }
             val sample = samples[channel.parameterId]?.takeIf { it.conversionIdentity == channel.conversionIdentity }
             val values = history[channel.parameterId].orEmpty().filter { it.conversionIdentity == channel.conversionIdentity }
                 .map { it.rawValue }.filter { it.isFinite() }
@@ -497,16 +540,16 @@ private fun MountedInstruments(
             val range = GaugeRange(if (custom) config.scaleMinimum else scale.minimum,
                 if (custom) config.scaleMaximum else scale.maximum)
             val fresh = receivedAt[channel.parameterId]?.let { now - it < 3_000_000_000L } == true
-            val status = if (!state.isLive) "STOPPED" else if (!fresh) "NO RECENT DATA"
+            val status = if (!state.isLive) "STOPPED" else if (!channel.isSelected) "NO DATA" else if (!fresh) "NO RECENT DATA"
                 else if (sample?.rawValue?.isFinite() != true) "NO VALID DATA" else "LIVE"
-            val raw = if (state.isLive && fresh) sample?.rawValue ?: Double.NaN else Double.NaN
+            val raw = if (state.isLive && fresh && channel.isSelected) sample?.rawValue ?: Double.NaN else Double.NaN
             val warning = alerts.state(channel.parameterId, config)
             val reading = GaugeFaceRenderer.Reading(channel.name, sample?.displayValue ?: "—", channel.units,
                 raw, range.minimum, range.maximum, values.maxOrNull() ?: Double.NaN, status,
                 if (custom) "CUSTOM SCALE" else if (scale.reference) "REFERENCE SCALE" else "RECENT SCALE",
                 raw.isFinite() && (warning == LoggerGaugeConfiguration.AlertState.HIGH || warning == LoggerGaugeConfiguration.AlertState.LOW))
             val instrument = runCatching { GaugeFaceRenderer.Style.valueOf(channelTheme.name) }.getOrNull()
-            Column(Modifier.fillMaxWidth().aspectRatio(320f / 250f).semantics {
+            Column(Modifier.fillMaxSize().clipToBounds().semantics {
                 contentDescription = "${channel.name}, ${if (raw.isFinite()) reading.display else "no valid data"}, $status"
             }) {
                 if (instrument != null) InstrumentGauge(instrument, reading, Modifier.fillMaxSize(),
@@ -518,7 +561,75 @@ private fun MountedInstruments(
                     Text(status, Modifier.padding(8.dp), fontSize = 11.sp)
                 }
             }
+        } }
+    }) { measurables, constraints ->
+        val positions = GaugeDashboardLayout.fit(constraints.maxWidth, constraints.maxHeight, measurables.size, 320.0 / 250, 2)
+        val children = measurables.mapIndexed { i, item -> item.measure(Constraints.fixed(positions[i].width, positions[i].height)) }
+        layout(constraints.maxWidth, constraints.maxHeight) {
+            children.forEachIndexed { i, child -> child.placeRelative(positions[i].left, positions[i].top) }
         }
+    }
+}
+
+internal fun gaugeDisplayChannels(display: LoggerGaugeDisplay, channels: List<LoggerChannel>): List<LoggerChannel> =
+    display.visibleChannels.map { id -> channels.firstOrNull { it.parameterId == id }
+        ?: LoggerChannel(id, id, "", LoggerChannelKind.PARAMETER, false) }
+
+@Composable
+internal fun GaugeDisplaySetup(channels: List<LoggerChannel>, display: LoggerGaugeDisplay,
+    preferences: LoggerWorkspacePreferences, defaultStyle: LoggerGaugeTheme,
+    onDisplay: (LoggerGaugeDisplay) -> Unit, onStylesChanged: () -> Unit,
+    onDefaultStyle: (LoggerGaugeTheme) -> Unit) {
+    var editingSlot by remember { mutableStateOf<Int?>(null) }
+    var stylingSlot by remember { mutableStateOf<String?>(null) }
+    var stylingDefault by remember { mutableStateOf(false) }
+    Column(Modifier.fillMaxWidth().heightIn(max = 230.dp).verticalScroll(rememberScrollState()).padding(8.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("Layout", Modifier.padding(top = 10.dp))
+            (1..6).forEach { count -> GaugeControlChip(count.toString(), display.count == count, true) { onDisplay(display.withCount(count)) } }
+            TextButton(onClick = { onDisplay(display.useLoggerChannels(channels)) }) { Text("Use Logger Channels") }
+            TextButton(onClick = { stylingDefault = true }) { Text("Default style") }
+        }
+        (0 until display.count).forEach { slot ->
+            val id = display.slots[slot]
+            val channel = channels.firstOrNull { it.parameterId == id }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                TextButton(onClick = { editingSlot = slot }, modifier = Modifier.weight(1f)) {
+                    Text("${slot + 1}: ${channel?.name ?: id.ifEmpty { "Choose channel" }}", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                TextButton(onClick = { stylingSlot = id }, enabled = id.isNotEmpty()) {
+                    Text("Style: ${preferences.getDashboardTile(id)?.gaugeTheme?.displayName ?: "Default"}", maxLines = 1)
+                }
+            }
+        }
+        Text("Display choices do not change logging. Add a channel to Logger to receive it. Configure while parked.", fontSize = 11.sp)
+    }
+    if (stylingDefault) GaugeStyleGallery("Default gauge style", defaultStyle, false, { stylingDefault = false }) { theme ->
+        if (theme != null) onDefaultStyle(theme)
+        stylingDefault = false
+    }
+    stylingSlot?.let { id -> GaugeStyleGallery("Gauge style · $id", preferences.getDashboardTile(id)?.gaugeTheme,
+        true, { stylingSlot = null }) { theme ->
+            preferences.setDashboardTile(id, dashboardTile(id, 0, preferences).withGaugeTheme(theme))
+            onStylesChanged(); stylingSlot = null
+        } }
+    editingSlot?.let { slot ->
+        var query by remember(slot) { mutableStateOf("") }
+        val matches = channels.filter { (it.name + " " + it.parameterId).contains(query.trim(), ignoreCase = true) }
+        AlertDialog(onDismissRequest = { editingSlot = null }, title = { Text("Gauge ${slot + 1} channel") },
+            text = { Column {
+                TextField(query, { query = it }, label = { Text("Search channels") }, singleLine = true)
+                LazyColumn(Modifier.heightIn(max = 300.dp)) {
+                    items(matches, key = { it.parameterId }) { channel ->
+                        TextButton(onClick = { onDisplay(display.withChannel(slot, channel.parameterId)); editingSlot = null }) {
+                            Text("${channel.name} [${channel.parameterId}]" + if (channel.isSelected) "" else " · not selected in Logger")
+                        }
+                    }
+                }
+                if (matches.isEmpty()) Text("No matching channels")
+            } }, confirmButton = { TextButton(onClick = { onDisplay(display.withChannel(slot, "")); editingSlot = null }) { Text("Clear slot") } },
+            dismissButton = { TextButton(onClick = { editingSlot = null }) { Text("Cancel") } })
     }
 }
 

@@ -145,6 +145,9 @@ private fun LoggerDesktopWindow(
     runtime: LoggerDesktopRuntime,
     onClose: () -> Unit
 ) {
+    val loggerWindowState = rememberFittedWindowState(1380, 860)
+    var gaugeFullScreen by remember { mutableStateOf(false) }
+    var previousPlacement by remember { mutableStateOf(loggerWindowState.placement) }
     val windowIcon = romRaiderWindowIcon()
     val context = remember(runtime) { runtime.workspaceContext }
     val configurationMissing = remember(runtime) {
@@ -171,7 +174,7 @@ private fun LoggerDesktopWindow(
         onCloseRequest = onClose,
         title = "${Version.PRODUCT_NAME} ${Version.VERSION} | Logger",
         icon = windowIcon,
-        state = rememberFittedWindowState(1380, 860)
+        state = loggerWindowState
     ) {
         val commandHandler = remember(runtime, window) {
             DesktopApplicationCommands.Handler { arguments ->
@@ -191,7 +194,7 @@ private fun LoggerDesktopWindow(
             DesktopApplicationCommands.register(commandHandler)
             onDispose { DesktopApplicationCommands.unregister(commandHandler) }
         }
-        MenuBar {
+        if (!gaugeFullScreen) MenuBar {
             Menu("File") {
                 Item(if (loadingLog) "Opening CSV log..." else "Open CSV log...",
                     enabled = !loadingLog,
@@ -233,7 +236,15 @@ private fun LoggerDesktopWindow(
                     enabled = sessionState == LoggerSessionState.RECORDING)
             }
         }
-        LoggerWorkspace(context, onOpenSetup = { showSetup = true })
+        LoggerWorkspace(context, onOpenSetup = { showSetup = true }, onGaugeFullScreen = { enabled ->
+            if (enabled != gaugeFullScreen) {
+                if (enabled) {
+                    previousPlacement = loggerWindowState.placement
+                    loggerWindowState.placement = androidx.compose.ui.window.WindowPlacement.Fullscreen
+                } else loggerWindowState.placement = previousPlacement
+                gaugeFullScreen = enabled
+            }
+        })
         LaunchedEffect(runtime) {
             if (!configurationMissing && runtime.settings.autoConnectOnStartup &&
                 context.session.state == LoggerSessionState.STOPPED) {

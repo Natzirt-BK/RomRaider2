@@ -6,7 +6,6 @@ import com.romraider.logger.api.*;
 import com.romraider.logger.ecu.ui.spi.LoggerWorkspaceContext;
 import java.util.List;
 import java.util.Map;
-import javafx.scene.layout.FlowPane;
 import javafx.stage.Stage;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
@@ -47,6 +46,7 @@ class FxMountedGaugesSmokeTest {
                 LoggerWorkspaceContext context = context(window[0]);
                 context.getChannels().replaceChannels(List.of(new LoggerChannel("gauge-fixture",
                         "Synthetic boost", "psi", LoggerChannelKind.PARAMETER, true, List.of(), "psi")));
+                context.getPreferences().setGaugeDisplay(new LoggerGaugeDisplay().useLoggerChannels(context.getChannels().getChannels()));
                 context.getLiveData().loggingData(); // Publish synthetic state; does not open a writer/adapter.
                 context.getLiveData().publish(sample(12.7));
             });
@@ -59,7 +59,7 @@ class FxMountedGaugesSmokeTest {
                     window[0].setGaugesOnly(true);
                     assertSame(session, context.getSession());
                     assertEquals(LoggerSessionState.RECORDING, context.getSession().getState());
-                    FlowPane gauges = FxEditorControlsSmokeTest.field(window[0], "mountedGauges");
+                    FxMountedGaugePane gauges = FxEditorControlsSmokeTest.field(window[0], "mountedGauges");
                     assertEquals(1, gauges.getChildren().size());
                     assertFalse(gauges.getChildren().getFirst().getStyleClass().contains("logger-card"));
                     assertFalse(gauges.getChildren().getFirst().getStyleClass().contains("logger-card-selected"));
@@ -88,13 +88,14 @@ class FxMountedGaugesSmokeTest {
                 if (window[0] != null) {
                     context(window[0]).getLiveData().stopped();
                     context(window[0]).getPreferences().setGaugeTheme(LoggerGaugeTheme.RR2_CLASSIC);
+                    context(window[0]).getPreferences().setGaugeDisplay(new LoggerGaugeDisplay());
                     window[0].close();
                 }
             });
         }
     }
     private static FxInstrumentView face(FxLoggerWindow window) throws Exception {
-        FlowPane gauges = FxEditorControlsSmokeTest.field(window, "mountedGauges");
+        FxMountedGaugePane gauges = FxEditorControlsSmokeTest.field(window, "mountedGauges");
         return (FxInstrumentView) gauges.getChildren().getFirst();
     }
     private static LoggerWorkspaceContext context(FxLoggerWindow window) throws Exception {

@@ -36,7 +36,7 @@ settings do not change production rendering or screenshot behavior.
 Actual native galleries: [JavaFX](images/desktop-gauge-style-picker.png) and
 [Compose desktop/handheld](images/handheld-gauge-style-picker.png).
 
-Android's independent display slots, 1–6 viewport-fitting layouts and transient
-full-screen exit menu are separate from this desktop style pass. Equivalent
-desktop/handheld setup and full-screen behavior remain follow-up work. These
-changes are not in the public 1.1.2 RC1 downloads.
+Desktop/handheld now also have [independent slots and fitted 1–6 layouts](DESKTOP_GAUGE_DISPLAY.md),
+with a temporary full-screen exit menu in their native logger windows. Remaining
+qualification and display-awake limitations are documented there. These changes
+are not in the public 1.1.2 RC1 downloads.

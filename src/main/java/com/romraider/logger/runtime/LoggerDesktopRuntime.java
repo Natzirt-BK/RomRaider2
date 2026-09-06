@@ -831,7 +831,8 @@ public final class LoggerDesktopRuntime implements EcuRelatedMessageListener,
                 settings.getLoggerDashboardTiles(),
                 settings::setLoggerDashboardTile,
                 settings.getLoggerParameterListState(),
-                settings::setLoggerParameterListState);
+                settings::setLoggerParameterListState,
+                settings.getLoggerGaugeDisplay(), settings::setLoggerGaugeDisplay);
     }
 
     @Override

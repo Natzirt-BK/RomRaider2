@@ -517,6 +517,16 @@ public final class DOMSettingsUnmarshaller {
                     }
                 }
 
+            } else if (n.getNodeType() == ELEMENT_NODE && n.getNodeName().equalsIgnoreCase("gauge-display")) {
+                if (unmarshallAttribute(n, "schema", 0) != 1) continue;
+                java.util.List<String> slots = new java.util.ArrayList<>();
+                for (int slot = 0; slot < 6; slot++) slots.add(unmarshallAttribute(n, "slot-" + (slot + 1), ""));
+                try {
+                    settings.setLoggerGaugeDisplay(new com.romraider.logger.api.LoggerGaugeDisplay(
+                            unmarshallAttribute(n, "count", 6), slots));
+                } catch (IllegalArgumentException invalid) {
+                    // Ignore invalid display settings, never infer slots from the Logger profile.
+                }
             } else if (n.getNodeType() == ELEMENT_NODE && n.getNodeName().equalsIgnoreCase("definition")) {
                 settings.setLoggerDefinitionFilePath(unmarshallAttribute(n, "path", settings.getLoggerDefinitionFilePath()));
 

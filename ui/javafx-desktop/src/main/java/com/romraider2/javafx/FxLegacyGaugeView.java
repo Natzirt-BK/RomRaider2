@@ -67,6 +67,7 @@ final class FxLegacyGaugeView extends Region {
         g.fillText(reading.available() ? reading.display : "—", 160, 164, 145);
         g.setFont(Font.font("SansSerif", 11)); g.fillText(reading.units, 160, 181, 145);
         g.setFill(Color.web("#9cabb8")); g.setFont(Font.font("SansSerif", 10));
+        g.fillText(reading.name, 160, 17, 300);
         g.fillText(reading.scaleLabel + " · " + GaugeFaceRenderer.compact(reading.minimum) + "–"
                 + GaugeFaceRenderer.compact(reading.maximum), 160, 226, 300);
         g.setFill(reading.available() && reading.warning ? Color.web("#ff564e") : Color.web("#9cabb8"));

@@ -22,6 +22,20 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class LoggerWorkspaceModelTest {
+    @Test fun displaySlotsRemainIndependentAndRetainUnknownChannels() {
+        val channels = listOf(
+            LoggerChannel("one", "One", "V", LoggerChannelKind.PARAMETER, true),
+            LoggerChannel("two", "Two", "rpm", LoggerChannelKind.PARAMETER, false))
+        val empty = com.romraider.logger.api.LoggerGaugeDisplay()
+        assertTrue(gaugeDisplayChannels(empty, channels).isEmpty())
+        val assigned = empty.withChannel(0, "two").withChannel(1, "missing").withChannel(5, "one").withCount(2)
+        val visible = gaugeDisplayChannels(assigned, channels)
+        assertEquals(listOf("two", "missing"), visible.map { it.parameterId })
+        assertTrue(visible.none { it.isSelected })
+        assertEquals(listOf("one"), empty.useLoggerChannels(channels).visibleChannels)
+        assertEquals(listOf(true, false), channels.map { it.isSelected })
+        assertEquals(3, gaugeDisplayChannels(assigned.withCount(6), channels).size)
+    }
     @Test fun styleSearchExposes25AndResetLayoutPreservesChannelOverrides() {
         val theme = com.romraider.logger.api.LoggerGaugeTheme.STI_NIGHT
         assertEquals(25, gaugeStyleChoices("").size)

@@ -8,7 +8,6 @@ import com.romraider.portable.gauge.GaugeFaceRenderer;
 import java.util.List;
 import javafx.scene.control.Button;
 import javafx.scene.control.TextField;
-import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.TilePane;
 import javafx.stage.Stage;
 import org.junit.jupiter.api.Test;
@@ -53,6 +52,7 @@ class FxGaugeStylePickerSmokeTest {
                 context.getChannels().replaceChannels(List.of(
                         new LoggerChannel("style-a", "Synthetic RPM", "rpm", LoggerChannelKind.PARAMETER, true),
                         new LoggerChannel("style-b", "Synthetic voltage", "V", LoggerChannelKind.PARAMETER, true)));
+                context.getPreferences().setGaugeDisplay(new LoggerGaugeDisplay().useLoggerChannels(context.getChannels().getChannels()));
                 context.getLiveData().loggingData(); // Synthetic state only; never opens an adapter or writer.
                 context.getLiveData().publish(new LiveDataSample("style-a", "Synthetic RPM", 4200, "4200", "rpm", 1));
                 context.getLiveData().publish(new LiveDataSample("style-b", "Synthetic voltage", 13, "13", "V", 1));
@@ -78,7 +78,7 @@ class FxGaugeStylePickerSmokeTest {
                 assertNull(context.getPreferences().getDashboardTile("style-b"));
                 context.getPreferences().setGaugeTheme(LoggerGaugeTheme.CHRONO_ROLL);
                 window[0].setGaugesOnly(true);
-                FlowPane mounted = field(window[0], "mountedGauges");
+                FxMountedGaugePane mounted = field(window[0], "mountedGauges");
                 assertEquals(GaugeFaceRenderer.Style.STI_NIGHT, field(mounted.getChildren().get(0), "style"));
                 assertEquals(GaugeFaceRenderer.Style.CHRONO_ROLL, field(mounted.getChildren().get(1), "style"));
                 window[0].setGaugesOnly(false);
@@ -103,6 +103,7 @@ class FxGaugeStylePickerSmokeTest {
                     context.getPreferences().setDashboardTile("style-a", null);
                     context.getPreferences().setDashboardTile("style-b", null);
                     context.getPreferences().setGaugeTheme(LoggerGaugeTheme.RR2_CLASSIC);
+                    context.getPreferences().setGaugeDisplay(new LoggerGaugeDisplay());
                     window[0].close();
                 }
             });

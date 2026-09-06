@@ -15,8 +15,10 @@ explicit Logger-channel copy, per-channel visual style picking and demo Show/Hid
 in Gauges. Only Full Screen keeps the screen awake; a tap reveals an exit menu
 that times out. Desktop/handheld searchable style galleries and per-channel
 persistence are now implemented; see [their contract](DESKTOP_GAUGE_STYLES.md).
-The next gauge task is independent display-slot setup and full-screen layout/menu
-parity on desktop/handheld, followed by package qualification. Public downloads
+[Independent slots and fitted 1–6 layouts](DESKTOP_GAUGE_DISPLAY.md) are now implemented
+on desktop/handheld, with native-window full-screen menus. The next gauge work is
+desktop display-awake support, legacy Swing-bridge full-screen behavior, and full
+Compose native menu/window/focus automation, followed by package qualification. Public downloads
 remain 1.1.2 RC1. Resume the parked DimeMod channel-pointer span audit afterward;
 neither the gauge work nor synthetic logging tests qualify vehicle writes.
 
@@ -24,6 +26,9 @@ The 25-style checkpoint `a5676f2f` passed both hosted Android regression runs,
 both desktop build runs, and [all platform packages](https://github.com/Natzirt-BK/RomRaider2/actions/runs/34064071712).
 This includes the Android version-increment automation upgrade; no public release
 was replaced by those CI artifacts.
+
+The gallery checkpoint `8e5decfa` passed both desktop build runs and
+[all platform packages](https://github.com/Natzirt-BK/RomRaider2/actions/runs/34065073018).
 
 1. Nine additional, original gauge designs (owner expanded the original three
    by six): Rally Precision, Circuit Stack, Retro VFD, Club Sport, Sweep Ribbon,

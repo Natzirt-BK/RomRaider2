@@ -254,6 +254,7 @@ public class Settings implements Serializable {
     private Boolean loggerWorkspaceDarkTheme;
     private LoggerGaugeTheme loggerGaugeTheme = LoggerGaugeTheme.RR2_CLASSIC;
     private LoggerGaugeLayout loggerGaugeLayout = LoggerGaugeLayout.STANDARD;
+    private com.romraider.logger.api.LoggerGaugeDisplay loggerGaugeDisplay = new com.romraider.logger.api.LoggerGaugeDisplay();
     private Map<String, LoggerGaugeConfiguration> loggerGaugeConfigurations =
             new LinkedHashMap<String, LoggerGaugeConfiguration>();
     private Map<String, LoggerDashboardTile> loggerDashboardTiles =
@@ -776,6 +777,11 @@ public class Settings implements Serializable {
 
     public LoggerGaugeLayout getLoggerGaugeLayout() {
         return loggerGaugeLayout;
+    }
+
+    public com.romraider.logger.api.LoggerGaugeDisplay getLoggerGaugeDisplay() { return loggerGaugeDisplay; }
+    public void setLoggerGaugeDisplay(com.romraider.logger.api.LoggerGaugeDisplay display) {
+        loggerGaugeDisplay = java.util.Objects.requireNonNull(display);
     }
 
     public void setLoggerGaugeLayout(LoggerGaugeLayout layout) {

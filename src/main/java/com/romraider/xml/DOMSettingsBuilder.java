@@ -502,6 +502,13 @@ public final class DOMSettingsBuilder {
         }
         loggerSettings.appendChild(dashboardLayout);
 
+        IIOMetadataNode gaugeDisplay = new IIOMetadataNode("gauge-display");
+        gaugeDisplay.setAttribute("schema", "1");
+        gaugeDisplay.setAttribute("count", String.valueOf(settings.getLoggerGaugeDisplay().getCount()));
+        for (int slot = 0; slot < 6; slot++) gaugeDisplay.setAttribute("slot-" + (slot + 1),
+                settings.getLoggerGaugeDisplay().getSlots().get(slot));
+        loggerSettings.appendChild(gaugeDisplay);
+
         // definition path
         IIOMetadataNode definition = new IIOMetadataNode("definition");
         definition.setAttribute("path", settings.getLoggerDefinitionFilePath());

@@ -25,6 +25,8 @@ public final class LoggerWorkspacePreferences {
     private volatile LoggerGaugeTheme gaugeTheme;
     private volatile LoggerGaugeLayout gaugeLayout;
     private volatile boolean channelRailVisible;
+    private volatile LoggerGaugeDisplay gaugeDisplay;
+    private final Consumer<LoggerGaugeDisplay> gaugeDisplayPersistence;
 
     public LoggerWorkspacePreferences(LoggerWorkspaceView view,
             boolean darkTheme,
@@ -91,11 +93,30 @@ public final class LoggerWorkspacePreferences {
             BiConsumer<String, LoggerDashboardTile> dashboardTilePersistence,
             boolean channelRailVisible,
             Consumer<Boolean> channelRailPersistence) {
+        this(view, darkTheme, gaugeTheme, persistence, gaugePersistence, gaugeLayout,
+                gaugeLayoutPersistence, gaugeConfigurations, gaugeConfigurationPersistence,
+                dashboardTiles, dashboardTilePersistence, channelRailVisible, channelRailPersistence,
+                new LoggerGaugeDisplay(), display -> { });
+    }
+
+    public LoggerWorkspacePreferences(LoggerWorkspaceView view, boolean darkTheme,
+            LoggerGaugeTheme gaugeTheme, BiConsumer<LoggerWorkspaceView, Boolean> persistence,
+            Consumer<LoggerGaugeTheme> gaugePersistence, LoggerGaugeLayout gaugeLayout,
+            Consumer<LoggerGaugeLayout> gaugeLayoutPersistence,
+            Map<String, LoggerGaugeConfiguration> gaugeConfigurations,
+            BiConsumer<String, LoggerGaugeConfiguration> gaugeConfigurationPersistence,
+            Map<String, LoggerDashboardTile> dashboardTiles,
+            BiConsumer<String, LoggerDashboardTile> dashboardTilePersistence,
+            boolean channelRailVisible, Consumer<Boolean> channelRailPersistence,
+            LoggerGaugeDisplay gaugeDisplay, Consumer<LoggerGaugeDisplay> gaugeDisplayPersistence) {
         checkNotNull(view, gaugeTheme, gaugeLayout, persistence,
                 gaugePersistence, gaugeLayoutPersistence);
         checkNotNull(gaugeConfigurations, gaugeConfigurationPersistence);
         checkNotNull(dashboardTiles, dashboardTilePersistence);
         checkNotNull(channelRailPersistence);
+        checkNotNull(gaugeDisplay, gaugeDisplayPersistence);
+        this.gaugeDisplay = gaugeDisplay;
+        this.gaugeDisplayPersistence = gaugeDisplayPersistence;
         this.view = view;
         this.darkTheme = darkTheme;
         this.gaugeTheme = gaugeTheme;
@@ -115,6 +136,14 @@ public final class LoggerWorkspacePreferences {
 
     public LoggerWorkspaceView getView() {
         return view;
+    }
+
+    public LoggerGaugeDisplay getGaugeDisplay() { return gaugeDisplay; }
+    public synchronized void setGaugeDisplay(LoggerGaugeDisplay next) {
+        checkNotNull(next);
+        if (next.equals(gaugeDisplay)) return;
+        gaugeDisplay = next;
+        gaugeDisplayPersistence.accept(next);
     }
 
     public boolean isDarkTheme() {

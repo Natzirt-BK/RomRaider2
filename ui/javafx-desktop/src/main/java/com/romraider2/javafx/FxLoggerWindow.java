@@ -46,6 +46,10 @@ import javafx.scene.Scene;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.control.Button;
+import javafx.scene.control.ButtonType;
+import javafx.scene.control.ListCell;
+import javafx.scene.control.ListView;
+import javafx.scene.control.TextField;
 import javafx.scene.control.ColorPicker;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Dialog;
@@ -90,7 +94,7 @@ final class FxLoggerWindow {
     private final TableView<LiveDataSample> data = new TableView<>();
     private final LiveGraph graph = new LiveGraph();
     private final FlowPane dashboard = new FlowPane(12, 12);
-    private final FlowPane mountedGauges = new FlowPane(12, 12);
+    private final FxMountedGaugePane mountedGauges = new FxMountedGaugePane();
     private final Label mountedStatus = new Label();
     private FxGaugeStylePicker gaugeStylePicker;
     private final Map<String, Long> receivedAt = new LinkedHashMap<>();
@@ -99,6 +103,13 @@ final class FxLoggerWindow {
             new javafx.animation.KeyFrame(javafx.util.Duration.seconds(1), event -> refreshViews()));
     private Node normalTop, normalBottom;
     private boolean gaugesOnly;
+    private boolean mountedFullScreen, previousFullScreen;
+    private VBox mountedSetup;
+    private StackPane mountedViewport;
+    private HBox mountedMenu;
+    private Dialog<?> mountedChannelPicker;
+    private final javafx.animation.PauseTransition mountedMenuTimeout =
+            new javafx.animation.PauseTransition(javafx.util.Duration.seconds(5));
     private final BorderPane analysis = new BorderPane();
     private FxDynoPane dyno;
     private FxFuelAnalysisPane mafAnalysis;
@@ -172,6 +183,7 @@ final class FxLoggerWindow {
                 if (disposed) return;
                 channelSnapshot = next;
                 channelRail.update(next);
+                if (gaugesOnly && !mountedFullScreen) refreshMountedSetup();
                 refreshViews();
             });
         };
@@ -229,6 +241,12 @@ final class FxLoggerWindow {
         Scene scene = new Scene(root, 1380, 860);
         FxTheme.apply(stage, scene);
         stage.setScene(scene);
+        stage.fullScreenProperty().addListener((value, oldState, full) -> {
+            if (mountedFullScreen && !full) { previousFullScreen = false; setMountedFullScreen(false); }
+        });
+        stage.focusedProperty().addListener((value, oldFocus, focused) -> {
+            if (!focused && mountedMenu != null) { mountedMenuTimeout.stop(); mountedMenu.setVisible(false); }
+        });
         stage.setTitle(Version.PRODUCT_NAME + " " + Version.VERSION
                 + " | JavaFX Logger");
         stage.setMinWidth(900);
@@ -508,8 +526,8 @@ final class FxLoggerWindow {
     private void refreshViews() {
         if (disposed) return;
         viewHistory = context.getLiveData().getRecentSamples();
+        if (gaugesOnly) { refreshMountedGauges(); return; }
         List<LiveDataSample> selected = selectedSamples();
-        if (gaugesOnly) { refreshMountedGauges(selected); return; }
         channelsMetric.setText(selected.size() + " SELECTED");
         if (selectedDashboardParameter != null && selected.stream().noneMatch(
                 sample -> sample.getParameterId().equals(
@@ -660,7 +678,7 @@ final class FxLoggerWindow {
     }
 
     private void chooseGaugeStyle(String parameterId) {
-        if (disposed || gaugesOnly) return;
+        if (disposed || mountedFullScreen) return;
         if (gaugeStylePicker != null) gaugeStylePicker.close();
         LoggerGaugeTheme selected = parameterId == null ? context.getPreferences().getGaugeTheme()
                 : tileFor(parameterId, 0).getGaugeTheme();
@@ -714,7 +732,8 @@ final class FxLoggerWindow {
         boolean fresh;
         synchronized (samples) { fresh = receivedAt.containsKey(sample.getParameterId())
                 && System.nanoTime() - receivedAt.get(sample.getParameterId()) < 3_000_000_000L; }
-        String state = !live ? "STOPPED" : !fresh ? "NO RECENT DATA" : "LIVE";
+        String state = !live ? "STOPPED" : !fresh ? "NO RECENT DATA"
+                : !Double.isFinite(sample.getRawValue()) ? "NO VALID DATA" : "LIVE";
         LoggerGaugeConfiguration.AlertState alert = gaugeAlerts.state(sample.getParameterId(), config);
         return new GaugeFaceRenderer.Reading(
                 sample.getName(), sample.getDisplayValue(), sample.getUnits(), live && fresh ? sample.getRawValue() : Double.NaN,
@@ -726,54 +745,137 @@ final class FxLoggerWindow {
 
     void setGaugesOnly(boolean enabled) {
         if (disposed || gaugesOnly == enabled) return;
+        if (!enabled) setMountedFullScreen(false);
         gaugesOnly = enabled;
         if (!enabled) {
+            if (gaugeStylePicker != null) gaugeStylePicker.close();
+            if (mountedChannelPicker != null) mountedChannelPicker.close();
             root.setTop(normalTop); root.setCenter(workspace); root.setBottom(normalBottom);
             views.getSelectionModel().select(3); refreshViews(); return;
         }
-        Button back = new Button("Exit gauges"); back.setMinHeight(48);
-        back.setOnAction(event -> setGaugesOnly(false));
-        Button fullscreen = new Button("Full screen"); fullscreen.setMinHeight(48);
-        fullscreen.setOnAction(event -> stage.setFullScreen(!stage.isFullScreen()));
-        Region fill = new Region(); HBox.setHgrow(fill, Priority.ALWAYS);
-        HBox bar = new HBox(12, back, mountedStatus, fill, fullscreen);
-        bar.setAlignment(Pos.CENTER_LEFT); bar.setPadding(new Insets(6, 12, 6, 12));
         String mountedStyle = "-rr-text: #edf1f4; -rr-muted: #a6b1bf; -fx-base: #17212b; "
                 + "-fx-background: #0f151b; -fx-background-color: #0f151b; -fx-text-background-color: #edf1f4;";
-        bar.setStyle(mountedStyle);
         mountedGauges.setStyle(mountedStyle);
-        mountedGauges.setAlignment(Pos.TOP_CENTER); mountedGauges.setPadding(new Insets(8));
-        ScrollPane scroll = new ScrollPane(mountedGauges); scroll.setFitToWidth(true);
-        scroll.setStyle(mountedStyle + " -fx-background-insets: 0; -fx-padding: 0; -fx-border-width: 0;");
-        root.setTop(bar); root.setCenter(scroll); root.setBottom(null);
+        mountedViewport = new StackPane(mountedGauges);
+        mountedViewport.setStyle(mountedStyle);
+        Button exitFull = new Button("Exit full screen"); exitFull.setMinHeight(48);
+        exitFull.setOnAction(event -> setMountedFullScreen(false));
+        Button stop = new Button("Stop recording"); stop.setMinHeight(48);
+        stop.setOnAction(event -> { if (context.getSession().getState() == LoggerSessionState.RECORDING)
+            context.getSession().stopRecording(); });
+        mountedMenu = new HBox(12, exitFull, stop); mountedMenu.setStyle(mountedStyle);
+        mountedMenu.setPadding(new Insets(8)); mountedMenu.setMaxHeight(64);
+        StackPane.setAlignment(mountedMenu, Pos.TOP_CENTER);
+        mountedViewport.getChildren().add(mountedMenu); mountedMenu.setVisible(false);
+        mountedMenuTimeout.setOnFinished(event -> mountedMenu.setVisible(false));
+        mountedViewport.addEventHandler(javafx.scene.input.MouseEvent.MOUSE_CLICKED, event -> {
+            if (mountedFullScreen) showMountedMenu();
+        });
+        root.setCenter(mountedViewport); root.setBottom(null);
+        refreshMountedSetup();
         gaugeClock.play(); refreshViews();
     }
 
-    private void refreshMountedGauges(List<LiveDataSample> selected) {
-        mountedStatus.setText(context.getSession().getState().getDisplayName() + "  ·  "
-                + Math.min(8, selected.size()) + "/" + selected.size() + " gauges");
-        mountedGauges.getChildren().clear();
-        double available = Math.max(240, root.getWidth() - 40);
-        int columns = Math.max(1, Math.min(4, (int)(available / 280)));
-        double width = Math.min(400, (available - 12 * (columns - 1)) / columns);
-        int index = 0;
-        for (LiveDataSample sample : selected.stream().limit(8).toList()) {
-            GaugeFaceRenderer.Style style = instrumentStyle(sample.getParameterId());
-            boolean fresh;
-            synchronized (samples) { fresh = receivedAt.containsKey(sample.getParameterId())
-                    && System.nanoTime() - receivedAt.get(sample.getParameterId()) < 3_000_000_000L; }
-            LiveDataSample displayed = context.getSession().getState().isLive() && fresh ? sample
-                    : new LiveDataSample(sample.getParameterId(), sample.getName(), Double.NaN, "—",
-                            sample.getUnits(), sample.getTimestampMillis(), sample.getConversionIdentity());
-            Node gauge = style == null ? dashboardCard(displayed, index++, true) : instrument(sample, style);
-            if (gauge instanceof Region region) {
-                region.setMinSize(width, width * 250 / 320);
-                region.setPrefSize(width, width * 250 / 320);
-                region.setMaxSize(width, width * 250 / 320);
+    private void refreshMountedGauges() {
+        List<LiveDataSample> displayed = new java.util.ArrayList<>();
+        for (String id : context.getPreferences().getGaugeDisplay().getVisibleChannels()) {
+            LoggerChannel channel = channelSnapshot.stream().filter(item -> item.getParameterId().equals(id)).findFirst().orElse(null);
+            LiveDataSample sample;
+            synchronized (samples) { sample = samples.get(id); }
+            if (channel == null || sample == null || !channel.isSelected()
+                    || !sample.getConversionIdentity().equals(channel.getConversionIdentity())) {
+                sample = new LiveDataSample(id, channel == null ? id : channel.getName(), Double.NaN, "—",
+                        channel == null ? "" : channel.getUnits(), 0, channel == null ? "" : channel.getConversionIdentity());
             }
+            displayed.add(sample);
+        }
+        mountedStatus.setText(context.getSession().getState().getDisplayName() + "  ·  "
+                + displayed.size() + " display channels");
+        mountedGauges.getChildren().clear();
+        for (LiveDataSample sample : displayed) {
+            GaugeFaceRenderer.Style style = instrumentStyle(sample.getParameterId());
+            Node gauge = style == null ? legacyGauge(sample, savedGaugeColor(tileFor(sample.getParameterId(), 0))) : instrument(sample, style);
             mountedGauges.getChildren().add(gauge);
         }
-        if (selected.isEmpty()) mountedGauges.getChildren().add(emptyLoggerState("No gauges selected", "Exit this view and select channels while parked. Entering this view never starts a connection."));
+        if (displayed.isEmpty()) mountedGauges.getChildren().add(emptyLoggerState("No display channels assigned",
+                "Choose display channels in Gauges setup, or explicitly copy Logger channels. This view never starts a connection."));
+    }
+
+    private void refreshMountedSetup() {
+        if (!gaugesOnly || mountedFullScreen) return;
+        var display = context.getPreferences().getGaugeDisplay();
+        Button back = new Button("Exit gauges"); back.setOnAction(event -> setGaugesOnly(false));
+        Button full = new Button("Full screen"); full.setOnAction(event -> setMountedFullScreen(true));
+        Button copy = new Button("Use Logger Channels");
+        copy.setOnAction(event -> setGaugeDisplay(context.getPreferences().getGaugeDisplay().useLoggerChannels(channelSnapshot)));
+        Button style = new Button("Default style…"); style.setOnAction(event -> chooseGaugeStyle(null));
+        ComboBox<Integer> count = new ComboBox<>(FXCollections.observableArrayList(1, 2, 3, 4, 5, 6));
+        count.setValue(display.getCount()); count.setAccessibleText("Number of display gauges");
+        count.setOnAction(event -> setGaugeDisplay(context.getPreferences().getGaugeDisplay().withCount(count.getValue())));
+        FlowPane commands = new FlowPane(8, 6, back, full, mountedStatus, new Label("Layout"), count, copy, style);
+        FlowPane slots = new FlowPane(8, 6);
+        for (int i = 0; i < display.getCount(); i++) {
+            int slot = i; String id = display.getSlots().get(i);
+            String name = channelSnapshot.stream().filter(channel -> channel.getParameterId().equals(id))
+                    .map(LoggerChannel::getName).findFirst().orElse(id.isEmpty() ? "Choose channel" : id);
+            Button channel = new Button((i + 1) + ": " + name); channel.setMaxWidth(250);
+            channel.setOnAction(event -> chooseMountedChannel(slot));
+            Button face = new Button("Style"); face.setDisable(id.isEmpty());
+            face.setOnAction(event -> chooseGaugeStyle(id));
+            slots.getChildren().add(new HBox(4, channel, face));
+        }
+        Label help = new Label("Display choices do not change logging. Add a channel to Logger to receive it. Configure while parked.");
+        help.setWrapText(true);
+        mountedSetup = new VBox(8, commands, slots, help); mountedSetup.setPadding(new Insets(8));
+        root.setTop(mountedSetup);
+    }
+
+    private void setGaugeDisplay(com.romraider.logger.api.LoggerGaugeDisplay display) {
+        context.getPreferences().setGaugeDisplay(display); refreshMountedSetup(); refreshViews();
+    }
+
+    private void chooseMountedChannel(int slot) {
+        if (mountedFullScreen || !gaugesOnly) return;
+        Dialog<Void> picker = new Dialog<>(); picker.initOwner(stage); picker.setTitle("Gauge " + (slot + 1) + " channel");
+        picker.getDialogPane().getButtonTypes().add(ButtonType.CANCEL);
+        TextField search = new TextField(); search.setPromptText("Search channels");
+        ListView<LoggerChannel> choices = new ListView<>(); choices.setPrefSize(440, 300);
+        choices.setCellFactory(list -> new ListCell<>() {
+            @Override protected void updateItem(LoggerChannel channel, boolean empty) {
+                super.updateItem(channel, empty);
+                setText(empty || channel == null ? "" : channel.getName() + " [" + channel.getParameterId() + "]"
+                        + (channel.isSelected() ? "" : " · not selected in Logger"));
+            }
+        });
+        Runnable filter = () -> choices.setItems(FXCollections.observableArrayList(channelSnapshot.stream()
+                .filter(channel -> (channel.getName() + " " + channel.getParameterId()).toLowerCase(java.util.Locale.ROOT)
+                        .contains(search.getText().trim().toLowerCase(java.util.Locale.ROOT))).toList()));
+        search.textProperty().addListener((value, oldText, newText) -> filter.run()); filter.run();
+        Button use = new Button("Assign channel"); use.disableProperty().bind(choices.getSelectionModel().selectedItemProperty().isNull());
+        use.setOnAction(event -> {
+            String id = choices.getSelectionModel().getSelectedItem().getParameterId(); picker.close();
+            setGaugeDisplay(context.getPreferences().getGaugeDisplay().withChannel(slot, id));
+        });
+        Button clear = new Button("Clear slot"); clear.setOnAction(event -> {
+            picker.close(); setGaugeDisplay(context.getPreferences().getGaugeDisplay().withChannel(slot, ""));
+        });
+        picker.getDialogPane().setContent(new VBox(8, search, choices, new HBox(8, use, clear)));
+        mountedChannelPicker = picker; picker.setOnHidden(event -> mountedChannelPicker = null); picker.show();
+    }
+
+    void setMountedFullScreen(boolean enabled) {
+        if (enabled && (!gaugesOnly || disposed)) return;
+        if (mountedFullScreen == enabled) return;
+        mountedFullScreen = enabled; mountedMenuTimeout.stop(); mountedMenu.setVisible(false);
+        if (enabled) {
+            previousFullScreen = stage.isFullScreen(); root.setTop(null); stage.setFullScreen(true);
+        } else {
+            stage.setFullScreen(previousFullScreen); refreshMountedSetup();
+        }
+    }
+    private void showMountedMenu() {
+        if (!mountedFullScreen) return;
+        mountedMenu.setVisible(true); mountedMenu.toFront(); mountedMenuTimeout.playFromStart();
     }
 
     private Node digitalGauge(LiveDataSample sample, Color accent) {
@@ -1181,6 +1283,8 @@ final class FxLoggerWindow {
     private void dispose() {
         if (disposed) return;
         disposed = true;
+        mountedMenuTimeout.stop();
+        if (mountedChannelPicker != null) mountedChannelPicker.close();
         if (gaugeStylePicker != null) gaugeStylePicker.close();
         gaugeClock.stop();
         gaugeMotions.clear();
