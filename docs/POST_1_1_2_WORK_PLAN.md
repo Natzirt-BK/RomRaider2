@@ -53,6 +53,12 @@ address structures with the retained desktop implementation before enabling any
 runtime-derived channel. Do not hardcode the owner's RAM addresses. External
 serial AEM input remains a distinct transport/lifecycle project.
 
+The [DimeMod channel audit](DIMEMOD_CHANNEL_AUDIT.md) repairs desktop channels
+that could be exposed without their discovered address block, old-layout oil
+inputs and the FFS/failsafe bit mix-up. It also confirms that the legacy discovery
+handshake uses writes; it must not be copied into Android's read-only logger.
+Continue bounded response/metadata validation and portable typed-channel work.
+
 ## Then
 
 Implemented in 1.1.3 development source: [linked, reviewed conditions](FUEL_LOG_ANALYSIS.md#linked-maf--injector-conditions-113-development-source) between MAF and Injector:

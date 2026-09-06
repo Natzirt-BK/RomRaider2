@@ -36,6 +36,11 @@ faces both scale proportionally. See the [display guide](ANDROID_MOUNTED_DISPLAY
 Both fresh hosted Android lifecycle/upgrade/CSV runs pass at `77910c37`:
 [master](https://github.com/Natzirt-BK/RomRaider2/actions/runs/34053019391) and
 [feature branch](https://github.com/Natzirt-BK/RomRaider2/actions/runs/34053019276).
+The follow-up test-only checkpoint `bbef7c3f` also passes both
+[Linux/Windows build runs](https://github.com/Natzirt-BK/RomRaider2/actions/runs/34053295451)
+([second run](https://github.com/Natzirt-BK/RomRaider2/actions/runs/34053296059)) and
+[signed Android, macOS and SteamOS package qualification](https://github.com/Natzirt-BK/RomRaider2/actions/runs/34053305427).
+Those are CI artifacts, not a published replacement release.
 
 ## Regression repairs and remaining qualification
 

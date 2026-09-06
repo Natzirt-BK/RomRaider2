@@ -362,23 +362,24 @@ public class DmInit {
             boolean isFfsExternalTriggerEnabled = (activeInputs & 0x20) != 0;
             boolean isMapSwitchExternalTriggerEnabled = (activeInputs & 0x40) != 0;
             boolean isFailsafeExternalTriggerEnabled = (activeInputs & 0x80) != 0;
-            boolean isOilTempEnabled = (activeInputs & 0x100) != 0;
-            boolean isOilPressEnabled = (activeInputs & 0x200) != 0;
+            boolean isOilTempEnabled = minorVer >= 3 && (activeInputs & 0x100) != 0;
+            boolean isOilPressEnabled = minorVer >= 3 && (activeInputs & 0x200) != 0;
 
             boolean isRamTuneEnabled = (runtimeActiveFeatures & 0x80000000) != 0;
             boolean isCruiseButtonImmediateHacksEnabled = (runtimeActiveFeatures & 0x40000000) != 0;
             boolean isCorrectionsByGearsEnabled = (runtimeActiveFeatures & 0x20000000) != 0;
             boolean isCelFlashEnabled = (runtimeActiveFeatures & 0x10000000) != 0;
             boolean isKnockLightEnabled = (runtimeActiveFeatures & 0x08000000) != 0;
-            boolean isKsByCylsEnabled = (runtimeActiveFeatures & 0x04000000) != 0;
-            boolean isMapSwitchEnabled = (runtimeActiveFeatures & 0x02000000) != 0;
+            // Runtime flags cannot supply addresses from an absent discovery block.
+            boolean isKsByCylsEnabled = this.isKsByCylsEnabled && (runtimeActiveFeatures & 0x04000000) != 0;
+            boolean isMapSwitchEnabled = this.isMapSwitchEnabled && (runtimeActiveFeatures & 0x02000000) != 0;
             boolean isSparkCutEnabled = (runtimeActiveFeatures & 0x01000000) != 0;
-            boolean isSpeedDensityEnabled = (runtimeActiveFeatures & 0x800000) != 0;
-            boolean isAlsEnabled = (runtimeActiveFeatures & 0x400000) != 0;
+            boolean isSpeedDensityEnabled = this.isSpeedDensityEnabled && (runtimeActiveFeatures & 0x800000) != 0;
+            boolean isAlsEnabled = this.isAlsEnabled && (runtimeActiveFeatures & 0x400000) != 0;
             boolean isCanSenderEnabled = (runtimeActiveFeatures & 0x200000) != 0;
             boolean isVinLockEnabled = (runtimeActiveFeatures & 0x100000) != 0;
             boolean isPwmControlEnabled = (runtimeActiveFeatures & 0x080000) != 0;
-            boolean isValetModeEnabled = (runtimeActiveFeatures & 0x040000) != 0;
+            boolean isValetModeEnabled = this.isValetModeEnabled && (runtimeActiveFeatures & 0x040000) != 0;
 
             params.clear();
             if (minorVer > 0) {
@@ -427,7 +428,7 @@ public class DmInit {
             if (isMapSwitchExternalTriggerEnabled) {
                 params.add(getFloatParameter("DM915", "DimeMod: MapSwitch External Trigger Voltage", "Voltage", extMapSwitchVoltageAddress, "v", "x", 0f, 5f, 0.5f));
             }
-            if (isFailsafeExternalTriggerEnabled) {
+            if (isFfsExternalTriggerEnabled) {
                 params.add(getUInt8Parameter("DM916", "DimeMod: FFS External Trigger", "FFS Trigger State", ffsTriggerStateAddress, "state", "x"));
                 params.add(getFloatParameter("DM917", "DimeMod: FFS External Trigger Voltage", "Voltage", ffsTriggerVoltageAddress, "v", "x", 0f, 5f, 0.5f));
             }
@@ -461,8 +462,11 @@ public class DmInit {
                     params.add(getFloatParameter("DM016", "DimeMod: Flex Fuel blend value (Other)", "Blend Value (Other)", flexFuelOtherSetBlendAddress, "set", 0, 4, 0.1f));
                 }
             }
-            params.add(getFloatParameter("DM017", "DimeMod: Injector Flow value", "Injector Flow Value", flexFuelInjFlowValueAddress, "cc/min", "2707090/x", 0, 4, 0.1f));
-            if (minorVer > 0 || buildNum > 1) {
+            // These addresses live in MAP_SWITCH metadata, even when switching
+            // is not currently active. Do not expose default zero addresses.
+            if (this.isMapSwitchEnabled)
+                params.add(getFloatParameter("DM017", "DimeMod: Injector Flow value", "Injector Flow Value", flexFuelInjFlowValueAddress, "cc/min", "2707090/x", 0, 4, 0.1f));
+            if (this.isMapSwitchEnabled && (minorVer > 0 || buildNum > 1)) {
                 if (isFuelPressureEnabled) {
                     params.add(getFloatParameter("DM018", "DimeMod: IPW Diff Pressure Compensation", "IPW compensation in %", diffPressureCompensationAddress, "%", "(x-1)*100", -100, 100, 10f));
                 }

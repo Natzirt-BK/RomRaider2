@@ -1,6 +1,6 @@
 # RomRaider2 source audit
 
-Last reviewed: 2026-09-01
+Baseline reviewed: 2026-09-01. DimeMod channel follow-up: 2026-09-06.
 
 This file records what was checked in the old forks and branches so useful work
 does not get forgotten or merged blindly later.
@@ -29,6 +29,11 @@ surface as the current code. Synthetic tests now cover DM20 version/address
 parsing, runtime channel creation, known error bits, bad structure signatures,
 and unsupported major versions. Private ROMs, definitions, profiles, and logs
 were not copied into the repository.
+
+The [September 6 channel/discovery follow-up](DIMEMOD_CHANNEL_AUDIT.md) reproduces
+and repairs missing-block channel exposure, old-layout oil inputs and independent
+trigger bits. It also documents the retained discovery handshake's writes and the
+remaining Android parity boundary; this is not a write-free discovery protocol.
 
 ## CarBerry and MerpMod
 
@@ -61,7 +66,7 @@ Recovered or already covered:
 Deferred:
 
 - The ELM327 PID-bitmask and variable-address changes need their own protocol
-  tests and real ELM/vehicle checks. They are not required for the Subaru RC3
+  tests and real ELM/vehicle checks. They are not required for the Subaru SSM
   path and were not merged as an unverified side change.
 
 Rejected:
