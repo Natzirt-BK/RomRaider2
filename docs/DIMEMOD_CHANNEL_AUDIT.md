@@ -96,8 +96,11 @@ discovery-origin/ECU-identity contract for importing those addresses.
   is retained; this pass does not invent new cleanup writes or prove all
   negotiation-error behavior safe. Frame/chunk checks do not validate every
   advertised metadata address.
-- Add portable typed float decoding and runtime/version feature mapping before
-  claiming Android parity for DM019/DM911 and other generated channels.
+- Portable signed/unsigned integer and float decoding already exists; the
+  [typed-channel audit](PORTABLE_TYPED_CHANNELS.md) verifies definition-to-query
+  behavior and native desktop comparisons. Runtime/version feature mapping and
+  verified address provenance are still needed before claiming Android parity
+  for DM019/DM911 and other generated channels.
 - Keep external serial AEM input, injector-latency transfer and physical
   Forester/EVO/OpenPort acceptance as separate backlog items. No live-tuning or
   vehicle-write capability is established by these tests.

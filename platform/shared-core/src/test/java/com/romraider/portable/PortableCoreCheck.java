@@ -34,6 +34,7 @@ public final class PortableCoreCheck {
         PortableLoggerSetupCheck.main(new String[0]);
         PortableProfileOrderCheck.main(new String[0]);
         PortableCalculatedChannelCheck.main(new String[0]);
+        PortableTypedChannelCheck.main(new String[0]);
         PortableOpenPortControlCheck.main(new String[0]);
         PortableMut2Check.main(new String[0]);
         PortableRomRaiderCsvCheck.main(new String[0]);
