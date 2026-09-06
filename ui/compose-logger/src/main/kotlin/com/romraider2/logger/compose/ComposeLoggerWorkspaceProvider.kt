@@ -94,6 +94,7 @@ import com.romraider.logger.api.LoggerChannel
 import com.romraider.logger.api.LoggerChannelKind
 import com.romraider.logger.api.LoggerGaugeTheme
 import com.romraider.logger.api.LoggerGaugeConfiguration
+import com.romraider.logger.api.LoggerGaugeAlertTracker
 import com.romraider.logger.api.LoggerGaugeLayout
 import com.romraider.logger.api.LoggerDashboardTile
 import com.romraider.logger.api.LoggerDashboardTileRole
@@ -133,6 +134,7 @@ internal fun LoggerWorkspace(
     onOpenSetup: (() -> Unit)? = null
 ) {
     val steamOs = remember { RuntimeUiProfile.isSteamOs() }
+    val gaugeAlerts = remember(context) { LoggerGaugeAlertTracker() }
     var channels by remember { mutableStateOf(context.channels.channels) }
     var samples by remember {
         mutableStateOf(context.liveData.latestSamples.associateBy {
@@ -202,6 +204,7 @@ internal fun LoggerWorkspace(
 
     DisposableEffect(context) {
         val channelListener = Consumer<List<LoggerChannel>> { next ->
+            gaugeAlerts.retainChannels(next)
             onUiThread { channels = next.toList() }
         }
         val stateListener = Consumer<LoggerSessionState> { next ->
@@ -212,14 +215,22 @@ internal fun LoggerWorkspace(
         }
         val liveListener = object : LoggerLiveDataListener {
             override fun sessionStateChanged(state: LoggerSessionState) {
+                gaugeAlerts.sessionChanged(state)
+                if (state == LoggerSessionState.CONNECTING || state == LoggerSessionState.RECONNECTING) {
+                    pendingSamples.clear()
+                    onUiThread { samples = emptyMap(); history = emptyMap() }
+                }
                 onUiThread { sessionState = state }
             }
 
             override fun sampleUpdated(sample: LiveDataSample) {
+                gaugeAlerts.update(sample, context.preferences.getGaugeConfiguration(
+                    sample.parameterId, sample.conversionIdentity))
                 pendingSamples.add(sample)
             }
 
             override fun parameterRemoved(parameterId: String) {
+                gaugeAlerts.remove(parameterId)
                 onUiThread {
                     pendingSamples.removeIf {
                         it.parameterId == parameterId
@@ -368,7 +379,7 @@ internal fun LoggerWorkspace(
                                         }
                                         graphPaused = true
                                     }
-                                }, preferences = context.preferences,
+                                }, preferences = context.preferences, gaugeAlerts = gaugeAlerts,
                                 modifier = Modifier.weight(1f).fillMaxWidth())
                         }
                     } else {
@@ -421,7 +432,7 @@ internal fun LoggerWorkspace(
                                         }
                                         graphPaused = true
                                     }
-                                }, preferences = context.preferences,
+                                }, preferences = context.preferences, gaugeAlerts = gaugeAlerts,
                                 modifier = Modifier.weight(1f).fillMaxHeight())
                         }
                     }
@@ -958,6 +969,7 @@ private fun WorkspaceBody(
     onGaugeLayout: (LoggerGaugeLayout) -> Unit,
     onToggleGraphPause: () -> Unit,
     preferences: LoggerWorkspacePreferences,
+    gaugeAlerts: LoggerGaugeAlertTracker,
     modifier: Modifier
 ) {
     val selected = channels.filter { it.isSelected }
@@ -972,7 +984,7 @@ private fun WorkspaceBody(
                 selected, graphHistory, graphPaused, onToggleGraphPause)
             LoggerWorkspaceView.DASHBOARD -> DashboardWorkspace(
                 selected, samples, history, gaugeTheme, allowGaugeThemes,
-                onGaugeTheme, gaugeLayout, onGaugeLayout, preferences)
+                onGaugeTheme, gaugeLayout, onGaugeLayout, preferences, gaugeAlerts)
             LoggerWorkspaceView.ANALYSIS -> AnalysisWorkspace(
                 selected, samples, history)
         }
@@ -1304,7 +1316,8 @@ private fun DashboardWorkspace(
     onGaugeTheme: (LoggerGaugeTheme) -> Unit,
     gaugeLayout: LoggerGaugeLayout,
     onGaugeLayout: (LoggerGaugeLayout) -> Unit,
-    preferences: LoggerWorkspacePreferences
+    preferences: LoggerWorkspacePreferences,
+    gaugeAlerts: LoggerGaugeAlertTracker
 ) {
     var showPeaks by remember { mutableStateOf(false) }
     var editingChannel by remember { mutableStateOf<LoggerChannel?>(null) }
@@ -1360,12 +1373,13 @@ private fun DashboardWorkspace(
                     preferences)
                 LiveGaugeCard(
                     channel,
-                    samples[channel.parameterId],
-                    history[channel.parameterId].orEmpty(),
+                    samples[channel.parameterId]?.takeIf { it.conversionIdentity == channel.conversionIdentity },
+                    history[channel.parameterId].orEmpty().filter { it.conversionIdentity == channel.conversionIdentity },
                     graphColors[index % graphColors.size],
                     gaugeTheme,
                     showPeaks,
-                    preferences.getGaugeConfiguration(channel.parameterId),
+                    preferences.getGaugeConfiguration(channel.parameterId, channel.conversionIdentity),
+                    gaugeAlerts,
                     { editingChannel = channel },
                     tile, arranging,
                     index > 0, index < ordered.lastIndex,
@@ -1394,11 +1408,19 @@ private fun DashboardWorkspace(
     editingChannel?.let { channel ->
         GaugeConfigurationDialog(
             channel,
-            preferences.getGaugeConfiguration(channel.parameterId),
+            preferences.getGaugeConfiguration(channel.parameterId, channel.conversionIdentity),
             onDismiss = { editingChannel = null },
             onSave = { configuration ->
-                preferences.setGaugeConfiguration(
-                    channel.parameterId, configuration)
+                val current = selected.firstOrNull { it.parameterId == channel.parameterId }
+                if (current?.conversionIdentity == channel.conversionIdentity) {
+                    preferences.setGaugeConfiguration(channel.parameterId,
+                        configuration?.forConversion(channel.conversionIdentity))
+                    gaugeAlerts.remove(channel.parameterId)
+                    samples[channel.parameterId]?.let { sample ->
+                        gaugeAlerts.update(sample, preferences.getGaugeConfiguration(
+                            channel.parameterId, sample.conversionIdentity))
+                    }
+                }
                 configurationRevision++
                 editingChannel = null
             }
@@ -1632,6 +1654,7 @@ private fun LiveGaugeCard(
     gaugeTheme: LoggerGaugeTheme,
     showPeak: Boolean,
     configuration: LoggerGaugeConfiguration?,
+    gaugeAlerts: LoggerGaugeAlertTracker,
     onConfigure: () -> Unit,
     tile: LoggerDashboardTile,
     arranging: Boolean,
@@ -1654,17 +1677,10 @@ private fun LiveGaugeCard(
         else sample?.displayValue
     val progress = gaugeProgress(displayedRaw, range)
     val style = gaugeStyle(gaugeTheme)
-    var alertState by remember(channel.parameterId, configuration) {
-        mutableStateOf(LoggerGaugeConfiguration.AlertState.NORMAL)
-    }
-    LaunchedEffect(displayedRaw, configuration) {
-        if (displayedRaw != null && configuration != null) {
-            alertState = configuration.alertState(displayedRaw, alertState)
-        } else {
-            alertState = LoggerGaugeConfiguration.AlertState.NORMAL
-        }
-    }
-    val alerting = alertState != LoggerGaugeConfiguration.AlertState.NORMAL
+    // Warnings follow every current reading, never a peak or a recomposition.
+    val alertState = gaugeAlerts.state(channel.parameterId, configuration)
+    val alerting = alertState == LoggerGaugeConfiguration.AlertState.HIGH ||
+        alertState == LoggerGaugeConfiguration.AlertState.LOW
     Column(
         modifier.background(MaterialTheme.colors.surface, RoundedCornerShape(10.dp))
             .border(if (alerting) 2.dp else 1.dp,
@@ -1951,7 +1967,9 @@ private fun ColumnScope.AlarmTileBody(
             else MaterialTheme.colors.onSurface.copy(.035f),
             RoundedCornerShape(8.dp)), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(if (alerting) alertState.name else "MONITORING",
+            Text(if (configuration?.hasWarnings() != true) "LIMITS NOT SET"
+                else if (alertState == LoggerGaugeConfiguration.AlertState.UNAVAILABLE) "NO VALID DATA"
+                else if (alerting) alertState.name else "MONITORING",
                 color = if (alerting) faultRed
                     else MaterialTheme.colors.onSurface.copy(.55f),
                 fontSize = 11.sp, fontWeight = FontWeight.Bold)
@@ -1970,7 +1988,7 @@ private fun alarmLimits(
     units: String,
     showPeak: Boolean
 ): String {
-    if (showPeak) return "PEAK RECALL  $units"
+    if (showPeak) return "PEAK RECALL  $units · WARNINGS USE CURRENT DATA"
     if (configuration?.hasWarnings() != true) return "SET WARNING LIMITS"
     val low = configuration.lowWarning?.formatValue()?.let { "LOW $it" }
     val high = configuration.highWarning?.formatValue()?.let { "HIGH $it" }
@@ -2036,7 +2054,8 @@ private fun GaugeConfigurationDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Leave a warning blank to keep it off. RomRaider2 does " +
-                    "not guess safety limits for your vehicle or setup.",
+                    "not guess safety limits for your vehicle or setup. Limits apply only to this " +
+                    "conversion; old or different-conversion limits stay inactive until configured again.",
                     color = MaterialTheme.colors.onSurface.copy(.68f),
                     fontSize = 12.sp)
                 GaugeInputRow("CUSTOM SCALE", scaleMinimum, scaleMaximum,
@@ -2065,7 +2084,7 @@ private fun GaugeConfigurationDialog(
         },
         confirmButton = {
             TextButton(onClick = { onSave(result.getOrNull()) },
-                enabled = result.isSuccess) { Text("Save") }
+                enabled = result.isSuccess && channel.conversionIdentity.isNotBlank()) { Text("Save") }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("Cancel") }

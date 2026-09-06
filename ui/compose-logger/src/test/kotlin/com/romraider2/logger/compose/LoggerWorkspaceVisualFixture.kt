@@ -52,11 +52,11 @@ fun main(args: Array<String>) {
             listOf(
                 LoggerChannelUnitOption("fahrenheit", "°F", true),
                 LoggerChannelUnitOption("celsius", "°C", false)
-            )
+            ), "fixture:P-COOLANT:°F"
         ),
         channel("P-IGN", "Ignition Total Timing", "°"),
         LoggerChannel("S-CLUTCH", "Clutch Switch", "",
-            LoggerChannelKind.SWITCH, true),
+            LoggerChannelKind.SWITCH, true, emptyList(), "fixture:S-CLUTCH:"),
         LoggerChannel("E-WIDEBAND", "External Wideband", "lambda",
             LoggerChannelKind.EXTERNAL, false)
     ) + (1..24).map { index ->
@@ -86,7 +86,7 @@ fun main(args: Array<String>) {
                     }
                     val units = options.first { it.isSelected }.label
                     LoggerChannel(channel.parameterId, channel.name, units,
-                        channel.kind, channel.isSelected, options)
+                        channel.kind, channel.isSelected, options, "fixture:${channel.parameterId}:$units")
                 }
             }
             channelService.replaceChannels(currentChannels)
@@ -138,7 +138,7 @@ fun main(args: Array<String>) {
             LoggerDashboardTileRole.TREND,
             LoggerDashboardTileSize.LARGE, 5))
         preferences.setGaugeConfiguration("P-BOOST",
-            LoggerGaugeConfiguration(null, null, null, 5.0, 0.5))
+            LoggerGaugeConfiguration(null, null, null, 5.0, 0.5).forConversion("fixture:P-BOOST:psi"))
     }
 
     SwingUtilities.invokeLater {
@@ -163,7 +163,7 @@ fun main(args: Array<String>) {
 }
 
 private fun channel(id: String, name: String, units: String) =
-    LoggerChannel(id, name, units, LoggerChannelKind.PARAMETER, true)
+    LoggerChannel(id, name, units, LoggerChannelKind.PARAMETER, true, emptyList(), "fixture:$id:$units")
 
 private fun publish(
     bus: LoggerLiveDataBus,
@@ -174,7 +174,7 @@ private fun publish(
     timestamp: Long
 ) {
     bus.publish(LiveDataSample(id, name, value, value.formatFixture(), units,
-        timestamp))
+        timestamp, "fixture:$id:$units"))
 }
 
 private fun Double.formatFixture(): String = when {

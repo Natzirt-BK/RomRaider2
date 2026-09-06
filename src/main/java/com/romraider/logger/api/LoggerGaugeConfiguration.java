@@ -5,16 +5,22 @@ import java.util.Objects;
 
 /** Optional user-authored scale and warning behavior for one logger channel. */
 public final class LoggerGaugeConfiguration {
-    public enum AlertState { NORMAL, LOW, HIGH }
+    public enum AlertState { NORMAL, LOW, HIGH, UNAVAILABLE }
 
     private final Double scaleMinimum;
     private final Double scaleMaximum;
     private final Double lowWarning;
     private final Double highWarning;
     private final double hysteresis;
+    private final String conversionIdentity;
 
     public LoggerGaugeConfiguration(Double scaleMinimum, Double scaleMaximum,
             Double lowWarning, Double highWarning, double hysteresis) {
+        this(scaleMinimum, scaleMaximum, lowWarning, highWarning, hysteresis, "");
+    }
+
+    public LoggerGaugeConfiguration(Double scaleMinimum, Double scaleMaximum,
+            Double lowWarning, Double highWarning, double hysteresis, String conversionIdentity) {
         finiteOrNull(scaleMinimum, "Scale minimum");
         finiteOrNull(scaleMaximum, "Scale maximum");
         finiteOrNull(lowWarning, "Low warning");
@@ -41,6 +47,7 @@ public final class LoggerGaugeConfiguration {
         this.lowWarning = lowWarning;
         this.highWarning = highWarning;
         this.hysteresis = hysteresis;
+        this.conversionIdentity = conversionIdentity == null ? "" : conversionIdentity.trim();
     }
 
     public Double getScaleMinimum() { return scaleMinimum; }
@@ -48,6 +55,19 @@ public final class LoggerGaugeConfiguration {
     public Double getLowWarning() { return lowWarning; }
     public Double getHighWarning() { return highWarning; }
     public double getHysteresis() { return hysteresis; }
+    public String getConversionIdentity() { return conversionIdentity; }
+
+    public boolean matchesConversion(String identity) {
+        return !conversionIdentity.isEmpty() && conversionIdentity.equals(identity);
+    }
+
+    public LoggerGaugeConfiguration forConversion(String identity) {
+        if (identity == null || identity.trim().isEmpty()) {
+            throw new IllegalArgumentException("A known channel conversion is required");
+        }
+        return new LoggerGaugeConfiguration(scaleMinimum, scaleMaximum, lowWarning,
+                highWarning, hysteresis, identity);
+    }
 
     public boolean hasCustomScale() {
         return scaleMinimum != null;
@@ -58,13 +78,15 @@ public final class LoggerGaugeConfiguration {
     }
 
     public AlertState alertState(double value, AlertState previous) {
+        if (!Double.isFinite(value)) return AlertState.UNAVAILABLE;
         AlertState prior = previous == null ? AlertState.NORMAL : previous;
+        // Crossing the opposite warning must override even a wide hysteresis band.
+        if (highWarning != null && value >= highWarning) return AlertState.HIGH;
+        if (lowWarning != null && value <= lowWarning) return AlertState.LOW;
         if (prior == AlertState.HIGH && highWarning != null
                 && value > highWarning - hysteresis) return AlertState.HIGH;
         if (prior == AlertState.LOW && lowWarning != null
                 && value < lowWarning + hysteresis) return AlertState.LOW;
-        if (highWarning != null && value >= highWarning) return AlertState.HIGH;
-        if (lowWarning != null && value <= lowWarning) return AlertState.LOW;
         return AlertState.NORMAL;
     }
 
@@ -77,13 +99,14 @@ public final class LoggerGaugeConfiguration {
                 && Objects.equals(scaleMinimum, that.scaleMinimum)
                 && Objects.equals(scaleMaximum, that.scaleMaximum)
                 && Objects.equals(lowWarning, that.lowWarning)
-                && Objects.equals(highWarning, that.highWarning);
+                && Objects.equals(highWarning, that.highWarning)
+                && conversionIdentity.equals(that.conversionIdentity);
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(scaleMinimum, scaleMaximum, lowWarning,
-                highWarning, hysteresis);
+                highWarning, hysteresis, conversionIdentity);
     }
 
     private static void finiteOrNull(Double value, String label) {

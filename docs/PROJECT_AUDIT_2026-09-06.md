@@ -2,6 +2,7 @@
 
 Subsequent work: [data-preservation repairs](DATA_PRESERVATION_FIXES.md) addresses
 A1 and A2; [portable XML hardening](XML_IMPORT_HARDENING.md) addresses A5.
+[Gauge warning/conversion repairs](GAUGE_WARNING_REPAIRS.md) address A3/A4.
 The findings and evidence below describe the audited `7c2f0ce4`
 snapshot and remain historical evidence, not a claim that those source fixes
 are already in the public Android APK. Other findings remain open.

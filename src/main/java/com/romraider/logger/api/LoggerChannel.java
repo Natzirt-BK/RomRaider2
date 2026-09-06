@@ -14,6 +14,7 @@ public final class LoggerChannel {
     private final LoggerChannelKind kind;
     private final boolean selected;
     private final List<LoggerChannelUnitOption> unitOptions;
+    private final String conversionIdentity;
 
     public LoggerChannel(String parameterId, String name, String units,
             LoggerChannelKind kind, boolean selected) {
@@ -27,6 +28,12 @@ public final class LoggerChannel {
     public LoggerChannel(String parameterId, String name, String units,
             LoggerChannelKind kind, boolean selected,
             Collection<LoggerChannelUnitOption> unitOptions) {
+        this(parameterId, name, units, kind, selected, unitOptions, "");
+    }
+
+    public LoggerChannel(String parameterId, String name, String units,
+            LoggerChannelKind kind, boolean selected,
+            Collection<LoggerChannelUnitOption> unitOptions, String conversionIdentity) {
         this.parameterId = required(parameterId, "parameter id");
         this.name = required(name, "channel name");
         this.units = units == null ? "" : units.trim();
@@ -38,6 +45,7 @@ public final class LoggerChannel {
         this.selected = selected;
         this.unitOptions = Collections.unmodifiableList(
                 new ArrayList<LoggerChannelUnitOption>(unitOptions));
+        this.conversionIdentity = conversionIdentity == null ? "" : conversionIdentity;
     }
 
     public String getParameterId() { return parameterId; }
@@ -46,11 +54,12 @@ public final class LoggerChannel {
     public LoggerChannelKind getKind() { return kind; }
     public boolean isSelected() { return selected; }
     public List<LoggerChannelUnitOption> getUnitOptions() { return unitOptions; }
+    public String getConversionIdentity() { return conversionIdentity; }
 
     public LoggerChannel withSelected(boolean value) {
         if (value == selected) return this;
         return new LoggerChannel(parameterId, name, units, kind, value,
-                unitOptions);
+                unitOptions, conversionIdentity);
     }
 
     private static String required(String value, String label) {

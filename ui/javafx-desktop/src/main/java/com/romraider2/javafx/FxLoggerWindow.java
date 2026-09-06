@@ -21,6 +21,7 @@ import com.romraider.logger.api.LoggerDashboardTile;
 import com.romraider.logger.api.LoggerDashboardTileRole;
 import com.romraider.logger.api.LoggerDashboardTileSize;
 import com.romraider.logger.api.LoggerGaugeConfiguration;
+import com.romraider.logger.api.LoggerGaugeAlertTracker;
 import com.romraider.logger.api.LoggerLiveDataListener;
 import com.romraider.logger.api.LoggerMessageSnapshot;
 import com.romraider.logger.api.LoggerSessionState;
@@ -95,6 +96,7 @@ final class FxLoggerWindow {
     private final Button record = new Button("Start recording");
     private final ToggleButton channels = new ToggleButton("Channels");
     private final Map<String, LiveDataSample> samples = new LinkedHashMap<>();
+    private final LoggerGaugeAlertTracker gaugeAlerts = new LoggerGaugeAlertTracker();
     private final Map<String, Color> gaugeColors = new LinkedHashMap<>();
     private final Map<String, double[]> customGaugeSizes = new LinkedHashMap<>();
     private final Map<String, Stage> detachedGauges = new LinkedHashMap<>();
@@ -134,12 +136,20 @@ final class FxLoggerWindow {
                 (title, message) -> FxDialogs.confirm(stage, title, message, "Clear selection"),
                 () -> context.getSession().getState() == LoggerSessionState.RECORDING);
 
-        channelListener = next -> Platform.runLater(() -> {
-            if (disposed) return;
-            channelSnapshot = next;
-            channelRail.update(next);
-            refreshViews();
-        });
+        channelListener = next -> {
+            synchronized (samples) {
+                gaugeAlerts.retainChannels(next);
+                samples.entrySet().removeIf(entry -> next.stream().noneMatch(channel ->
+                        channel.isSelected() && channel.getParameterId().equals(entry.getKey())
+                        && channel.getConversionIdentity().equals(entry.getValue().getConversionIdentity())));
+            }
+            Platform.runLater(() -> {
+                if (disposed) return;
+                channelSnapshot = next;
+                channelRail.update(next);
+                refreshViews();
+            });
+        };
         stateListener = next -> Platform.runLater(() -> updateState(next));
         messageListener = next -> Platform.runLater(() -> {
             status.setText(next.getMessage());
@@ -149,18 +159,27 @@ final class FxLoggerWindow {
         });
         liveListener = new LoggerLiveDataListener() {
             @Override public void sessionStateChanged(LoggerSessionState next) {
+                gaugeAlerts.sessionChanged(next);
+                if (next == LoggerSessionState.CONNECTING || next == LoggerSessionState.RECONNECTING) {
+                    synchronized (samples) { samples.clear(); }
+                    scheduleRefresh();
+                }
                 Platform.runLater(() -> updateState(next));
             }
 
             @Override public void sampleUpdated(LiveDataSample sample) {
                 synchronized (samples) {
+                    gaugeAlerts.update(sample, configurationFor(sample));
                     samples.put(sample.getParameterId(), sample);
                 }
                 scheduleRefresh();
             }
 
             @Override public void parameterRemoved(String parameterId) {
-                synchronized (samples) { samples.remove(parameterId); }
+                synchronized (samples) {
+                    samples.remove(parameterId);
+                    gaugeAlerts.remove(parameterId);
+                }
                 scheduleRefresh();
             }
         };
@@ -501,6 +520,8 @@ final class FxLoggerWindow {
         Region fill = new Region();
         HBox.setHgrow(fill, Priority.ALWAYS);
         Button color = new Button("Color");
+        Button settings = new Button("Limits");
+        settings.setOnAction(event -> configureGauge(sample.getParameterId()));
         color.setOnAction(event -> chooseGaugeColor(sample.getParameterId()));
         Button detach = new Button(detached ? "Attached view" : "Detach");
         detach.setDisable(detached);
@@ -509,7 +530,7 @@ final class FxLoggerWindow {
         resize.setVisible(tile.getSize() == LoggerDashboardTileSize.WIDE
                 && !detached);
         resize.setManaged(resize.isVisible());
-        HBox footer = new HBox(6, units, resize, fill, color, detach);
+        HBox footer = new HBox(6, units, resize, fill, settings, color, detach);
         footer.setAlignment(Pos.CENTER_LEFT);
         VBox card = new VBox(7, name, body, footer);
         card.setPadding(new Insets(13));
@@ -628,16 +649,16 @@ final class FxLoggerWindow {
     }
 
     private Node alarmGauge(LiveDataSample sample, Color accent) {
-        LoggerGaugeConfiguration configuration = context.getPreferences()
-                .getGaugeConfiguration(sample.getParameterId());
-        LoggerGaugeConfiguration.AlertState state = configuration == null
-                ? LoggerGaugeConfiguration.AlertState.NORMAL
-                : configuration.alertState(sample.getRawValue(), null);
-        Label stateLabel = new Label(state == LoggerGaugeConfiguration.AlertState.NORMAL
-                ? "NORMAL" : state.name() + " WARNING");
+        LoggerGaugeConfiguration configuration = configurationFor(sample);
+        LoggerGaugeConfiguration.AlertState state = gaugeAlerts.state(sample.getParameterId(), configuration);
+        boolean warning = state == LoggerGaugeConfiguration.AlertState.LOW
+                || state == LoggerGaugeConfiguration.AlertState.HIGH;
+        String label = configuration == null || !configuration.hasWarnings() ? "LIMITS NOT SET"
+                : state == LoggerGaugeConfiguration.AlertState.UNAVAILABLE ? "NO VALID DATA"
+                : warning ? state.name() + " WARNING" : "NORMAL";
+        Label stateLabel = new Label(label);
         stateLabel.getStyleClass().add("alarm-state");
-        Color stateColor = state == LoggerGaugeConfiguration.AlertState.NORMAL
-                ? accent : Color.web("#d92632");
+        Color stateColor = warning ? Color.web("#d92632") : accent;
         stateLabel.setStyle("-fx-text-fill: " + colorCss(stateColor) + ";");
         Label value = new Label(sample.getDisplayValue());
         value.getStyleClass().add("gauge-value");
@@ -647,8 +668,8 @@ final class FxLoggerWindow {
     }
 
     private double gaugeFraction(LiveDataSample sample) {
-        LoggerGaugeConfiguration configuration = context.getPreferences()
-                .getGaugeConfiguration(sample.getParameterId());
+        if (!Double.isFinite(sample.getRawValue())) return 0;
+        LoggerGaugeConfiguration configuration = configurationFor(sample);
         if (configuration != null && configuration.hasCustomScale()) {
             return clamp((sample.getRawValue() - configuration.getScaleMinimum())
                     / (configuration.getScaleMaximum()
@@ -657,11 +678,43 @@ final class FxLoggerWindow {
         List<LiveDataSample> history = context.getLiveData().getRecentSamples()
                 .getOrDefault(sample.getParameterId(), List.of());
         double min = history.stream().mapToDouble(
-                LiveDataSample::getRawValue).min().orElse(0);
+                LiveDataSample::getRawValue).filter(Double::isFinite).min().orElse(0);
         double max = history.stream().mapToDouble(
-                LiveDataSample::getRawValue).max().orElse(100);
+                LiveDataSample::getRawValue).filter(Double::isFinite).max().orElse(100);
         if (max == min) return .5;
         return clamp((sample.getRawValue() - min) / (max - min));
+    }
+
+    private LoggerGaugeConfiguration configurationFor(LiveDataSample sample) {
+        return context.getPreferences().getGaugeConfiguration(
+                sample.getParameterId(), sample.getConversionIdentity());
+    }
+
+    private void configureGauge(String id) {
+        LoggerChannel channel = channelSnapshot.stream().filter(value -> value.getParameterId().equals(id))
+                .findFirst().orElse(null);
+        if (channel == null || channel.getConversionIdentity().isEmpty()) {
+            status.setText("Gauge limits require a known channel conversion.");
+            return;
+        }
+        LoggerGaugeConfiguration raw = context.getPreferences().getGaugeConfiguration(id);
+        LoggerGaugeConfiguration active = context.getPreferences().getGaugeConfiguration(id, channel.getConversionIdentity());
+        FxGaugeConfigurationDialog.create(stage, channel, active, raw != null && active == null)
+                .showAndWait().ifPresent(result -> {
+                    LoggerChannel current = channelSnapshot.stream().filter(value -> value.getParameterId().equals(id))
+                            .findFirst().orElse(null);
+                    if (current == null || !current.getConversionIdentity().equals(channel.getConversionIdentity())) {
+                        status.setText("Channel conversion changed; reopen gauge limits.");
+                        return;
+                    }
+                    context.getPreferences().setGaugeConfiguration(id, result.configuration());
+                    synchronized (samples) {
+                        gaugeAlerts.remove(id);
+                        LiveDataSample sample = samples.get(id);
+                        if (sample != null) gaugeAlerts.update(sample, configurationFor(sample));
+                    }
+                    refreshViews();
+                });
     }
 
     private LoggerDashboardTile tileFor(String parameterId, int order) {
@@ -794,8 +847,9 @@ final class FxLoggerWindow {
         selected.forEach(sample -> byId.put(sample.getParameterId(), sample));
         detachedGauges.forEach((parameterId, detached) -> {
             LiveDataSample sample = byId.get(parameterId);
-            if (sample != null) detached.getScene().setRoot(new StackPane(
-                    dashboardCard(sample, selectedOrder(), true)));
+            detached.getScene().setRoot(new StackPane(sample != null
+                    ? dashboardCard(sample, selectedOrder(), true)
+                    : styled("Channel removed — no live data", "muted")));
         });
     }
 
@@ -817,9 +871,10 @@ final class FxLoggerWindow {
         for (LoggerChannel channel : channelSnapshot) {
             if (!channel.isSelected()) continue;
             LiveDataSample sample = current.get(channel.getParameterId());
+            if (sample != null && !sample.getConversionIdentity().equals(channel.getConversionIdentity())) sample = null;
             if (sample == null) sample = new LiveDataSample(
-                    channel.getParameterId(), channel.getName(), 0, "—",
-                    channel.getUnits(), System.currentTimeMillis());
+                    channel.getParameterId(), channel.getName(), Double.NaN, "—",
+                    channel.getUnits(), System.currentTimeMillis(), channel.getConversionIdentity());
             result.add(sample);
         }
         return result;

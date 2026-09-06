@@ -457,7 +457,8 @@ public final class DOMSettingsUnmarshaller {
             } else if (n.getNodeType() == ELEMENT_NODE
                     && n.getNodeName().equalsIgnoreCase(
                             "gauge-configurations")) {
-                if (unmarshallAttribute(n, "schema", 0) != 1) continue;
+                int gaugeSchema = unmarshallAttribute(n, "schema", 0);
+                if (gaugeSchema != 1 && gaugeSchema != 2) continue;
                 NodeList channelNodes = n.getChildNodes();
                 for (int j = 0; j < channelNodes.getLength(); j++) {
                     Node channel = channelNodes.item(j);
@@ -475,7 +476,9 @@ public final class DOMSettingsUnmarshaller {
                                         optionalDouble(channel, "warn-low"),
                                         optionalDouble(channel, "warn-high"),
                                         unmarshallAttribute(channel,
-                                                "hysteresis", 0.0)));
+                                                "hysteresis", 0.0),
+                                        gaugeSchema == 2 ? unmarshallAttribute(channel,
+                                                "conversion", "") : ""));
                     } catch (IllegalArgumentException invalid) {
                         // Ignore one corrupt channel without losing settings.
                     }

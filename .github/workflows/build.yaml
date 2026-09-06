@@ -31,7 +31,7 @@ jobs:
           cp packaging/default/settings.xml settings.xml
           timeout 10m xvfb-run -a ant clean unittest
           ant clean build-linux
-          xvfb-run -a env RR2_FX_WINDOW_SMOKE=1 gradle --no-daemon :ui:javafx-desktop:test :ui:javafx-desktop:stageJavaFxLinux
+          xvfb-run -a env RR2_FX_WINDOW_SMOKE=1 gradle --no-daemon :platform:shared-core:check :ui:compose-logger:test :ui:javafx-desktop:test :ui:javafx-desktop:stageJavaFxLinux
           packaging/java21/audit-runtime-modules.sh build/linux/lib/RomRaider2.jar
           packaging/java21/build-linux-app-image.sh build/release-1.1.1
           packaging/java21/build-linux-release.sh
@@ -75,7 +75,7 @@ jobs:
           Copy-Item packaging/default/settings.xml settings.xml
           ant clean unittest
           ant clean build-windows
-          gradle --no-daemon :ui:javafx-desktop:test :ui:javafx-desktop:stageJavaFxWindows
+          gradle --no-daemon :platform:shared-core:check :ui:compose-logger:test :ui:javafx-desktop:test :ui:javafx-desktop:stageJavaFxWindows
       - name: Build J2534 architecture helpers
         timeout-minutes: 10
         shell: pwsh

@@ -71,6 +71,8 @@ public class LoggerLiveDataBusTest {
             assertEquals("P-BOOST", sample.get().getParameterId());
             assertEquals("215.9", sample.get().getDisplayValue());
             assertEquals("psi", sample.get().getUnits());
+            assertEquals(LoggerConversionIdentity.of(data.getSelectedConvertor()),
+                    sample.get().getConversionIdentity());
             assertEquals(1, bus.getLatestSamples().size());
             assertEquals(2_000,
                     bus.getRecentSamples().get("P-BOOST").size());

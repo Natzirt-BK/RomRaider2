@@ -658,7 +658,9 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
             String units = data.getSelectedConvertor() == null ? ""
                     : data.getSelectedConvertor().getUnits();
             channels.add(new LoggerChannel(data.getId(), data.getName(), units,
-                    kind, isSelectedInAnyWorkspace(data.getId())));
+                    kind, isSelectedInAnyWorkspace(data.getId()),
+                    java.util.Collections.emptyList(),
+                    com.romraider.logger.api.LoggerConversionIdentity.of(data.getSelectedConvertor())));
         }
     }
 

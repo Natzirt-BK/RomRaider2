@@ -9,15 +9,22 @@ public final class LiveDataSample {
     private final String displayValue;
     private final String units;
     private final long timestampMillis;
+    private final String conversionIdentity;
 
     public LiveDataSample(String parameterId, String name, double rawValue,
             String displayValue, String units, long timestampMillis) {
+        this(parameterId, name, rawValue, displayValue, units, timestampMillis, "");
+    }
+
+    public LiveDataSample(String parameterId, String name, double rawValue,
+            String displayValue, String units, long timestampMillis, String conversionIdentity) {
         this.parameterId = required(parameterId, "parameter id");
         this.name = required(name, "parameter name");
         this.rawValue = rawValue;
         this.displayValue = normalize(displayValue);
         this.units = normalize(units);
         this.timestampMillis = timestampMillis;
+        this.conversionIdentity = normalize(conversionIdentity);
     }
 
     public String getParameterId() { return parameterId; }
@@ -26,6 +33,7 @@ public final class LiveDataSample {
     public String getDisplayValue() { return displayValue; }
     public String getUnits() { return units; }
     public long getTimestampMillis() { return timestampMillis; }
+    public String getConversionIdentity() { return conversionIdentity; }
 
     private static String required(String value, String label) {
         if (value == null || value.trim().isEmpty()) {

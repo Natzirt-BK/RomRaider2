@@ -80,7 +80,8 @@ public final class LoggerLiveDataBus implements LoggerStatusListener {
             units = "";
         }
         LiveDataSample sample = new LiveDataSample(data.getId(), data.getName(),
-                rawValue, displayValue, units, System.currentTimeMillis());
+                rawValue, displayValue, units, System.currentTimeMillis(),
+                LoggerConversionIdentity.of(convertor));
         publish(sample);
     }
 

@@ -65,7 +65,7 @@ The [full-project audit](docs/PROJECT_AUDIT_2026-09-06.md) separates current
 `master` from the published 1.1.1 packages. Source repairs for
 [installer migration and Android ROM-save failure handling](docs/DATA_PRESERVATION_FIXES.md)
 and [encoding-safe XML imports](docs/XML_IMPORT_HARDENING.md) are documented
-separately; gauge-warning findings remain open. New
+separately, along with [gauge warning/conversion repairs](docs/GAUGE_WARNING_REPAIRS.md). New
 Android source work is not yet in the public downloads.
 
 | Area | Current status |

@@ -462,12 +462,13 @@ public final class DOMSettingsBuilder {
 
         IIOMetadataNode gaugeConfigurations = new IIOMetadataNode(
                 "gauge-configurations");
-        gaugeConfigurations.setAttribute("schema", "1");
+        gaugeConfigurations.setAttribute("schema", "2");
         for (Map.Entry<String, LoggerGaugeConfiguration> entry
                 : settings.getLoggerGaugeConfigurations().entrySet()) {
             LoggerGaugeConfiguration configuration = entry.getValue();
             IIOMetadataNode channel = new IIOMetadataNode("channel");
             channel.setAttribute("id", entry.getKey());
+            channel.setAttribute("conversion", configuration.getConversionIdentity());
             setOptional(channel, "scale-min", configuration.getScaleMinimum());
             setOptional(channel, "scale-max", configuration.getScaleMaximum());
             setOptional(channel, "warn-low", configuration.getLowWarning());

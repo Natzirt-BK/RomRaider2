@@ -577,7 +577,7 @@ public final class LoggerDesktopRuntime implements EcuRelatedMessageListener,
             catalog.add(new LoggerChannel(data.getId(), data.getName(),
                     convertor == null ? "" : convertor.getUnits(),
                     kind(data), selectedIds.contains(data.getId()),
-                    unitOptions(data)));
+                    unitOptions(data), com.romraider.logger.api.LoggerConversionIdentity.of(convertor)));
         }
         channels.replaceChannels(catalog);
     }

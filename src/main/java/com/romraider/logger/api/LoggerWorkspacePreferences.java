@@ -181,6 +181,14 @@ public final class LoggerWorkspacePreferences {
         gaugeConfigurationPersistence.accept(parameterId, configuration);
     }
 
+    /** Unscoped legacy or mismatched limits are retained, but never interpreted. */
+    public synchronized LoggerGaugeConfiguration getGaugeConfiguration(
+            String parameterId, String conversionIdentity) {
+        LoggerGaugeConfiguration configuration = gaugeConfigurations.get(parameterId);
+        return configuration != null && configuration.matchesConversion(conversionIdentity)
+                ? configuration : null;
+    }
+
     public synchronized LoggerDashboardTile getDashboardTile(
             String parameterId) {
         return dashboardTiles.get(parameterId);
