@@ -130,32 +130,42 @@ class FxWindowPlacementSmokeTest {
         });
     }
 
-    @Test void modalUserPlacementRemainsAfterInitialFit() throws Exception {
+    @RepeatedTest(20) void modalUserPlacementRemainsAfterInitialFit() throws Exception {
         FxTestRuntime.run(() -> {
             Stage stage = new Stage();
             Rectangle2D work = Screen.getPrimary().getVisualBounds();
             Rectangle2D[] observed = new Rectangle2D[1];
             Rectangle2D[] accepted = new Rectangle2D[1];
+            StringBuilder transitions = new StringBuilder();
+            stage.widthProperty().addListener((o, before, after) -> transitions.append(" w=").append(after).append(placementCaller()));
+            stage.heightProperty().addListener((o, before, after) -> transitions.append(" h=").append(after).append(placementCaller()));
             stage.setScene(new Scene(new StackPane(), work.getWidth() + 200, work.getHeight() + 200));
             stage.setOnShown(event -> new javafx.animation.AnimationTimer() {
                 private int pulses;
                 @Override public void handle(long now) {
                     if (++pulses == 10) {
-                        stage.setWidth(500); stage.setHeight(300);
+                        // A window manager may restore remembered maximization.
+                        // Restore first, as a user would before manual resizing.
+                        transitions.append(" restore; maximized=").append(stage.isMaximized());
+                        stage.setMaximized(false);
                     }
                     if (pulses == 20) {
+                        transitions.append(" shrink; maximized=").append(stage.isMaximized());
+                        stage.setWidth(500); stage.setHeight(300);
+                    }
+                    if (pulses == 30) {
                         // Separate shrink and move requests so a pending
                         // screen-sized frame does not confound this check.
                         stage.setX(work.getMinX() + 20); stage.setY(work.getMinY() + 30);
                     }
-                    if (pulses < 30) return;
-                    if (pulses == 30) {
+                    if (pulses < 40) return;
+                    if (pulses == 40) {
                         // Some window managers ignore requested coordinates.
                         // Retain the placement they actually acknowledged.
                         accepted[0] = bounds(stage);
                         FxWindowPlacement.show(stage);
                     }
-                    if (pulses < 40) return;
+                    if (pulses < 50) return;
                     observed[0] = bounds(stage);
                     stop(); stage.close();
                 }
@@ -163,14 +173,55 @@ class FxWindowPlacementSmokeTest {
             try {
                 FxWindowPlacement.showAndWait(stage);
                 assertTrue(accepted[0] != null, "Native user placement was observed");
-                assertEquals(500, accepted[0].getWidth());
-                assertEquals(300, accepted[0].getHeight());
+                assertEquals(500, accepted[0].getWidth(), transitions.toString());
+                assertEquals(300, accepted[0].getHeight(), transitions.toString());
                 assertEquals(accepted[0], observed[0],
                         "Initial fitting must not later recenter or resize a user's window");
                 assertEquals(Double.MAX_VALUE, stage.getMaxWidth(), "No lasting maximum-width restriction");
                 assertEquals(Double.MAX_VALUE, stage.getMaxHeight(), "No lasting maximum-height restriction");
             } finally { stage.close(); }
         });
+    }
+
+    @Test void shownHandlerPlacementIsNotOverwrittenByADeferredFit() throws Exception {
+        FxTestRuntime.run(() -> {
+            Stage stage = new Stage();
+            Rectangle2D work = Screen.getPrimary().getVisualBounds();
+            boolean[] userPlaced = {false};
+            StringBuilder lateRequests = new StringBuilder();
+            javafx.beans.value.ChangeListener<Number> changes = (o, before, after) -> {
+                if (userPlaced[0] && !placementCaller().isEmpty()) lateRequests.append(" ").append(before).append(" -> ").append(after);
+            };
+            stage.xProperty().addListener(changes); stage.yProperty().addListener(changes);
+            stage.widthProperty().addListener(changes); stage.heightProperty().addListener(changes);
+            stage.setScene(new Scene(new StackPane(), work.getWidth() + 200, work.getHeight() + 200));
+            stage.setOnShown(event -> {
+                stage.setWidth(500); stage.setHeight(300);
+                stage.setX(work.getMinX() + 20); stage.setY(work.getMinY() + 30);
+                userPlaced[0] = true;
+                new javafx.animation.AnimationTimer() {
+                    private int pulses;
+                    @Override public void handle(long now) {
+                        if (++pulses < 10) return;
+                        stop(); stage.close();
+                    }
+                }.start();
+            });
+            try {
+                FxWindowPlacement.showAndWait(stage);
+                assertEquals("", lateRequests.toString(), "Startup helper changed geometry after the shown handler supplied placement");
+            } finally { stage.close(); }
+        });
+    }
+
+    // Native geometry acknowledgements can legitimately change properties.
+    // Distinguish them from additional application-owned placement requests.
+    private static String placementCaller() {
+        for (StackTraceElement frame : Thread.currentThread().getStackTrace()) {
+            if (frame.getClassName().equals(FxWindowPlacement.class.getName())
+                    && frame.getMethodName().equals("fitVisible")) return " [startup fit]";
+        }
+        return "";
     }
 
     private static Rectangle2D bounds(Stage stage) {

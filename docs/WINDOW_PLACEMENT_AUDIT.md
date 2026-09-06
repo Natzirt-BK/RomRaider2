@@ -29,8 +29,9 @@ layouts remain responsible for their content; this is not a scrollbar policy.
 
 Unset positions use the owner's location, or the primary screen, to select the
 initial work area. Existing overlap-based screen selection, work-area centering
-and minimum-size reduction remain. The post-show fit is retained. No polling
-timer, persistent maximum-size restriction or resize listener was introduced;
+and minimum-size reduction remain. Ordinary windows retain a synchronous
+post-show fit; the redundant queued modal fit was removed in the follow-up below.
+No polling timer, persistent maximum-size restriction or resize listener was introduced;
 showing an already-visible ordinary window still preserves its placement.
 
 JavaFX documents Stage/Window dimensions as including native decorations and
@@ -66,9 +67,37 @@ A subsequent [closed-runtime lifecycle audit](DIMEMOD_CACHE_LIFECYCLE.md) found
 another intermittent failure in the added user-resize test: at its observation
 point the native width was still 1,920 rather than the requested 500. The
 first-show and settled initial-fit checks passed. The successful runs above
-therefore do not establish reliable later-resize behavior under the local KDE
-session; native acknowledgements and the deferred modal fit need further
-investigation. No boundary assertion was removed or relaxed.
+therefore prompted further investigation of native state and the deferred modal
+fit, described below. No boundary assertion was removed or relaxed.
+
+## Maximized state and redundant modal fit
+
+The new resize trace showed `maximized=true` before each rejected shrink in a
+twenty-repetition baseline. The application requested 500 × 300, but the native
+window returned to the maximized 1,920 × 1,016 bounds, without a startup-fit call
+in that size-change stack. The test now restores the window before requesting
+a manual resize, then moves it and verifies the native-accepted placement after
+re-showing. Production code does **not** force users out of maximized mode.
+JavaFX exposes maximization as native-controlled window state; see
+[Stage maximization](https://openjfx.io/javadoc/21/javafx.graphics/javafx/stage/Stage.html#maximizedProperty()).
+
+A separate shown-handler regression reproduced an actual redundant application
+request: the queued startup fit changed the handler's `(20,30)` placement to
+`(710,358)`. The test distinguishes native geometry notifications from calls made
+by the application's fit method, so a window manager that ignores coordinates
+cannot hide that extra application request. `showAndWait` now relies on the
+already-bounded initial request and does not enqueue a second fit. This also
+eliminates that queued task's ability to outlive a failed or closed invocation.
+The native-size and work-area checks remain, including twenty initial openings
+and now twenty restore/resize/re-show repetitions.
+
+Follow-up qualification: all 246 display-enabled JavaFX tests and the retained
+35 Compose tests pass, with no test skips; shared-core checks and Linux JavaFX
+staging pass. A fresh 800 × 600 Xvfb/X11 run passes all 49 window-placement tests
+(44 native cases/repetitions and five geometry cases). The new shown-handler
+test fails on the old queued-fit implementation and passes without that task.
+These results explain and supersede the later resize-test failure above; they
+are not physical Windows/macOS or multi-monitor acceptance.
 
 Physical multi-monitor, Windows and macOS window-manager acceptance remains
 separate from local source qualification and hosted build/package checks.

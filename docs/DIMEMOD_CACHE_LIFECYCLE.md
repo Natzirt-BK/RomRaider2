@@ -31,6 +31,10 @@ the existing modal user-resize test observes width 1,920 instead of the requeste
 500. Its first-show/settled-fit boundary tests still pass. This separate native
 resize failure remains under investigation; the lifecycle checkpoint does not
 claim to resolve it or qualify a release.
+The [window-placement follow-up](WINDOW_PLACEMENT_AUDIT.md#maximized-state-and-redundant-modal-fit)
+subsequently separated remembered maximization from a redundant queued startup
+fit, corrected the restore-before-resize test sequence, and removed the queued
+modal fit. The failed lifecycle-checkpoint run remains recorded above.
 
 ## Existing cache boundary
 

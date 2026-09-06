@@ -19,11 +19,9 @@ final class FxWindowPlacement {
 
     static void showAndWait(Stage stage) {
         if (!stage.isShowing()) fitBeforeShow(stage);
-        // WINDOW_SHOWN fires before native geometry has settled on GTK. Queue
-        // the fit into showAndWait's nested loop, after show() has completed.
-        javafx.application.Platform.runLater(() -> {
-            if (stage.isShowing()) fitVisible(stage);
-        });
+        // The initial native request is already bounded. A queued second fit
+        // can run after a shown handler/user supplies a different placement,
+        // or even after this invocation has failed or its window has closed.
         stage.showAndWait();
     }
 
