@@ -12,6 +12,9 @@ public final class FuelLogAnalysis {
     public static final int MAX_BINS = 2000;
     private FuelLogAnalysis() { }
 
+    @FunctionalInterface public interface PointConsumer { void accept(double x, double y); }
+    @FunctionalInterface private interface PointSource { void forEach(PointConsumer consumer); }
+
     /** Inclusive filter limits; an unavailable value rejects the sample. */
     public static final class Filter {
         private final int channel;
@@ -25,16 +28,17 @@ public final class FuelLogAnalysis {
     }
 
     public static final class Bin {
-        private final double lower, upper, mean, minimum, maximum;
+        private final double lower, upper, meanX, mean, minimum, maximum;
         private final int count;
         private Bin(double lower, double upper, Accumulator values) {
             this.lower = lower; this.upper = upper;
-            mean = values.mean; minimum = values.minimum; maximum = values.maximum;
+            meanX = values.meanX; mean = values.mean; minimum = values.minimum; maximum = values.maximum;
             count = values.count;
         }
         public double getLower() { return lower; }
         public double getUpper() { return upper; }
         public double getMean() { return mean; }
+        public double getMeanX() { return meanX; }
         public double getMinimum() { return minimum; }
         public double getMaximum() { return maximum; }
         public int getCount() { return count; }
@@ -43,14 +47,21 @@ public final class FuelLogAnalysis {
     public static final class Result {
         private final List<Bin> bins;
         private final int accepted, invalid, filtered;
-        private Result(List<Bin> bins, int accepted, int invalid, int filtered) {
+        private final PointSource points;
+        private Result(List<Bin> bins, int accepted, int invalid, int filtered, PointSource points) {
             this.bins = Collections.unmodifiableList(new ArrayList<Bin>(bins));
             this.accepted = accepted; this.invalid = invalid; this.filtered = filtered;
+            this.points = points;
         }
         public List<Bin> getBins() { return bins; }
         public int getAccepted() { return accepted; }
         public int getInvalid() { return invalid; }
         public int getFiltered() { return filtered; }
+        /** Replays the exact accepted raw projections without retaining a second sample array. */
+        public void forEachAccepted(PointConsumer consumer) {
+            if (consumer == null) throw new IllegalArgumentException("Point consumer is required");
+            points.forEach(consumer);
+        }
     }
 
     /** Inputs must be volts and percent. Output is learning + correction (%). */
@@ -90,7 +101,29 @@ public final class FuelLogAnalysis {
             if (filter == null) throw new IllegalArgumentException("Missing filter");
             validateChannel(data, filter.channel);
         }
+        List<Filter> capturedFilters = List.copyOf(filters);
         Map<Long, Accumulator> groups = new TreeMap<Long, Accumulator>();
+        int[] counts = visitAccepted(data, range, xChannel, yChannel, correction, width, capturedFilters,
+                injector, stoich, density, (x, y) -> {
+                    long key = (long) Math.floor(Math.nextUp(x / width));
+                    Accumulator bin = groups.get(key);
+                    if (bin == null) {
+                        if (groups.size() >= MAX_BINS) throw new IllegalArgumentException("Too many bins; increase bin width or narrow the sample range");
+                        bin = new Accumulator(); groups.put(key, bin);
+                    }
+                    bin.add(x, y);
+                });
+        List<Bin> bins = new ArrayList<Bin>();
+        for (Map.Entry<Long, Accumulator> entry : groups.entrySet()) {
+            bins.add(new Bin(entry.getKey() * width, (entry.getKey() + 1) * width, entry.getValue()));
+        }
+        return new Result(bins, counts[0], counts[1], counts[2], consumer -> visitAccepted(data, range,
+                xChannel, yChannel, correction, width, capturedFilters, injector, stoich, density, consumer));
+    }
+
+    private static int[] visitAccepted(LogDataset data, LogRange range, int xChannel,
+            int yChannel, int correction, double width, List<Filter> filters,
+            boolean injector, double stoich, double density, PointConsumer consumer) {
         int accepted = 0, invalid = 0, filtered = 0;
         for (int row = range.getStartInclusive(); row < range.getEndExclusive(); row++) {
             if (Thread.currentThread().isInterrupted()) throw new java.util.concurrent.CancellationException();
@@ -114,21 +147,9 @@ public final class FuelLogAnalysis {
                     || !Double.isFinite((keyValue + 1) * width)) {
                 invalid++; continue;
             }
-            long key = (long) keyValue;
-            Accumulator bin = groups.get(key);
-            if (bin == null) {
-                if (groups.size() >= MAX_BINS) {
-                    throw new IllegalArgumentException("Too many bins; increase bin width or narrow the sample range");
-                }
-                bin = new Accumulator(); groups.put(key, bin);
-            }
-            bin.add(y); accepted++;
+            consumer.accept(x, y); accepted++;
         }
-        List<Bin> bins = new ArrayList<Bin>();
-        for (Map.Entry<Long, Accumulator> entry : groups.entrySet()) {
-            bins.add(new Bin(entry.getKey() * width, (entry.getKey() + 1) * width, entry.getValue()));
-        }
-        return new Result(bins, accepted, invalid, filtered);
+        return new int[] {accepted, invalid, filtered};
     }
 
     private static void validateChannel(LogDataset data, int channel) {
@@ -142,10 +163,14 @@ public final class FuelLogAnalysis {
     }
     private static final class Accumulator {
         private int count;
-        private double mean, minimum = Double.POSITIVE_INFINITY, maximum = Double.NEGATIVE_INFINITY;
-        private void add(double value) {
+        private double meanX, mean, minimum = Double.POSITIVE_INFINITY, maximum = Double.NEGATIVE_INFINITY;
+        private void add(double x, double value) {
             count++;
-            mean = count == 1 ? value : mean * (1.0 - 1.0 / count) + value / count;
+            // Accepted x values are nonnegative, so this difference cannot overflow.
+            meanX = count == 1 ? x : meanX + (x - meanX) / count;
+            double delta = value - mean;
+            mean = count == 1 ? value : Double.isFinite(delta)
+                    ? mean + delta / count : mean * (1.0 - 1.0 / count) + value / count;
             minimum = Math.min(minimum, value); maximum = Math.max(maximum, value);
         }
     }

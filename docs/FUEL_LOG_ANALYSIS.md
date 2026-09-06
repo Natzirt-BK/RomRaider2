@@ -57,6 +57,12 @@ reviewed transfer into ROM tables remain follow-ups. Neither pane can connect
 to a vehicle, alter ROM bytes, save over the source CSV, or execute ECU writes.
 Android and the other desktop shells are unchanged by this JavaFX addition.
 
+The public 1.1.2 limits above remain applicable to those downloads. In 1.1.3
+development source, [Curve review](FUEL_CURVE_REVIEW.md) adds piecewise bin
+interpolation, raw-sample polynomial/linear fits and explicitly unverified
+injector estimates. Full legacy filtering and reviewed ROM-table transfer remain
+open; these estimates are not measured injector calibration.
+
 Synthetic regression tests check inherited arithmetic, finite/missing handling,
 range/filter boundaries, bin limits, unit-confirmation gating, stale-result
 invalidation, replacement/close behavior, and a scrollable small-window form.

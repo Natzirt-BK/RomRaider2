@@ -50,6 +50,7 @@ final class FxFuelAnalysisPane extends BorderPane implements AutoCloseable {
     private final Label status = new Label("Open a CSV log, map its channels, and confirm the units.");
     private final TableView<FuelLogAnalysis.Bin> results = new TableView<>();
     private final ScatterChart<Number, Number> chart;
+    private final FxFuelCurvePane curve;
     private final Button calculate = new Button("Analyze saved log");
     private final Button copy = new Button("Copy results");
     private final Button saveSetup = new Button("Save analysis setup…");
@@ -71,9 +72,10 @@ final class FxFuelAnalysisPane extends BorderPane implements AutoCloseable {
     FxFuelAnalysisPane(Mode mode, Runnable openLog) {
         this.mode = mode;
         boolean maf = mode == Mode.MAF;
+        curve = new FxFuelCurvePane(!maf);
         binWidth = new TextField(maf ? "0.05" : "0.1");
         NumberAxis horizontal = new NumberAxis(), vertical = new NumberAxis();
-        horizontal.setLabel(maf ? "MAF voltage bin midpoint (V)" : "Pulse-width bin midpoint (ms)");
+        horizontal.setLabel(maf ? "Observed mean MAF voltage (V)" : "Observed mean pulse width (ms)");
         vertical.setLabel(yLabel());
         chart = new ScatterChart<>(horizontal, vertical);
         chart.setAnimated(false); chart.setLegendVisible(false); chart.setMinSize(0, 0);
@@ -146,7 +148,7 @@ final class FxFuelAnalysisPane extends BorderPane implements AutoCloseable {
         addColumn("Maximum", bin -> number(bin.getMaximum()));
         copy.setDisable(true); copy.setOnAction(event -> copyResults());
         BorderPane table = new BorderPane(results); table.setBottom(copy);
-        TabPane output = new TabPane(tab("Binned results", table), tab("Chart", chart));
+        TabPane output = new TabPane(tab("Binned results", table), tab("Chart", chart), tab("Curve review", curve));
         output.setMinSize(0, 0); setCenter(output);
 
         for (ComboBox<LogChannel> mappingChoice : List.of(x, y, correction)) {
@@ -333,6 +335,7 @@ final class FxFuelAnalysisPane extends BorderPane implements AutoCloseable {
         generation++;
         if (pending != null) pending.cancel(true);
         results.getItems().clear(); chart.getData().clear(); copy.setDisable(true);
+        curve.setAnalysis(null);
         status.setText(dataset == null ? "Open a CSV log to begin."
                 : "Inputs changed. Confirm mappings and analyze to refresh results.");
     }
@@ -353,9 +356,10 @@ final class FxFuelAnalysisPane extends BorderPane implements AutoCloseable {
                     results.setItems(FXCollections.observableArrayList(result.getBins()));
                     XYChart.Series<Number, Number> series = new XYChart.Series<>();
                     for (FuelLogAnalysis.Bin bin : result.getBins()) {
-                        series.getData().add(new XYChart.Data<>(bin.getLower() / 2 + bin.getUpper() / 2, bin.getMean()));
+                        series.getData().add(new XYChart.Data<>(bin.getMeanX(), bin.getMean()));
                     }
                     chart.getData().setAll(List.of(series));
+                    curve.setAnalysis(result);
                     copy.setDisable(result.getBins().isEmpty());
                     status.setText(result.getAccepted() + " accepted · " + result.getFiltered()
                             + " filtered · " + result.getInvalid() + " invalid · " + result.getBins().size()
@@ -461,6 +465,7 @@ final class FxFuelAnalysisPane extends BorderPane implements AutoCloseable {
         if (closed) return;
         if (conditionsLink != null) conditionsLink.disconnect();
         closed = true; invalidate(); dataset = null; worker.shutdownNow();
+        curve.close();
         if (conditionsLink != null) conditionsLink.refresh(); else showConditionsLink(false);
         // Complete already-requested atomic exports; closed/load-generation guards
         // prevent any queued import from mutating a disposed pane.

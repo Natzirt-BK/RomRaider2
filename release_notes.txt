@@ -23,6 +23,10 @@ What changed for 1.1.3
   review. Edits in either tab update both and clear stale results/confirmations.
   Setup/log changes disconnect; channel mappings and fuel assumptions remain
   independent. This is not automatic operating-condition filtering or ROM tuning.
+- JavaFX Curve review separates observed-bin interpolation from raw-sample
+  polynomial/linear fitting. Coverage gaps, residual statistics, work/rank limits
+  and stale-worker guards are explicit. Injector line estimates are labeled as
+  unverified; no ROM transfer, extrapolated curve evaluation or ECU write occurs.
 
 What changed for 1.1.2
 ---------------------

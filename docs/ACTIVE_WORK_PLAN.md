@@ -87,3 +87,9 @@ ranges and numeric filters. Link activation and condition edits clear affected
 results and confirmations; setup/log replacement disconnects. Full legacy
 operating-condition filters, fitting/interpolation and reviewed ROM-table transfer
 remain open, as does linkage to the separate Log Analysis cursor/statistics view.
+
+Read-only [curve review](FUEL_CURVE_REVIEW.md) is now implemented in 1.1.3 source:
+observed-bin interpolation with gap handling, bounded raw-sample polynomial fits
+and descriptive injector line estimates. This advances fitting/interpolation;
+full legacy filtering, reviewed table transfer and vehicle qualification remain
+separate work. No calculated correction is applied automatically.
