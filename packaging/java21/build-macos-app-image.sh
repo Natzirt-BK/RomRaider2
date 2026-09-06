@@ -85,6 +85,7 @@ done
 cp -- "$repo_root/lib/log4j2.xml" "$input/lib/log4j2.xml"
 cp -- "$repo_root"/plugins/*.plugin "$input/plugins/"
 cp -- "$repo_root"/licenses/* "$input/licenses/"
+cp -- "$repo_root/license.txt" "$input/licenses/GPL-2.0.txt"
 cp -- "$repo_root/packaging/default/settings.xml" \
     "$input/defaults/settings.xml"
 cp -- "$repo_root"/customize/* "$input/customize/"
@@ -129,6 +130,9 @@ config=$destination/Contents/app/RomRaider2.cfg
     exit 5
 }
 grep -q '^JAVA_VERSION="21\.' "$runtime_release"
+cmp -- "$repo_root/license.txt" "$destination/Contents/app/licenses/GPL-2.0.txt"
+cmp -- "$repo_root/licenses/STI-wordmark-NOTICE.txt" \
+    "$destination/Contents/app/licenses/STI-wordmark-NOTICE.txt"
 [[ -f "$destination/Contents/app/$renderer" ]]
 for wrong_renderer in \
         org-jetbrains-skiko-skiko-awt-runtime-linux-x64-0.150.1.jar \
