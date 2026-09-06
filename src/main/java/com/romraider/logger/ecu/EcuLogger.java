@@ -20,7 +20,6 @@
 package com.romraider.logger.ecu;
 
 import com.romraider.logger.ecu.comms.query.dimemod.DmInit;
-import com.romraider.logger.ecu.comms.query.dimemod.DmInitCallback;
 import com.romraider.platform.DimeModState;
 import com.romraider.platform.PlatformContext;
 import com.romraider.platform.RamTuneRuntimeMetadata;
@@ -146,7 +145,6 @@ import com.romraider.logger.ecu.comms.globaladjust.SSMGlobalAdjustManager;
 import com.romraider.logger.ecu.comms.learning.LearningTableValues;
 import com.romraider.logger.ecu.comms.learning.LearningTableValuesFactory;
 import com.romraider.logger.ecu.comms.query.EcuInit;
-import com.romraider.logger.ecu.comms.query.EcuInitCallback;
 import com.romraider.logger.ecu.comms.readcodes.ReadCodesManager;
 import com.romraider.logger.ecu.comms.readcodes.ReadCodesManagerImpl;
 import com.romraider.logger.ecu.comms.reset.ResetManager;
@@ -301,11 +299,12 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
     private boolean channelRefreshPending;
 
     public EcuInit getEcuInit() {
-        return ecuInit;
+        return initialization.getEcuInit();
     }
 
-    private EcuInit ecuInit;
-    private DmInit dmInit;
+    private final SwingLoggerInitialization initialization = new SwingLoggerInitialization(
+            SwingUtilities::invokeLater, EcuLogger::publishInitialization, this::applyInitialization);
+    private long renderedInitializationRevision = -1;
     private JToggleButton logToFileButton;
     private List<ExternalDataSource> externalDataSources;
     private List<EcuParameter> ecuParams;
@@ -428,84 +427,6 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
     }
 
     private void bootstrap() {
-        EcuInitCallback ecuInitCallback = new EcuInitCallback() {
-            @Override
-            public void callback(EcuInit newEcuInit) {
-                final String ecuId = newEcuInit.getEcuId();
-                LOGGER.info(target + " ID = " + ecuId);
-                if (ecuInit == null || !ecuInit.getEcuId().equals(ecuId)) {
-                    ecuInit = newEcuInit;
-                    dmInit = null;
-                    dmLabel.setText("");
-                    PlatformContext.getInstance().setDimeModRuntime(
-                            DimeModState.UNKNOWN, false);
-                    invokeLater(new Runnable() {
-                        @Override
-                        public void run() {
-                            String calId = getCalId(ecuId);
-                            String carString = getCarString(ecuId);
-                            LOGGER.info("CAL ID: " + calId + ", Car: " + carString);
-                            calIdLabel.setText(buildEcuInfoLabelText(CAL_ID_LABEL, calId));
-                            ecuIdLabel.setText(buildEcuInfoLabelText(target + " ID", ecuId));
-                            loadResult = String.format("Loading logger config for new %s ID: %s, ", target, ecuId);
-                            loadLoggerParams();
-                            loadUserProfile(getSettings().getLoggerProfileFilePath());
-                        }
-
-                        private String getCalId(String ecuId) {
-                            Map<String, EcuDefinition> ecuDefinitionMap = getSettings().getLoggerEcuDefinitionMap();
-                            if (ecuDefinitionMap == null) return null;
-                            EcuDefinition def = ecuDefinitionMap.get(ecuId);
-                            return def == null ? null : def.getCalId();
-                        }
-
-                        private String getCarString(String ecuId) {
-                            Map<String, EcuDefinition> ecuDefinitionMap = getSettings().getLoggerEcuDefinitionMap();
-                            if (ecuDefinitionMap == null) return null;
-                            EcuDefinition def = ecuDefinitionMap.get(ecuId);
-                            return def == null ? null : def.getCarString();
-                        }
-                    });
-                }
-            }
-        };
-
-        DmInitCallback dmInitCallback = new DmInitCallback() {
-            @Override
-            public void callback(DmInit dmInit, boolean forceUpdate) {
-                PlatformContext.getInstance().setDimeModRuntime(
-                        dmInit == null ? DimeModState.NOT_PRESENT
-                                : DimeModState.ACTIVE,
-                        dmInit != null && dmInit.isRamTuneEnabled(),
-                        dmInit != null && dmInit.isRamTuneEnabled()
-                                ? new RamTuneRuntimeMetadata(
-                                        dmInit.getDimeModVersion(),
-                                        dmInit.getRamTuneSignatureAddress(),
-                                        dmInit.getRamTuneLutSize())
-                                : null);
-                if (dmInit != EcuLogger.this.dmInit || (dmInit != null && forceUpdate)) {
-                    invokeLater(() -> {
-                        EcuLogger.this.dmInit = dmInit;
-                        dmLabel.setText(dmInit == null
-                                ? "DimeMod: Not Present"
-                                : "DimeMod v" + dmInit.getDimeModVersion());
-                        loadLoggerParams();
-                        loadUserProfile(getSettings().getLoggerProfileFilePath());
-                    });
-                }
-            }
-
-            @Override
-            public boolean needToInit() {
-                return dmInit == null;
-            }
-
-            @Override
-            public DmInit getDmInit() {
-                return EcuLogger.this.dmInit;
-            }
-        };
-
         fileUpdateHandler = new FileUpdateHandlerImpl(this);
         dataTableModel = new LiveDataTableModel();
         liveDataUpdateHandler = new LiveDataUpdateHandler(dataTableModel);
@@ -516,7 +437,7 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
         mafUpdateHandler = new MafUpdateHandler();
         injectorUpdateHandler = new InjectorUpdateHandler();
         dynoUpdateHandler = new DynoUpdateHandler();
-        controller = new LoggerControllerImpl(ecuInitCallback, dmInitCallback,
+        controller = new LoggerControllerImpl(initialization.ecuCallback(), initialization.dimeCallback(),
                 this, SwingUtilities::invokeLater, liveDataUpdateHandler,
                 graphUpdateHandler, dashboardUpdateHandler, mafUpdateHandler, injectorUpdateHandler,
                 dynoUpdateHandler, fileUpdateHandler, TableUpdateHandler.getInstance(), DataflowSimulationHandler.getInstance());
@@ -609,6 +530,42 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
 
     public void loadLoggerParams() {
         loadLoggerParams(null);
+    }
+
+    /** Runs only for the current owner revision on the Swing event thread. */
+    private void applyInitialization(SwingLoggerInitialization.Snapshot state) {
+        final String ecuId = state.ecu.getEcuId();
+        Map<String, EcuDefinition> definitions = getSettings().getLoggerEcuDefinitionMap();
+        EcuDefinition definition = definitions == null ? null : definitions.get(ecuId);
+        String calId = definition == null ? null : definition.getCalId();
+        String carString = definition == null ? null : definition.getCarString();
+        LOGGER.info(target + " ID = " + ecuId + ", CAL ID: " + calId + ", Car: " + carString);
+        calIdLabel.setText(buildEcuInfoLabelText(CAL_ID_LABEL, calId));
+        ecuIdLabel.setText(buildEcuInfoLabelText(target + " ID", ecuId));
+        DmInit dime = state.dime;
+        dmLabel.setText(!state.dimeKnown ? "" : dime == null
+                ? "DimeMod: Not Present" : "DimeMod v" + dime.getDimeModVersion());
+        if (renderedInitializationRevision != state.channelRevision && initialization.isCurrent(state)) {
+            renderedInitializationRevision = state.channelRevision;
+            loadResult = String.format("Loading logger config for %s ID: %s, ", target, ecuId);
+            loadLoggerParams();
+            // Definition errors can open a nested Swing event loop. Do not
+            // restore an old profile if that loop closed or replaced this state.
+            if (initialization.isCurrent(state))
+                loadUserProfile(getSettings().getLoggerProfileFilePath());
+        }
+    }
+
+    /** Publish capabilities synchronously; never wait for the Swing queue. */
+    static void publishInitialization(SwingLoggerInitialization.Snapshot state) {
+        DmInit dime = state.dime;
+        PlatformContext.getInstance().setDimeModRuntime(
+                !state.dimeKnown ? DimeModState.UNKNOWN : dime == null
+                        ? DimeModState.NOT_PRESENT : DimeModState.ACTIVE,
+                dime != null && dime.isRamTuneEnabled(),
+                dime != null && dime.isRamTuneEnabled()
+                        ? new RamTuneRuntimeMetadata(dime.getDimeModVersion(),
+                                dime.getRamTuneSignatureAddress(), dime.getRamTuneLutSize()) : null);
     }
 
     /**
@@ -801,7 +758,7 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
                     dataLoader.loadConfigFromXml(loggerConfigFilePath,
                             getSettings().getLoggerProtocol(),
                             getSettings().getFileLoggingControllerSwitchId(),
-                            ecuInit);
+                            getEcuInit());
                 }
                 List<EcuParameter> ecuParams = dataLoader.getEcuParameters();
                 updateDmEcuParams(ecuParams);
@@ -854,6 +811,7 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
     }
 
     private void updateDmEcuParams(List<EcuParameter> ecuParams) {
+        final DmInit dmInit = getDmInit();
         if (dmInit == null) {
             return;
         }
@@ -1605,7 +1563,7 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
         ecuIdItem.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
-                fileNameExtention.setText(ecuInit.getEcuId());
+                fileNameExtention.setText(getEcuInit().getEcuId());
                 getSettings().setLogfileNameText(fileNameExtention.getText());
             }
         });
@@ -2171,7 +2129,7 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
     }
 
     public final boolean isEcuInit() {
-        if (ecuInit == null) {
+        if (getEcuInit() == null) {
             LOGGER.info("DT codes ECU Initialized: false");
             return false;
         }
@@ -2183,7 +2141,7 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
                 new ReadCodesManagerImpl(
                         this,
                         dtcodes,
-                        ecuInit.getEcuInitBytes().length);
+                        getEcuInit().getEcuInitBytes().length);
         return readCodesManager.readCodes();
     }
 
@@ -2198,7 +2156,7 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
     public final void readLearningTables() {
         final EcuDefinition ecuDef = new EvaluateEcuDefinition().getDef(
                 getSettings().getLoggerEcuDefinitionMap(),
-                ecuInit.getEcuId());
+                getEcuInit().getEcuId());
         final LearningTableValues learningTablesManager =
                 LearningTableValuesFactory.getManager(
                         getSettings().getLoggerProtocol());
@@ -2214,6 +2172,11 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
     }
 
     public void handleExit() {
+        if (!SwingUtilities.isEventDispatchThread()) {
+            invokeLater(this::handleExit);
+            return;
+        }
+        if (!initialization.close()) return;
         if (refresher != null) {
             refresher.stop();
             refresher = null;
@@ -2569,6 +2532,6 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
 
 
     public DmInit getDmInit() {
-        return dmInit;
+        return initialization.getDmInit();
     }
 }

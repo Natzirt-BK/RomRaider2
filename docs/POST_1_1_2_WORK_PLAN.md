@@ -74,9 +74,11 @@ The [cache/lifecycle follow-up](DIMEMOD_CACHE_LIFECYCLE.md) rejects late ECU and
 DimeMod callbacks from closed modern desktop workspaces, including after a new
 workspace opens. Read-codes now captures metadata once and uses a separate
 runtime-only API returning an independent snapshot; cache changes cannot select
-discovery writes or replace its decoded result. Full cache identity and retained
-Swing callback ownership remain separate work; invalidating a cache must not
-silently increase discovery writes.
+discovery writes or replace its decoded result. The retained Swing owner now
+stores accepted state synchronously, discards superseded UI notifications and
+rejects closed-owner callbacks/cache requests. Full ECU/session binding and
+in-flight UI reload cancellation remain separate work; invalidating a cache
+must not silently increase discovery writes.
 
 ## Then
 

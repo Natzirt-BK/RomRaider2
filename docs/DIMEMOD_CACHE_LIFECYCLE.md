@@ -77,6 +77,57 @@ This closes the read-codes write-fallback race, **not cache identity validation*
 No fresh ECU identification is added to read-codes; previously discovered dynamic
 addresses are still not proven to belong to the currently attached firmware.
 
+## Retained Swing owner and queued notifications
+
+`EcuLogger` now registers the callbacks owned by `SwingLoggerInitialization`.
+Accepted ECU/DimeMod state is stored synchronously under the owner monitor;
+queued Swing tasks never assign that cache. Each notification carries a state
+revision and is discarded if superseded or closed. A combined notification
+contains both ECU identity and DimeMod status, so coalescing an identity event
+with its following DimeMod result cannot lose the identity labels.
+
+The same-ID cache behavior is retained. A changed ID immediately clears DimeMod
+metadata and publishes `UNKNOWN` capabilities, even with a blocked event thread.
+Shared platform-state publication remains synchronous and serialized with owner
+updates/closure; only UI work is deferred. The publisher does not wait for the
+event thread or perform I/O. Existing platform listeners were inspected: their
+background notifications queue Swing work instead of waiting for it.
+
+Unchanged DimeMod metadata avoids a catalog/profile reload. Forced channel
+updates advance a separate channel revision; a first absent result updates
+status without reloading unchanged channels. After a definition load that may
+open a nested event loop, the caller checks its revision again before restoring
+the profile.
+
+`handleExit` marshals to the event thread, closes the callback owner before
+stopping workers, and ignores repeated closure. Late callbacks cannot mutate
+retained state or platform capabilities, and pending UI notifications are
+discarded. Closed callback cache lookups throw rather than returning a null
+cache that might request legacy discovery. This is a pre-operation guard, not
+cancellation of a transport request already in flight.
+
+Tests exercise the production callback owner with controlled EDT ordering,
+native labels, a genuinely blocked Swing queue, and the actual platform-state
+publisher without constructing a logger frame, starting its controller, or
+opening any adapter. They cover immediate cache visibility, identity changes,
+same-ID reuse, reordered notifications, combined identity/status delivery,
+forced/absent metadata, close/reopen isolation, repeated closure, closed cache
+lookups, unbound metadata, and immediate capability invalidation. One initial
+test failure was an incorrect expected version-label format (`2.3.100` rather
+than the existing `2.3 build 100`); the production label format is unchanged.
+
+Qualification: all 13 Swing initialization tests pass. The full Ant Linux
+build/unit suite passes with the three existing optional/native skips.
+Shared-core checks and all 281 desktop UI tests (246 JavaFX, 35 Compose) pass,
+with no UI test skips; Linux JavaFX staging succeeds.
+
+The callback interface still carries **no originating session token**. These
+guards reject superseded queued UI work and closed owners; they cannot identify
+an old transport result first delivered after a newer ECU callback on an open
+owner. Full ECU/module/transport/session binding remains open, as does broader
+in-flight catalog/profile reload cancellation. No physical reconnect test or
+write-based discovery qualification is claimed.
+
 ## Existing cache boundary
 
 The remaining cache is **ECU-ID keyed, not fully ECU/session bound**:
@@ -85,9 +136,9 @@ The remaining cache is **ECU-ID keyed, not fully ECU/session bound**:
   Another initialization with the same ID retains it. Other initialization
   bytes, connection generation, transport and physical identity are not part
   of this cache key.
-- The retained Swing logger follows the same ID comparison, but assigns its
-  DimeMod cache through a queued UI callback. That path still needs a separate
-  stale-callback/owner audit; the modern runtime repair does not cover it.
+- The retained Swing logger follows the same ID comparison. Its owner-scoped
+  synchronous cache and guarded UI notifications are qualified above; the
+  callback interface still does not bind results to their originating session.
 - `QueryManagerImpl.initConnection` identifies the ECU and then calls DimeMod
   initialization on each connection attempt. `SSMLoggerConnection.dmInit`
   obtains its cache from `getDmInit()`: a non-null entry takes the runtime-read
@@ -112,8 +163,8 @@ rediscovery. Preserve the distinction between read-only runtime refresh and
 discovery negotiation. Android still needs a verified read-only discovery source
 or a separately authorized, accurately labelled flow.
 
-Other advertised channel/RAM-tune address spans, cache identity, Swing callback
-ownership, and negotiation cleanup remain open. See the
+Other advertised channel/RAM-tune address spans, cache/session identity,
+in-flight UI reload cancellation, and negotiation cleanup remain open. See the
 [metadata and discovery audit](DIMEMOD_CHANNEL_AUDIT.md) for completed bounds
 checks and their limits. No production ECU-writing or live-tuning capability is
 qualified by this lifecycle repair.
