@@ -123,12 +123,96 @@ public class QueryManagerInitializationTest {
     }
 
     @Test
+    public void interruptedEcuAttemptStopsRetriesAndPreservesTheInterrupt() throws Exception {
+        Fixture f = new Fixture();
+        f.connection.onEcu = () -> {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("synthetic interrupted ECU failure");
+        };
+        try {
+            assertFalse(f.initialize());
+            assertTrue("ECU interruption must stop retrying", f.stopped());
+            assertTrue(Thread.currentThread().isInterrupted());
+            assertEquals(0, f.connection.dimeCalls);
+            assertEquals(1, f.connection.closes);
+            assertEquals(1, f.messages.size());
+            f.connection.ecu.callback(ecu("late"));
+            assertNull(f.identity);
+            // Even cleanup that consumes the interrupt must not re-enable retries.
+            Thread.interrupted();
+            assertFalse(f.initialize());
+            assertEquals(1, f.factories.get());
+            assertEquals(1, f.messages.size());
+        } finally { Thread.interrupted(); }
+    }
+
+    @Test
+    public void interruptedFactoryReturnClosesWithoutSendingEcuCommands() throws Exception {
+        Fixture f = new Fixture();
+        f.onCreate = () -> Thread.currentThread().interrupt();
+        try {
+            assertFalse("Interrupted factory return must not initialize", f.initialize());
+            assertTrue(f.stopped());
+            assertTrue(Thread.currentThread().isInterrupted());
+            assertNull(f.connection.ecu);
+            assertEquals(0, f.connection.dimeCalls);
+            assertEquals(1, f.connection.closes);
+            assertEquals(1, f.messages.size());
+        } finally { Thread.interrupted(); }
+    }
+
+    @Test
+    public void interruptedEcuReturnNeverStartsDimeDiscovery() throws Exception {
+        Fixture f = new Fixture();
+        f.connection.onEcu = () -> Thread.currentThread().interrupt();
+        try {
+            assertFalse("Interrupted ECU return must not succeed", f.initialize());
+            assertTrue(f.stopped());
+            assertTrue(Thread.currentThread().isInterrupted());
+            assertEquals(0, f.connection.dimeCalls);
+            assertEquals(1, f.connection.closes);
+            assertEquals(1, f.messages.size());
+        } finally { Thread.interrupted(); }
+    }
+
+    @Test
+    public void interruptedDimeReturnDoesNotReportSuccess() throws Exception {
+        Fixture f = new Fixture();
+        f.connection.onDime = () -> Thread.currentThread().interrupt();
+        try {
+            assertFalse("Interrupted DimeMod return must not succeed", f.initialize());
+            assertTrue(f.stopped());
+            assertTrue(Thread.currentThread().isInterrupted());
+            assertEquals(1, f.connection.closes);
+            assertEquals(3, f.messages.size());
+            // Cancellation does not clear state accepted before the manager observes it.
+            assertSame(f.metadata, f.cached);
+        } finally { Thread.interrupted(); }
+    }
+
+    @Test
+    public void interruptedDimeFailureDoesNotFallBackToStandardLogging() throws Exception {
+        Fixture f = new Fixture();
+        f.connection.onDime = () -> Thread.currentThread().interrupt();
+        f.connection.failDime = true;
+        try {
+            assertFalse("Cancellation is not an optional DimeMod failure", f.initialize());
+            assertTrue(f.stopped());
+            assertTrue(Thread.currentThread().isInterrupted());
+            assertEquals(1, f.connection.closes);
+            assertEquals(3, f.messages.size());
+            assertNull(f.cached);
+        } finally { Thread.interrupted(); }
+    }
+
+    @Test
     public void interruptedDimeAttemptDoesNotReportSuccessAndPreservesCancellation() throws Exception {
         Fixture f = new Fixture();
         f.connection.interruptDime = true;
         try {
             assertFalse(f.initialize());
             assertTrue(Thread.currentThread().isInterrupted());
+            assertTrue(f.stopped());
             f.connection.dime.callback(f.metadata, true);
             assertNull(f.cached);
             assertEquals(1, f.connection.closes);
@@ -175,13 +259,18 @@ public class QueryManagerInitializationTest {
             return manager.initConnection(new Module("ECU", new byte[] {0x10}, "Synthetic",
                     new byte[] {(byte) 0xf0}, false), "synthetic connection");
         }
+        boolean stopped() throws Exception {
+            java.lang.reflect.Field stop = QueryManagerImpl.class.getDeclaredField("stop");
+            stop.setAccessible(true);
+            return stop.getBoolean(manager);
+        }
     }
 
     private static final class FakeConnection implements LoggerConnection {
         final DmInit metadata;
         EcuInitCallback ecu;
         DmInitCallback dime;
-        Runnable onEcu = () -> { }, onClose = () -> { };
+        Runnable onEcu = () -> { }, onDime = () -> { }, onClose = () -> { };
         int dimeCalls, closes;
         boolean failDime, interruptDime;
         FakeConnection(DmInit metadata) { this.metadata = metadata; }
@@ -193,6 +282,7 @@ public class QueryManagerInitializationTest {
         public void dmInit(DmInitCallback callback, Module module) throws InterruptedException {
             dimeCalls++;
             dime = callback;
+            onDime.run();
             if (interruptDime) throw new InterruptedException("synthetic cancellation");
             if (failDime) throw new IllegalStateException("synthetic DimeMod failure");
             callback.getDmInit();

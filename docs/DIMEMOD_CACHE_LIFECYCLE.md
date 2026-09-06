@@ -186,6 +186,25 @@ operation already executing is not rolled back by token expiry. Firmware bytes,
 module/transport/adapter identity, and dynamic-address validity across reconnects
 are still not part of the retained metadata key.
 
+## Interrupted initialization
+
+Initialization now checks the thread's interrupt flag after connection creation,
+ECU identification and DimeMod initialization, including ordinary returns and
+unchecked failures. Cancellation stops retries, expires callbacks and preserves
+the interrupt flag. It is not treated as an optional DimeMod failure that can
+continue into standard logging. Already accepted state is retained; an in-flight
+operation or a lower layer that consumes an interrupt is not rolled back.
+
+Five synthetic regressions failed against the preceding implementation: interrupted
+factory, ECU and DimeMod returns, plus interrupted ECU/DimeMod failures. The ECU
+failure case also verifies that consuming the flag later does not re-enable a
+stopped manager. Ordinary non-cancelled DimeMod failure still permits standard
+logging, and checked DimeMod interruption retains its existing cancellation behavior.
+
+Verification passes: 14 initialization tests, 71 focused logger tests overall,
+the full Ant suite/Linux build, shared checks, and all 284 desktop UI tests.
+No physical connection or ECU command was executed.
+
 ## Existing cache boundary
 
 The remaining cache is **ECU-ID keyed, not fully ECU/session bound**:

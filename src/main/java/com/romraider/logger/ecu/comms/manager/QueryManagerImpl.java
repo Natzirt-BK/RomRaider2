@@ -294,46 +294,44 @@ public final class QueryManagerImpl implements QueryManager {
         InitializationAttempt previous = activeInitialization.getAndSet(attempt);
         if (previous != null) previous.close();
         // Covers stop racing with installation of the new token.
-        if (Thread.currentThread().isInterrupted()) stop = true;
         if (stop) attempt.close();
         try {
-            attempt.requireActive();
+            requireInitializationActive(attempt);
             messageListener.reportMessage(MessageFormat.format(
                     rb.getString("SENDINIT"), module.getName(), name));
             connection = connectionFactory.get();
-            attempt.requireActive();
+            requireInitializationActive(attempt);
             connection.ecuInit(attempt.bind(ecuInitCallback), module);
-            attempt.requireActive();
+            requireInitializationActive(attempt);
             messageListener.reportMessage(MessageFormat.format(
                     rb.getString("INITDONE"), module.getName(), name));
             try {
                 if (dmInitCallback != null) {
                     messageListener.reportMessage(MessageFormat.format(
                             rb.getString("SENDDMINIT"), module.getName(), name));
-                    attempt.requireActive();
+                    requireInitializationActive(attempt);
                     connection.dmInit(attempt.bind(dmInitCallback), module);
-                    attempt.requireActive();
+                    requireInitializationActive(attempt);
                     messageListener.reportMessage(MessageFormat.format(
                             rb.getString("INITDMDONE"), module.getName(), name));
                 }
             }
-            catch (InterruptedException interrupted) {
-                stop = true;
-                attempt.close();
-                Thread.currentThread().interrupt();
-                throw interrupted;
-            }
             catch (Exception e) {
-                if (!attempt.isActive()) throw e;
+                if (e instanceof InterruptedException) throw e;
+                requireInitializationActive(attempt);
                 messageListener.reportMessage(MessageFormat.format(
                         rb.getString("INITDMFAIL"), module.getName()));
                 LOGGER.error("Error in DimeMod init: ", e);
             }
 
-            attempt.requireActive();
+            requireInitializationActive(attempt);
             rv = true;
         } catch (Exception e) {
-            if (attempt.isActive() && !(e instanceof InterruptedException)) {
+            if (e instanceof InterruptedException || Thread.currentThread().isInterrupted()) {
+                stop = true;
+                attempt.close();
+                Thread.currentThread().interrupt();
+            } else if (attempt.isActive()) {
                 messageListener.reportMessage(MessageFormat.format(
                         rb.getString("INITFAIL"), module.getName()));
                 if (!initFailureReported) {
@@ -350,6 +348,15 @@ public final class QueryManagerImpl implements QueryManager {
             if (connection != null) connection.close();
         }
         return rv;
+    }
+
+    /** Observe cancellation after native calls even when they return without throwing. */
+    private void requireInitializationActive(InitializationAttempt attempt) {
+        if (Thread.currentThread().isInterrupted()) {
+            stop = true;
+            attempt.close();
+        }
+        attempt.requireActive();
     }
 
     static boolean shouldTrySerialConnection(String portName) {
