@@ -6,7 +6,6 @@ import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.Dimension;
 import java.io.File;
-import java.io.IOException;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.List;
@@ -42,7 +41,6 @@ import com.romraider.logger.analysis.LogRange;
 import com.romraider.logger.analysis.LogMarker;
 import com.romraider.logger.analysis.LogMarkerStore;
 import com.romraider.logger.analysis.LogMarkerType;
-import com.romraider.logger.analysis.LogStatisticsService;
 import com.romraider.logger.analysis.PlaybackState;
 import com.romraider.logger.analysis.RecentLogCaptureService;
 import com.romraider.ui.ThemeToken;
@@ -56,6 +54,10 @@ public final class LogAnalysisPanel extends JPanel {
     private static final DecimalFormat DURATION_FORMAT = new DecimalFormat("0.###");
 
     private SwingLogLoadTask logLoads;
+    private SwingLogStatisticsTask statisticsTask;
+    private SwingMarkerSaveTask markerSaves;
+    private boolean statisticsBusy, changingStatistics, markersBusy;
+    private String submittedMarkerLabel;
     private volatile boolean detached;
     private volatile long lifecycle;
     private final LogCursorModel cursor = new LogCursorModel();
@@ -91,7 +93,6 @@ public final class LogAnalysisPanel extends JPanel {
     private final JButton nextMarkerButton = new JButton("Next");
     private final JButton deleteMarkerButton = new JButton("Delete Here");
     private final JLabel markerSummary = new JLabel("No markers");
-    private final LogMarkerStore markerStore = new LogMarkerStore();
     private LogMarkerStore.Snapshot markerSnapshot;
     private String markerProblem;
     private final List<LogMarker> markers = new ArrayList<LogMarker>();
@@ -184,7 +185,7 @@ public final class LogAnalysisPanel extends JPanel {
         loadButton.addActionListener(event -> chooseLog());
         applyRangeButton.addActionListener(event -> applySelectedRange());
         statisticsTable.getSelectionModel().addListSelectionListener(event -> {
-            if (!event.getValueIsAdjusting()) updateGraphChannels();
+            if (!changingStatistics && !event.getValueIsAdjusting()) updateGraphChannels();
         });
         cursor.addListener((value, rangeValue, sample) ->
                 updateCursorControls(value, rangeValue, sample));
@@ -313,6 +314,9 @@ public final class LogAnalysisPanel extends JPanel {
     }
 
     private void installLog(SwingLogLoadTask.PreparedLog prepared) {
+        if (statisticsTask != null) { statisticsTask.close(); statisticsTask = null; }
+        if (markerSaves != null) { markerSaves.close(); markerSaves = null; }
+        statisticsBusy = false; markersBusy = false; statisticsTable.setEnabled(true);
         LogDataset dataset = prepared.dataset();
         this.dataset = dataset;
         datasetFile = prepared.source();
@@ -363,15 +367,30 @@ public final class LogAnalysisPanel extends JPanel {
     }
 
     private void updateStatistics(LogRange range) {
-        displayStatistics(range, LogStatisticsService.analyze(dataset, range));
+        if (detached || dataset == null) return;
+        if (statisticsTask == null) statisticsTask = new SwingLogStatisticsTask(SwingUtilities::invokeLater, result -> {
+            statisticsBusy = false; statisticsTable.setEnabled(true); displayStatistics(result.range(), result.statistics());
+        }, failure -> {
+            statisticsBusy = false; statisticsTable.setEnabled(true);
+            statusLabel.setText("Statistics unavailable: " + failure.getMessage());
+        });
+        statisticsBusy = true; statisticsTable.setEnabled(false);
+        changingStatistics = true;
+        try { tableModel.setStatistics(Collections.emptyList()); }
+        finally { changingStatistics = false; }
+        statusLabel.setText("Calculating samples " + (range.getStartInclusive() + 1) + "–" + range.getEndExclusive()
+                + "… Graphs and playback remain available.");
+        statisticsTask.request(dataset, range);
     }
 
     private void displayStatistics(LogRange range, List<ChannelStatistics> statistics) {
         List<LogChannel> graphed = graph.getChannels();
-        tableModel.setStatistics(statistics);
+        changingStatistics = true;
+        try { tableModel.setStatistics(statistics); }
+        finally { changingStatistics = false; }
         if (!graphed.isEmpty()) reselectGraphChannels(graphed);
         String duration = describeDuration(dataset, range);
-        statusLabel.setText(range.size() + " of " + dataset.getRowCount()
+        statusLabel.setText("Samples " + (range.getStartInclusive() + 1) + "–" + range.getEndExclusive() + " • " + range.size() + " of " + dataset.getRowCount()
                 + " samples • " + dataset.getChannelCount() + " channels"
                 + (duration.isEmpty() ? "" : " • " + duration));
     }
@@ -498,22 +517,23 @@ public final class LogAnalysisPanel extends JPanel {
     }
 
     private void addMarker() {
-        if (dataset == null || cursor.getSampleIndex() < 0 || markerSnapshot == null) return;
+        if (dataset == null || cursor.getSampleIndex() < 0 || markerSnapshot == null || markersBusy || detached) return;
         LogMarkerType type = (LogMarkerType) markerType.getSelectedItem();
-        markers.add(new LogMarker(cursor.getSampleIndex(), type,
+        List<LogMarker> proposed = new ArrayList<>(markers);
+        proposed.add(new LogMarker(cursor.getSampleIndex(), type,
                 markerLabel.getText()));
-        Collections.sort(markers);
-        persistMarkers();
-        if (markerSnapshot != null) markerLabel.setText("");
+        submittedMarkerLabel = markerLabel.getText();
+        persistMarkers(proposed);
     }
 
     private void deleteMarkerAtCursor() {
-        if (markerSnapshot == null) return;
+        if (markerSnapshot == null || markersBusy || detached) return;
         int sample = cursor.getSampleIndex();
         for (int index = 0; index < markers.size(); index++) {
             if (markers.get(index).getSampleIndex() == sample) {
-                markers.remove(index);
-                persistMarkers();
+                List<LogMarker> proposed = new ArrayList<>(markers); proposed.remove(index);
+                submittedMarkerLabel = null;
+                persistMarkers(proposed);
                 return;
             }
         }
@@ -561,19 +581,21 @@ public final class LogAnalysisPanel extends JPanel {
                 && marker.getSampleIndex() < range.getEndExclusive();
     }
 
-    private void persistMarkers() {
-        if (markerSnapshot != null) {
-            try {
-                markerSnapshot = markerStore.saveIfUnchanged(markerSnapshot, markers);
-            } catch (IOException failure) {
-                markers.clear(); markers.addAll(markerSnapshot.getMarkers()); markerSnapshot = null;
-                markerProblem = "Markers were not saved; prior list retained. Reload the log before editing: " + failure.getMessage();
-                statusLabel.setText(markerProblem);
-            }
-        }
-        graph.setMarkers(markers);
-        xyGraph.setMarkers(markers);
+    private void persistMarkers(List<LogMarker> proposed) {
+        if (markerSaves == null) markerSaves = new SwingMarkerSaveTask(SwingUtilities::invokeLater, snapshot -> {
+            markerSnapshot = snapshot; markers.clear(); markers.addAll(snapshot.getMarkers()); markersBusy = false;
+            if (submittedMarkerLabel != null && submittedMarkerLabel.equals(markerLabel.getText())) markerLabel.setText("");
+            graph.setMarkers(markers); xyGraph.setMarkers(markers); updateMarkerControls();
+            statusLabel.setText("Marker sidecar saved. CSV unchanged.");
+        }, failure -> {
+            markersBusy = false; markerSnapshot = null;
+            markerProblem = "Markers were not saved; prior list retained. Reload the log before editing: " + failure.getMessage();
+            statusLabel.setText(markerProblem); updateMarkerControls();
+        });
+        markersBusy = true;
+        statusLabel.setText("Saving markers… The previous saved list remains visible until this finishes.");
         updateMarkerControls();
+        markerSaves.save(markerSnapshot, proposed);
     }
 
     private void configureXyAxes() {
@@ -605,13 +627,13 @@ public final class LogAnalysisPanel extends JPanel {
             markerHere |= marker.getSampleIndex() == cursor.getSampleIndex();
             markerInRange |= range != null && contains(range, marker);
         }
-        addMarkerButton.setEnabled(loaded && markerSnapshot != null);
+        addMarkerButton.setEnabled(loaded && markerSnapshot != null && !markersBusy && !detached);
         previousMarkerButton.setEnabled(loaded && markerInRange);
         nextMarkerButton.setEnabled(loaded && markerInRange);
-        deleteMarkerButton.setEnabled(loaded && markerHere && markerSnapshot != null);
+        deleteMarkerButton.setEnabled(loaded && markerHere && markerSnapshot != null && !markersBusy && !detached);
         markerSummary.setText((markers.isEmpty() ? "No markers"
                 : markers.size() + (markers.size() == 1 ? " marker" : " markers"))
-                + (markerProblem == null ? "" : " • read-only (reload log)"));
+                + (markerProblem == null ? "" : " • read-only (reload log)") + (markersBusy ? " • saving…" : ""));
         markerSummary.setToolTipText(markerProblem);
         addMarkerButton.setToolTipText(markerProblem); deleteMarkerButton.setToolTipText(markerProblem);
     }
@@ -633,6 +655,8 @@ public final class LogAnalysisPanel extends JPanel {
     public void addNotify() {
         super.addNotify();
         detached = false;
+        if (statisticsBusy && dataset != null) updateStatistics(cursor.getRange());
+        updateMarkerControls();
         if (!recentLogAttached) {
             recentLogAttached = true;
             RecentLogCaptureService.getInstance().addListener(
@@ -644,6 +668,12 @@ public final class LogAnalysisPanel extends JPanel {
     public void removeNotify() {
         detached = true; lifecycle++;
         if (logLoads != null) { logLoads.close(); logLoads = null; }
+        if (statisticsTask != null) { statisticsTask.close(); statisticsTask = null; }
+        if (markerSaves != null) { markerSaves.close(); markerSaves = null; }
+        if (markersBusy) {
+            markersBusy = false; markerSnapshot = null;
+            markerProblem = "A marker save was pending when the view detached. Reload the log to verify the saved list before editing.";
+        }
         if (recentLogAttached) {
             RecentLogCaptureService.getInstance().removeListener(
                     recentLogListener);

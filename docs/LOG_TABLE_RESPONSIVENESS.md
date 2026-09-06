@@ -71,7 +71,8 @@ inspected. Shared numerical code and Android were not changed by this update.
 
 [CSV parsing](BOUNDED_CSV_IMPORT.md) and [range statistics](LOG_ANALYSIS_ARCHITECTURE.md#background-range-statistics--113-development-source)
 have separate bounded workers. [Marker-sidecar loading/saving](MARKER_FILE_SAFETY.md)
-now also runs off the JavaFX thread with conflict guards; legacy Swing asynchronous
-handling remains a follow-up. This does not promise that every layout or plotting operation
+now also runs off the JavaFX thread with conflict guards. [Swing preparation,
+range calculations and marker writes](SWING_LOG_LOADING.md) also use workers.
+This does not promise that every layout or plotting operation
 has constant cost, nor qualify Android or vehicle hardware. No source CSV, ROM,
 definition, active recording or ECU state is changed.

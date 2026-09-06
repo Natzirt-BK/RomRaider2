@@ -71,9 +71,11 @@ The legacy Swing analysis pane also uses captured snapshots and conflict-checked
 saves. Failed loads disable marker editing; failed saves restore the preceding
 displayed list, retain label text, and require reloading the log. Subsequent
 [Swing loading work](SWING_LOG_LOADING.md) now prepares the CSV, initial statistics
-and sidecar snapshot off the event thread. Swing marker writes and later manual
-range-statistics calculations still need asynchronous handling. The shared store
-never enables ECU access.
+and sidecar snapshot off the event thread. Later range calculations and marker
+writes now also use separate workers. Pending saves retain the prior list;
+detaching permits an accepted write to finish while suppressing late UI delivery.
+Reattachment after a pending save requires an explicit reload to verify the saved
+list before editing. The shared store never enables ECU access.
 
 Automated checks cover Unicode/empty round trips, bounds, invalid and unknown
 documents, protected paths, changed/created/deleted sidecars, simultaneous
@@ -83,7 +85,7 @@ off-UI loading, closure and accepted-save completion. Tests use synthetic files.
 The settings-window regression test also now constructs/disposes Swing UI on the
 event thread after an intermittent off-thread failure during qualification.
 
-Local qualification passed 14 focused core/Swing tests (including nine bounded
+Initial marker-file qualification passed 14 focused core/Swing tests (including nine bounded
 store cases), the full Ant unit suite and Linux core build, 197 JavaFX tests
 (five marker-worker and two native marker cases), 35 Compose tests, portable-core
 checks and Linux JavaFX staging. The actual marker recovery screen was inspected

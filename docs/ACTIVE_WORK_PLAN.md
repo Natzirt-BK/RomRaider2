@@ -202,3 +202,10 @@ whole-log statistics and marker snapshots off the event thread. New selections
 cancel old work; detached/reopened panels reject late results and errors. Current
 datasets remain usable during loading. Manual range statistics and marker writes
 still need asynchronous Swing handling before moving on to broader mobile work.
+
+Swing's subsequent range statistics and marker writes now also run off the event
+thread. Range results are bounded and cancellable, preserve graph choices, and
+cannot republish after dataset replacement or detachment. Marker proposals remain
+unapplied until saved; accepted saves may finish after closure without updating
+closed views. Reattachment after a pending save requires verification by reload.
+Continue mobile/service work and compatibility audits; hardware gates stay deferred.

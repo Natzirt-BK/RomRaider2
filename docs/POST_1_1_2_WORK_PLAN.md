@@ -101,8 +101,10 @@ allocation-free source indexing and cancellable stable sorting with direct
 sample lookup. [Marker-file I/O](MARKER_FILE_SAFETY.md) now runs on a JavaFX worker
 with bounded strict validation, immutable snapshots and conflict-checked atomic
 saves. Swing gains save guards and now [prepares new CSVs, initial statistics and
-marker snapshots on a bounded worker](SWING_LOG_LOADING.md). Continue asynchronous
-Swing range statistics/marker writes and the remaining mobile/service work.
+marker snapshots on a bounded worker](SWING_LOG_LOADING.md). Subsequent Swing
+range statistics and marker writes now use their own workers, with graph/sample
+identity preservation, frozen save proposals and detached/replacement guards.
+Continue the remaining mobile/service work and broader compatibility audits.
 
 The [desktop profile persistence prerequisite](DESKTOP_PROFILE_INTEGRITY.md) now
 preserves Unicode, escaped attributes, captured protocol and immutable snapshots,

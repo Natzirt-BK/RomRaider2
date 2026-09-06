@@ -37,6 +37,10 @@ What changed for 1.1.3
 - Legacy Swing CSV opening now uses bounded, cancellable background preparation
   for the CSV, initial statistics and marker snapshot. Superseded/detached loads
   cannot replace a newer workspace; failed CSVs preserve the current log.
+- Swing range-statistics recalculation and marker saves now run on separate
+  workers. Graph selections survive statistics refresh, old results are cleared,
+  and late work cannot overwrite replacement views. Marker proposals appear only
+  after successful persistence; pending-save detachment requires reload to verify.
 - Run comparison aligns independent CSV ranges in explicit common X bins.
   Counts, qualified means, B-minus-A differences and gap-aware plots distinguish
   missing/low-count coverage. B imports are bounded, local to the comparison tab,

@@ -14,6 +14,56 @@ import org.junit.Test;
 
 public class LogAnalysisPanelTest {
     @org.junit.Rule public org.junit.rules.TemporaryFolder temporary = new org.junit.rules.TemporaryFolder();
+    @Test public void asynchronousRangesRetainGraphSelectionAndRejectOldDatasetResults() throws Exception {
+        var source = temporary.newFile("ranges.csv"); var second = temporary.newFile("replacement.csv");
+        java.nio.file.Files.writeString(source.toPath(), "Time,RPM,AFR\n0,1000,10\n100,2000,12\n200,3000,14\n300,4000,16\n");
+        java.nio.file.Files.writeString(second.toPath(), "Value\n8\n9\n");
+        var prepared = SwingLogLoadTask.prepare(source); var replacement = SwingLogLoadTask.prepare(second);
+        javax.swing.SwingUtilities.invokeAndWait(() -> {
+            LogAnalysisPanel panel = new LogAnalysisPanel();
+            try {
+                var install = LogAnalysisPanel.class.getDeclaredMethod("installLog", SwingLogLoadTask.PreparedLog.class); install.setAccessible(true); install.invoke(panel, prepared);
+                var graph = findNamed(panel, LogTimeGraphPanel.class, "OFFLINE LOG TIME GRAPH"); var selected = graph.getChannels(); assertFalse(selected.isEmpty());
+                var first = (javax.swing.JSpinner) field(panel, "firstSample"); var last = (javax.swing.JSpinner) field(panel, "lastSample");
+                var apply = (JButton) field(panel, "applyRangeButton"); var table = findNamed(panel, JTable.class, "LOG ANALYSIS STATISTICS");
+                first.setValue(2); last.setValue(3); apply.doClick();
+                assertEquals(0, table.getRowCount()); assertFalse(table.isEnabled()); assertEquals(selected, graph.getChannels());
+                awaitWork(((SwingLogStatisticsTask) field(panel, "statisticsTask")).pending());
+                assertTrue(table.isEnabled()); assertEquals(2500.0, (Double) table.getModel().getValueAt(1, 6), 0); assertEquals(selected, graph.getChannels());
+                assertTrue(((javax.swing.JLabel) field(panel, "statusLabel")).getText().contains("Samples 2–3"));
+                first.setValue(1); last.setValue(2); apply.doClick();
+                ((SwingLogStatisticsTask) field(panel, "statisticsTask")).pending().get(5, java.util.concurrent.TimeUnit.SECONDS);
+                panel.removeNotify(); panel.addNotify(); awaitWork(((SwingLogStatisticsTask) field(panel, "statisticsTask")).pending());
+                assertEquals(1500.0, (Double) table.getModel().getValueAt(1, 6), 0);
+                first.setValue(2); last.setValue(4); apply.doClick(); var old = ((SwingLogStatisticsTask) field(panel, "statisticsTask")).pending();
+                old.get(5, java.util.concurrent.TimeUnit.SECONDS); install.invoke(panel, replacement); awaitWork(old);
+                assertEquals(second, field(panel, "datasetFile")); assertEquals(1, table.getRowCount()); assertEquals(8.5, (Double) table.getModel().getValueAt(0, 6), 0);
+            } catch (Exception failure) { throw new RuntimeException(failure); }
+            finally { panel.removeNotify(); }
+        });
+    }
+    @Test public void markerSavesRetainPriorListAndNewLabelThenRequireVerificationAfterDetach() throws Exception {
+        var source = temporary.newFile("markers.csv"); String csv = "Value\n1\n2\n"; java.nio.file.Files.writeString(source.toPath(), csv);
+        var store = new com.romraider.logger.analysis.LogMarkerStore();
+        store.save(source, java.util.List.of(new com.romraider.logger.analysis.LogMarker(0, com.romraider.logger.analysis.LogMarkerType.CUSTOM, "base")));
+        var prepared = SwingLogLoadTask.prepare(source);
+        javax.swing.SwingUtilities.invokeAndWait(() -> {
+            LogAnalysisPanel panel = new LogAnalysisPanel();
+            try {
+                var install = LogAnalysisPanel.class.getDeclaredMethod("installLog", SwingLogLoadTask.PreparedLog.class); install.setAccessible(true); install.invoke(panel, prepared);
+                var label = (javax.swing.JTextField) field(panel, "markerLabel"); var add = findNamed(panel, JButton.class, "ADD LOG MARKER");
+                label.setText("queued"); add.doClick(); assertFalse(add.isEnabled()); assertEquals(1, ((java.util.List<?>) field(panel, "markers")).size());
+                label.setText("next"); awaitWork(((SwingMarkerSaveTask) field(panel, "markerSaves")).pending());
+                assertTrue(add.isEnabled()); assertEquals(2, ((java.util.List<?>) field(panel, "markers")).size()); assertEquals("next", label.getText());
+                add.doClick(); var save = ((SwingMarkerSaveTask) field(panel, "markerSaves")).pending(); save.get(5, java.util.concurrent.TimeUnit.SECONDS);
+                panel.removeNotify(); panel.addNotify(); awaitWork(save);
+                assertFalse(add.isEnabled()); assertNull(field(panel, "markerSnapshot")); assertEquals(3, store.load(source, 2).size());
+                install.invoke(panel, SwingLogLoadTask.prepare(source)); assertTrue(add.isEnabled()); assertEquals(3, ((java.util.List<?>) field(panel, "markers")).size());
+                assertEquals(csv, java.nio.file.Files.readString(source.toPath()));
+            } catch (Exception failure) { throw new RuntimeException(failure); }
+            finally { panel.removeNotify(); }
+        });
+    }
     @Test public void publicLoadMarshalsToSwingAndDetachedPanelRejectsQueuedResultsBeforeReattach() throws Exception {
         var first = temporary.newFile("first.csv"); var second = temporary.newFile("second.csv");
         java.nio.file.Files.writeString(first.toPath(), "Value\n1\n2\n");
@@ -62,8 +112,8 @@ public class LogAnalysisPanelTest {
         var store = new com.romraider.logger.analysis.LogMarkerStore();
         java.nio.file.Files.writeString(store.sidecar(source), "format.version=99\nmarker.count=0\n");
         javax.swing.SwingUtilities.invokeAndWait(() -> {
+            LogAnalysisPanel panel = new LogAnalysisPanel();
             try {
-                LogAnalysisPanel panel = new LogAnalysisPanel();
                 var install = LogAnalysisPanel.class.getDeclaredMethod("installLog", SwingLogLoadTask.PreparedLog.class);
                 install.setAccessible(true); install.invoke(panel, SwingLogLoadTask.prepare(source));
                 JButton add = findNamed(panel, JButton.class, "ADD LOG MARKER"); assertFalse(add.isEnabled());
@@ -71,10 +121,21 @@ public class LogAnalysisPanelTest {
                 assertTrue(java.nio.file.Files.readString(store.sidecar(source)).contains("99"));
                 java.nio.file.Files.delete(store.sidecar(source)); install.invoke(panel, SwingLogLoadTask.prepare(source)); assertTrue(add.isEnabled());
                 store.save(source, java.util.List.of(new com.romraider.logger.analysis.LogMarker(1, com.romraider.logger.analysis.LogMarkerType.CUSTOM, "external")));
-                add.doClick(); assertFalse(add.isEnabled());
+                add.doClick(); awaitWork(((SwingMarkerSaveTask) field(panel, "markerSaves")).pending()); assertFalse(add.isEnabled());
                 assertEquals("external", store.load(source, 2).get(0).getLabel());
             } catch (Exception failure) { throw new RuntimeException(failure); }
+            finally { panel.removeNotify(); }
         });
+    }
+    private static void awaitWork(java.util.concurrent.Future<?> pending) {
+        var loop = java.awt.Toolkit.getDefaultToolkit().getSystemEventQueue().createSecondaryLoop();
+        var problem = new java.util.concurrent.atomic.AtomicReference<Throwable>();
+        Thread waiter = new Thread(() -> {
+            try { pending.get(10, java.util.concurrent.TimeUnit.SECONDS); } catch (Exception failure) { problem.set(failure); }
+            java.awt.EventQueue.invokeLater(loop::exit);
+        }, "rr2-swing-test-wait");
+        waiter.setDaemon(true); waiter.start(); assertTrue(loop.enter());
+        if (problem.get() != null) throw new AssertionError(problem.get());
     }
     @Test
     public void exposesOfflinePlaybackAndGraphControls() {

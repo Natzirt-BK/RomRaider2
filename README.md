@@ -126,7 +126,8 @@ with lightweight source indexing and cancellable background sorting.
 [Marker files](docs/MARKER_FILE_SAFETY.md) load/save off the JavaFX thread, with
 strict bounds, conflict checks and atomic replacement.
 [Legacy Swing loading](docs/SWING_LOG_LOADING.md) now prepares bounded CSVs,
-initial statistics and marker snapshots off the event thread.
+initial statistics and marker snapshots off the event thread, with separate
+workers for later range calculations and marker saves.
 [Desktop profile persistence](docs/DESKTOP_PROFILE_INTEGRITY.md) preserves Unicode
 units and captured protocol, with escaped XML and atomic save/backup replacement.
 These follow-ups are not in the published 1.1.2 downloads.
