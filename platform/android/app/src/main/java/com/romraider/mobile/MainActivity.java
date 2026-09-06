@@ -73,8 +73,6 @@ import java.io.OutputStreamWriter;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
-import java.text.DecimalFormat;
-import java.text.DecimalFormatSymbols;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -1602,8 +1600,7 @@ public final class MainActivity extends Activity {
             summary.append('\n')
                     .append(value.getSelection().getParameter().getName())
                     .append("   ")
-                    .append(String.format(Locale.ROOT, "%.3f",
-                            value.getValue()))
+                    .append(MobileGaugeSnapshot.summaryValue(value.getValue()))
                     .append(' ')
                     .append(value.getSelection().getConversion().getUnits());
         }
@@ -1621,8 +1618,7 @@ public final class MainActivity extends Activity {
             summary.append("\n")
                     .append(value.getSelection().getParameter().getName())
                     .append("   ")
-                    .append(String.format(Locale.ROOT, "%.3f",
-                            value.getValue()))
+                    .append(MobileGaugeSnapshot.summaryValue(value.getValue()))
                     .append(' ')
                     .append(value.getSelection().getConversion().getUnits());
         }
@@ -1793,49 +1789,6 @@ public final class MainActivity extends Activity {
         loggerGaugeSnapshots.clear();
         loggerGaugeViews.clear();
         if (loggerGaugeGrid != null) loggerGaugeGrid.removeAllViews();
-    }
-
-    private static final class MobileGaugeSnapshot {
-        private final String id;
-        private final String name;
-        private final String units;
-        private final String format;
-        private double value;
-        private double minimum;
-        private double maximum;
-
-        private MobileGaugeSnapshot(String id, String name, String units,
-                String format, double value) {
-            this.id = id;
-            this.name = name;
-            this.units = units;
-            this.format = format;
-            this.value = value;
-            minimum = value;
-            maximum = value;
-        }
-
-        private void accept(double next) {
-            value = next;
-            minimum = Math.min(minimum, next);
-            maximum = Math.max(maximum, next);
-        }
-
-        private void resetPeaks() {
-            minimum = value;
-            maximum = value;
-        }
-
-        private String displayValue() {
-            try {
-                DecimalFormat formatter = new DecimalFormat(format,
-                        DecimalFormatSymbols.getInstance(Locale.ROOT));
-                formatter.setGroupingUsed(false);
-                return formatter.format(value);
-            } catch (IllegalArgumentException exception) {
-                return String.format(Locale.ROOT, "%.2f", value);
-            }
-        }
     }
 
     private static List<byte[]> simulatedResponses(

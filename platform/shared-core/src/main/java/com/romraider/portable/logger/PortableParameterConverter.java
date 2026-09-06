@@ -50,7 +50,9 @@ public final class PortableParameterConverter {
             }
             raw = value;
         }
+        // A bad float or expression is missing data, never a measured zero.
+        if (!Double.isFinite(raw)) return Double.NaN;
         double result = expression.evaluate(raw);
-        return Double.isFinite(result) ? result : 0.0;
+        return Double.isFinite(result) ? result : Double.NaN;
     }
 }

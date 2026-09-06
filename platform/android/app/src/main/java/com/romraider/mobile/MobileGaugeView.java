@@ -20,9 +20,9 @@ final class MobileGaugeView extends View {
     private String name = "Waiting for data";
     private String displayValue = "—";
     private String units = "";
-    private double value;
-    private double measuredMinimum;
-    private double measuredMaximum;
+    private double value = Double.NaN;
+    private double measuredMinimum = Double.NaN;
+    private double measuredMaximum = Double.NaN;
     private MobileGaugeScale scale = new MobileGaugeScale(0, 1);
     private MobileGaugeTheme theme = MobileGaugeTheme.RR2_CLASSIC;
 
@@ -40,13 +40,14 @@ final class MobileGaugeView extends View {
     void setValue(String id, String nextName, String nextDisplay, String nextUnits,
             double nextValue, double minimum, double maximum) {
         name = nextName;
-        displayValue = nextDisplay;
+        displayValue = Double.isFinite(nextValue) ? nextDisplay : "—";
         units = nextUnits == null ? "" : nextUnits;
         value = nextValue;
         measuredMinimum = minimum;
         measuredMaximum = maximum;
         scale = MobileGaugeScale.forChannel(id, name, units, minimum, maximum);
-        setContentDescription(name + ", " + displayValue + " " + units
+        setContentDescription(name + ", " + (Double.isFinite(value)
+                ? displayValue + " " + units : "no valid data")
                 + ", measured minimum " + compact(minimum)
                 + " and maximum " + compact(maximum));
         invalidate();
@@ -114,7 +115,7 @@ final class MobileGaugeView extends View {
             for (int index = 0; index <= 30; index++) {
                 float fraction = index / 30f;
                 double angle = Math.toRadians(start + sweep * fraction);
-                paint.setColor(fraction <= progress ? theme.primary
+                paint.setColor(Double.isFinite(value) && fraction <= progress ? theme.primary
                         : withAlpha(theme.secondary, .35f));
                 canvas.drawCircle(centerX + (float) Math.cos(angle) * radius,
                         centerY + (float) Math.sin(angle) * radius,
@@ -133,7 +134,7 @@ final class MobileGaugeView extends View {
             paint.clearShadowLayer();
         }
 
-        if (!theme.segmented) {
+        if (!theme.segmented && Double.isFinite(value)) {
             double needleAngle = Math.toRadians(start + sweep * progress);
             paint.setStrokeWidth(3.5f * density);
             paint.setColor(theme.primary);
@@ -154,7 +155,8 @@ final class MobileGaugeView extends View {
         paint.setTypeface(android.graphics.Typeface.DEFAULT);
         paint.setTextSize(10 * density);
         paint.setColor(withAlpha(theme.ink, .62f));
-        canvas.drawText(units.isEmpty() ? "CURRENT" : units,
+        canvas.drawText(!Double.isFinite(value) ? "NO VALID DATA"
+                : units.isEmpty() ? "CURRENT" : units,
                 centerX, 120 * density, paint);
 
         paint.setTextAlign(Paint.Align.LEFT);
@@ -179,6 +181,7 @@ final class MobileGaugeView extends View {
     }
 
     private static String compact(double value) {
+        if (!Double.isFinite(value)) return "—";
         double absolute = Math.abs(value);
         if (absolute >= 100) return String.format(Locale.ROOT, "%.0f", value);
         if (absolute >= 10) return String.format(Locale.ROOT, "%.1f", value);

@@ -15,7 +15,8 @@ final class MobileGaugeScale {
 
     float progress(double value) {
         double span = maximum - minimum;
-        if (span <= 0.0) return 0f;
+        if (!Double.isFinite(value) || !Double.isFinite(minimum)
+                || !Double.isFinite(span) || span <= 0.0) return 0f;
         return (float) Math.max(0.0, Math.min(1.0,
                 (value - minimum) / span));
     }
@@ -61,11 +62,17 @@ final class MobileGaugeScale {
             return new MobileGaugeScale(-20, 60);
         }
         if (identity.contains("knock")) return new MobileGaugeScale(-12, 12);
+        if (!Double.isFinite(measuredMinimum) || !Double.isFinite(measuredMaximum)) {
+            return new MobileGaugeScale(0, 1);
+        }
         double span = measuredMaximum - measuredMinimum;
         double padding = span > 0 ? span * .12
                 : Math.max(Math.abs(measuredMaximum) * .20, 1.0);
-        return new MobileGaugeScale(measuredMinimum - padding,
-                measuredMaximum + padding);
+        double lower = measuredMinimum - padding;
+        double upper = measuredMaximum + padding;
+        if (!Double.isFinite(lower) || !Double.isFinite(upper)
+                || !Double.isFinite(upper - lower)) return new MobileGaugeScale(0, 1);
+        return new MobileGaugeScale(lower, upper);
     }
 
     private static String clean(String value) {
