@@ -42,6 +42,9 @@ final class FxFuelAnalysisPane extends BorderPane implements AutoCloseable {
     private final TextField binWidth;
     private final TextField stoich = new TextField("14.7"), density = new TextField("732");
     private final CheckBox confirmed = new CheckBox();
+    private final CheckBox linkConditions = new CheckBox("Link MAF / Injector range and filters…");
+    private final Label linkStatus = new Label("Independent conditions");
+    private FxFuelAnalysisLink conditionsLink;
     private final List<FilterRow> filters = new ArrayList<>();
     private final Label source = new Label("No saved log loaded");
     private final Label status = new Label("Open a CSV log, map its channels, and confirm the units.");
@@ -100,6 +103,23 @@ final class FxFuelAnalysisPane extends BorderPane implements AutoCloseable {
         Label limits = new Label("No automatic operating-condition filters. Choose a suitable sample range and add filters for closed-loop state, temperatures or other conditions as needed. Missing filter values are rejected.");
         limits.setWrapText(true);
         VBox setup = new VBox(10, mapping, limits);
+        linkConditions.setDisable(true);
+        linkConditions.setWrapText(true); linkStatus.setWrapText(true);
+        setup.getChildren().add(new VBox(3, linkConditions, linkStatus));
+        linkConditions.setOnAction(event -> {
+            if (conditionsLink == null) return;
+            try {
+                if (!linkConditions.isSelected()) conditionsLink.disconnect();
+                else conditionsLink.enable(this, () -> FxDialogs.confirm(
+                        getScene() == null ? null : getScene().getWindow(), "Link analysis conditions?",
+                        "Use the current " + mode + " conditions in BOTH tabs? This replaces the other tab's range and filters.\n\n"
+                                + conditionsDraft().summary()
+                                + "\n\nFurther range/filter edits in either tab update both. Existing results and unit confirmations are cleared."
+                                + " Channel mappings, bin widths and fuel assumptions stay independent. Loading a setup or log breaks the link.",
+                        "Link conditions"));
+            } catch (IllegalArgumentException failure) { status.setText(failure.getMessage()); }
+            finally { conditionsLink.refresh(); }
+        });
         for (int index = 1; index <= 3; index++) {
             FilterRow filter = new FilterRow(); filters.add(filter);
             setup.getChildren().add(new VBox(3, new Label("Filter " + index + " (optional)"),
@@ -134,19 +154,26 @@ final class FxFuelAnalysisPane extends BorderPane implements AutoCloseable {
                 confirmed.setSelected(false); invalidate();
             });
         }
-        for (TextField text : List.of(first, last, binWidth, stoich, density)) {
-            text.textProperty().addListener((value, oldValue, newValue) -> invalidate());
+        binWidth.textProperty().addListener((value, oldValue, newValue) -> invalidate());
+        for (TextField text : List.of(stoich, density)) {
+            text.textProperty().addListener((value, oldValue, newValue) -> {
+                confirmed.setSelected(false); invalidate();
+            });
+        }
+        for (TextField text : List.of(first, last)) {
+            text.textProperty().addListener((value, oldValue, newValue) -> conditionsChanged());
         }
         confirmed.selectedProperty().addListener((value, oldValue, newValue) -> invalidate());
         for (FilterRow filter : filters) {
-            filter.channel.valueProperty().addListener((value, oldValue, newValue) -> invalidate());
-            filter.minimum.textProperty().addListener((value, oldValue, newValue) -> invalidate());
-            filter.maximum.textProperty().addListener((value, oldValue, newValue) -> invalidate());
+            filter.channel.valueProperty().addListener((value, oldValue, newValue) -> conditionsChanged());
+            filter.minimum.textProperty().addListener((value, oldValue, newValue) -> conditionsChanged());
+            filter.maximum.textProperty().addListener((value, oldValue, newValue) -> conditionsChanged());
         }
     }
 
     void setDataset(LogDataset next) {
         if (closed) return;
+        if (conditionsLink != null) conditionsLink.disconnect();
         invalidate(); dataset = next;
         List<LogChannel> channels = next.getChannels().stream().filter(channel -> !channel.isTimeChannel()).toList();
         for (ComboBox<LogChannel> mapping : List.of(x, y, correction)) {
@@ -161,6 +188,39 @@ final class FxFuelAnalysisPane extends BorderPane implements AutoCloseable {
         confirmed.setSelected(false);
         source.setText(next.getSourceName() + " · " + next.getRowCount() + " samples · saved data only");
         calculate.setDisable(false); saveSetup.setDisable(false); loadSetup.setDisable(false); invalidate();
+        if (conditionsLink != null) conditionsLink.refresh();
+    }
+
+    void attachConditionsLink(FxFuelAnalysisLink link) { conditionsLink = link; showConditionsLink(false); }
+    boolean conditionsAvailable() { return !closed && dataset != null; }
+    long inputRevision() { return generation; }
+    FxFuelAnalysisLink.Draft conditionsDraft() {
+        return new FxFuelAnalysisLink.Draft(dataset, first.getText(), last.getText(), filters.stream()
+                .map(row -> new FxFuelAnalysisLink.FilterDraft(row.channel.getValue(), row.minimum.getText(), row.maximum.getText())).toList());
+    }
+    void applyConditionsDraft(FxFuelAnalysisLink.Draft draft) {
+        if (!conditionsAvailable() || draft.dataset() != dataset || draft.filters().size() != filters.size()) {
+            throw new IllegalArgumentException("Conditions do not match this dataset or filter layout.");
+        }
+        invalidateConditions();
+        first.setText(draft.first()); last.setText(draft.last());
+        for (int i = 0; i < filters.size(); i++) {
+            FilterRow row = filters.get(i);
+            FxFuelAnalysisLink.FilterDraft next = draft.filters().get(i);
+            row.channel.setValue(next.channel()); row.channel.setTooltip(null);
+            row.minimum.setText(next.minimum()); row.maximum.setText(next.maximum());
+        }
+    }
+    void invalidateConditions() { confirmed.setSelected(false); invalidate(); }
+    private void conditionsChanged() {
+        invalidateConditions();
+        if (conditionsLink != null) conditionsLink.changed(this);
+    }
+    void showConditionsLink(boolean linked) {
+        linkConditions.setSelected(linked);
+        linkConditions.setDisable(conditionsLink == null || !conditionsLink.available());
+        linkStatus.setText(linked ? "Linked · edits update both tabs; each tab still needs unit confirmation."
+                : "Independent conditions · linking requires review; setup/log changes disconnect.");
     }
 
     private void chooseSetupFile(boolean save) {
@@ -242,6 +302,7 @@ final class FxFuelAnalysisPane extends BorderPane implements AutoCloseable {
     void applySetup(FuelAnalysisSetup setup) {
         if (closed || dataset == null) throw new IllegalArgumentException("Open a CSV log first");
         if (!setup.kind().name().equals(mode.name())) throw new IllegalArgumentException("This setup belongs in the " + setup.kind() + " tab; existing inputs are unchanged.");
+        if (conditionsLink != null) conditionsLink.disconnect();
         invalidate(); confirmed.setSelected(false);
         List<String> unresolved = new ArrayList<>();
         restoreChannel(x, setup.x(), unresolved); restoreChannel(y, setup.y(), unresolved);
@@ -353,9 +414,14 @@ final class FxFuelAnalysisPane extends BorderPane implements AutoCloseable {
         column.setSortable(false); column.setPrefWidth(125); results.getColumns().add(column);
     }
     private static Tab tab(String name, javafx.scene.Node content) { Tab tab = new Tab(name, content); tab.setClosable(false); return tab; }
-    private static int selected(ComboBox<LogChannel> choice) {
+    private int selected(ComboBox<LogChannel> choice) {
         if (choice.getValue() == null) throw new IllegalArgumentException("Map every required channel before analyzing.");
-        return choice.getValue().getIndex();
+        int index = choice.getValue().getIndex();
+        if (dataset == null || index < 0 || index >= dataset.getChannels().size()
+                || dataset.getChannels().get(index) != choice.getValue() || choice.getValue().isTimeChannel()) {
+            throw new IllegalArgumentException("Map channels from the current dataset before analyzing.");
+        }
+        return index;
     }
     private static int integer(TextField field, String name) {
         try { return Integer.parseInt(field.getText().trim()); }
@@ -378,8 +444,8 @@ final class FxFuelAnalysisPane extends BorderPane implements AutoCloseable {
         return new ListCell<>() {
             @Override protected void updateItem(LogChannel channel, boolean empty) {
                 super.updateItem(channel, empty);
-                setText(channel == null ? "None / choose channel" : channel.getLabel());
-                setTooltip(channel == null ? null : new Tooltip(channel.getLabel()));
+                setText(channel == null ? "None / choose channel" : "[" + (channel.getIndex() + 1) + "] " + channel.getLabel());
+                setTooltip(channel == null ? null : new Tooltip("CSV column " + (channel.getIndex() + 1) + ": " + channel.getLabel()));
             }
         };
     }
@@ -393,7 +459,9 @@ final class FxFuelAnalysisPane extends BorderPane implements AutoCloseable {
     }
     @Override public void close() {
         if (closed) return;
+        if (conditionsLink != null) conditionsLink.disconnect();
         closed = true; invalidate(); dataset = null; worker.shutdownNow();
+        if (conditionsLink != null) conditionsLink.refresh(); else showConditionsLink(false);
         // Complete already-requested atomic exports; closed/load-generation guards
         // prevent any queued import from mutating a disposed pane.
         setupWorker.shutdown();

@@ -68,9 +68,11 @@ class FxFuelAnalysisPaneSmokeTest {
                 Object filter = ((List<?>) field(pane[0], "filters")).get(0);
                 ((TextField) field(filter, "minimum")).setText("8");
                 ((TextField) field(filter, "maximum")).setText("8");
+                confirmed(pane[0]);
                 assertNull(calculate(pane[0]));
                 assertTrue(((Label) field(pane[0], "status")).getText().contains("Select a channel"));
                 ComboBox<LogChannel> choice = field(filter, "channel"); choice.setValue(data.getChannels().get(6));
+                confirmed(pane[0]);
                 job[0] = calculate(pane[0]);
             });
             job[0].get(10, TimeUnit.SECONDS);

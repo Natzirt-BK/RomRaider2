@@ -19,6 +19,10 @@ What changed for 1.1.3
   are honored; bare inputs use definition-default units independently of gauge
   units. Selected CSV columns stay unchanged; failed cycles publish no partial row.
   DimeMod runtime discovery and external serial AEM input remain separate work.
+- MAF and Injector can explicitly link sample ranges and numeric filters after
+  review. Edits in either tab update both and clear stale results/confirmations.
+  Setup/log changes disconnect; channel mappings and fuel assumptions remain
+  independent. This is not automatic operating-condition filtering or ROM tuning.
 
 What changed for 1.1.2
 ---------------------

@@ -46,11 +46,12 @@ cannot publish into a replacement log or a closed window.
   filters**. Users must select appropriate conditions and understand the logged
   channel units/state encoding. Three arbitrary numeric filters do not replace
   the full legacy filter pipeline. Sample ranges are independent of the
-  existing Log Analysis cursor/range.
+  existing Log Analysis cursor/range. In 1.1.3 development source, MAF and Injector
+  conditions can optionally be linked as described below.
 
 ## Still deferred
 
-Live capture, synchronized legacy filtering, MAF interpolation, injector
+Live capture, full legacy operating-condition filtering, MAF interpolation, injector
 regression/scaling/latency fitting, and explicit
 reviewed transfer into ROM tables remain follow-ups. Neither pane can connect
 to a vehicle, alter ROM bytes, save over the source CSV, or execute ECU writes.
@@ -99,3 +100,47 @@ wrong-kind imports and stale analysis/import callbacks. Android unit tests, lint
 both 1.1.3 APK versions/notices and portable checks pass after the shared version
 bump. Native file-chooser/provider failure paths and physical platform behavior
 still need separate acceptance; these results do not qualify vehicle tuning.
+
+## Linked MAF / Injector conditions (1.1.3 development source)
+
+Both tabs initially keep independent ranges and filters. After loading a CSV,
+select **Link MAF / Injector range and filters…** in the tab whose conditions
+you want to use. The native review dialog lists its inclusive sample range and
+numeric filters, with one-based CSV column numbers to distinguish duplicate
+headers. Approving replaces the other tab's range and filters; cancelling changes
+neither setup. Invalid ranges, unresolved filters, nonfinite/reversed limits and
+channels from another dataset are rejected before review. Changes made to either
+setup while the dialog is open invalidate that approval.
+
+While linked, range/filter edits in either tab update both immediately. Incomplete
+edits are mirrored too, so both tabs visibly reject the same invalid draft instead
+of using different last-valid conditions. Every condition change cancels pending
+calculations, clears results/copy output and clears each tab's unit confirmation.
+Confirm the units separately before running each analysis again. The same range
+and numeric filters do **not** guarantee identical accepted counts: MAF and
+Injector require different measurements, with their own invalid-value rules.
+
+Channel mappings, bin widths, stoichiometric AFR and fuel density remain
+independent. The Log Analysis cursor, playback, statistics and charts are not
+linked by this feature. Changing a fuel assumption clears that pane's own
+confirmation without changing the other pane.
+No operating conditions are inferred, and no analysis
+result is applied to a ROM or sent to a vehicle.
+
+Unchecking either box disconnects without reverting the current conditions.
+Successfully importing an analysis setup, replacing either dataset or closing a
+pane also disconnects. A failed/wrong-kind import leaves the link and inputs
+unchanged; a queued import cannot overwrite a newly reviewed link. Links are
+window-local and are not saved in `.rr2analysis` files. They require the exact same
+loaded dataset instance, not merely matching filenames, row counts or headers.
+
+Native JavaFX tests cover confirmation/cancellation, both update directions,
+duplicate-column identity, malformed conditions, dataset replacement, close,
+setup import, cancellation of both analysis workers, stale setup callbacks and
+matching synthetic filter counts including a nonfinite filter sample.
+
+Local qualification for this follow-up: all 90 display-enabled JavaFX tests and
+35 Compose tests pass, with no skips in those suites. Portable checks and Linux
+staging pass; Ant tests/Linux compilation pass with the existing optional corpus
+skips. The nine new link tests include the actual native confirmation dialog.
+The source version remains 1.1.3; public 1.1.2 downloads are unchanged.

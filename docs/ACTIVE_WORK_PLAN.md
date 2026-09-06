@@ -81,3 +81,9 @@ including P200/P201, bounded hidden dependencies and explicit input-unit binding
 See [the calculation contract and verification scope](CALCULATED_LOGGER_CHANNELS.md).
 This does not complete DimeMod runtime discovery, external serial sensors,
 background recording, setup transfer or hardware acceptance.
+
+The 1.1.3 source also provides reviewed, two-way linking of MAF/Injector sample
+ranges and numeric filters. Link activation and condition edits clear affected
+results and confirmations; setup/log replacement disconnects. Full legacy
+operating-condition filters, fitting/interpolation and reviewed ROM-table transfer
+remain open, as does linkage to the separate Log Analysis cursor/statistics view.

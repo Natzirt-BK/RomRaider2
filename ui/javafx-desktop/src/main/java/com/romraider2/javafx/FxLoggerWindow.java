@@ -355,6 +355,7 @@ final class FxLoggerWindow {
                 fixedTab("MAF", mafAnalysis = new FxFuelAnalysisPane(FxFuelAnalysisPane.Mode.MAF, this::openLog)),
                 fixedTab("Injector", injectorAnalysis = new FxFuelAnalysisPane(FxFuelAnalysisPane.Mode.INJECTOR, this::openLog)),
                 fixedTab("Gauges only", new StackPane()));
+        new FxFuelAnalysisLink(mafAnalysis, injectorAnalysis);
         views.getSelectionModel().select(tabFor(
                 context.getPreferences().getView()));
         views.getSelectionModel().selectedIndexProperty().addListener(

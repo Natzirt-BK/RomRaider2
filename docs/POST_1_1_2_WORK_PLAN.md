@@ -55,7 +55,7 @@ serial AEM input remains a distinct transport/lifecycle project.
 
 ## Then
 
-The next analysis slice is shared, reviewed conditions between MAF and Injector:
+Implemented in 1.1.3 development source: [linked, reviewed conditions](FUEL_LOG_ANALYSIS.md#linked-maf--injector-conditions-113-development-source) between MAF and Injector:
 the same loaded dataset, inclusive sample range and up to three numeric filters.
 Keep the input-channel mappings, bin widths and injector fuel assumptions
 independent. Sharing conditions must be explicit, reject invalid ranges or
@@ -65,7 +65,7 @@ different datasets. Cover source/target replacement, stale worker results,
 duplicate column identities, missing/nonfinite filter values and closed panes.
 This is not automatic closed-loop/transient filtering or full legacy parity.
 
-Continue synchronized analysis filters, reviewed fitting/interpolation, log-to-map
+Continue full legacy operating-condition filtering, reviewed fitting/interpolation, log-to-map
 tracing and binned/run-comparison views. Portable logger-setup export/import and
 bounded large-log review follow. Background recording needs its own Android
 service/USB/notification and failure-recovery design; switching to GAUGES is not
