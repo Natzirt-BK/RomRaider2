@@ -37,7 +37,8 @@ locally. No real installed application or user-data directory was used.
 snapshot and only marks it saved after opening, writing, flushing and closing the
 destination all succeed. A null destination or any I/O failure leaves the saved
 baseline, dirty state and recoverable edits intact. Edits made after capture
-remain dirty. A destroyed Activity does not queue a success UI/recovery callback.
+remain dirty. A destroyed Activity does not publish success or enqueue new
+recovery work from the success callback.
 
 Eight new unit tests cover success ordering, null/open/write/flush/close failure,
 edits during close and snapshot ownership. They use the production recovery store
@@ -53,3 +54,15 @@ This is not a physical phone/document-provider or vehicle qualification claim.
 Android still does not repair ROM checksums. Saved copies remain for review and
 desktop validation, not flashing. The audit's XML encoding, gauge warning/unit,
 release/signing migration and hardware findings are separate follow-up work.
+
+## Final hosted verification
+
+- Installer source `ab50d34`: [branch validation](https://github.com/Natzirt-BK/subaru-ecu-tools-linux/actions/runs/34010146264)
+  and [master validation](https://github.com/Natzirt-BK/subaru-ecu-tools-linux/actions/runs/34010248704)
+  both pass script tests and Debian 13 bridge/build/tests. The fix is on the
+  companion repository's `master`; its application release pin is unchanged.
+- Android source `2c54b491`: [regression run](https://github.com/Natzirt-BK/RomRaider2/actions/runs/34010177772)
+  passes all unit/build, emulator seed (including ROM-save failure/recovery),
+  restart, same-key upgrade, clear/corrupt setup and desktop CSV parsing checks.
+- The same source passes [Linux/Windows tests and package verification](https://github.com/Natzirt-BK/RomRaider2/actions/runs/34010177780).
+  The later evidence-recording commit changes documentation only.
