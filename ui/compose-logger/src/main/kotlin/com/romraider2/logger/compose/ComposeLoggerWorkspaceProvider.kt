@@ -1819,7 +1819,10 @@ private fun LiveGaugeCard(
                     LoggerGaugeTheme.CLUB_SPORT, LoggerGaugeTheme.SWEEP_RIBBON,
                     LoggerGaugeTheme.TWIN_ARC, LoggerGaugeTheme.AMBER_MATRIX,
                     LoggerGaugeTheme.VECTOR_HUD, LoggerGaugeTheme.TURBO_POD,
-                    LoggerGaugeTheme.STI_NIGHT, LoggerGaugeTheme.EVOLUTION_NIGHT)) {
+                    LoggerGaugeTheme.STI_NIGHT, LoggerGaugeTheme.EVOLUTION_NIGHT,
+                    LoggerGaugeTheme.PHOSPHOR_84, LoggerGaugeTheme.ELECTRIC_BLOOM,
+                    LoggerGaugeTheme.SUNSET_GT, LoggerGaugeTheme.LASER_LED,
+                    LoggerGaugeTheme.PRISM_CASSETTE)) {
                 InstrumentGauge(GaugeFaceRenderer.Style.valueOf(gaugeTheme.name),
                     GaugeFaceRenderer.Reading(channel.name, displayedValue ?: "—", channel.units,
                         displayedRaw ?: Double.NaN, range.minimum, range.maximum,
@@ -2332,6 +2335,10 @@ private fun gaugeStyle(theme: LoggerGaugeTheme): GaugeStyle = when (theme) {
     LoggerGaugeTheme.TURBO_POD -> gaugeStyle(LoggerGaugeTheme.AMBER_GT)
     LoggerGaugeTheme.STI_NIGHT -> gaugeStyle(LoggerGaugeTheme.RALLY_HERITAGE)
     LoggerGaugeTheme.EVOLUTION_NIGHT -> gaugeStyle(LoggerGaugeTheme.RALLY_HERITAGE)
+    LoggerGaugeTheme.PHOSPHOR_84, LoggerGaugeTheme.ELECTRIC_BLOOM,
+    LoggerGaugeTheme.PRISM_CASSETTE -> gaugeStyle(LoggerGaugeTheme.NEON_CIRCUIT)
+    LoggerGaugeTheme.SUNSET_GT -> gaugeStyle(LoggerGaugeTheme.CENTRAL_TACH)
+    LoggerGaugeTheme.LASER_LED -> gaugeStyle(LoggerGaugeTheme.AMBER_GT)
     LoggerGaugeTheme.RR2_CLASSIC -> GaugeStyle(
         Color(0xFF151C24), Color(0xFF2D3945), brandRed,
         Color(0xFF718397), Color(0xFFD92632), Color.White,

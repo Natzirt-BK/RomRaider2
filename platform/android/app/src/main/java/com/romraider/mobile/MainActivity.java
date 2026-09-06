@@ -123,6 +123,8 @@ public final class MainActivity extends Activity {
     private Button editorTab;
     private Button gaugesTab;
     private ScrollView workspaceScroll;
+    private LinearLayout workspacePage;
+    private LinearLayout workspaceTabs;
     private LinearLayout workspaceBrand;
     private TextView workspaceFooter;
     private LinearLayout gaugesPage;
@@ -130,6 +132,12 @@ public final class MainActivity extends Activity {
     private ViewGroup gaugeGridHome;
     private int gaugeGridHomeIndex;
     private boolean gaugesVisible;
+    private boolean mountedFullScreen;
+    private Button mountedModeButton;
+    private int previousSystemUiVisibility;
+    private int previousSystemBarsBehavior;
+    private int previousVisibleSystemBars;
+    private android.window.OnBackInvokedCallback mountedBackCallback;
     private boolean gaugeDemo;
     private boolean liveEcuIdentified;
     private final Map<String, Long> gaugeReceivedAt = new LinkedHashMap<>();
@@ -219,6 +227,20 @@ public final class MainActivity extends Activity {
     private java.util.concurrent.Future<?> archivePreparation;
     private int archiveExportGeneration;
     private boolean archiveExportPending;
+    private final java.util.concurrent.ThreadPoolExecutor logImportExecutor = new java.util.concurrent.ThreadPoolExecutor(
+            1, 1, 0L, java.util.concurrent.TimeUnit.MILLISECONDS, new java.util.concurrent.ArrayBlockingQueue<>(1),
+            task -> new Thread(task, "rr2-csv-import"));
+    private java.util.concurrent.Future<?> logImportTask;
+    private android.os.CancellationSignal logImportSignal;
+    private int logImportGeneration;
+    private boolean logImportLoading;
+    private String logImportStatus = "No CSV imported. Imported data never becomes live gauge data.";
+    private TextView logImportStatusView;
+    private Button cancelLogImportButton;
+    private PortableLogCsvReader.Summary importedLogSummary;
+    private String importedLogName = "";
+    private int importedLogPage;
+    private View importedLogCard;
     private boolean loggerVisible;
     private volatile String usbState = "OpenPort not prepared.";
     private volatile PortableLoggerDefinition loggerDefinition;
@@ -312,6 +334,8 @@ public final class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         activityResumed = true;
+        updateScreenAwake();
+        if (mountedFullScreen) applyMountedSystemBars();
         closeMissingOpenPort();
         refreshUsbStatus();
         previewHandler.removeCallbacks(gaugeMonitor);
@@ -322,6 +346,9 @@ public final class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        setMountedFullScreen(false);
+        cancelLogImport(null);
+        logImportExecutor.shutdownNow();
         archiveExportGeneration++;
         if (archivePreparation != null) archivePreparation.cancel(true);
         if (archiveRecoveryDialog != null) {
@@ -351,6 +378,7 @@ public final class MainActivity extends Activity {
     @Override
     protected void onStop() {
         activityResumed = false;
+        updateScreenAwake();
         previewHandler.removeCallbacks(gaugeMonitor);
         previewHandler.removeCallbacks(recordingTick);
         stopLoggerPreview(null);
@@ -360,16 +388,19 @@ public final class MainActivity extends Activity {
 
     private void showWorkspace() {
         LinearLayout page = column();
+        workspacePage = page;
         page.setPadding(dp(20), dp(18), dp(20), dp(12));
         page.setBackgroundColor(BACKGROUND);
         if (Build.VERSION.SDK_INT >= 30) {
             getWindow().setDecorFitsSystemWindows(false);
             page.setOnApplyWindowInsetsListener((view, insets) -> {
                 android.graphics.Insets bars = insets.getInsets(
-                        android.view.WindowInsets.Type.systemBars()
+                        (mountedFullScreen ? 0 : android.view.WindowInsets.Type.systemBars())
                                 | android.view.WindowInsets.Type.displayCutout());
-                view.setPadding(dp(20) + bars.left, dp(18) + bars.top,
-                        dp(20) + bars.right, dp(12) + bars.bottom);
+                view.setPadding(dp(mountedFullScreen ? 4 : 20) + bars.left,
+                        dp(mountedFullScreen ? 0 : 18) + bars.top,
+                        dp(mountedFullScreen ? 4 : 20) + bars.right,
+                        dp(mountedFullScreen ? 0 : 12) + bars.bottom);
                 return insets;
             });
         }
@@ -402,6 +433,7 @@ public final class MainActivity extends Activity {
         page.addView(brand, matchWrap(dp(14)));
 
         LinearLayout tabs = new LinearLayout(this);
+        workspaceTabs = tabs;
         tabs.setOrientation(LinearLayout.HORIZONTAL);
         tabs.setPadding(0, 0, 0, dp(12));
         loggerTab = button("LOGGER");
@@ -471,6 +503,8 @@ public final class MainActivity extends Activity {
     }
 
     private void showLogger() {
+        cancelLogImport(null);
+        importedLogCard = null;
         if (gaugesVisible) leaveGaugesOnly();
         stopLoggerPreview(null);
         loggerVisible = true;
@@ -503,7 +537,12 @@ public final class MainActivity extends Activity {
                         + "value for each channel.");
         Button open = button("OPEN CSV LOG");
         open.setOnClickListener(view -> openLog());
-        reviewCard.addView(open, matchWrap());
+        cancelLogImportButton = button("CANCEL CSV IMPORT");
+        cancelLogImportButton.setOnClickListener(view -> cancelLogImport("CSV import cancelled; previous summary retained."));
+        reviewCard.addView(actionRow(open, cancelLogImportButton), matchWrap());
+        logImportStatusView = statusText(logImportStatus);
+        reviewCard.addView(logImportStatusView, matchWrap());
+        refreshLogImportStatus();
         content.addView(reviewCard, cardParams(dp(10)));
 
         LinearLayout setupCard = sectionCard("LOGGER SETUP",
@@ -601,6 +640,7 @@ public final class MainActivity extends Activity {
         content.addView(liveCard, cardParams(dp(12)));
         displayedRecordingState = null;
         refreshRecording();
+        showLogSummary();
     }
 
     private void showUsbDevices() {
@@ -823,6 +863,7 @@ public final class MainActivity extends Activity {
             notice("Stop logging before opening the editor. LOGGER and GAUGES remain available.");
             return;
         }
+        cancelLogImport(null);
         if (gaugesVisible) leaveGaugesOnly();
         stopLoggerPreview(null);
         stopLiveLogger(null);
@@ -940,6 +981,11 @@ public final class MainActivity extends Activity {
     }
 
     private void openLog() {
+        if (!canReviewLog()) {
+            notice("Stop logging and return to LOGGER before importing a CSV.");
+            return;
+        }
+        cancelLogImport(null);
         Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         intent.setType("text/*");
@@ -1016,20 +1062,7 @@ public final class MainActivity extends Activity {
                 }
             });
         } else if (requestCode == OPEN_LOG) {
-            String name = displayName(uri);
-            workerExecutor.execute(() -> {
-                try (InputStream input = getContentResolver().openInputStream(uri);
-                     InputStreamReader reader = new InputStreamReader(input,
-                             StandardCharsets.UTF_8)) {
-                    PortableLogSession opened = PortableLogCsvReader.read(reader);
-                    runOnUiThread(() -> {
-                        showLogger();
-                        showLogSummary(name, opened);
-                    });
-                } catch (Exception ex) {
-                    fileFailure(ex, "The log could not be opened.");
-                }
-            });
+            loadLogSummary(uri);
         } else if (requestCode == OPEN_LOGGER_DEFINITION) {
             loadLoggerDefinition(uri, displayName(uri));
         } else if (requestCode == OPEN_PORTABLE_SETUP) {
@@ -1771,23 +1804,119 @@ public final class MainActivity extends Activity {
                 }).setNegativeButton("Cancel", null).show();
     }
 
-    private void showLogSummary(String name, PortableLogSession session) {
-        Map<String, PortableLogSample> latest = new LinkedHashMap<>();
-        for (PortableLogSample sample : session.snapshot()) latest.put(sample.getChannelId(), sample);
-        StringBuilder summary = new StringBuilder(name).append("\n")
-                .append(session.size()).append(" channel values  /  ")
-                .append(latest.size()).append(" channels\n\n");
-        for (PortableLogSample sample : latest.values()) {
-            summary.append(sample.getChannelName()).append("   ")
-                    .append(sample.getValue()).append(' ')
-                    .append(sample.getUnits()).append('\n');
+    private boolean canReviewLog() {
+        return !isDestroyed() && loggerVisible && !gaugesVisible && !isLiveActive() && !previewRunning;
+    }
+
+    private void cancelLogImport(String message) {
+        logImportGeneration++;
+        if (logImportTask != null) logImportTask.cancel(true);
+        logImportTask = null;
+        if (logImportSignal != null) {
+            try { logImportSignal.cancel(); }
+            catch (RuntimeException failure) { android.util.Log.w("RomRaider2", "CSV provider cancellation failed", failure); }
         }
-        LinearLayout card = sectionCard("OPEN LOG", name + "  /  "
-                + session.size() + " values  /  " + latest.size()
-                + " channels");
-        TextView values = statusText(summary.toString().trim());
-        card.addView(values, matchWrap());
-        content.addView(card, 3, cardParams(dp(10)));
+        logImportSignal = null;
+        logImportExecutor.purge();
+        if (logImportLoading) logImportStatus = message == null
+                ? "CSV import cancelled; previous summary retained." : message;
+        logImportLoading = false;
+        refreshLogImportStatus();
+    }
+
+    private void refreshLogImportStatus() {
+        if (logImportStatusView != null) logImportStatusView.setText(logImportStatus);
+        if (cancelLogImportButton != null) cancelLogImportButton.setEnabled(logImportLoading);
+    }
+
+    private void loadLogSummary(Uri uri) {
+        if (!canReviewLog()) { notice("Stop logging and return to LOGGER before importing a CSV."); return; }
+        cancelLogImport(null);
+        int generation = logImportGeneration;
+        android.os.CancellationSignal signal = new android.os.CancellationSignal();
+        logImportSignal = signal;
+        logImportLoading = true;
+        logImportStatus = "Reading the complete CSV on a worker. Previous summary retained until validation finishes.";
+        refreshLogImportStatus();
+        try {
+            logImportTask = logImportExecutor.submit(() -> {
+                try {
+                    String name = csvDisplayName(uri, signal);
+                    signal.throwIfCanceled();
+                    PortableLogCsvReader.Summary opened;
+                    try (android.content.res.AssetFileDescriptor descriptor =
+                            getContentResolver().openAssetFileDescriptor(uri, "r", signal)) {
+                        if (descriptor == null) throw new IOException("CSV source is unavailable");
+                        try (InputStream input = descriptor.createInputStream();
+                             InputStreamReader reader = new InputStreamReader(input, StandardCharsets.UTF_8.newDecoder()
+                                     .onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
+                                     .onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT))) {
+                            opened = PortableLogCsvReader.summarize(reader);
+                        }
+                    }
+                    runOnUiThread(() -> {
+                        if (isDestroyed() || generation != logImportGeneration) return;
+                        logImportTask = null; logImportSignal = null; logImportLoading = false;
+                        if (!canReviewLog()) {
+                            logImportStatus = "CSV import was not applied after the workspace changed.";
+                            refreshLogImportStatus(); return;
+                        }
+                        importedLogSummary = opened;
+                        importedLogName = name;
+                        importedLogPage = 0;
+                        logImportStatus = "Complete file validated. This is an imported-log summary, not live data.";
+                        refreshLogImportStatus();
+                        showLogSummary();
+                    });
+                } catch (Exception failure) {
+                    runOnUiThread(() -> {
+                        if (isDestroyed() || generation != logImportGeneration) return;
+                        logImportTask = null; logImportSignal = null; logImportLoading = false;
+                        logImportStatus = "CSV was not imported: " + (failure.getMessage() == null
+                                ? "The source could not be read." : failure.getMessage()) + " Previous summary retained.";
+                        refreshLogImportStatus();
+                    });
+                }
+            });
+        } catch (java.util.concurrent.RejectedExecutionException unavailable) {
+            logImportSignal = null; logImportLoading = false;
+            logImportStatus = "CSV import worker is unavailable. Previous summary retained.";
+            refreshLogImportStatus();
+        }
+    }
+
+    private void showLogSummary() {
+        if (!loggerVisible || gaugesVisible || importedLogSummary == null) return;
+        if (importedLogCard != null && importedLogCard.getParent() == content) content.removeView(importedLogCard);
+        List<PortableLogCsvReader.ChannelSummary> channels = importedLogSummary.channels();
+        int pages = Math.max(1, (channels.size() + 11) / 12);
+        importedLogPage = Math.max(0, Math.min(importedLogPage, pages - 1));
+        int start = importedLogPage * 12, end = Math.min(channels.size(), start + 12);
+        StringBuilder summary = new StringBuilder("IMPORTED FILE — NOT LIVE\n")
+                .append("Channels ").append(channels.isEmpty() ? 0 : start + 1).append('–').append(end)
+                .append(" of ").append(channels.size()).append("\n\n");
+        for (int index = start; index < end; index++) {
+            PortableLogCsvReader.ChannelSummary channel = channels.get(index);
+            PortableLogSample latest = channel.latest();
+            summary.append(latest.getChannelName()).append(" [").append(latest.getChannelId()).append("]\n")
+                    .append("Latest: ").append(Double.isFinite(latest.getValue()) ? Double.toString(latest.getValue()) : "Unavailable")
+                    .append(' ').append(latest.getUnits()).append(" at ").append(latest.getTimestampMillis()).append(" ms\n")
+                    .append("Finite: ").append(channel.finite()).append("  /  unavailable: ").append(channel.missing())
+                    .append("\nMin / max: ").append(channel.finite() == 0 ? "Unavailable"
+                            : channel.minimum() + " / " + channel.maximum()).append("\n\n");
+        }
+        LinearLayout card = sectionCard("IMPORTED LOG SUMMARY", importedLogName + "  /  "
+                + importedLogSummary.values() + " values  /  " + channels.size() + " channels");
+        card.addView(statusText(summary.toString().trim()), matchWrap());
+        if (pages > 1) {
+            Button previous = button("PREVIOUS CHANNELS"), next = button("NEXT CHANNELS");
+            previous.setEnabled(importedLogPage > 0); next.setEnabled(importedLogPage + 1 < pages);
+            previous.setOnClickListener(view -> { importedLogPage--; showLogSummary(); });
+            next.setOnClickListener(view -> { importedLogPage++; showLogSummary(); });
+            card.addView(actionRow(previous, next), matchWrap());
+        }
+        importedLogCard = card;
+        content.addView(card, Math.min(3, content.getChildCount()), cardParams(dp(10)));
     }
 
     private boolean loggerImportPending() {
@@ -1825,6 +1954,7 @@ public final class MainActivity extends Activity {
             previewSession = new PortableLogSession();
             previewCycle = 0;
             previewStartedAt = SystemClock.elapsedRealtime();
+            cancelLogImport(null);
             previewRunning = true;
             loggerPreviewButton.setText(R.string.logger_preview_stop);
             loggerPreviewView.setText("SIMULATED DATA\nStarting offline logger preview...");
@@ -1908,6 +2038,7 @@ public final class MainActivity extends Activity {
                 openPort = null; // Exclusive ownership transferred; Activity must never close it.
             }
             usbState = "OpenPort is owned by the read-only recording service.";
+            cancelLogImport(null);
             clearLoggerGauges();
             displayedRecording = null;
             displayedRecordingState = null;
@@ -1963,8 +2094,7 @@ public final class MainActivity extends Activity {
             displayedRecordingState = state;
         }
         liveEcuIdentified = busy && state.phase() == ReadOnlyRecording.Phase.RECORDING;
-        if (busy && activityResumed) getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        updateScreenAwake();
         if (liveLoggerButton != null) liveLoggerButton.setText(busy
                 ? R.string.logger_live_stop : R.string.logger_live_start);
         if (liveLoggerView != null) {
@@ -2165,6 +2295,7 @@ public final class MainActivity extends Activity {
             notice("Stop the live logger before showing simulated gauges.");
             return;
         }
+        cancelLogImport(null);
         stopLoggerPreview(null);
         clearLoggerGauges();
         gaugeDemo = true;
@@ -2377,6 +2508,17 @@ public final class MainActivity extends Activity {
         return "document.bin";
     }
 
+    private String csvDisplayName(Uri uri, android.os.CancellationSignal signal) {
+        String name = uri.getLastPathSegment();
+        try (Cursor cursor = getContentResolver().query(uri,
+                new String[] {OpenableColumns.DISPLAY_NAME}, null, null, null, signal)) {
+            if (cursor != null && cursor.moveToFirst()) name = cursor.getString(0);
+        }
+        signal.throwIfCanceled();
+        if (name == null || name.isEmpty()) return "recording.csv";
+        return name.length() <= 512 ? name : name.substring(0, 512) + "…";
+    }
+
     private static String copyName(String name) {
         int dot = name.lastIndexOf('.');
         return dot > 0 ? name.substring(0, dot) + "-edited" + name.substring(dot)
@@ -2397,6 +2539,7 @@ public final class MainActivity extends Activity {
     /** Changes only presentation: the logger, writer, and gauge instances survive. */
     private void showGaugesOnly() {
         if (gaugesVisible) return;
+        cancelLogImport(null);
         if (!loggerVisible) showLogger();
         gaugeGridHome = (ViewGroup) loggerGaugeGrid.getParent();
         gaugeGridHomeIndex = gaugeGridHome.indexOfChild(loggerGaugeGrid);
@@ -2414,6 +2557,12 @@ public final class MainActivity extends Activity {
         LinearLayout status = new LinearLayout(this);
         status.setGravity(Gravity.CENTER_VERTICAL);
         status.addView(gaugesStatus, weighted());
+        mountedModeButton = button("FULL SCREEN");
+        mountedModeButton.setTextSize(11);
+        mountedModeButton.setMinHeight(dp(48));
+        mountedModeButton.setContentDescription("Full screen gauges; keep the display awake while visible");
+        mountedModeButton.setOnClickListener(view -> setMountedFullScreen(!mountedFullScreen));
+        status.addView(mountedModeButton);
         status.addView(stop);
         gaugesPage.addView(status, matchWrap());
         ScrollView scroll = new ScrollView(this);
@@ -2431,6 +2580,7 @@ public final class MainActivity extends Activity {
 
     private void leaveGaugesOnly() {
         if (!gaugesVisible) return;
+        setMountedFullScreen(false);
         ((ViewGroup) loggerGaugeGrid.getParent()).removeView(loggerGaugeGrid);
         gaugeGridHome.addView(loggerGaugeGrid, gaugeGridHomeIndex, matchWrap());
         gaugesVisible = false;
@@ -2440,6 +2590,89 @@ public final class MainActivity extends Activity {
         workspaceBrand.setVisibility(View.VISIBLE);
         workspaceFooter.setVisibility(View.VISIBLE);
         selectTab(loggerTab, gaugesTab);
+    }
+
+    /** Display-only mode: never starts, stops, or replaces the recording or gauge grid. */
+    private void setMountedFullScreen(boolean enabled) {
+        if (enabled && !gaugesVisible) return;
+        if (mountedFullScreen == enabled) return;
+        if (enabled) {
+            previousSystemUiVisibility = getWindow().getDecorView().getSystemUiVisibility();
+            if (Build.VERSION.SDK_INT >= 30) {
+                android.view.WindowInsetsController controller = getWindow().getInsetsController();
+                if (controller != null) previousSystemBarsBehavior = controller.getSystemBarsBehavior();
+                android.view.WindowInsets insets = getWindow().getDecorView().getRootWindowInsets();
+                previousVisibleSystemBars = 0;
+                for (int type : new int[]{android.view.WindowInsets.Type.statusBars(),
+                        android.view.WindowInsets.Type.navigationBars(), android.view.WindowInsets.Type.captionBar()}) {
+                    if (insets == null || insets.isVisible(type)) previousVisibleSystemBars |= type;
+                }
+            }
+        }
+        mountedFullScreen = enabled;
+        workspaceTabs.setVisibility(enabled ? View.GONE : View.VISIBLE);
+        mountedModeButton.setText(enabled ? "EXIT FULL" : "FULL SCREEN");
+        mountedModeButton.setContentDescription(enabled ? "Exit full screen gauges"
+                : "Full screen gauges; keep the display awake while visible");
+        if (Build.VERSION.SDK_INT >= 33) {
+            if (enabled) {
+                mountedBackCallback = () -> setMountedFullScreen(false);
+                getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
+                        android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT, mountedBackCallback);
+            } else if (mountedBackCallback != null) {
+                getOnBackInvokedDispatcher().unregisterOnBackInvokedCallback(mountedBackCallback);
+                mountedBackCallback = null;
+            }
+        }
+        applyMountedSystemBars();
+        workspacePage.setPadding(dp(enabled ? 4 : 20), dp(enabled ? 0 : 18),
+                dp(enabled ? 4 : 20), dp(enabled ? 0 : 12));
+        workspacePage.requestApplyInsets();
+        updateScreenAwake();
+    }
+
+    @SuppressWarnings("deprecation") // API 26-29 fallback; modern devices use WindowInsetsController.
+    private void applyMountedSystemBars() {
+        if (Build.VERSION.SDK_INT >= 30) {
+            android.view.WindowInsetsController controller = getWindow().getInsetsController();
+            if (controller == null) return;
+            if (mountedFullScreen) {
+                controller.setSystemBarsBehavior(android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+                controller.hide(android.view.WindowInsets.Type.systemBars());
+            } else {
+                controller.setSystemBarsBehavior(previousSystemBarsBehavior);
+                controller.hide(android.view.WindowInsets.Type.systemBars() & ~previousVisibleSystemBars);
+                controller.show(previousVisibleSystemBars);
+            }
+        } else {
+            getWindow().getDecorView().setSystemUiVisibility(mountedFullScreen
+                    ? previousSystemUiVisibility | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                            | View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                            | View.SYSTEM_UI_FLAG_LAYOUT_STABLE | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                            | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                    : previousSystemUiVisibility);
+        }
+    }
+
+    private void updateScreenAwake() {
+        boolean keepAwake = activityResumed && ((mountedFullScreen && gaugesVisible)
+                || (recordingService != null && recordingService.busy()));
+        if (keepAwake) getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus && mountedFullScreen) applyMountedSystemBars();
+    }
+
+    @Override
+    @SuppressWarnings("deprecation")
+    @SuppressLint("GestureBackNavigation") // API 26-32 only; API 33+ registers OnBackInvokedCallback above.
+    public void onBackPressed() {
+        if (mountedFullScreen) setMountedFullScreen(false);
+        else super.onBackPressed();
     }
 
     private void refreshGaugeAvailability() {

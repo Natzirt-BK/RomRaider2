@@ -21,7 +21,12 @@ public enum LoggerGaugeTheme {
     VECTOR_HUD("Vector HUD"),
     TURBO_POD("Turbo Pod"),
     STI_NIGHT("STI Night"),
-    EVOLUTION_NIGHT("Evolution Night");
+    EVOLUTION_NIGHT("Evolution Night"),
+    PHOSPHOR_84("Phosphor 84"),
+    ELECTRIC_BLOOM("Electric Bloom"),
+    SUNSET_GT("Sunset GT"),
+    LASER_LED("Laser LED"),
+    PRISM_CASSETTE("Prism Cassette");
 
     private final String displayName;
 

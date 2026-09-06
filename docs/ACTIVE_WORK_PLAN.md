@@ -231,3 +231,13 @@ freezes and validates the completed prefix before destination writes, preserves
 the original, reports omitted tail bytes and invalidates stale Activity reviews.
 Continue larger-log mobile review and remaining platform/fork audits; provider
 and physical USB acceptance remain separate from synthetic qualification.
+
+The larger-log mobile pass now provides [bounded worker-based CSV summaries](ANDROID_CSV_REVIEW.md),
+with cancellation, twelve-channel pagination and retention of the previous review
+on failure. The owner's additional visual request adds Phosphor 84, Electric Bloom,
+Sunset GT, Laser LED and Prism Cassette across Android/JavaFX/Compose. Android also
+adds [full-screen mounted gauges](ANDROID_MOUNTED_DISPLAY.md): hidden app/system
+chrome, foreground keep-awake even when stopped, accessible Stop/Exit and retained
+recording identity. These changes are 1.1.3 development source, not a republished
+1.1.2 release. Continue native qualification and remaining fork/platform audits;
+physical acceptance stays deferred.

@@ -15,6 +15,10 @@ physical-device qualification.
 Retained exports in 1.1.3 also provide
 [reviewed incomplete-tail recovery](../../docs/ANDROID_RECORDING_RECOVERY.md),
 without modifying original recordings.
+The same source adds five vibrant/retro gauge styles (21 mobile themes total),
+[full-screen mounted mode with display keep-awake](../../docs/ANDROID_MOUNTED_DISPLAY.md),
+and [bounded, cancellable large-CSV summary review](../../docs/ANDROID_CSV_REVIEW.md).
+These additions do not change the public 1.1.2 feature list below.
 
 ## Features
 

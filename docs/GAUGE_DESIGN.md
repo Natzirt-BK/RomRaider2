@@ -1,7 +1,8 @@
 # Dashboard instruments
 
-RomRaider2 adds nine original instrument faces plus STI Night and Evolution Night
-alongside its existing themes.
+RomRaider2 includes nine original instrument faces plus STI Night and Evolution Night
+alongside its existing themes. Development source 1.1.3 adds five more vibrant/retro
+styles below; these five are not in the published 1.1.2 packages.
 Choose a face in the Logger dashboard, then switch to **Gauges** on Android or
 **Gauges only** in the JavaFX or Compose desktop/handheld logger. Configure the display while
 parked. This view is not a replacement for the vehicle's instruments or warnings.
@@ -19,6 +20,20 @@ parked. This view is not a replacement for the vehicle's instruments or warnings
 | Turbo Pod | Offset circular dial paired with a separate digital display |
 | STI Night | Red-lit dial, STI wordmark, shaded bezel and bright tapered needle |
 | Evolution Night | Metallic bezel, warm-white numerals and red-orange tapered needle |
+| Phosphor 84 | Teal phosphor-style glass, cyan segmented digits and arched level bars |
+| Electric Bloom | Blue illuminated ring, cyan pointer and pink numeric window |
+| Sunset GT | Cream face, berry pointer, amber numerals and period-inspired stripes |
+| Laser LED | Smoked circular face, lime level segments and red-orange digits |
+| Prism Cassette | Cyan/violet/pink rising segments, white digits and cassette-era stripes |
+
+Android 1.1.3 adds [full-screen mounted display and foreground keep-awake](ANDROID_MOUNTED_DISPLAY.md).
+All five styles apply to the selected channels, not fixed RPM/boost-only gauges.
+
+![Five vibrant and retro gauge styles rendered by the native JavaFX canvas, using explicitly simulated RPM and boost values](images/five-vibrant-retro-gauges.png)
+
+[View all 21 mobile themes in one labeled, native-rendered collection sheet](images/all-mobile-gauge-styles.png).
+The reproducible `gauge-contact-sheet` instrumentation phase draws actual Android
+gauge views. `gauge-gallery` and `gauge-gallery-landscape` capture the full-screen app.
 
 ## Research and design decisions
 
@@ -45,6 +60,16 @@ The owner's subsequent premium pass adds the STI wordmark; see the
 [brand provenance and notices](GAUGE_BRAND_NOTICES.md). No cluster photograph or
 manufacturer font asset is embedded.
 
+The later vibrant study adds the blue illumination and mixed analog/digital layout
+of [BLITZ FLD](https://www.blitz.co.jp/products/meter/fldmeter.html), teal digital
+instrument presentation from [Dakota Digital VFD3](https://www.dakotadigital.com/index.cfm/page/ptype=product/product_id=488/category_id=69/mode=prod/prd488.htm),
+and the large digits/LED-ring structure of [AEM X-Series](https://www.aemelectronics.com/products/dashes_and_gauges/aem_performance_gauges/x_series_gauges/).
+AEM labels several X-Series models best-sellers; that supports selecting established
+market references, not a claim that display appearance caused their sales. Sunset
+GT and Prism Cassette extend the brief with original cream/berry and multi-color
+retro treatments. Colored segments show measured progress, not invented redlines.
+No manufacturer product photograph, logo or face skin was copied into these five.
+
 ## Data meaning
 
 - Numbers and units come from the selected logger conversion.
@@ -64,7 +89,7 @@ manufacturer font asset is embedded.
 
 ## Implementation and validation
 
-`GaugeFaceRenderer` in the portable module defines all eleven added vector faces. Android,
+`GaugeFaceRenderer` in the portable module defines all sixteen added vector faces. Android,
 JavaFX and Compose adapt its drawing operations to their native canvases.
 The portable check exercises every face with finite, missing, infinite and
 out-of-range values and invalid scales. Native UI checks cover rendering and
@@ -80,7 +105,7 @@ Both are part of the lifecycle regression script. `gauge-gallery` captures nativ
 screens and rejects an obstructing window. JavaFX's mounted-gauge smoke test
 checks published recording state, every theme switch, stale data and recovery.
 
-The two night-cluster faces interpolate only the needle for at most 100 ms.
+The two night-cluster faces, Electric Bloom and Sunset GT interpolate only the needle for at most 100 ms.
 Numeric readings, measured peaks, warnings and CSV recording are never interpolated.
 First readings, invalid values, recovery and long gaps do not trigger a startup
 sweep. Android respects disabled system animators; desktop rendering also accepts

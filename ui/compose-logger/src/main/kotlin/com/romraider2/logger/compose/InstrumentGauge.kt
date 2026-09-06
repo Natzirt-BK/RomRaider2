@@ -30,7 +30,7 @@ internal fun InstrumentGauge(style: GaugeFaceRenderer.Style,
     val measurer = rememberTextMeasurer()
     val motion = remember { com.romraider.portable.gauge.GaugeMotion() }
     var indicator by remember { mutableStateOf(reading.value) }
-    val animated = (style == GaugeFaceRenderer.Style.STI_NIGHT || style == GaugeFaceRenderer.Style.EVOLUTION_NIGHT) &&
+    val animated = style.usesNeedleMotion() &&
         !java.lang.Boolean.getBoolean("romraider2.gauge.reduceMotion")
     LaunchedEffect(style, reading.value) {
         if (!animated || !reading.value.isFinite()) {

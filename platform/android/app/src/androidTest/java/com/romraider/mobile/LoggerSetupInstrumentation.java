@@ -55,6 +55,7 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
             awaitImports();
             if (phase.equals("seed")) seed();
             else if (phase.equals("gauges")) verifyGaugesOnly();
+            else if (phase.equals("mounted-fullscreen")) verifyMountedFullScreen();
             else if (phase.equals("live-gauges")) verifyReadOnlySessionViewSwitch();
             else if (phase.equals("calculated-gauges")) verifyCalculatedGauges();
             else if (phase.equals("channel-transfer")) verifyChannelTransfer();
@@ -63,7 +64,9 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
             else if (phase.equals("background-process-death")) prepareBackgroundProcessDeath();
             else if (phase.equals("background-after-death")) verifyBackgroundAfterDeath();
             else if (phase.equals("recording-recovery")) verifyRecordingRecovery();
-            else if (phase.equals("gauge-gallery")) captureGaugeGallery();
+            else if (phase.equals("csv-import")) verifyCsvImport();
+            else if (phase.equals("gauge-gallery") || phase.equals("gauge-gallery-landscape")) captureGaugeGallery();
+            else if (phase.equals("gauge-contact-sheet")) captureGaugeContactSheet();
             else if (phase.equals("verify")) verify(2);
             else if (phase.equals("clear")) {
                 verify(2);
@@ -509,10 +512,145 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
         clickDialogText("Software license");
         clickDialogText("Close");
     }
-    private void captureGaugeGallery() throws Exception {
+    private void verifyMountedFullScreen() throws Exception {
         invoke("showLoggerGaugeDemo", new Class<?>[0]);
         invoke("showGaugesOnly", new Class<?>[0]);
-        File directory = new File(getTargetContext().getExternalFilesDir(null), "gauge-gallery");
+        Object grid = field("loggerGaugeGrid");
+        runOnMainSync(() -> ((android.widget.Button) fieldUnchecked("mountedModeButton")).performClick());
+        assertMountedWindow(true);
+        check(field("loggerGaugeGrid") == grid, "Full screen replaced the gauge grid");
+        for (int orientation : new int[]{android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE,
+                android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT}) {
+            rotateMountedDisplay(orientation);
+            assertMountedWindow(true);
+            check(field("loggerGaugeGrid") == grid, "Rotation replaced the mounted gauge grid");
+        }
+        runOnMainSync(() -> check(clickViewText((android.view.View) fieldUnchecked("gaugesPage"), "STOP"),
+                "Mounted Stop control missing"));
+        invoke("refreshGaugeAvailability", new Class<?>[0]);
+        invoke("refreshRecording", new Class<?>[0]);
+        assertMountedWindow(true); // STOPPED still stays awake; never manufactures live data.
+        check(((android.widget.TextView) field("gaugesStatus")).getText().toString().contains("STOPPED"),
+                "Stopped mounted display lost its state label");
+        shell("input keyevent KEYCODE_HOME");
+        long deadline = SystemClock.uptimeMillis() + 10_000;
+        while ((Boolean) field("activityResumed") && SystemClock.uptimeMillis() < deadline) SystemClock.sleep(50);
+        check(!(Boolean) field("activityResumed"), "Mounted Activity did not background");
+        check(!screenAwake(), "Mounted view retained keep-screen-on in the background");
+        // singleTop reuses the Activity: startActivitySync would wait for a new onCreate forever.
+        getTargetContext().startActivity(new Intent().setClassName(getTargetContext(), MainActivity.class.getName())
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        deadline = SystemClock.uptimeMillis() + 10_000;
+        while (!(Boolean) field("activityResumed") && SystemClock.uptimeMillis() < deadline) SystemClock.sleep(50);
+        check((Boolean) field("activityResumed"), "Mounted Activity did not return");
+        waitForIdleSync();
+        assertMountedWindow(true);
+        shell("input keyevent KEYCODE_BACK");
+        deadline = SystemClock.uptimeMillis() + 5000;
+        while ((Boolean) field("mountedFullScreen") && SystemClock.uptimeMillis() < deadline) SystemClock.sleep(50);
+        assertMountedWindow(false);
+        check((Boolean) field("gaugesVisible") && field("loggerGaugeGrid") == grid,
+                "Back left the dashboard or replaced gauges");
+        invoke("setMountedFullScreen", new Class<?>[]{boolean.class}, true);
+        invoke("leaveGaugesOnly", new Class<?>[0]);
+        assertMountedWindow(false);
+        check(field("loggerGaugeGrid") == grid, "Leaving mounted view rebuilt the gauges");
+        System.out.println("PASS: immersive gauges hide bars, stay awake when stopped, release awake in background, and exit through Back/LOGGER.");
+    }
+
+    private boolean screenAwake() {
+        boolean[] awake = new boolean[1];
+        runOnMainSync(() -> awake[0] = (activity.getWindow().getAttributes().flags
+                & android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) != 0);
+        return awake[0];
+    }
+
+    private void rotateMountedDisplay(int orientation) {
+        runOnMainSync(() -> activity.setRequestedOrientation(orientation));
+        int expected = orientation == android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+                ? android.content.res.Configuration.ORIENTATION_LANDSCAPE
+                : android.content.res.Configuration.ORIENTATION_PORTRAIT;
+        long deadline = SystemClock.uptimeMillis() + 5000;
+        while (activity.getResources().getConfiguration().orientation != expected
+                && SystemClock.uptimeMillis() < deadline) SystemClock.sleep(50);
+        check(activity.getResources().getConfiguration().orientation == expected, "Mounted rotation did not complete");
+        waitForIdleSync();
+    }
+
+    private void assertMountedWindow(boolean enabled) throws Exception {
+        check((Boolean) field("mountedFullScreen") == enabled, "Unexpected mounted mode state");
+        check(screenAwake() == enabled, "Idle mounted keep-screen-on state incorrect");
+        runOnMainSync(() -> check(((android.view.View) fieldUnchecked("workspaceTabs")).getVisibility()
+                == (enabled ? android.view.View.GONE : android.view.View.VISIBLE), "Mounted navigation chrome incorrect"));
+        if (android.os.Build.VERSION.SDK_INT >= 30) {
+            boolean[] barsVisible = new boolean[1];
+            long deadline = SystemClock.uptimeMillis() + 5000;
+            do {
+                runOnMainSync(() -> {
+                    android.view.WindowInsets insets = activity.getWindow().getDecorView().getRootWindowInsets();
+                    barsVisible[0] = insets == null || insets.isVisible(android.view.WindowInsets.Type.statusBars())
+                            || insets.isVisible(android.view.WindowInsets.Type.navigationBars());
+                });
+                if (barsVisible[0] != enabled) break;
+                SystemClock.sleep(50);
+            } while (SystemClock.uptimeMillis() < deadline);
+            check(barsVisible[0] != enabled, "System bars did not follow mounted mode");
+        }
+    }
+
+    private void captureGaugeContactSheet() throws Exception {
+        // Draw the actual mobile View for every selectable theme, including legacy faces.
+        File file = new File(getTargetContext().getExternalFilesDir(null), "all-mobile-gauge-styles.png");
+        android.graphics.Bitmap bitmap = android.graphics.Bitmap.createBitmap(1440, 1930,
+                android.graphics.Bitmap.Config.ARGB_8888);
+        try {
+            runOnMainSync(() -> {
+                android.graphics.Canvas canvas = new android.graphics.Canvas(bitmap);
+                canvas.drawColor(0xFF0B1117);
+                android.graphics.Paint text = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+                text.setTypeface(android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD));
+                text.setColor(0xFFF0F4F8); text.setTextSize(34);
+                canvas.drawText("ROMRAIDER2 / THE GAUGE COLLECTION", 32, 51, text);
+                text.setTypeface(android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL));
+                text.setTextSize(18); text.setColor(0xFFA6B3C0);
+                canvas.drawText("21 mobile styles • Actual Android rendering • Simulated values • 1.1.3 development source", 32, 85, text);
+                float density = getTargetContext().getResources().getDisplayMetrics().density;
+                int index = 0;
+                for (MobileGaugeTheme theme : MobileGaugeTheme.values()) {
+                    float x = 32 + (index % 4) * 350, y = 124 + (index / 4) * 295;
+                    text.setTextSize(18); text.setColor(0xFFE6EDF4);
+                    text.setTypeface(android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD));
+                    canvas.drawText(String.format(java.util.Locale.ROOT, "%02d  %s", index + 1, theme.displayName), x, y, text);
+                    MobileGaugeView gauge = new MobileGaugeView(activity);
+                    gauge.setTheme(theme);
+                    gauge.setValue("P8", "Engine Speed", "4210", "rpm", 4210, 800, 6650);
+                    gauge.setDataState("SIMULATED");
+                    int width = Math.round(320 * density);
+                    int height = Math.round((theme.instrumentStyle() == null ? 205 : 250) * density);
+                    gauge.measure(android.view.View.MeasureSpec.makeMeasureSpec(width, android.view.View.MeasureSpec.EXACTLY),
+                            android.view.View.MeasureSpec.makeMeasureSpec(height, android.view.View.MeasureSpec.EXACTLY));
+                    gauge.layout(0, 0, width, height);
+                    canvas.save(); canvas.translate(x, y + 12); canvas.scale(1 / density, 1 / density);
+                    gauge.draw(canvas); canvas.restore();
+                    index++;
+                }
+                text.setTextSize(17); text.setColor(0xFFA6B3C0);
+                canvas.drawText("Display scales are not engine limits. Configure while parked.", 32, 1910, text);
+            });
+            try (OutputStream output = new FileOutputStream(file)) {
+                check(bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, output), "Contact sheet encoding failed");
+            }
+        } finally { bitmap.recycle(); }
+    }
+
+    private void captureGaugeGallery() throws Exception {
+        rotateMountedDisplay(phase.endsWith("landscape")
+                ? android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+                : android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+        invoke("showLoggerGaugeDemo", new Class<?>[0]);
+        invoke("showGaugesOnly", new Class<?>[0]);
+        invoke("setMountedFullScreen", new Class<?>[]{boolean.class}, true);
+        File directory = new File(getTargetContext().getExternalFilesDir(null), phase);
         check(directory.isDirectory() || directory.mkdirs(), "Cannot create render directory");
         for (MobileGaugeTheme theme : MobileGaugeTheme.values()) {
             if (theme.instrumentStyle() == null) continue;
@@ -523,6 +661,13 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
             long deadline = SystemClock.uptimeMillis() + 5000;
             while ((active == null || !getTargetContext().getPackageName().contentEquals(active.getPackageName()))
                     && SystemClock.uptimeMillis() < deadline) {
+                // Android can present its one-time immersive-mode tutorial after the first frame.
+                // Acknowledge only that known tutorial; every other obstruction remains a failure.
+                if (active != null && "com.android.systemui".contentEquals(active.getPackageName())
+                        && !active.findAccessibilityNodeInfosByText("Viewing full screen").isEmpty()) {
+                    for (AccessibilityNodeInfo confirm : active.findAccessibilityNodeInfosByText("Got it"))
+                        confirm.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+                }
                 SystemClock.sleep(50);
                 active = getUiAutomation().getRootInActiveWindow();
             }
@@ -622,22 +767,38 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
                 (PortableLoggerProfile) field("loggerProfile"), log, () -> { }, false);
         try {
             long deadline = SystemClock.uptimeMillis() + 5000;
-            while (log.size() < 4 && SystemClock.uptimeMillis() < deadline) SystemClock.sleep(30);
+            // Worker samples can precede the Activity's bounded 100 ms snapshot poll.
+            while ((log.size() < 4 || field("displayedRecording") != session)
+                    && SystemClock.uptimeMillis() < deadline) SystemClock.sleep(30);
             check(log.size() >= 4 && identifies.get() == 1, "Read-only synthetic logger did not begin");
+            check(field("displayedRecording") == session, "Activity did not attach the service recording before view-switch checks");
             int before = log.size();
             long bytes = spool.length();
             Object grid = field("loggerGaugeGrid");
             for (MobileGaugeTheme theme : MobileGaugeTheme.values()) {
                 invoke("setLoggerGaugeTheme", new Class<?>[] {MobileGaugeTheme.class}, theme);
                 invoke("showGaugesOnly", new Class<?>[0]);
-                check(field("displayedRecording") == session && session.completedLog() == null && field("loggerGaugeGrid") == grid,
-                        "Mounted view replaced the running read-only session, writer or gauges");
+                invoke("setMountedFullScreen", new Class<?>[]{boolean.class}, true);
+                check(field("displayedRecording") == session, "Mounted view replaced the displayed recording owner");
+                check(session.completedLog() == null, "Mounted view exposed a completed writer: " + session.snapshot().message());
+                check(field("loggerGaugeGrid") == grid, "Mounted view replaced the gauge grid");
+                invoke("setMountedFullScreen", new Class<?>[]{boolean.class}, false);
+                check(screenAwake(), "Exiting full screen released the active foreground logger's screen flag");
                 invoke("leaveGaugesOnly", new Class<?>[0]);
                 check(closes.get() == 0 && identifies.get() == 1, "View switching disconnected/reidentified the ECU");
             }
             deadline = SystemClock.uptimeMillis() + 5000;
             while (log.size() <= before && SystemClock.uptimeMillis() < deadline) SystemClock.sleep(30);
             check(log.size() > before && spool.length() > bytes, "CSV spool stopped growing during view switches");
+            invoke("showGaugesOnly", new Class<?>[0]);
+            invoke("setMountedFullScreen", new Class<?>[]{boolean.class}, true);
+            runOnMainSync(() -> check(clickViewText((android.view.View) fieldUnchecked("gaugesPage"), "STOP"),
+                    "Mounted live Stop control missing"));
+            waitForServiceIdle(service);
+            invoke("refreshRecording", new Class<?>[0]);
+            check(screenAwake() && (Boolean) field("mountedFullScreen"), "Stopping capture left/dimmed mounted mode");
+            invoke("leaveGaugesOnly", new Class<?>[0]);
+            check(!screenAwake(), "Stopped logger retained screen-awake after mounted exit");
         } finally {
             runOnMainSync(service::stop);
             waitForServiceIdle(service);
@@ -699,11 +860,13 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
             check(setupRoot.findAccessibilityNodeInfosByText("Channels (fewer = faster cycles)").isEmpty(),
                     "Active recording opened editable channel controls");
             invoke("showGaugesOnly", new Class<?>[0]);
+            invoke("setMountedFullScreen", new Class<?>[]{boolean.class}, true);
             int before = first.recording.snapshot().samples();
             shell("input keyevent KEYCODE_HOME");
             long stoppedDeadline = SystemClock.uptimeMillis() + 10_000;
             while ((Boolean) field("activityResumed") && SystemClock.uptimeMillis() < stoppedDeadline) SystemClock.sleep(50);
             check(!(Boolean) field("activityResumed"), "Activity did not leave foreground");
+            check(!screenAwake(), "Background recording retained the display-awake flag");
             waitForSamples(first, before + 4);
             shell("input keyevent KEYCODE_SLEEP");
             before = first.recording.snapshot().samples();
@@ -997,6 +1160,112 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
             SystemClock.sleep(30);
         }
         throw new AssertionError("Recording export/review did not finish");
+    }
+
+    private void verifyCsvImport() throws Exception {
+        File folder = getTargetContext().getFilesDir();
+        File large = new File(folder, "automation-large-import.csv");
+        File second = new File(folder, "automation-second-import.csv");
+        File invalid = new File(folder, "automation-invalid-import.csv");
+        try {
+            try (Writer output = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(large), StandardCharsets.UTF_8))) {
+                output.write("Time (msec),RPM (rpm),Voltage (V)\n");
+                for (int row = 0; row < 130_001; row++) output.write(row + ",900,13\n");
+            }
+            invoke("loadLogSummary", new Class<?>[] {Uri.class}, Uri.fromFile(large));
+            awaitCsvImport();
+            com.romraider.portable.PortableLogCsvReader.Summary summary =
+                    (com.romraider.portable.PortableLogCsvReader.Summary) field("importedLogSummary");
+            check(summary != null && summary.values() == 260_002 && summary.channels().size() == 2,
+                    "Android large CSV import was truncated to the previous full-sample cap");
+            check(summary.channels().get(0).latest().getTimestampMillis() == 130_000
+                    && summary.channels().get(0).finite() == 130_001, "Large imported summary is incomplete");
+            Object retainedCard = field("importedLogCard");
+            Files.write(invalid.toPath(), new byte[] {'T', 'i', 'm', 'e', ',', 'A', '\n', '0', ',', (byte) 0xff, '\n'});
+            invoke("loadLogSummary", new Class<?>[] {Uri.class}, Uri.fromFile(invalid));
+            awaitCsvImport();
+            check(field("importedLogSummary") == summary && field("importedLogCard") == retainedCard,
+                    "Invalid UTF-8 replaced the previous imported summary");
+            check(((String) field("logImportStatus")).contains("not imported"), "Invalid import was not reported");
+            StringBuilder header = new StringBuilder("Time"), row = new StringBuilder("0");
+            for (int i = 0; i < 14; i++) { header.append(",C").append(i); row.append(',').append(i); }
+            Files.write(second.toPath(), (header + "\n" + row + "\n").getBytes(StandardCharsets.UTF_8));
+            invoke("loadLogSummary", new Class<?>[] {Uri.class}, Uri.fromFile(second));
+            awaitCsvImport();
+            summary = (com.romraider.portable.PortableLogCsvReader.Summary) field("importedLogSummary");
+            check(summary.channels().size() == 14 && (Integer) field("importedLogPage") == 0, "Paged summary missing");
+            // Use the native button even when the summary starts outside the viewport.
+            android.view.View card = (android.view.View) field("importedLogCard");
+            runOnMainSync(() -> check(clickViewText(card, "NEXT CHANNELS"), "Next-channel control missing"));
+            check((Integer) field("importedLogPage") == 1 && field("importedLogSummary") == summary,
+                    "Paging reimported or replaced the file");
+            java.util.concurrent.ThreadPoolExecutor executor = (java.util.concurrent.ThreadPoolExecutor) field("logImportExecutor");
+            CountDownLatch release = new CountDownLatch(1);
+            Future<?> gate = executor.submit(() -> { if (!release.await(15, TimeUnit.SECONDS)) throw new AssertionError("CSV gate timed out"); return null; });
+            try {
+                invoke("loadLogSummary", new Class<?>[] {Uri.class}, Uri.fromFile(large));
+                Future<?> superseded = (Future<?>) field("logImportTask");
+                invoke("loadLogSummary", new Class<?>[] {Uri.class}, Uri.fromFile(second));
+                check(superseded.isCancelled() && executor.getQueue().size() == 1, "Superseded work was not cancelled/purged");
+                invoke("showGaugesOnly", new Class<?>[0]);
+                check(!(Boolean) field("logImportLoading") && executor.getQueue().isEmpty(), "Gauge switch retained queued CSV work");
+            } finally { release.countDown(); }
+            gate.get(10, TimeUnit.SECONDS); executor.submit(() -> { }).get(10, TimeUnit.SECONDS); waitForIdleSync();
+            check((Boolean) field("gaugesVisible") && field("importedLogSummary") == summary,
+                    "Late CSV work replaced the mounted dashboard or previous summary");
+            invoke("leaveGaugesOnly", new Class<?>[0]);
+            invoke("loadLogSummary", new Class<?>[] {Uri.class}, Uri.fromFile(large));
+            invoke("cancelLogImport", new Class<?>[] {String.class}, "CSV import cancelled; previous summary retained.");
+            executor.submit(() -> { }).get(15, TimeUnit.SECONDS); waitForIdleSync();
+            check(field("importedLogSummary") == summary && !(Boolean) field("logImportLoading"), "Cancelled import replaced summary");
+            invoke("showEditor", new Class<?>[0]);
+            invoke("loadLogSummary", new Class<?>[] {Uri.class}, Uri.fromFile(large));
+            check(!(Boolean) field("loggerVisible") && !(Boolean) field("logImportLoading"), "CSV import hijacked the editor");
+            invoke("showLogger", new Class<?>[0]);
+            check(field("importedLogSummary") == summary && field("importedLogCard") != null, "Returning to LOGGER lost imported summary");
+            ServiceFixture fixture = new ServiceFixture((ReadOnlyLoggingService) field("recordingService"));
+            try {
+                fixture.start(false); waitForSamples(fixture, 4);
+                invoke("loadLogSummary", new Class<?>[] {Uri.class}, Uri.fromFile(large));
+                check(!(Boolean) field("logImportLoading") && field("importedLogSummary") == summary,
+                        "CSV import changed active recording display");
+                waitForSamples(fixture, 8);
+                check(fixture.identifies.get() == 1, "CSV action restarted live capture");
+            } finally { fixture.stop(); }
+            CountDownLatch releaseOld = new CountDownLatch(1);
+            Future<?> oldGate = executor.submit(() -> { if (!releaseOld.await(15, TimeUnit.SECONDS)) throw new AssertionError("CSV close gate timed out"); return null; });
+            try {
+                invoke("loadLogSummary", new Class<?>[] {Uri.class}, Uri.fromFile(large));
+                Future<?> pending = (Future<?>) field("logImportTask");
+                verifyActivityRecreation();
+                check(pending.isCancelled(), "Activity destruction did not cancel CSV import");
+            } finally { releaseOld.countDown(); }
+            try { oldGate.get(10, TimeUnit.SECONDS); } catch (ExecutionException interrupted) {
+                check(interrupted.getCause() instanceof InterruptedException, "Unexpected old CSV worker failure");
+            }
+            check(executor.awaitTermination(10, TimeUnit.SECONDS), "Destroyed Activity CSV worker survived");
+            check(field("importedLogSummary") == null && !(Boolean) field("logImportLoading"), "Old CSV result reached replacement Activity");
+            verifyNotRunning();
+            System.out.println("PASS: Android streamed 260,002 values, retained prior summaries on failure/cancel, paged channels, and rejected stale/active-capture imports.");
+        } finally {
+            Files.deleteIfExists(large.toPath()); Files.deleteIfExists(second.toPath()); Files.deleteIfExists(invalid.toPath());
+        }
+    }
+
+    private boolean clickViewText(android.view.View view, String text) {
+        if (view instanceof android.widget.Button && ((android.widget.Button) view).getText().toString().equals(text)) return view.performClick();
+        if (view instanceof android.view.ViewGroup) {
+            android.view.ViewGroup group = (android.view.ViewGroup) view;
+            for (int i = 0; i < group.getChildCount(); i++) if (clickViewText(group.getChildAt(i), text)) return true;
+        }
+        return false;
+    }
+
+    private void awaitCsvImport() throws Exception {
+        long deadline = SystemClock.uptimeMillis() + 30_000;
+        while ((Boolean) field("logImportLoading") && SystemClock.uptimeMillis() < deadline) SystemClock.sleep(30);
+        check(!(Boolean) field("logImportLoading"), "CSV import did not finish");
+        waitForIdleSync();
     }
 
     private void waitForServiceIdle(ReadOnlyLoggingService service) {

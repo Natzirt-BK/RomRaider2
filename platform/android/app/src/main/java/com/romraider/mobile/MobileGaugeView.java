@@ -100,7 +100,7 @@ final class MobileGaugeView extends View {
                             .withIndicator(android.animation.ValueAnimator.areAnimatorsEnabled()
                                     ? motion.valueAt(System.nanoTime()) : value));
             canvas.restore();
-            if ((theme == MobileGaugeTheme.STI_NIGHT || theme == MobileGaugeTheme.EVOLUTION_NIGHT)
+            if (theme.instrumentStyle().usesNeedleMotion()
                     && android.animation.ValueAnimator.areAnimatorsEnabled() && motion.isAnimating(System.nanoTime()))
                 postInvalidateOnAnimation();
             return;

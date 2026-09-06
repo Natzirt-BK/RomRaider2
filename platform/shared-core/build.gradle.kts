@@ -30,6 +30,13 @@ tasks.test {
     enabled = false
 }
 
+tasks.register<JavaExec>("portableCsvStreamingCheck") {
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("com.romraider.portable.PortableCsvStreamingCheck")
+    maxHeapSize = "64m"
+}
+
 tasks.check {
-    dependsOn("portableCoreCheck")
+    dependsOn("portableCoreCheck", "portableCsvStreamingCheck")
 }

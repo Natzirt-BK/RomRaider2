@@ -2,98 +2,156 @@
 package com.romraider.portable;
 
 import java.io.IOException;
-import java.io.PushbackReader;
+import java.io.InterruptedIOException;
+import java.io.BufferedReader;
 import java.io.Reader;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.LinkedHashMap;
+import java.util.Collections;
 
 /** Reads bounded RomRaider wide-column and portable long-form logger CSVs. */
 public final class PortableLogCsvReader {
     private static final int MAX_CSV_CHARACTERS = 64 * 1024 * 1024;
-    private static final int MAX_FIELD_CHARACTERS = 1024 * 1024;
+    private static final int MAX_FIELD_CHARACTERS = 65_536;
+    private static final int MAX_RECORD_CHARACTERS = 1024 * 1024;
+    private static final int MAX_RECORDS = 1_000_001;
+    public static final int MAX_CHANNELS = 256;
+    public static final long MAX_SUMMARY_VALUES = 5_000_000;
     private static final List<String> HEADER = Arrays.asList(
             "timestamp_ms", "channel_id", "channel_name", "value", "units");
 
     private PortableLogCsvReader() { }
 
     public static PortableLogSession read(Reader reader) throws IOException {
-        if (reader == null) {
-            throw new IllegalArgumentException("A CSV reader is required");
-        }
-        List<List<String>> rows = rows(reader);
-        if (rows.isEmpty()) {
-            throw new IOException("Unsupported logger CSV header");
-        }
-        removeByteOrderMark(rows.get(0));
-        if (HEADER.equals(rows.get(0))) return readLongForm(rows);
-        if (isWideHeader(rows.get(0))) return readWideForm(rows);
-        throw new IOException("Unsupported logger CSV header");
-    }
-
-    private static PortableLogSession readLongForm(List<List<String>> rows)
-            throws IOException {
         PortableLogSession session = new PortableLogSession();
-        for (int index = 1; index < rows.size(); index++) {
-            List<String> row = rows.get(index);
-            if (row.size() == 1 && row.get(0).isEmpty()) continue;
-            if (row.size() != HEADER.size()) {
-                throw new IOException("Invalid logger CSV row " + (index + 1));
-            }
-            try {
-                session.append(new PortableLogSample(
-                        Long.parseLong(row.get(0)), row.get(1), row.get(2),
-                        Double.parseDouble(row.get(3)), row.get(4)));
-            } catch (IllegalArgumentException ex) {
-                throw new IOException("Invalid logger CSV row " + (index + 1), ex);
-            }
-        }
+        parse(reader, PortableLogSession.MAX_SAMPLES, session::append);
         return session;
     }
 
-    private static PortableLogSession readWideForm(List<List<String>> rows)
-            throws IOException {
-        List<String> header = rows.get(0);
-        int channelCount = header.size() - 1;
-        long maximumSamples = (long) (rows.size() - 1) * channelCount;
-        if (maximumSamples > PortableLogSession.MAX_SAMPLES) {
-            throw new IOException("Portable log sample limit reached");
-        }
+    /** Full-file summary, not a sample or truncated preview. Retains only per-channel state. */
+    public static Summary summarize(Reader reader) throws IOException {
+        Map<String, Accumulator> channels = new LinkedHashMap<>();
+        long count = parse(reader, MAX_SUMMARY_VALUES, sample ->
+                channels.computeIfAbsent(sample.getChannelId(), ignored -> new Accumulator()).add(sample));
+        List<ChannelSummary> result = new ArrayList<>();
+        for (Accumulator channel : channels.values()) result.add(new ChannelSummary(channel));
+        return new Summary(count, result);
+    }
 
-        List<ChannelHeader> channels = new ArrayList<ChannelHeader>(channelCount);
-        for (int column = 1; column < header.size(); column++) {
-            channels.add(ChannelHeader.parse(header.get(column), column));
+    public static final class Summary {
+        private final long values;
+        private final List<ChannelSummary> channels;
+        private Summary(long values, List<ChannelSummary> channels) {
+            this.values = values;
+            this.channels = Collections.unmodifiableList(new ArrayList<>(channels));
         }
+        public long values() { return values; }
+        public List<ChannelSummary> channels() { return channels; }
+    }
 
-        PortableLogSession session = new PortableLogSession();
+    public static final class ChannelSummary {
+        private final PortableLogSample latest;
+        private final long finite;
+        private final long missing;
+        private final double minimum;
+        private final double maximum;
+        private ChannelSummary(Accumulator source) {
+            latest = source.latest; finite = source.finite; missing = source.missing;
+            minimum = finite == 0 ? Double.NaN : source.minimum;
+            maximum = finite == 0 ? Double.NaN : source.maximum;
+        }
+        public PortableLogSample latest() { return latest; }
+        public long finite() { return finite; }
+        public long missing() { return missing; }
+        public double minimum() { return minimum; }
+        public double maximum() { return maximum; }
+    }
+
+    private static final class Accumulator {
+        PortableLogSample latest;
+        long finite, missing;
+        double minimum = Double.POSITIVE_INFINITY, maximum = Double.NEGATIVE_INFINITY;
+        void add(PortableLogSample sample) {
+            latest = sample;
+            if (Double.isFinite(sample.getValue())) {
+                finite++;
+                minimum = Math.min(minimum, sample.getValue());
+                maximum = Math.max(maximum, sample.getValue());
+            } else missing++;
+        }
+    }
+
+    private interface Sink { void accept(PortableLogSample sample); }
+
+    private static long parse(Reader reader, long limit, Sink sink) throws IOException {
+        if (reader == null) throw new IllegalArgumentException("A CSV reader is required");
+        Records records = new Records(reader);
+        List<String> header = records.next();
+        if (header == null) throw new IOException("Unsupported logger CSV header");
+        boolean longForm = HEADER.equals(header);
+        if (!longForm && !isWideHeader(header)) throw new IOException("Unsupported logger CSV header");
+        records.columns = header.size();
+        List<ChannelHeader> wideChannels = new ArrayList<>();
+        Map<String, ChannelHeader> channelIdentities = new LinkedHashMap<>();
+        int metadataCharacters = 0;
+        if (!longForm) for (int column = 1; column < header.size(); column++) {
+            ChannelHeader channel = ChannelHeader.parse(header.get(column), column);
+            metadataCharacters = metadataSize(metadataCharacters, channel);
+            wideChannels.add(channel);
+        }
         TimestampParser timestamps = new TimestampParser(header.get(0));
-        for (int index = 1; index < rows.size(); index++) {
-            List<String> row = rows.get(index);
+        long count = 0;
+        List<String> row;
+        while ((row = records.next()) != null) {
             if (row.size() == 1 && row.get(0).trim().isEmpty()) continue;
-            if (row.equals(header)) continue;
+            if (!longForm && row.equals(header)) continue;
             if (row.size() != header.size()) {
-                throw new IOException("Invalid logger CSV row " + (index + 1)
+                throw new IOException("Invalid logger CSV record " + records.number
                         + ": found " + row.size() + " fields; expected "
                         + header.size());
             }
-            long timestamp = timestamps.parse(row.get(0), index + 1);
-            for (int column = 1; column < row.size(); column++) {
-                String field = row.get(column).trim();
-                double value;
-                try {
-                    value = field.isEmpty() ? Double.NaN
-                            : Double.parseDouble(field);
-                } catch (NumberFormatException ex) {
-                    throw new IOException("Invalid logger CSV row "
-                            + (index + 1) + ", column " + (column + 1), ex);
+            int values = longForm ? 1 : wideChannels.size();
+            if (count > limit - values) throw new IOException("Portable log value limit reached (" + limit + ")");
+            try {
+                if (longForm) {
+                    ChannelHeader channel = channelIdentities.get(row.get(1));
+                    if (channel == null) {
+                        if (channelIdentities.size() >= MAX_CHANNELS) throw new IOException("Too many logger CSV channels");
+                        channel = new ChannelHeader(row.get(1), row.get(2), row.get(4));
+                        metadataCharacters = metadataSize(metadataCharacters, channel);
+                        channelIdentities.put(channel.id, channel);
+                    } else if (!channel.name.equals(row.get(2)) || !channel.units.equals(row.get(4))) {
+                        throw new IOException("Logger CSV channel metadata changed");
+                    }
+                    sink.accept(new PortableLogSample(Long.parseLong(row.get(0)), channel.id,
+                            channel.name, Double.parseDouble(row.get(3)), channel.units));
+                } else {
+                    long timestamp = timestamps.parse(row.get(0), records.number);
+                    for (int column = 1; column < row.size(); column++) {
+                        String field = row.get(column).trim();
+                        double value = field.isEmpty() ? Double.NaN : Double.parseDouble(field);
+                        ChannelHeader channel = wideChannels.get(column - 1);
+                        sink.accept(new PortableLogSample(timestamp, channel.id, channel.name, value, channel.units));
+                    }
                 }
-                ChannelHeader channel = channels.get(column - 1);
-                session.append(new PortableLogSample(timestamp, channel.id,
-                        channel.name, value, channel.units));
+            } catch (IllegalArgumentException ex) {
+                throw new IOException("Invalid logger CSV record " + records.number, ex);
             }
+            count += values;
         }
-        return session;
+        return count;
+    }
+
+    private static int metadataSize(int previous, ChannelHeader channel) throws IOException {
+        int size = channel.id.length() + channel.name.length() + channel.units.length();
+        if (size > 4096 || previous > 1024 * 1024 - size) throw new IOException("Logger CSV channel metadata is too large");
+        return previous + size;
     }
 
     private static boolean isWideHeader(List<String> header) {
@@ -101,14 +159,6 @@ public final class PortableLogCsvReader {
         String time = ChannelHeader.parseLabel(header.get(0))[0];
         return "time".equalsIgnoreCase(time)
                 || time.toLowerCase(Locale.ROOT).startsWith("time ");
-    }
-
-    private static void removeByteOrderMark(List<String> header) {
-        if (header.isEmpty()) return;
-        String first = header.get(0);
-        if (!first.isEmpty() && first.charAt(0) == '\ufeff') {
-            header.set(0, first.substring(1));
-        }
     }
 
     private static final class ChannelHeader {
@@ -162,16 +212,15 @@ public final class PortableLogCsvReader {
 
         private long parse(String field, int row) throws IOException {
             String value = field.trim();
+            if (value.length() > 128) throw new IOException("Logger timestamp is too long on record " + row);
             if (value.indexOf(':') >= 0) return parseClock(value, row);
             try {
-                double numeric = Double.parseDouble(value);
-                if (!Double.isFinite(numeric) || numeric < 0) {
-                    throw new NumberFormatException();
-                }
-                double millis = seconds ? numeric * 1000.0 : numeric;
-                if (millis > Long.MAX_VALUE) throw new NumberFormatException();
-                return Math.round(millis);
-            } catch (NumberFormatException ex) {
+                BigDecimal numeric = new BigDecimal(value);
+                if (numeric.signum() < 0 || Math.abs((long) numeric.scale()) > 1024) throw new NumberFormatException();
+                BigDecimal millis = seconds ? numeric.multiply(BigDecimal.valueOf(1000)) : numeric;
+                if (millis.compareTo(BigDecimal.valueOf(Long.MAX_VALUE)) > 0) throw new NumberFormatException();
+                return millis.setScale(0, RoundingMode.HALF_UP).longValueExact();
+            } catch (NumberFormatException | ArithmeticException ex) {
                 throw new IOException("Invalid logger timestamp on row "
                         + row, ex);
             }
@@ -185,7 +234,7 @@ public final class PortableLogCsvReader {
                 int minutes = Integer.parseInt(clock[1]);
                 double secondsValue = Double.parseDouble(clock[2]);
                 if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59
-                        || secondsValue < 0 || secondsValue >= 60) {
+                        || !Double.isFinite(secondsValue) || secondsValue < 0 || secondsValue >= 60) {
                     throw new NumberFormatException();
                 }
                 long clockMillis = Math.round(((hours * 60L + minutes) * 60L
@@ -206,67 +255,58 @@ public final class PortableLogCsvReader {
         }
     }
 
-    private static List<List<String>> rows(Reader reader) throws IOException {
-        PushbackReader input = new PushbackReader(reader, 1);
-        List<List<String>> rows = new ArrayList<List<String>>();
-        List<String> row = new ArrayList<String>();
-        StringBuilder field = new StringBuilder();
-        boolean quoted = false;
-        int value;
-        int characters = 0;
-        while ((value = input.read()) >= 0) {
-            characters = Math.addExact(characters, 1);
-            if (characters > MAX_CSV_CHARACTERS) {
-                throw new IOException("Portable logger CSV size limit reached");
-            }
-            char character = (char) value;
-            if (quoted) {
-                if (character == '"') {
-                    int next = input.read();
-                    if (next == '"') field.append('"');
-                    else {
-                        quoted = false;
-                        if (next >= 0) input.unread(next);
+    /** One record at a time; limits apply while tokenizing, before list growth. */
+    private static final class Records {
+        private final Reader input;
+        private int characters;
+        private int pending = -2;
+        private int number;
+        private int columns = MAX_CHANNELS + 1;
+        Records(Reader input) { this.input = input instanceof BufferedReader ? input : new BufferedReader(input); }
+        private int take() throws IOException {
+            if (Thread.currentThread().isInterrupted()) throw new InterruptedIOException("Logger CSV import cancelled");
+            if (pending != -2) { int value = pending; pending = -2; return value; }
+            int value = input.read();
+            if (value >= 0 && ++characters > MAX_CSV_CHARACTERS) throw new IOException("Portable logger CSV size limit reached");
+            return value;
+        }
+        List<String> next() throws IOException {
+            int ch = take();
+            if (number == 0 && ch == '\ufeff') ch = take();
+            if (ch < 0) return null;
+            if (++number > MAX_RECORDS) throw new IOException("Portable logger CSV record limit reached");
+            List<String> row = new ArrayList<>();
+            StringBuilder field = new StringBuilder();
+            int state = 0; // field start, unquoted, quoted, closing quote
+            int length = 0;
+            while (true) {
+                if (ch >= 0 && ++length > MAX_RECORD_CHARACTERS) throw new IOException("Portable logger CSV record is too large");
+                if (state == 2) {
+                    if (ch < 0) throw new IOException("Unterminated quoted CSV field");
+                    if (ch == '"') state = 3;
+                    else append(field, ch);
+                } else if (state == 3 && ch == '"') { append(field, ch); state = 2; }
+                else if (state == 0 && ch == '"') state = 2;
+                else if (ch < 0 || ch == ',' || ch == '\n' || ch == '\r') {
+                    if (row.size() >= columns) throw new IOException("Too many logger CSV columns on record " + number);
+                    row.add(field.toString());
+                    field.setLength(0);
+                    state = 0;
+                    if (ch != ',') {
+                        if (ch == '\r') { int next = take(); if (next != '\n') pending = next; }
+                        return row;
                     }
+                    if (row.size() >= columns) throw new IOException("Too many logger CSV columns on record " + number);
                 } else {
-                    field.append(character);
+                    if (state == 3 || ch == '"') throw new IOException("Invalid CSV quote on record " + number);
+                    append(field, ch); state = 1;
                 }
-            } else if (character == '"' && field.length() == 0) {
-                quoted = true;
-            } else if (character == ',') {
-                row.add(field.toString());
-                field.setLength(0);
-            } else if (character == '\n') {
-                row.add(trimCarriageReturn(field));
-                rows.add(row);
-                if (rows.size() > PortableLogSession.MAX_SAMPLES + 1) {
-                    throw new IOException("Portable log sample limit reached");
-                }
-                row = new ArrayList<String>();
-                field.setLength(0);
-            } else {
-                field.append(character);
-            }
-            if (field.length() > MAX_FIELD_CHARACTERS) {
-                throw new IOException("Portable logger CSV field is too large");
+                ch = take();
             }
         }
-        if (quoted) throw new IOException("Unterminated quoted CSV field");
-        if (field.length() > 0 || !row.isEmpty()) {
-            row.add(trimCarriageReturn(field));
-            rows.add(row);
-            if (rows.size() > PortableLogSession.MAX_SAMPLES + 1) {
-                throw new IOException("Portable log sample limit reached");
-            }
+        private static void append(StringBuilder field, int value) throws IOException {
+            if (field.length() >= MAX_FIELD_CHARACTERS) throw new IOException("Portable logger CSV field is too large");
+            field.append((char) value);
         }
-        return rows;
-    }
-
-    private static String trimCarriageReturn(StringBuilder field) {
-        int length = field.length();
-        if (length > 0 && field.charAt(length - 1) == '\r') {
-            return field.substring(0, length - 1);
-        }
-        return field.toString();
     }
 }

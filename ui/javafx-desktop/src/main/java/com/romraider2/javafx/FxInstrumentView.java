@@ -50,7 +50,7 @@ final class FxInstrumentView extends Region {
                 animated() ? reading.withIndicator(motion.valueAt(System.nanoTime())) : reading); g.restore();
     }
     private boolean animated() {
-        return (style == GaugeFaceRenderer.Style.STI_NIGHT || style == GaugeFaceRenderer.Style.EVOLUTION_NIGHT)
+        return style.usesNeedleMotion()
                 && !Boolean.getBoolean("romraider2.gauge.reduceMotion");
     }
     private static Color color(int argb) {

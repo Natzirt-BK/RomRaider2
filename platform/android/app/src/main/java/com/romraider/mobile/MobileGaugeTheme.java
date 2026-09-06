@@ -30,7 +30,12 @@ enum MobileGaugeTheme {
     VECTOR_HUD("Vector HUD", 0xFF10171D, 0xFF7CDFFF, 0xFF436170, Color.WHITE, false, false),
     TURBO_POD("Turbo Pod", 0xFF080E14, 0xFFFF8C61, 0xFF8495A4, Color.WHITE, false, false),
     STI_NIGHT("STI Night", 0xFF080A0F, 0xFFFF3348, 0xFF732738, Color.WHITE, true, false),
-    EVOLUTION_NIGHT("Evolution Night", 0xFF080A0F, 0xFFFF5B40, 0xFF666A73, Color.WHITE, true, false);
+    EVOLUTION_NIGHT("Evolution Night", 0xFF080A0F, 0xFFFF5B40, 0xFF666A73, Color.WHITE, true, false),
+    PHOSPHOR_84("Phosphor 84", 0xFF061F29, 0xFF48F5EA, 0xFFFF4EA5, Color.WHITE, true, true),
+    ELECTRIC_BLOOM("Electric Bloom", 0xFF070C18, 0xFF538FFF, 0xFFA17BFF, Color.WHITE, true, false),
+    SUNSET_GT("Sunset GT", 0xFFF3DCAD, 0xFFCB2D70, 0xFFFFA24D, 0xFF593F48, false, false),
+    LASER_LED("Laser LED", 0xFF050A0B, 0xFFFF633F, 0xFFB5FF42, Color.WHITE, true, true),
+    PRISM_CASSETTE("Prism Cassette", 0xFF0A1326, 0xFF48F5EA, 0xFFFF4EA5, Color.WHITE, true, true);
 
     final String displayName;
     final int face;

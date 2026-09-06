@@ -123,7 +123,15 @@ features; real USB/background behavior is not established by synthetic tests.
 [Reviewed interrupted-recording recovery](ANDROID_RECORDING_RECOVERY.md) is now
 implemented in 1.1.3 source. Completed records are validated from a private
 snapshot before destination writes; omission of an unfinished tail requires
-review. Continue larger-log mobile import/review and provider acceptance audits.
+review. [Larger-log mobile summary review](ANDROID_CSV_REVIEW.md) is now implemented
+with bounded streaming, worker cancellation, pagination and retained previous
+results. Physical document-provider acceptance remains pending.
+
+The owner's additional gauge request adds five vibrant/retro native faces and
+[full-screen mounted mode](ANDROID_MOUNTED_DISPLAY.md), including display keep-awake
+while visible even without active logging. Continue emulator/native visual and
+lifecycle qualification, then the remaining fork-adoption audit; do not substitute
+synthetic test data for supervised hardware acceptance.
 
 Forester/EVO/OpenPort in-car acceptance, phone document-provider behavior and
 physical Windows/Mac/Deck tests remain supervised tasks. No production ECU

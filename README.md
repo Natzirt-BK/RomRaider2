@@ -139,6 +139,10 @@ do not qualify phone power management or vehicle compatibility.
 [Interrupted-recording recovery](docs/ANDROID_RECORDING_RECOVERY.md) validates a
 private snapshot before export and requires review before omitting an unfinished
 final record; the original recovery file remains unchanged.
+[Large-log Android review](docs/ANDROID_CSV_REVIEW.md) now streams bounded summaries
+off the UI thread, with cancellation and channel pagination. The source also adds
+five vibrant/retro gauge styles and a [full-screen mounted display](docs/ANDROID_MOUNTED_DISPLAY.md)
+that keeps the screen awake while visible, including when logging is stopped.
 
 - Tabbed calibration workspace with favorites, recent and changed maps, ROM
   comparison, grouped undo/redo, notes, and crash recovery.

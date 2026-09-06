@@ -11,6 +11,10 @@ public final class PortableGaugeCheck {
         motion();
         Set<String> faces = new HashSet<>();
         for (GaugeFaceRenderer.Style style : GaugeFaceRenderer.Style.values()) {
+            require(style.usesNeedleMotion() == (style == GaugeFaceRenderer.Style.STI_NIGHT
+                    || style == GaugeFaceRenderer.Style.EVOLUTION_NIGHT
+                    || style == GaugeFaceRenderer.Style.ELECTRIC_BLOOM
+                    || style == GaugeFaceRenderer.Style.SUNSET_GT), "Unexpected animated instrument");
             Recording surface = new Recording();
             GaugeFaceRenderer.draw(surface, style, reading(12.7, -15, 30));
             faces.add(surface.commands.toString());

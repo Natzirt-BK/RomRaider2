@@ -7,7 +7,11 @@ import java.util.Locale;
 public final class GaugeFaceRenderer {
     public enum Style { RALLY_PRECISION, CIRCUIT_STACK, RETRO_VFD,
         CLUB_SPORT, SWEEP_RIBBON, TWIN_ARC, AMBER_MATRIX, VECTOR_HUD, TURBO_POD,
-        STI_NIGHT, EVOLUTION_NIGHT }
+        STI_NIGHT, EVOLUTION_NIGHT, PHOSPHOR_84, ELECTRIC_BLOOM, SUNSET_GT, LASER_LED, PRISM_CASSETTE;
+        public boolean usesNeedleMotion() {
+            return this == STI_NIGHT || this == EVOLUTION_NIGHT || this == ELECTRIC_BLOOM || this == SUNSET_GT;
+        }
+    }
     public interface Surface {
         void rect(double x, double y, double width, double height, double radius, int color);
         void circle(double x, double y, double radius, int color);
@@ -59,6 +63,11 @@ public final class GaugeFaceRenderer {
         if (s == null || style == null || r == null) throw new IllegalArgumentException("Gauge surface, style and reading are required");
         if (style == Style.STI_NIGHT || style == Style.EVOLUTION_NIGHT) {
             PremiumGaugeFaces.draw(s, style, r);
+            return;
+        }
+        if (style == Style.PHOSPHOR_84 || style == Style.ELECTRIC_BLOOM || style == Style.SUNSET_GT
+                || style == Style.LASER_LED || style == Style.PRISM_CASSETTE) {
+            VibrantGaugeFaces.draw(s, style, r);
             return;
         }
         int accent = style == Style.RETRO_VFD ? MINT

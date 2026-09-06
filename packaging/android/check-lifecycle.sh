@@ -44,6 +44,7 @@ run_phase verify
 "$adb_command" -s "$serial" install -r "$upgrade"
 run_phase verify
 run_phase gauges
+run_phase mounted-fullscreen
 run_phase live-gauges
 run_phase clear
 run_phase verify-empty
@@ -51,6 +52,7 @@ run_phase corrupt
 run_phase verify-corrupt
 run_phase calculated-gauges
 run_phase channel-transfer
+run_phase csv-import
 run_phase recording-recovery
 run_phase background-service
 "$adb_command" -s "$serial" shell pm revoke com.romraider.mobile.automation android.permission.POST_NOTIFICATIONS
@@ -70,3 +72,5 @@ run_phase background-after-death
 echo 'PASS: setup restoration, source removal, same-key upgrade, retained log export, gauge view/session/CSV continuity, calculated channels, reviewed channel transfer, clear selection, corrupt setup, and no automatic logging.'
 echo 'PASS: service-owned synthetic capture through Home/screen-off and recreation, notification/in-app Stop, stale requests, denied notifications, and retained spool prefix with no restart after process death.'
 echo 'PASS: retained recording validation, reviewed incomplete-tail recovery, source preservation, cancellation and stale Activity cleanup.'
+echo 'PASS: streamed CSV summaries beyond the old sample cap, bounded channel paging, retained results on failure/cancel, and workspace/recording isolation.'
+echo 'PASS: mounted full screen and system-bar restoration, portrait/landscape, stopped display keep-awake, Home/return, Back/Exit, and same-writer Stop.'
