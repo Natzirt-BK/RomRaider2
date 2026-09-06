@@ -13,6 +13,16 @@
     <string name="logger_live_stop">STOP LIVE LOGGER</string>
     <string name="logger_live_opening">READ-ONLY LOGGER\nOpening %1$s K-line…</string>
     <string name="logger_simulated_gauge_demo">SIMULATED GAUGE DEMO  /  no ECU data</string>
+    <string name="logger_gauge_demo_show">SHOW GAUGE DEMO</string>
+    <string name="logger_gauge_demo_hide">HIDE GAUGE DEMO</string>
+    <string name="logger_gauge_demo_show_description">Show simulated values for visual review</string>
+    <string name="logger_gauge_demo_hide_description">Hide simulated gauge values and return to the empty dashboard</string>
+    <string name="logger_gauge_empty">Choose display channels above or use logger channels. Start the read-only logger for real readings, or show the demo to browse simulated gauges.</string>
+    <string name="gauge_default_style">GAUGE STYLE · %1$s ▾</string>
+    <string name="gauge_style_sample_hint">Tap a style to apply · sample readings</string>
+    <string name="gauge_style_use_default">%1$sUse default · %2$s</string>
+    <string name="gauge_style_no_matches">No matching styles. Try another name.</string>
+    <string name="gauge_style_label">%1$s%2$s</string>
     <string name="logger_live_identified">READ-ONLY LOGGER\nECU %1$s\nReady: %2$d  /  unavailable: %3$d\nWaiting for the first values…</string>
     <string name="logger_live_stopped">%1$s\n%2$s\nPrepare the adapter before another recording.</string>
     <string name="logger_service_unavailable">Recording service unavailable. No reconnection will be started automatically.</string>

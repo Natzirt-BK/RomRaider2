@@ -1,18 +1,30 @@
 # Full-screen mounted gauges — 1.1.3 development source
 
-Configure channels and choose a gauge style while parked. Open **GAUGES**, then
-tap **FULL SCREEN**. This hides the app tabs and Android status/navigation bars,
+Open **GAUGES** to configure the display while parked: layout, channel assignments,
+default style, per-channel styles, demo Show/Hide and peak reset are together here.
+The searchable style gallery previews actual native gauge faces with labeled sample
+readings. Tap a face to apply it, or cancel without changing anything.
+
+Tap **FULL SCREEN** to hide the app tabs and Android status/navigation bars,
 reduces outer padding, and keeps the display awake while this Activity is visible.
 It works on phone/tablet portrait and landscape layouts. Display cutout insets
 remain protected on modern Android; the OS can retain window controls in multi-window mode.
 
-Tap **LAYOUT** to show **1, 2, 3, 4, 5 or 6 gauges**. The choice is saved between
-launches. The display uses the first channels in logger order, up to the chosen
-count; if fewer are available, it fits only those gauges, without empty slots.
-All selected channels continue recording, including those not currently shown.
-Returning to LOGGER or the regular Gauges view shows all channels again.
+In the setup screen, tap **LAYOUT** to choose **1, 2, 3, 4, 5 or 6 gauges**, in
+portrait or landscape. Assign a channel and a style to each slot. Display channels
+are saved separately for SSM and MUT-II and start empty; importing a logger profile
+does not assign them. **USE LOGGER CHANNELS** explicitly copies the first six logger
+selections in order. Slots outside a smaller layout remain saved for later.
+Style overrides are saved per channel/protocol; choosing the default style does not
+overwrite individual styles. Each channel's picker can restore **Use default**.
 
-The mounted grid fills the available area below the compact controls, with no
+These choices affect display only: they do not add ECU requests or change the CSV.
+All logger-selected channels continue recording. An assigned channel without incoming
+readings shows **NO DATA**, not a simulated value. To receive that channel, include
+it in the Logger acquisition setup before starting the session. Unassigned slots do
+not occupy fullscreen space; assigned channels without data retain an unavailable face.
+
+The mounted grid fills the available area with no persistent controls and no
 scrolling. It compares balanced row arrangements for the current viewport and
 face shape, choosing the largest combined face area. Incomplete rows use their
 full width; faces scale uniformly without stretching or cropping. Portrait,
@@ -28,11 +40,14 @@ restores the regular cards without replacing gauge instances or the recording.
 The same borderless presentation is used in JavaFX and Compose mounted views;
 their normal workspace theme is restored on exit.
 
-**EXIT** or Android Back restores the regular Gauges view. **STOP** remains
-accessible and stops the same recording without leaving mounted mode. The display
+Tap anywhere on the mounted gauges or backdrop to reveal an overlay menu with
+**EXIT FULL SCREEN** and **STOP**. The menu hides after five seconds of inactivity;
+another tap resets the timer. Android's accessibility timeout preference is respected.
+Fullscreen taps reveal controls, never a style picker. **EXIT FULL SCREEN** or Android
+Back restores gauge setup. **STOP** stops the same recording without leaving mounted mode. The display
 stays awake even when stopped or displaying explicitly simulated data. Entering
 mounted mode does not connect USB, identify an ECU, start recording, or create data.
-Channel and style settings remain in LOGGER. View switches retain the gauge grid,
+Channel and style settings remain in GAUGES setup. View switches retain the gauge grid,
 recording owner and CSV writer. Stopped/stale labels and unavailable readings are
 not hidden by full-screen mode.
 
@@ -40,8 +55,8 @@ This is an awake application display, not Android's lock-screen Always On Displa
 It does not change system timeout preferences, force maximum brightness, disable
 the lock screen, or prevent deliberate power-button sleep. Going to Home releases
 the display-awake flag; returning to the existing mounted view restores it.
-Leaving full screen releases it unless a foreground recording independently
-requires it. A new Activity/process starts in the normal LOGGER view; mounted mode
+Leaving full screen releases it, including during recording. The ordinary Gauges
+and Logger tabs do not keep the screen awake. A new Activity/process starts in the normal LOGGER view; mounted mode
 never causes an automatic logging restart. Ordinary orientation changes retain the
 current Activity. Background recording is a [separate service feature](ANDROID_BACKGROUND_RECORDING.md).
 
@@ -51,6 +66,9 @@ predictive-back callback only while mounted, with the older Back override retain
 for API 26–32. See Android's [immersive-mode guidance](https://developer.android.com/develop/ui/views/layout/immersive)
 and [keep-screen-on contract](https://developer.android.com/develop/background-work/background-tasks/awake/screen-on).
 
+The `gauge-setup` automation phase covers explicit channel assignment/copy, gallery
+search and selection, per-channel persistence, unavailable channels, menu reveal/reset/
+timeout/exit and unchanged simulated capture. `gauge-demo-toggle` covers Show/Hide.
 The `mounted-fullscreen` automation phase checks hidden/restored system bars,
 idle/stopped keep-awake, Home/return, Back/LOGGER exit and retained gauge identity.
 The synthetic service tests also switch full screen during disk-backed capture.
@@ -66,6 +84,15 @@ These checks do not establish real-phone thermal behavior, sunlight readability,
 USB stability or vehicle safety. Set up while parked; do not adjust it while driving.
 This feature is not in the published 1.1.2 packages.
 
+The consolidated-setup update passes debug and automation builds, all 65 Android
+unit tests in each variant, and lint (zero errors, five existing warnings).
+Emulator phases `seed`, `gauge-setup`, `gauge-demo-toggle`, `gauges`,
+`mounted-fullscreen`, `mounted-layouts`, `seamless-gauges`, `live-gauges`,
+`calculated-gauges` and `background-service` pass. The calculated-gauge fixture now
+explicitly copies Logger channels into display slots; profile loading alone must
+not perform that action. This is Android source verification, not a new public
+release, desktop UI parity, or completion of the planned 25-style collection.
+
 September 6 seamless-display checks: 65 Android unit tests, debug/automation
 builds and lint pass (five existing lint warnings). Native emulator phases pass
 for all 21 borderless styles, fullscreen lifecycle, all 24 count/orientation
@@ -73,6 +100,13 @@ layouts, live-session/CSV continuity and calculated gauges. Shared rendering
 checks cover 1,120 card/seamless edge cases; the desktop suite passes 284 tests.
 
 ## Actual Android layouts
+
+[Gauge setup](images/android-gauge-setup.png) ·
+[Visual style picker](images/android-gauge-style-picker.png) ·
+[Mixed-style fullscreen](images/android-fullscreen-mixed-gauges.png) ·
+[Tap-to-reveal menu](images/android-fullscreen-tap-menu.png).
+These four native emulator captures show the consolidated setup and explicitly
+simulated test readings, not vehicle data. Reproduce with `gauge-setup`.
 
 ![Six STI Night gauges fitted into a landscape Android viewport](images/android-mounted-six-landscape.png)
 

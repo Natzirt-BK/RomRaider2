@@ -3,8 +3,12 @@
 RomRaider2 includes nine original instrument faces plus STI Night and Evolution Night
 alongside its existing themes. Development source 1.1.3 adds five more vibrant/retro
 styles below; these five are not in the published 1.1.2 packages.
-Choose a face in the Logger dashboard, then switch to **Gauges** on Android or
-**Gauges only** in the JavaFX or Compose desktop/handheld logger. Configure the display while
+On Android, choose channels, layouts and faces in **Gauges**, using the searchable
+visual picker for the default or an individual channel. Display assignments are
+independent of Logger, with an explicit **Use logger channels** shortcut. Enter
+**Full Screen** for the seamless, awake display; tap it for a temporary exit menu.
+Desktop/handheld currently use the Logger dashboard and **Gauges only** in JavaFX
+or Compose; Android's consolidated setup/picker is not yet ported to those UIs. Configure the display while
 parked. This view is not a replacement for the vehicle's instruments or warnings.
 
 | Face | Visual structure |

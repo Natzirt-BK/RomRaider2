@@ -138,12 +138,19 @@ public final class MainActivity extends Activity {
     private int mountedGaugeCount = 6;
     private FrameLayout mountedGaugeViewport;
     private ScrollView gaugesScroll;
+    private LinearLayout gaugeSetupCard;
+    private LinearLayout gaugeSlotOptions;
+    private LinearLayout gaugesControls;
+    private final Runnable hideMountedMenu = () -> {
+        if (mountedFullScreen && gaugesControls != null) gaugesControls.setVisibility(View.GONE);
+    };
     private AlertDialog mountedLayoutDialog;
     private int previousSystemUiVisibility;
     private int previousSystemBarsBehavior;
     private int previousVisibleSystemBars;
     private android.window.OnBackInvokedCallback mountedBackCallback;
     private boolean gaugeDemo;
+    private Button loggerGaugeDemoButton;
     private boolean liveEcuIdentified;
     private final Map<String, Long> gaugeReceivedAt = new LinkedHashMap<>();
     private final Runnable gaugeMonitor = new Runnable() {
@@ -181,9 +188,11 @@ public final class MainActivity extends Activity {
             new LinkedHashMap<>();
     private final Map<String, MobileGaugeSnapshot> loggerGaugeSnapshots =
             new LinkedHashMap<>();
-    private final Map<MobileGaugeTheme, Button> loggerGaugeThemeButtons =
-            new LinkedHashMap<>();
+    private Button loggerGaugeStyleButton;
+    private AlertDialog loggerGaugeStyleDialog;
     private MobileGaugeTheme loggerGaugeTheme = MobileGaugeTheme.RR2_CLASSIC;
+    private MobileGaugeStyles loggerGaugeStyles;
+    private List<String> gaugeChannelSlots = new ArrayList<>(java.util.Collections.nCopies(6, ""));
     private final Handler previewHandler = new Handler(Looper.getMainLooper());
     private final ExecutorService workerExecutor = Executors.newSingleThreadExecutor();
     private final AtomicInteger recoveryGeneration = new AtomicInteger();
@@ -352,6 +361,8 @@ public final class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        previewHandler.removeCallbacks(hideMountedMenu);
+        if (loggerGaugeStyleDialog != null) { loggerGaugeStyleDialog.dismiss(); loggerGaugeStyleDialog = null; }
         if (mountedLayoutDialog != null) { mountedLayoutDialog.dismiss(); mountedLayoutDialog = null; }
         setMountedFullScreen(false);
         cancelLogImport(null);
@@ -385,6 +396,8 @@ public final class MainActivity extends Activity {
     @Override
     protected void onStop() {
         activityResumed = false;
+        previewHandler.removeCallbacks(hideMountedMenu);
+        if (mountedFullScreen && gaugesControls != null) gaugesControls.setVisibility(View.GONE);
         updateScreenAwake();
         previewHandler.removeCallbacks(gaugeMonitor);
         previewHandler.removeCallbacks(recordingTick);
@@ -523,11 +536,12 @@ public final class MainActivity extends Activity {
         liveLoggerButton = null;
         loggerGaugeGrid = null;
         loggerGaugeEmpty = null;
+        loggerGaugeDemoButton = null;
         loggerGaugeViews.clear();
         loggerGaugeSnapshots.clear();
         gaugeReceivedAt.clear();
         gaugeDemo = false;
-        loggerGaugeThemeButtons.clear();
+        loggerGaugeStyleButton = null;
         selectTab(loggerTab, editorTab);
         content.removeAllViews();
 
@@ -537,7 +551,8 @@ public final class MainActivity extends Activity {
         content.addView(text("Review logs, prepare a session, and verify the "
                 + "OpenPort from one workspace.", 13, MUTED), matchWrap(dp(14)));
 
-        content.addView(loggerDashboardCard(), cardParams(dp(10)));
+        // Gauge setup belongs exclusively to the Gauges tab, not the logger's channel setup.
+        gaugeSetupCard = loggerDashboardCard();
 
         LinearLayout reviewCard = sectionCard("LOG REVIEW",
                 "Open a RomRaider or RomRaider2 CSV and review the latest "
@@ -2074,15 +2089,17 @@ public final class MainActivity extends Activity {
                 && !busy && !displayedRecordingBusy) return;
         if (current != displayedRecording) {
             clearLoggerGauges();
+            refreshAssignedGauges();
             displayedRecording = current;
             displayedRecordingState = null;
         }
         if (state != displayedRecordingState) {
             if (!state.values().isEmpty()) {
-                for (int index = 0; index < Math.min(MOBILE_GAUGE_LIMIT, state.values().size()); index++) {
+                for (int index = 0; index < state.values().size(); index++) {
                     PortableLoggerValue value = state.values().get(index);
                     PortableSelectedParameter selected = value.getSelection();
                     String id = selected.getParameter().getId();
+                    if (!isDisplayChannel(id)) continue;
                     MobileGaugeSnapshot gauge = loggerGaugeSnapshots.get(id);
                     if (gauge == null) {
                         gauge = new MobileGaugeSnapshot(id, selected.getParameter().getName(),
@@ -2094,6 +2111,7 @@ public final class MainActivity extends Activity {
                 }
                 updateLoggerGauges(state.values());
                 for (PortableLoggerValue value : state.values()) {
+                    if (!isDisplayChannel(value.getSelection().getParameter().getId())) continue;
                     gaugeReceivedAt.put(value.getSelection().getParameter().getId(),
                             state.receivedAtNanos() / 1_000_000L);
                 }
@@ -2178,44 +2196,41 @@ public final class MainActivity extends Activity {
     }
 
     private LinearLayout loggerDashboardCard() {
-        LinearLayout card = sectionCard("MOBILE DASHBOARD",
-                "Glanceable fixed-scale gauges for simulated and read-only "
-                        + "live data. Theme choice is saved on this device.");
+        LinearLayout card = sectionCard("GAUGE SETUP",
+                "Set up while parked. Full Screen keeps the display awake.");
         SharedPreferences preferences = getPreferences(MODE_PRIVATE);
         loggerGaugeTheme = MobileGaugeTheme.fromName(preferences.getString(
                 PREF_GAUGE_THEME, MobileGaugeTheme.RR2_CLASSIC.name()));
+        loggerGaugeStyles = new MobileGaugeStyles(preferences);
+        gaugeChannelSlots = MobileGaugeChannels.read(preferences, loggerProtocol.name());
 
-        HorizontalScrollView themeScroll = new HorizontalScrollView(this);
-        themeScroll.setHorizontalScrollBarEnabled(false);
-        LinearLayout themes = new LinearLayout(this);
-        themes.setOrientation(LinearLayout.HORIZONTAL);
-        for (MobileGaugeTheme theme : MobileGaugeTheme.values()) {
-            Button choice = button(theme.displayName);
-            choice.setMinWidth(dp(126));
-            choice.setContentDescription("Use " + theme.displayName
-                    + " dashboard gauges");
-            choice.setOnClickListener(view -> setLoggerGaugeTheme(theme));
-            loggerGaugeThemeButtons.put(theme, choice);
-            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.WRAP_CONTENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT);
-            params.setMargins(0, 0, dp(7), 0);
-            themes.addView(choice, params);
-        }
-        themeScroll.addView(themes, matchWrap());
-        card.addView(themeScroll, matchWrap(dp(10)));
+        loggerGaugeStyleButton = button("");
+        loggerGaugeStyleButton.setOnClickListener(view -> chooseDefaultGaugeStyle());
 
-        Button demo = button("SHOW GAUGE DEMO");
+        Button demo = button(getString(R.string.logger_gauge_demo_show));
+        loggerGaugeDemoButton = demo;
         styleButton(demo, POSITIVE, POSITIVE);
-        demo.setContentDescription("Show simulated values for visual review");
-        demo.setOnClickListener(view -> showLoggerGaugeDemo());
+        refreshGaugeDemoButton();
+        demo.setOnClickListener(view -> {
+            if (gaugeDemo) hideLoggerGaugeDemo();
+            else showLoggerGaugeDemo();
+        });
         Button resetPeaks = button("RESET PEAKS");
         resetPeaks.setOnClickListener(view -> resetLoggerGaugePeaks());
-        card.addView(actionRow(demo, resetPeaks), matchWrap(dp(10)));
+        mountedLayoutButton = button("LAYOUT");
+        mountedLayoutButton.setOnClickListener(view -> chooseMountedGaugeCount());
+        Button fromLogger = button("USE LOGGER CHANNELS");
+        fromLogger.setOnClickListener(view -> useLoggerGaugeChannels());
+        card.addView(actionRow(mountedLayoutButton, fromLogger), matchWrap(dp(6)));
+        card.addView(text("Display only; logging is unchanged. Channels without incoming readings show No data.",
+                12, MUTED), matchWrap(dp(6)));
+        gaugeSlotOptions = column();
+        card.addView(gaugeSlotOptions, matchWrap(dp(6)));
+        refreshGaugeSlotOptions();
+        card.addView(loggerGaugeStyleButton, matchWrap(dp(8)));
+        card.addView(actionRow(demo, resetPeaks), matchWrap(dp(6)));
 
-        loggerGaugeEmpty = statusText("Run the offline preview or the "
-                + "read-only logger to populate this dashboard, or show the "
-                + "simulated demo for a visual check.");
+        loggerGaugeEmpty = statusText(getString(R.string.logger_gauge_empty));
         card.addView(loggerGaugeEmpty, matchWrap(dp(8)));
         loggerGaugeGrid = new MountedGaugeGrid(this);
         loggerGaugeGrid.setColumnCount(2);
@@ -2224,6 +2239,7 @@ public final class MainActivity extends Activity {
         loggerGaugeGrid.addOnLayoutChangeListener((view, left, top, right, bottom,
                 oldLeft, oldTop, oldRight, oldBottom) -> layoutGaugeColumns());
         card.addView(loggerGaugeGrid, matchWrap());
+        configureMountedGaugeLayout();
         styleLoggerGaugeThemeButtons();
         return card;
     }
@@ -2232,21 +2248,175 @@ public final class MainActivity extends Activity {
         loggerGaugeTheme = theme;
         getPreferences(MODE_PRIVATE).edit().putString(
                 PREF_GAUGE_THEME, theme.name()).apply();
-        for (MobileGaugeView gauge : loggerGaugeViews.values()) {
-            gauge.setTheme(theme);
+        for (Map.Entry<String, MobileGaugeView> entry : loggerGaugeViews.entrySet()) {
+            entry.getValue().setTheme(channelGaugeTheme(entry.getKey()));
         }
         configureMountedGaugeLayout();
         styleLoggerGaugeThemeButtons();
+        refreshGaugeSlotOptions();
+    }
+
+    private String gaugeStyleScope() { return gaugeDemo ? "DEMO" : loggerProtocol.name(); }
+
+    private MobileGaugeTheme channelGaugeTheme(String id) {
+        if (loggerGaugeStyles == null) return loggerGaugeTheme;
+        try { return loggerGaugeStyles.resolve(gaugeStyleScope(), id, loggerGaugeTheme); }
+        catch (IllegalArgumentException invalidIdentity) { return loggerGaugeTheme; }
+    }
+
+    private void applyChannelGaugeStyle(String scope, String id, MobileGaugeTheme theme) {
+        if (activityDestroyed || !scope.equals(gaugeStyleScope())) return;
+        try { loggerGaugeStyles.set(scope, id, theme); }
+        catch (RuntimeException invalid) { notice(invalid.getMessage()); return; }
+        MobileGaugeView gauge = loggerGaugeViews.get(id);
+        if (gauge != null) gauge.setTheme(channelGaugeTheme(id));
+        configureMountedGaugeLayout();
+        refreshGaugeSlotOptions();
+    }
+
+    private boolean isDisplayChannel(String id) {
+        return gaugeDemo || gaugeChannelSlots.subList(0, mountedGaugeCount).contains(id);
+    }
+
+    private void useLoggerGaugeChannels() {
+        if (loggerProfile == null || loggerProfile.selections().isEmpty()) {
+            notice("Choose logger channels first, or assign display channels individually.");
+            return;
+        }
+        List<String> slots = new ArrayList<>(java.util.Collections.nCopies(6, ""));
+        int index = 0;
+        for (PortableLoggerProfile.Selection selection : loggerProfile.selections()) {
+            if (index == 6) break;
+            if (selection.getId().length() <= 240 && !slots.contains(selection.getId()))
+                slots.set(index++, selection.getId());
+        }
+        saveGaugeChannels(slots);
+        setMountedGaugeCount(Math.max(1, index));
+        if (loggerProfile.selections().size() > 6) notice("Copied the first six logger channels. Recording is unchanged.");
+    }
+
+    private void saveGaugeChannels(List<String> slots) {
+        MobileGaugeChannels.write(getPreferences(MODE_PRIVATE), loggerProtocol.name(), slots);
+        gaugeChannelSlots = slots;
+        if (gaugeDemo) hideLoggerGaugeDemo();
+        refreshAssignedGauges();
+        refreshGaugeSlotOptions();
+    }
+
+    private String gaugeChannelName(String id) {
+        PortableLoggerParameter parameter = loggerDefinition == null ? null : loggerDefinition.parameter(id);
+        return parameter == null ? id : parameter.getName();
+    }
+
+    private void refreshGaugeSlotOptions() {
+        if (gaugeSlotOptions == null) return;
+        gaugeSlotOptions.removeAllViews();
+        for (int i = 0; i < mountedGaugeCount; i++) {
+            final int slot = i;
+            String id = gaugeChannelSlots.get(i);
+            Button channel = button((i + 1) + " · " + (id.isEmpty() ? "CHOOSE CHANNEL" : gaugeChannelName(id)));
+            channel.setOnClickListener(view -> chooseGaugeSlotChannel(slot));
+            Button style = button(id.isEmpty() ? "STYLE" : loggerGaugeStyles.resolve(loggerProtocol.name(), id, loggerGaugeTheme).displayName + " ▾");
+            style.setEnabled(!id.isEmpty());
+            style.setOnClickListener(view -> {
+                if (gaugeDemo) { hideLoggerGaugeDemo(); refreshAssignedGauges(); }
+                chooseChannelGaugeStyle(loggerProtocol.name(), id, gaugeChannelName(id));
+            });
+            gaugeSlotOptions.addView(actionRow(channel, style), matchWrap(dp(4)));
+        }
+    }
+
+    private void chooseGaugeSlotChannel(int slot) {
+        if (loggerDefinition == null) { notice("Load a logger definition before choosing display channels."); return; }
+        String scope = loggerProtocol.name();
+        List<String> ids = new ArrayList<>();
+        List<String> labels = new ArrayList<>();
+        ids.add(""); labels.add("Empty slot");
+        for (PortableLoggerParameter parameter : loggerDefinition.parameters()) {
+            if (parameter.getId().length() > 240) continue;
+            ids.add(parameter.getId());
+            labels.add(parameter.getName() + " [" + parameter.getId() + "]");
+        }
+        LinearLayout body = column();
+        EditText search = new EditText(this);
+        search.setSingleLine(true); search.setHint("Search channels");
+        body.addView(search, matchWrap());
+        android.widget.ListView list = new android.widget.ListView(this);
+        android.widget.ArrayAdapter<String> adapter = new android.widget.ArrayAdapter<>(this,
+                android.R.layout.simple_list_item_1, new ArrayList<>(labels));
+        list.setAdapter(adapter);
+        body.addView(list, new LinearLayout.LayoutParams(-1, dp(300)));
+        AlertDialog dialog = new AlertDialog.Builder(this).setTitle("Gauge " + (slot + 1) + " · channel")
+                .setView(body).setNegativeButton("Cancel", null).create();
+        search.addTextChangedListener(new TextWatcher() {
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) { }
+            public void onTextChanged(CharSequence s, int start, int before, int count) { adapter.getFilter().filter(s); }
+            public void afterTextChanged(Editable s) { }
+        });
+        list.setOnItemClickListener((parent, view, position, rowId) -> {
+            if (!scope.equals(loggerProtocol.name()) || activityDestroyed) { dialog.dismiss(); return; }
+            String id = ids.get(labels.indexOf(adapter.getItem(position)));
+            List<String> slots = new ArrayList<>(gaugeChannelSlots);
+            int previous = id.isEmpty() ? -1 : slots.indexOf(id);
+            if (previous >= 0) slots.set(previous, slots.get(slot));
+            slots.set(slot, id);
+            saveGaugeChannels(slots);
+            dialog.dismiss();
+        });
+        body.setFocusableInTouchMode(true); body.requestFocus();
+        dialog.show();
+    }
+
+    private void refreshAssignedGauges() {
+        if (loggerGaugeGrid == null || gaugeDemo) return;
+        loggerGaugeViews.keySet().removeIf(id -> !isDisplayChannel(id));
+        loggerGaugeSnapshots.keySet().removeIf(id -> !isDisplayChannel(id));
+        gaugeReceivedAt.keySet().removeIf(id -> !isDisplayChannel(id));
+        for (String id : gaugeChannelSlots.subList(0, mountedGaugeCount)) {
+            if (id.isEmpty() || loggerGaugeViews.containsKey(id)) continue;
+            updateLoggerGauge(id, gaugeChannelName(id), "", "0.0", Double.NaN);
+            // A display placeholder is not a sample and must not set units, peaks or freshness.
+            loggerGaugeSnapshots.remove(id);
+            gaugeReceivedAt.remove(id);
+        }
+        Map<String, MobileGaugeView> ordered = new LinkedHashMap<>();
+        for (String id : gaugeChannelSlots.subList(0, mountedGaugeCount))
+            if (loggerGaugeViews.containsKey(id)) ordered.put(id, loggerGaugeViews.get(id));
+        loggerGaugeViews.clear(); loggerGaugeViews.putAll(ordered);
+        loggerGaugeGrid.removeAllViews();
+        int index = 0, columns = loggerGaugeGrid.getColumnCount();
+        for (MobileGaugeView gauge : loggerGaugeViews.values()) {
+            GridLayout.LayoutParams params = new GridLayout.LayoutParams(GridLayout.spec(index / columns),
+                    GridLayout.spec(index % columns, 1f));
+            params.width = 0; params.height = ViewGroup.LayoutParams.WRAP_CONTENT;
+            params.setMargins(dp(3), dp(3), dp(3), dp(3));
+            loggerGaugeGrid.addView(gauge, params); index++;
+        }
+        displayedRecordingState = null; // Repaint from the existing service snapshot; never restart acquisition.
+        configureMountedGaugeLayout();
+        refreshGaugeAvailability();
+    }
+
+    private void chooseChannelGaugeStyle(String scope, String id, String name) {
+        MobileGaugeTheme selected;
+        try { selected = loggerGaugeStyles.override(scope, id); }
+        catch (IllegalArgumentException invalid) { notice(invalid.getMessage()); return; }
+        if (loggerGaugeStyleDialog != null) loggerGaugeStyleDialog.dismiss();
+        loggerGaugeStyleDialog = MobileGaugeStylePicker.show(this, name + " · style", selected,
+                loggerGaugeTheme, theme -> applyChannelGaugeStyle(scope, id, theme));
+    }
+
+    private void chooseDefaultGaugeStyle() {
+        if (loggerGaugeStyleDialog != null) loggerGaugeStyleDialog.dismiss();
+        loggerGaugeStyleDialog = MobileGaugeStylePicker.show(this, "Default gauge style", loggerGaugeTheme,
+                null, theme -> { if (!activityDestroyed) setLoggerGaugeTheme(theme); });
     }
 
     private void styleLoggerGaugeThemeButtons() {
-        for (Map.Entry<MobileGaugeTheme, Button> entry
-                : loggerGaugeThemeButtons.entrySet()) {
-            boolean selected = entry.getKey() == loggerGaugeTheme;
-            styleButton(entry.getValue(),
-                    selected ? ACCENT : PANEL_RAISED,
-                    selected ? ACCENT : BORDER);
-            entry.getValue().setSelected(selected);
+        if (loggerGaugeStyleButton != null) {
+            loggerGaugeStyleButton.setText(getString(R.string.gauge_default_style, loggerGaugeTheme.displayName));
+            loggerGaugeStyleButton.setContentDescription("Default gauge style: " + loggerGaugeTheme.displayName
+                    + ". Open visual style gallery");
         }
     }
 
@@ -2265,7 +2435,7 @@ public final class MainActivity extends Activity {
     private void updateLoggerGauge(String id, String name, String units,
             String format, double value) {
         GridLayout grid = loggerGaugeGrid;
-        if (grid == null) return;
+        if (grid == null || !isDisplayChannel(id)) return;
         MobileGaugeSnapshot snapshot = loggerGaugeSnapshots.get(id);
         if (snapshot == null) {
             if (loggerGaugeSnapshots.size() >= MOBILE_GAUGE_LIMIT) return;
@@ -2277,7 +2447,11 @@ public final class MainActivity extends Activity {
         MobileGaugeView gauge = loggerGaugeViews.get(id);
             if (gauge == null) {
                 gauge = new MobileGaugeView(this);
-                gauge.setTheme(loggerGaugeTheme);
+                gauge.setTheme(channelGaugeTheme(id));
+                gauge.setOnClickListener(view -> {
+                    if (mountedFullScreen) showMountedMenu();
+                    else chooseChannelGaugeStyle(gaugeStyleScope(), id, name);
+                });
                 int index = loggerGaugeViews.size();
                 GridLayout.LayoutParams params = new GridLayout.LayoutParams(
                         GridLayout.spec(index / grid.getColumnCount()),
@@ -2287,6 +2461,7 @@ public final class MainActivity extends Activity {
                 params.setMargins(dp(3), dp(3), dp(3), dp(3));
                 grid.addView(gauge, params);
                 loggerGaugeViews.put(id, gauge);
+                configureMountedGaugeLayout();
             }
         gauge.setValue(snapshot.id, snapshot.name,
                 snapshot.displayValue(), snapshot.units, snapshot.value,
@@ -2307,6 +2482,7 @@ public final class MainActivity extends Activity {
         stopLoggerPreview(null);
         clearLoggerGauges();
         gaugeDemo = true;
+        refreshGaugeDemoButton();
         demoGauge("P-RPM", "Engine Speed", "rpm", "0", 720, 6650, 4210);
         demoGauge("P-BOOST", "Boost Pressure", "psi", "0.0", -8.6, 18.4, 12.7);
         demoGauge("P-COOLANT", "Coolant Temperature", "°F", "0", 154, 207, 196);
@@ -2319,6 +2495,23 @@ public final class MainActivity extends Activity {
             loggerGaugeEmpty.setText(R.string.logger_simulated_gauge_demo);
             loggerGaugeEmpty.setVisibility(View.VISIBLE);
         }
+        refreshGaugeAvailability();
+    }
+
+    private void hideLoggerGaugeDemo() {
+        // A stale Hide action must never clear real or offline-recording gauges.
+        if (!gaugeDemo || previewRunning || isLiveActive()) return;
+        clearLoggerGauges();
+        refreshGaugeAvailability();
+    }
+
+    private void refreshGaugeDemoButton() {
+        if (loggerGaugeDemoButton == null) return;
+        loggerGaugeDemoButton.setText(gaugeDemo
+                ? R.string.logger_gauge_demo_hide : R.string.logger_gauge_demo_show);
+        loggerGaugeDemoButton.setContentDescription(getString(gaugeDemo
+                ? R.string.logger_gauge_demo_hide_description : R.string.logger_gauge_demo_show_description));
+        loggerGaugeDemoButton.setSelected(gaugeDemo);
     }
 
     private void demoGauge(String id, String name, String units, String format,
@@ -2352,11 +2545,16 @@ public final class MainActivity extends Activity {
 
     private void clearLoggerGauges() {
         gaugeDemo = false;
+        refreshGaugeDemoButton();
         liveEcuIdentified = false;
         gaugeReceivedAt.clear();
         loggerGaugeSnapshots.clear();
         loggerGaugeViews.clear();
         if (loggerGaugeGrid != null) loggerGaugeGrid.removeAllViews();
+        if (loggerGaugeEmpty != null) {
+            loggerGaugeEmpty.setText(R.string.logger_gauge_empty);
+            loggerGaugeEmpty.setVisibility(View.VISIBLE);
+        }
     }
 
     private static List<byte[]> simulatedResponses(
@@ -2549,9 +2747,9 @@ public final class MainActivity extends Activity {
         if (gaugesVisible) return;
         cancelLogImport(null);
         if (!loggerVisible) showLogger();
-        gaugeGridHome = (ViewGroup) loggerGaugeGrid.getParent();
+        gaugeGridHome = gaugeSetupCard;
         gaugeGridHomeIndex = gaugeGridHome.indexOfChild(loggerGaugeGrid);
-        gaugeGridHome.removeView(loggerGaugeGrid);
+        if (gaugeSetupCard.getParent() != null) ((ViewGroup) gaugeSetupCard.getParent()).removeView(gaugeSetupCard);
         gaugesPage.removeAllViews();
         gaugesStatus = statusText("");
         gaugesStatus.setMaxLines(3);
@@ -2559,33 +2757,36 @@ public final class MainActivity extends Activity {
         Button stop = button("STOP");
         stop.setMinHeight(dp(48));
         stop.setOnClickListener(view -> {
+            if (mountedFullScreen) showMountedMenu();
             stopLoggerPreview(null);
             stopLiveLogger("Stopped from gauges dashboard.");
-            gaugeDemo = false;
+            hideLoggerGaugeDemo();
             refreshGaugeAvailability();
         });
         LinearLayout status = new LinearLayout(this);
+        gaugesControls = status;
         status.setGravity(Gravity.CENTER_VERTICAL);
+        status.setBackgroundColor(BACKGROUND);
         status.addView(gaugesStatus, weighted());
-        mountedLayoutButton = button("LAYOUT");
-        mountedLayoutButton.setTextSize(10);
-        mountedLayoutButton.setVisibility(View.GONE);
-        mountedLayoutButton.setOnClickListener(view -> chooseMountedGaugeCount());
-        status.addView(mountedLayoutButton);
         mountedModeButton = button("FULL SCREEN");
         mountedModeButton.setTextSize(11);
         mountedModeButton.setMinHeight(dp(48));
+        mountedModeButton.setPadding(dp(12), 0, dp(12), 0);
         mountedModeButton.setContentDescription("Full screen gauges; keep the display awake while visible");
         mountedModeButton.setOnClickListener(view -> setMountedFullScreen(!mountedFullScreen));
+        status.setOnClickListener(view -> { if (mountedFullScreen) showMountedMenu(); });
         status.addView(mountedModeButton);
         status.addView(stop);
         gaugesPage.addView(status, matchWrap());
         gaugesScroll = new ScrollView(this);
-        gaugesScroll.addView(loggerGaugeGrid, matchWrap());
+        gaugesScroll.addView(gaugeSetupCard, matchWrap());
         mountedGaugeViewport = new FrameLayout(this);
+        mountedGaugeViewport.setOnClickListener(view -> { if (mountedFullScreen) showMountedMenu(); });
         mountedGaugeViewport.addView(gaugesScroll, new FrameLayout.LayoutParams(-1, -1));
         gaugesPage.addView(mountedGaugeViewport, new LinearLayout.LayoutParams(-1, 0, 1f));
         gaugesVisible = true;
+        refreshAssignedGauges();
+        refreshGaugeSlotOptions();
         layoutGaugeColumns();
         workspaceScroll.setVisibility(View.GONE);
         workspaceBrand.setVisibility(View.GONE);
@@ -2598,8 +2799,6 @@ public final class MainActivity extends Activity {
     private void leaveGaugesOnly() {
         if (!gaugesVisible) return;
         setMountedFullScreen(false);
-        ((ViewGroup) loggerGaugeGrid.getParent()).removeView(loggerGaugeGrid);
-        gaugeGridHome.addView(loggerGaugeGrid, gaugeGridHomeIndex, matchWrap());
         gaugesVisible = false;
         layoutGaugeColumns();
         gaugesPage.setVisibility(View.GONE);
@@ -2627,14 +2826,23 @@ public final class MainActivity extends Activity {
             }
         }
         mountedFullScreen = enabled;
+        previewHandler.removeCallbacks(hideMountedMenu);
         gaugesStatus.setBackground(enabled ? null : rounded(BACKGROUND, BORDER, 7));
         ((ViewGroup) loggerGaugeGrid.getParent()).removeView(loggerGaugeGrid);
         gaugesScroll.setVisibility(enabled ? View.GONE : View.VISIBLE);
-        if (enabled) mountedGaugeViewport.addView(loggerGaugeGrid, new FrameLayout.LayoutParams(-1, -1));
-        else gaugesScroll.addView(loggerGaugeGrid, matchWrap());
+        ((ViewGroup) gaugesControls.getParent()).removeView(gaugesControls);
+        if (enabled) {
+            mountedGaugeViewport.addView(loggerGaugeGrid, new FrameLayout.LayoutParams(-1, -1));
+            mountedGaugeViewport.addView(gaugesControls, new FrameLayout.LayoutParams(-1, -2, Gravity.TOP));
+            gaugesControls.setVisibility(View.GONE);
+        } else {
+            gaugeGridHome.addView(loggerGaugeGrid, gaugeGridHomeIndex, matchWrap());
+            gaugesPage.addView(gaugesControls, 0, matchWrap());
+            gaugesControls.setVisibility(View.VISIBLE);
+        }
         configureMountedGaugeLayout();
         workspaceTabs.setVisibility(enabled ? View.GONE : View.VISIBLE);
-        mountedModeButton.setText(enabled ? "EXIT" : "FULL SCREEN");
+        mountedModeButton.setText(enabled ? "EXIT FULL SCREEN" : "FULL SCREEN");
         mountedModeButton.setContentDescription(enabled ? "Exit full screen gauges"
                 : "Full screen gauges; keep the display awake while visible");
         if (Build.VERSION.SDK_INT >= 33) {
@@ -2656,10 +2864,10 @@ public final class MainActivity extends Activity {
     }
 
     private void chooseMountedGaugeCount() {
-        if (!mountedFullScreen) return;
+        if (!gaugesVisible || mountedFullScreen) return;
         if (mountedLayoutDialog != null) mountedLayoutDialog.dismiss();
         mountedLayoutDialog = new AlertDialog.Builder(this)
-                .setTitle("Gauges shown — logging unchanged")
+                .setTitle("Display layout")
                 .setSingleChoiceItems(new String[]{"1 gauge", "2 gauges", "3 gauges", "4 gauges", "5 gauges", "6 gauges"},
                         mountedGaugeCount - 1, (dialog, selected) -> {
                             setMountedGaugeCount(selected + 1);
@@ -2673,15 +2881,23 @@ public final class MainActivity extends Activity {
         if (count < 1 || count > 6) throw new IllegalArgumentException("Choose one to six gauges");
         mountedGaugeCount = count;
         getPreferences(MODE_PRIVATE).edit().putInt("mounted_gauge_count", count).apply();
+        refreshAssignedGauges();
+        refreshGaugeSlotOptions();
         configureMountedGaugeLayout();
         refreshGaugeAvailability();
     }
 
     private void configureMountedGaugeLayout() {
+        double aspect = 320.0 / 205;
+        int visible = 0;
+        for (String id : loggerGaugeViews.keySet()) {
+            if (visible++ >= mountedGaugeCount) break;
+            if (channelGaugeTheme(id).instrumentStyle() != null) aspect = 320.0 / 250;
+        }
         if (loggerGaugeGrid instanceof MountedGaugeGrid) ((MountedGaugeGrid) loggerGaugeGrid).configure(
-                mountedFullScreen, mountedGaugeCount, loggerGaugeTheme.instrumentStyle() == null ? 320.0 / 205 : 320.0 / 250);
+                mountedFullScreen, mountedGaugeCount, aspect);
         if (mountedLayoutButton != null) {
-            mountedLayoutButton.setVisibility(mountedFullScreen ? View.VISIBLE : View.GONE);
+            mountedLayoutButton.setVisibility(View.VISIBLE);
             mountedLayoutButton.setText(String.format(Locale.ROOT, "LAYOUT %d", mountedGaugeCount));
             mountedLayoutButton.setContentDescription(String.format(Locale.ROOT, "Display up to %d gauges; choose a one to six gauge layout", mountedGaugeCount));
         }
@@ -2711,10 +2927,33 @@ public final class MainActivity extends Activity {
     }
 
     private void updateScreenAwake() {
-        boolean keepAwake = activityResumed && ((mountedFullScreen && gaugesVisible)
-                || (recordingService != null && recordingService.busy()));
+        boolean keepAwake = activityResumed && mountedFullScreen && gaugesVisible;
         if (keepAwake) getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+    }
+
+    private void showMountedMenu() {
+        if (!mountedFullScreen || gaugesControls == null) return;
+        gaugesControls.setVisibility(View.VISIBLE);
+        gaugesControls.bringToFront();
+        previewHandler.removeCallbacks(hideMountedMenu);
+        // An accessibility-focused menu must remain reachable; Android supplies the user's preferred timeout.
+        int timeout = 5000;
+        if (Build.VERSION.SDK_INT >= 29) {
+            android.view.accessibility.AccessibilityManager accessibility = getSystemService(android.view.accessibility.AccessibilityManager.class);
+            if (accessibility != null) timeout = accessibility.getRecommendedTimeoutMillis(timeout,
+                    android.view.accessibility.AccessibilityManager.FLAG_CONTENT_CONTROLS
+                            | android.view.accessibility.AccessibilityManager.FLAG_CONTENT_TEXT);
+        }
+        previewHandler.postDelayed(hideMountedMenu, timeout);
+    }
+
+    @Override
+    public boolean dispatchTouchEvent(android.view.MotionEvent event) {
+        // Reveal on release, after Android chose the down-event target. The revealing
+        // tap must not accidentally activate an Exit button that was previously hidden.
+        if (mountedFullScreen && event.getActionMasked() == android.view.MotionEvent.ACTION_UP) showMountedMenu();
+        return super.dispatchTouchEvent(event);
     }
 
     @Override
@@ -2744,12 +2983,13 @@ public final class MainActivity extends Activity {
             else if (phase != ReadOnlyRecording.Phase.RECORDING) state = "CONNECTING";
         }
         if (gaugesStatus != null) gaugesStatus.setText(state + (loggerGaugeViews.isEmpty()
-                ? "\nSelect channels in LOGGER while parked."
+                ? "\nChoose display channels below."
                 : mountedFullScreen ? "\n" + Math.min(mountedGaugeCount, loggerGaugeViews.size()) + " of " + loggerGaugeViews.size()
                 : "  •  " + loggerGaugeViews.size() + " gauges"));
         long now = SystemClock.elapsedRealtime();
         for (Map.Entry<String, MobileGaugeView> entry : loggerGaugeViews.entrySet()) {
             if (gaugeDemo) entry.getValue().setDataState("SIMULATED");
+            else if (!gaugeReceivedAt.containsKey(entry.getKey())) entry.getValue().markUnavailable("NO DATA");
             else if (!previewRunning && !isLiveActive()) entry.getValue().markUnavailable("STOPPED");
             else if (now - gaugeReceivedAt.getOrDefault(entry.getKey(), 0L) > 3000)
                 entry.getValue().markUnavailable("NO RECENT DATA");

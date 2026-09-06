@@ -55,6 +55,8 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
             awaitImports();
             if (phase.equals("seed")) seed();
             else if (phase.equals("gauges")) verifyGaugesOnly();
+            else if (phase.equals("gauge-demo-toggle")) verifyGaugeDemoToggle();
+            else if (phase.equals("gauge-setup")) verifyGaugeSetup();
             else if (phase.equals("mounted-fullscreen")) verifyMountedFullScreen();
             else if (phase.equals("mounted-layouts")) verifyMountedLayouts();
             else if (phase.equals("seamless-gauges")) verifySeamlessGauges();
@@ -104,6 +106,14 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
             result.putString("stream", "\nPASS logger setup automation: " + phase + "\n");
             finish(Activity.RESULT_OK, result);
         } catch (Throwable failure) {
+            try {
+                android.graphics.Bitmap screen = getUiAutomation().takeScreenshot();
+                if (screen != null) {
+                    try (OutputStream out = new FileOutputStream(new File(getTargetContext().getExternalFilesDir(null), "automation-failure.png"))) {
+                        screen.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out);
+                    } finally { screen.recycle(); }
+                }
+            } catch (Exception ignored) { }
             StringWriter trace = new StringWriter();
             failure.printStackTrace(new PrintWriter(trace));
             result.putString("stream", "\nFAIL logger setup automation: " + phase + "\n" + trace);
@@ -128,6 +138,7 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
         awaitImports();
         verifySelection(2);
         // The next launch must restore independently of both original documents.
+        invoke("useLoggerGaugeChannels", new Class<?>[0]); // Explicit test fixture display setup, not application auto-selection.
         Files.delete(definition.toPath());
         Files.delete(profile.toPath());
         File recordings = new File(folder, "recordings");
@@ -501,6 +512,208 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
         System.out.println("PASS: all themes preserve the same simulated session and gauge instances across view switches.");
     }
 
+    private void verifyGaugeDemoToggle() throws Exception {
+        verifySelection(2);
+        Object profile = field("loggerProfile"), definition = field("loggerDefinition");
+        Object session = field("previewSession"), recording = field("displayedRecording");
+        Object grid = field("loggerGaugeGrid");
+        android.widget.Button demo = (android.widget.Button) field("loggerGaugeDemoButton");
+        check(demo.getText().toString().equals("SHOW GAUGE DEMO"), "Initial demo action is wrong");
+        File renders = new File(getTargetContext().getExternalFilesDir(null), "gauge-demo-toggle");
+        check(renders.isDirectory() || renders.mkdirs(), "Cannot create demo render folder");
+        for (int cycle = 0; cycle < 2; cycle++) {
+            runOnMainSync(demo::performClick);
+            check((Boolean) field("gaugeDemo") && demo.isSelected()
+                    && demo.getText().toString().equals("HIDE GAUGE DEMO"), "Show did not expose Hide");
+            check(((java.util.Map<?, ?>) field("loggerGaugeViews")).size() == 8, "Demo gauges missing");
+            if (cycle == 0) captureMountedScreenshot(new File(renders, "demo-visible.png"));
+            invoke("showGaugesOnly", new Class<?>[0]);
+            invoke("leaveGaugesOnly", new Class<?>[0]);
+            check(field("loggerGaugeDemoButton") == demo && demo.getText().toString().equals("HIDE GAUGE DEMO"),
+                    "View switch lost Hide action");
+            runOnMainSync(demo::performClick);
+            check(!(Boolean) field("gaugeDemo") && !demo.isSelected()
+                    && demo.getText().toString().equals("SHOW GAUGE DEMO"), "Hide did not restore Show");
+            check(((java.util.Map<?, ?>) field("loggerGaugeViews")).isEmpty()
+                    && ((java.util.Map<?, ?>) field("loggerGaugeSnapshots")).isEmpty()
+                    && ((java.util.Map<?, ?>) field("gaugeReceivedAt")).isEmpty(), "Hide retained simulated readings/peaks");
+            check(((android.view.ViewGroup) grid).getChildCount() == 0, "Hide left demo views attached");
+            android.widget.TextView empty = (android.widget.TextView) field("loggerGaugeEmpty");
+            check(empty.getVisibility() == android.view.View.VISIBLE
+                    && !empty.getText().toString().contains("SIMULATED GAUGE DEMO"), "Demo hint was not cleared");
+            check(field("loggerProfile") == profile && field("loggerDefinition") == definition
+                    && field("previewSession") == session && field("displayedRecording") == recording,
+                    "Demo toggle changed setup or retained recording");
+            if (cycle == 0) captureMountedScreenshot(new File(renders, "demo-hidden.png"));
+        }
+        runOnMainSync(demo::performClick);
+        invoke("showGaugesOnly", new Class<?>[0]);
+        invoke("setMountedFullScreen", new Class<?>[]{boolean.class}, true);
+        runOnMainSync(() -> check(clickViewText((android.view.View) fieldUnchecked("gaugesPage"), "STOP"), "Stop missing"));
+        check(!(Boolean) field("gaugeDemo") && ((android.view.ViewGroup) grid).getChildCount() == 0,
+                "Mounted Stop left demo gauges behind");
+        check((Boolean) field("mountedFullScreen") && screenAwake(), "Hiding demo exited/dimmed mounted mode");
+        invoke("leaveGaugesOnly", new Class<?>[0]);
+        runOnMainSync(demo::performClick);
+        invoke("toggleLoggerPreview", new Class<?>[0]);
+        try {
+            long deadline = SystemClock.uptimeMillis() + 5000;
+            while ((Integer) field("previewCycle") < 2 && SystemClock.uptimeMillis() < deadline) SystemClock.sleep(30);
+            check((Boolean) field("previewRunning") && !(Boolean) field("gaugeDemo"), "Preview did not replace demo");
+            check(demo.getText().toString().equals("SHOW GAUGE DEMO"), "Recording start left a stale Hide label");
+            Object active = field("previewSession");
+            int count = ((android.view.ViewGroup) grid).getChildCount();
+            check(count > 0, "Preview has no gauge readings");
+            invoke("hideLoggerGaugeDemo", new Class<?>[0]);
+            check((Boolean) field("previewRunning") && field("previewSession") == active
+                    && ((android.view.ViewGroup) grid).getChildCount() == count,
+                    "Stale Hide stopped/cleared an offline recording");
+        } finally { invoke("stopLoggerPreview", new Class<?>[]{String.class}, (Object) null); }
+        System.out.println("PASS: demo Show/Hide toggles, clears only simulated gauges, survives view switches, and preserves recordings/setup.");
+    }
+
+    private void verifyGaugeSetup() throws Exception {
+        verifyGaugePreferences();
+        verifySelection(2);
+        Object profile = field("loggerProfile");
+        invoke("saveGaugeChannels", new Class<?>[]{java.util.List.class},
+                new java.util.ArrayList<>(java.util.Collections.nCopies(6, "")));
+        invoke("showGaugesOnly", new Class<?>[0]);
+        check(!screenAwake(), "Gauges setup must not keep the screen on");
+        check(((java.util.Map<?, ?>) field("loggerGaugeViews")).isEmpty(), "Logger channels were implicitly assigned");
+        check(((android.view.View) field("gaugeSetupCard")).isShown(), "Gauge setup missing from Gauges tab");
+        invoke("chooseMountedGaugeCount", new Class<?>[0]);
+        check(field("mountedLayoutDialog") != null && ((android.app.AlertDialog) field("mountedLayoutDialog")).isShowing(),
+                "Layout dialog was not shown");
+        clickDialogText("3 gauges");
+        check(((android.view.ViewGroup) field("gaugeSlotOptions")).getChildCount() == 3,
+                "Portrait layout did not expose three assignable slots");
+        invoke("chooseGaugeSlotChannel", new Class<?>[]{int.class}, 0);
+        clickDialogText("Unselected channel [P2]");
+        check(((java.util.List<?>) field("gaugeChannelSlots")).get(0).equals("P2"), "Independent channel was not assigned");
+        check(field("loggerProfile") == profile, "Display assignment changed Logger profile");
+        invoke("toggleLoggerPreview", new Class<?>[0]);
+        try {
+            long deadline = SystemClock.uptimeMillis() + 5000;
+            while ((Integer) field("previewCycle") < 2 && SystemClock.uptimeMillis() < deadline) SystemClock.sleep(30);
+            invoke("refreshAssignedGauges", new Class<?>[0]);
+            Object session = field("previewSession");
+            java.util.Map<?, ?> gauges = (java.util.Map<?, ?>) field("loggerGaugeViews");
+            check(gauges.size() == 1 && gauges.containsKey("P2"), "Logger choices replaced independent display assignment");
+            check(((MobileGaugeView) gauges.get("P2")).getContentDescription().toString().contains("NO DATA"),
+                    "Unqueried display channel manufactured a reading");
+            runOnMainSync(() -> check(clickViewText((android.view.View) fieldUnchecked("gaugeSetupCard"), "USE LOGGER CHANNELS"),
+                    "Use logger channels shortcut is missing"));
+            check(((java.util.List<?>) field("gaugeChannelSlots")).subList(0, 2).equals(java.util.Arrays.asList("P8", "P1")),
+                    "Explicit logger copy did not preserve channel order");
+            check(field("previewSession") == session && field("loggerProfile") == profile, "Copy restarted or changed Logger");
+
+            invoke("setLoggerGaugeTheme", new Class<?>[]{MobileGaugeTheme.class}, MobileGaugeTheme.RR2_CLASSIC);
+            runOnMainSync(() -> ((MobileGaugeStyles) fieldUnchecked("loggerGaugeStyles")).clear("SSM"));
+            invoke("chooseDefaultGaugeStyle", new Class<?>[0]);
+            android.app.AlertDialog picker = (android.app.AlertDialog) field("loggerGaugeStyleDialog");
+            android.widget.GridLayout gallery = descendant(picker.getWindow().getDecorView(), android.widget.GridLayout.class);
+            check(gallery.getChildCount() == MobileGaugeTheme.values().length, "Gallery omitted styles");
+            File renders = new File(getTargetContext().getExternalFilesDir(null), "gauge-setup");
+            check(renders.isDirectory() || renders.mkdirs(), "Cannot create gauge setup render folder");
+            captureMountedScreenshot(new File(renders, "style-gallery.png"));
+            android.widget.EditText search = descendant(picker.getWindow().getDecorView(), android.widget.EditText.class);
+            runOnMainSync(() -> search.setText("no such gauge style"));
+            check(gallery.getChildCount() == 0, "Search did not filter unmatched styles");
+            runOnMainSync(() -> search.setText("STI Night"));
+            check(gallery.getChildCount() == 1, "Search did not find STI Night uniquely");
+            runOnMainSync(() -> gallery.getChildAt(0).performClick());
+            check(field("loggerGaugeTheme") == MobileGaugeTheme.STI_NIGHT && !picker.isShowing(), "Visual choice was not applied");
+
+            invoke("chooseChannelGaugeStyle", new Class<?>[]{String.class, String.class, String.class}, "SSM", "P1", "Battery Voltage");
+            android.app.AlertDialog channelPicker = (android.app.AlertDialog) field("loggerGaugeStyleDialog");
+            android.widget.EditText channelSearch = descendant(channelPicker.getWindow().getDecorView(), android.widget.EditText.class);
+            android.widget.GridLayout channelGallery = descendant(channelPicker.getWindow().getDecorView(), android.widget.GridLayout.class);
+            runOnMainSync(() -> { channelSearch.setText("Retro VFD"); channelGallery.getChildAt(0).performClick(); });
+            MobileGaugeStyles styles = (MobileGaugeStyles) field("loggerGaugeStyles");
+            check(styles.resolve("SSM", "P1", MobileGaugeTheme.STI_NIGHT) == MobileGaugeTheme.RETRO_VFD
+                    && styles.override("SSM", "P8") == null && styles.override("MUT2", "P1") == null
+                    && styles.override("DEMO", "P1") == null, "Per-channel style leaked into another channel/protocol/demo");
+            check(field("previewSession") == session && (Boolean) field("previewRunning"), "Gallery interrupted capture");
+
+            invoke("setMountedFullScreen", new Class<?>[]{boolean.class}, true);
+            android.view.View controls = (android.view.View) field("gaugesControls");
+            check(controls.getVisibility() == android.view.View.GONE && screenAwake(), "Fullscreen did not start clean and awake");
+            java.util.Map<?, ?> currentGauges = (java.util.Map<?, ?>) field("loggerGaugeViews");
+            MobileGaugeView first = (MobileGaugeView) currentGauges.values().iterator().next();
+            runOnMainSync(first::performClick);
+            check(controls.getVisibility() == android.view.View.VISIBLE && !channelPicker.isShowing(), "Fullscreen tap opened a picker instead of the exit menu");
+            captureMountedScreenshot(new File(renders, "fullscreen-menu.png"));
+            SystemClock.sleep(2700);
+            runOnMainSync(first::performClick); // Restart the inactivity timeout.
+            SystemClock.sleep(2700);
+            check(controls.getVisibility() == android.view.View.VISIBLE, "Tap did not reset the menu timeout");
+            deadline = SystemClock.uptimeMillis() + 6000;
+            while (controls.getVisibility() != android.view.View.GONE && SystemClock.uptimeMillis() < deadline) SystemClock.sleep(50);
+            check(controls.getVisibility() == android.view.View.GONE && screenAwake(), "Menu did not auto-hide without dimming fullscreen");
+            captureMountedScreenshot(new File(renders, "fullscreen-clean.png"));
+            runOnMainSync(first::performClick);
+            runOnMainSync(() -> ((android.widget.Button) fieldUnchecked("mountedModeButton")).performClick());
+            check(!(Boolean) field("mountedFullScreen") && !screenAwake() && (Boolean) field("gaugesVisible"), "Exit did not return to non-awake gauge setup");
+            check(field("previewSession") == session && (Boolean) field("previewRunning"), "Menu stopped recording");
+            captureMountedScreenshot(new File(renders, "gauge-setup.png"));
+        } finally { invoke("stopLoggerPreview", new Class<?>[]{String.class}, (Object) null); }
+        verifyActivityRecreation();
+        check(((java.util.List<?>) field("gaugeChannelSlots")).subList(0, 2).equals(java.util.Arrays.asList("P8", "P1")), "Display assignments did not survive recreation");
+        check(((MobileGaugeStyles) field("loggerGaugeStyles")).override("SSM", "P1") == MobileGaugeTheme.RETRO_VFD,
+                "Channel styles did not survive recreation");
+        check(!screenAwake() && !(Boolean) field("mountedFullScreen"), "Recreation restored an awake/fullscreen state");
+        // Leave deterministic defaults for the uniform-style render checks that follow.
+        runOnMainSync(() -> ((MobileGaugeStyles) fieldUnchecked("loggerGaugeStyles")).clear("SSM"));
+        invoke("setLoggerGaugeTheme", new Class<?>[]{MobileGaugeTheme.class}, MobileGaugeTheme.RR2_CLASSIC);
+        invoke("useLoggerGaugeChannels", new Class<?>[0]);
+        System.out.println("PASS: independent slots, explicit logger copy, searchable native gallery, per-channel persistence, fullscreen tap/reset/timeout/exit and session continuity.");
+    }
+
+    private void verifyGaugePreferences() {
+        android.content.SharedPreferences preferences = getTargetContext().getSharedPreferences("automation-gauge-preferences", 0);
+        preferences.edit().clear().commit();
+        MobileGaugeStyles styles = new MobileGaugeStyles(preferences);
+        styles.set("SSM", "P8", MobileGaugeTheme.STI_NIGHT);
+        styles.set("SSM", "P1", MobileGaugeTheme.RETRO_VFD);
+        styles.set("MUT2", "P8", MobileGaugeTheme.EVOLUTION_NIGHT);
+        styles.set("DEMO", "P8", MobileGaugeTheme.AMBER_GT);
+        styles.set("SSM", "P1", null);
+        MobileGaugeStyles restored = new MobileGaugeStyles(preferences);
+        check(restored.override("SSM", "P8") == MobileGaugeTheme.STI_NIGHT
+                && restored.resolve("SSM", "P1", MobileGaugeTheme.RR2_CLASSIC) == MobileGaugeTheme.RR2_CLASSIC,
+                "Style persistence/default reset failed");
+        restored.clear("SSM");
+        check(restored.override("SSM", "P8") == null && restored.override("MUT2", "P8") == MobileGaugeTheme.EVOLUTION_NIGHT
+                && restored.override("DEMO", "P8") == MobileGaugeTheme.AMBER_GT, "Protocol reset removed unrelated overrides");
+        preferences.edit().putString("logger_channel_gauge_styles_v1", "{bad json").commit();
+        check(new MobileGaugeStyles(preferences).override("SSM", "P8") == null, "Invalid style JSON did not fall back");
+        preferences.edit().putInt("logger_channel_gauge_styles_v1", 7).commit();
+        check(new MobileGaugeStyles(preferences).override("SSM", "P8") == null, "Wrong preference type crashed/fabricated a style");
+        java.util.List<String> slots = new java.util.ArrayList<>(java.util.Arrays.asList("P8", "", "P1", "", "", ""));
+        MobileGaugeChannels.write(preferences, "SSM", slots);
+        check(MobileGaugeChannels.read(preferences, "SSM").equals(slots)
+                && MobileGaugeChannels.read(preferences, "MUT2").equals(java.util.Collections.nCopies(6, "")),
+                "Display slots lost ordering or leaked into another protocol");
+        java.util.List<String> duplicate = new java.util.ArrayList<>(slots); duplicate.set(1, "P8");
+        try { MobileGaugeChannels.write(preferences, "SSM", duplicate); throw new AssertionError("Duplicate assignment accepted"); }
+        catch (IllegalArgumentException expected) { }
+        check(MobileGaugeChannels.read(preferences, "SSM").equals(slots), "Rejected assignment changed saved slots");
+        preferences.edit().clear().commit();
+    }
+
+    private static <T extends android.view.View> T descendant(android.view.View root, Class<T> type) {
+        if (type.isInstance(root)) return type.cast(root);
+        if (root instanceof android.view.ViewGroup) {
+            android.view.ViewGroup group = (android.view.ViewGroup) root;
+            for (int i = 0; i < group.getChildCount(); i++) {
+                T found = descendant(group.getChildAt(i), type);
+                if (found != null) return found;
+            }
+        }
+        return null;
+    }
+
     private void verifyBundledNotices() throws Exception {
         for (String asset : new String[] {"license.txt", "STI-wordmark-NOTICE.txt"}) {
             try (java.io.InputStream input = getTargetContext().getAssets().open("notices/" + asset)) {
@@ -642,6 +855,7 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
                 }
             }
         }
+        invoke("setMountedFullScreen", new Class<?>[]{boolean.class}, false);
         invoke("chooseMountedGaugeCount", new Class<?>[0]);
         clickDialogText("3 gauges");
         check((Integer) field("mountedGaugeCount") == 3, "Layout picker did not apply selection");
@@ -820,6 +1034,7 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
                 "Calculated definition did not restore");
         check(((PortableLoggerProfile) field("loggerProfile")).selections().size() == 2,
                 "Hidden dependencies expanded the saved profile");
+        invoke("useLoggerGaugeChannels", new Class<?>[0]); // This is now an explicit display choice.
         invoke("toggleLoggerPreview", new Class<?>[0]);
         try {
             long deadline = SystemClock.uptimeMillis() + 5000;
@@ -841,6 +1056,7 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
         verifyReadOnlySessionViewSwitch(false);
     }
     private void verifyReadOnlySessionViewSwitch(boolean calculated) throws Exception {
+        invoke("useLoggerGaugeChannels", new Class<?>[0]);
         File spool = File.createTempFile("synthetic-gauge-session-", ".csv.part", getTargetContext().getCacheDir());
         com.romraider.portable.PortableLogSession log = com.romraider.portable.PortableLogSession.streaming(spool, 20);
         java.util.concurrent.atomic.AtomicInteger identifies = new java.util.concurrent.atomic.AtomicInteger();
@@ -876,13 +1092,19 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
         try {
             long deadline = SystemClock.uptimeMillis() + 5000;
             // Worker samples can precede the Activity's bounded 100 ms snapshot poll.
-            while ((log.size() < 4 || field("displayedRecording") != session)
+            while ((log.size() < 4 || field("displayedRecording") != session
+                    || ((java.util.Map<?, ?>) field("loggerGaugeViews")).isEmpty())
                     && SystemClock.uptimeMillis() < deadline) SystemClock.sleep(30);
             check(log.size() >= 4 && identifies.get() == 1, "Read-only synthetic logger did not begin");
             check(field("displayedRecording") == session, "Activity did not attach the service recording before view-switch checks");
             int before = log.size();
             long bytes = spool.length();
             Object grid = field("loggerGaugeGrid");
+            int visibleBeforeHide = ((android.view.ViewGroup) grid).getChildCount();
+            check(visibleBeforeHide > 0, "Activity has not rendered the live gauges");
+            invoke("hideLoggerGaugeDemo", new Class<?>[0]);
+            check(((android.view.ViewGroup) grid).getChildCount() == visibleBeforeHide && service.recording() == session,
+                    "Stale Hide cleared a live recording's gauges");
             for (MobileGaugeTheme theme : MobileGaugeTheme.values()) {
                 invoke("setLoggerGaugeTheme", new Class<?>[] {MobileGaugeTheme.class}, theme);
                 invoke("showGaugesOnly", new Class<?>[0]);
@@ -892,7 +1114,7 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
                 check(session.completedLog() == null, "Mounted view exposed a completed writer: " + session.snapshot().message());
                 check(field("loggerGaugeGrid") == grid, "Mounted view replaced the gauge grid");
                 invoke("setMountedFullScreen", new Class<?>[]{boolean.class}, false);
-                check(screenAwake(), "Exiting full screen released the active foreground logger's screen flag");
+                check(!screenAwake(), "Gauge setup kept the screen awake after leaving full screen");
                 invoke("leaveGaugesOnly", new Class<?>[0]);
                 check(closes.get() == 0 && identifies.get() == 1, "View switching disconnected/reidentified the ECU");
             }
@@ -1456,6 +1678,23 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
             AccessibilityNodeInfo root = getUiAutomation().getRootInActiveWindow();
             if (root != null) for (AccessibilityNodeInfo node : root.findAccessibilityNodeInfosByText(text)) {
                 if (node.performAction(AccessibilityNodeInfo.ACTION_CLICK)) { waitForIdleSync(); return; }
+                // Framework single-choice rows can expose their text without a click
+                // accessibility action. Exercise the actual visible touch target.
+                android.graphics.Rect bounds = new android.graphics.Rect();
+                node.getBoundsInScreen(bounds);
+                if (node.isVisibleToUser() && !bounds.isEmpty()
+                        && getTargetContext().getPackageName().contentEquals(root.getPackageName())) {
+                    long when = SystemClock.uptimeMillis();
+                    android.view.MotionEvent down = android.view.MotionEvent.obtain(when, when,
+                            android.view.MotionEvent.ACTION_DOWN, bounds.exactCenterX(), bounds.exactCenterY(), 0);
+                    android.view.MotionEvent up = android.view.MotionEvent.obtain(when, when + 30,
+                            android.view.MotionEvent.ACTION_UP, bounds.exactCenterX(), bounds.exactCenterY(), 0);
+                    try {
+                        check(getUiAutomation().injectInputEvent(down, true) && getUiAutomation().injectInputEvent(up, true),
+                                "Could not tap visible dialog row: " + text);
+                    } finally { down.recycle(); up.recycle(); }
+                    waitForIdleSync(); return;
+                }
             }
             SystemClock.sleep(50);
         }
