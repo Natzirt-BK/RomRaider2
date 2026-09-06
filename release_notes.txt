@@ -8,6 +8,10 @@ https://github.com/Natzirt-BK/RomRaider2/releases/latest
 What changed for 1.1.3
 ---------------------
 
+- Android adds an internal, tested screen-independent recording owner as a
+  foreground-service prerequisite. It is not yet wired into the Activity;
+  background recording remains disabled. Session cleanup errors now preserve
+  the original connection failure instead of overwriting it.
 - JavaFX desktop Logger adds Android-compatible channel-setup import/export.
   Transfers use exact loaded-definition bytes, reviewed replacements, idle/stale
   guards and explicit rollback/persistence-failure reporting. XML recovery

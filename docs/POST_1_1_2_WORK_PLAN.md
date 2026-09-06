@@ -112,9 +112,12 @@ and saves through atomic replacement. The desktop transfer integration builds
 on those repairs, with explicit rollback/persistence failure handling; neither
 feature establishes hardware qualification or production ECU writes.
 
-Background recording still needs its own Android
-service/USB/notification and failure-recovery design; switching to GAUGES is not
-background recording.
+The [Android background-recording contract](ANDROID_BACKGROUND_RECORDING.md)
+now has a tested screen-independent recording owner. This internal foundation is
+not yet wired into the Activity and does not enable background capture. Next
+implement and qualify service/USB ownership, notifications, screen reattachment,
+power handling and process-death recovery. Switching to GAUGES is not background
+recording.
 
 Forester/EVO/OpenPort in-car acceptance, phone document-provider behavior and
 physical Windows/Mac/Deck tests remain supervised tasks. No production ECU

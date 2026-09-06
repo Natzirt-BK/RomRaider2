@@ -17,7 +17,7 @@ import com.romraider.portable.logger.definition.PortableSelectedParameter;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-/** One foreground-only, read-only Android logger session. */
+/** One single-use read-only session; its host determines the Android execution lifecycle. */
 public final class ReadOnlyLoggerSession {
     public interface Listener {
         void onIdentified(String ecuId, int readyParameters,
@@ -109,12 +109,12 @@ public final class ReadOnlyLoggerSession {
             try {
                 transport.closeReadOnlyKLine();
             } catch (RuntimeException ex) {
-                stopMessage = "Adapter cleanup failed: " + ex.getMessage();
+                stopMessage += " Adapter cleanup failed: " + ex.getMessage();
             }
             try {
                 log.finish();
             } catch (java.io.IOException ex) {
-                stopMessage = "Log storage could not be flushed: " + ex.getMessage();
+                stopMessage += " Log storage could not be flushed: " + ex.getMessage();
             }
             listener.onStopped(stopMessage);
         }

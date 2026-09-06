@@ -209,3 +209,11 @@ cannot republish after dataset replacement or detachment. Marker proposals remai
 unapplied until saved; accepted saves may finish after closure without updating
 closed views. Reattachment after a pending save requires verification by reload.
 Continue mobile/service work and compatibility audits; hardware gates stay deferred.
+
+The [Android recording-ownership foundation](ANDROID_BACKGROUND_RECORDING.md)
+now separates one-shot worker/resource lifetime from screen callbacks, with
+immutable latest-cycle snapshots, cancellation/cleanup guards and retained CSVs.
+It is not yet connected to the Activity: background recording remains disabled.
+Next integrate the non-exported connected-device foreground service, explicit
+notification Stop and same-session screen reattachment, then qualify those paths
+on the isolated emulator before any supervised hardware acceptance.
