@@ -27,6 +27,9 @@ until the owner is available; never initiate hardware polling to fill that gap.
 6. Read-only log-to-map tracing, binned 2D/3D analysis and run comparisons.
 7. Android background-recording design, large-log review and portable setup
    export/import. Gauges-only view switching is not background recording.
+   Audit follow-up: portable calculated Logger channels and verified DimeMod
+   runtime discovery are needed for full desktop Shinji-profile parity;
+   external serial AEM input is not currently supported on Android.
 8. Remaining software platform/fork-adoption and scoped dependency audit work.
    Owner follow-up: include ECUFlash and the exact Forester/EVO definition sets,
    then clean up GitHub language, formatting and release/documentation consistency.

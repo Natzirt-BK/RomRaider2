@@ -20,9 +20,6 @@
 package com.romraider.maps;
 
 import static com.romraider.maps.RomChecksum.validateRomChecksum;
-import static javax.swing.JOptionPane.INFORMATION_MESSAGE;
-import static javax.swing.JOptionPane.WARNING_MESSAGE;
-import static javax.swing.JOptionPane.showMessageDialog;
 
 import java.text.MessageFormat;
 import java.util.ResourceBundle;
@@ -59,18 +56,14 @@ public class TableSwitch extends Table1D {
 	        String message = MessageFormat.format(
 	                rb.getString("CHKSUMINVALID"), result, super.getName());
 	        if (result > 0) {
-	            showMessageDialog(null,
-	                    message,
-	                    rb.getString("CHKSUMSFAILED"),
-	                    WARNING_MESSAGE);
+                RomUserInteractionService.checksumValidationFailed(rom,
+                        rb.getString("CHKSUMSFAILED"), message);
 	           // setButtonsUnselected(buttonGroup);
 	        }
 	        else if (result == -1){
 	            message = rb.getString("ALLDISABLED");
-	            showMessageDialog(null,
-	                    message,
-	                    rb.getString("CHKSUMSTATUS"),
-	                    INFORMATION_MESSAGE);
+                RomUserInteractionService.checksumValidationFailed(rom,
+                        rb.getString("CHKSUMSTATUS"), message);
 	            //getButtonByText(buttonGroup, "on").setSelected(true);
 	        }
 	        else {

@@ -318,33 +318,41 @@ public class DataCell implements Serializable  {
     }
 
     public void registerDataCell(DataCell cell) {
-
-        int memoryIndex = getMemoryStartAddress(cell);
-
-        if (rom.byteCellMapping.containsKey(memoryIndex))
-            {
-            rom.byteCellMapping.get(memoryIndex).add(cell);
+        int start = getMemoryStartAddress(cell);
+        for (int offset = 0; offset < storageByteWidth(cell.getTable()); offset++) {
+            int address = start + offset;
+            if (!rom.byteCellMapping.containsKey(address)) {
+                rom.byteCellMapping.put(address, new LinkedList<DataCell>());
             }
-        else {
-            LinkedList<DataCell> l = new LinkedList<DataCell>();
-            l.add(cell);
-            rom.byteCellMapping.put(memoryIndex, l);
+            rom.byteCellMapping.get(address).add(cell);
         }
     }
 
     public void checkForDataUpdates() {
-        int memoryIndex = getMemoryStartAddress(this);
+        int start = getMemoryStartAddress(this);
+        // Different tables can describe the same bytes with different starts
+        // or widths. Update each actual cell once, regardless of value equality.
+        java.util.Set<DataCell> affected = java.util.Collections.newSetFromMap(
+                new java.util.IdentityHashMap<DataCell, Boolean>());
+        for (int offset = 0; offset < storageByteWidth(table); offset++) {
+            java.util.List<DataCell> aliases = rom.byteCellMapping.get(start + offset);
+            if (aliases != null) affected.addAll(aliases);
+        }
+        for (DataCell cell : affected) cell.updateBinValueFromMemory();
+    }
 
-        if (rom.byteCellMapping.containsKey(memoryIndex)){
-            for(DataCell c : rom.byteCellMapping.get(memoryIndex)) {
-                c.updateBinValueFromMemory();
-            }
+    private static int storageByteWidth(Table table) {
+        switch (table.getStorageType()) {
+            case Settings.STORAGE_TYPE_FLOAT: return 4;
+            case Settings.STORAGE_TYPE_MOVI20:
+            case Settings.STORAGE_TYPE_MOVI20S: return 3;
+            default: return table.getStorageType();
         }
     }
 
     public static int getMemoryStartAddress(DataCell cell) {
         Table t = cell.getTable();
-        return t.getStorageAddress() + cell.getIndexInTable() * t.getStorageType() - t.getRamOffset();
+        return t.getStorageAddress() + cell.getIndexInTable() * storageByteWidth(t) - t.getRamOffset();
     }
 
     public Settings getSettings()
