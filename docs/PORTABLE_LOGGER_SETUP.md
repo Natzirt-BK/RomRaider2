@@ -5,6 +5,10 @@ The shared Java 11 codec is platform-neutral; import/export controls are current
 available in Android only. Desktop UI integration remains a follow-up, not a
 completed desktop-to-phone workflow.
 
+The [desktop profile-integrity repair](DESKTOP_PROFILE_INTEGRITY.md) prepares
+that integration by preserving UTF-8 units, escaped XML attributes, captured
+protocols and immutable snapshots, and protecting existing profiles during saves.
+
 ## Android workflow
 
 1. Stop live or simulated logging and wait for the recording to finish.

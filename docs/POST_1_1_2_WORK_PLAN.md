@@ -92,7 +92,15 @@ Android [portable channel-setup export/import](PORTABLE_LOGGER_SETUP.md) is now
 implemented with a platform-neutral bounded codec, exact-definition matching,
 explicit review and stale-work guards. Desktop exchange controls remain pending;
 this does not yet establish desktop-to-phone setup transfer. Continue that
-integration and bounded large-log review. Background recording needs its own Android
+integration and bounded large-log review.
+
+The [desktop profile persistence prerequisite](DESKTOP_PROFILE_INTEGRITY.md) now
+preserves Unicode, escaped attributes, captured protocol and immutable snapshots,
+and saves through atomic replacement. Continue desktop transfer with exact
+loaded-definition identity, transactional selection changes and explicit order
+persistence; these controls are not implemented by the persistence repair alone.
+
+Background recording still needs its own Android
 service/USB/notification and failure-recovery design; switching to GAUGES is not
 background recording.
 

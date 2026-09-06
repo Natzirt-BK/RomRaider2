@@ -20,6 +20,7 @@
 package com.romraider.logger.ecu.ui.swing.menubar.util;
 
 import com.romraider.logger.ecu.profile.UserProfile;
+import com.romraider.logger.ecu.profile.UserProfileWriter;
 import com.romraider.swing.GenericFileFilter;
 import com.romraider.swing.IntegratedFileChooser;
 import com.romraider.util.ResourceUtil;
@@ -28,7 +29,6 @@ import static com.romraider.util.ParamChecker.isNullOrEmpty;
 import static javax.swing.JFileChooser.DIRECTORIES_ONLY;
 import javax.swing.JFileChooser;
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.ResourceBundle;
 
@@ -55,16 +55,11 @@ public final class FileHelper {
 
     public static String saveProfileToFile(UserProfile profile, File destinationFile) throws IOException {
         String profileFilePath = destinationFile.getAbsolutePath();
-        if (!profileFilePath.endsWith(".xml")) {
+        if (!profileFilePath.toLowerCase(java.util.Locale.ROOT).endsWith(".xml")) {
             profileFilePath += ".xml";
             destinationFile = new File(profileFilePath);
         }
-        FileOutputStream fos = new FileOutputStream(destinationFile);
-        try {
-            fos.write(profile.getBytes());
-        } finally {
-            fos.close();
-        }
+        UserProfileWriter.save(profile, destinationFile.toPath());
         return profileFilePath;
     }
 

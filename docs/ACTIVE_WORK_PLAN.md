@@ -158,3 +158,9 @@ state. Failed/stale imports preserve selection; intentional empty setups remain
 empty and imports persist across restart without starting logging. Desktop
 exchange controls, background recording, broad large-log handling and supervised
 provider/hardware acceptance remain open.
+
+[Desktop XML profile integrity](DESKTOP_PROFILE_INTEGRITY.md) is repaired as a
+setup-transfer prerequisite: UTF-8/escaped attributes, captured protocol and
+immutable items, preserved switch units, read-only loading, and synced atomic
+save/backup replacement. This does not complete desktop `.rr2logger` controls,
+global selection-order persistence or transactional live-runtime application.

@@ -19,7 +19,6 @@
 
 package com.romraider.logger.ecu.profile;
 
-import com.romraider.Settings;
 import com.romraider.logger.ecu.definition.EcuDataConvertor;
 import com.romraider.logger.ecu.definition.EcuParameter;
 import com.romraider.logger.ecu.definition.EcuSwitch;
@@ -27,14 +26,15 @@ import com.romraider.logger.ecu.definition.ExternalData;
 import com.romraider.logger.ecu.definition.LoggerData;
 import com.romraider.logger.ecu.exception.ConfigurationException;
 import com.romraider.util.ResourceUtil;
-import com.romraider.util.SettingsManager;
 
 import static com.romraider.util.ParamChecker.checkNotNull;
 import static com.romraider.util.ParamChecker.isNullOrEmpty;
 
-import java.io.UnsupportedEncodingException;
+import java.nio.charset.StandardCharsets;
 import java.text.MessageFormat;
 import java.util.Map;
+import java.util.LinkedHashMap;
+import java.util.Collections;
 import java.util.ResourceBundle;
 
 public final class UserProfileImpl implements UserProfile {
@@ -55,10 +55,10 @@ public final class UserProfileImpl implements UserProfile {
         checkNotNull(params, "params");
         checkNotNull(switches, "switches");
         checkNotNull(external, "external");
-        this.params = params;
-        this.switches = switches;
-        this.external = external;
-        this.protocol = protocol;
+        this.params = snapshot(params);
+        this.switches = snapshot(switches);
+        this.external = snapshot(external);
+        this.protocol = protocol == null ? "" : protocol;
     }
 
     public boolean contains(LoggerData loggerData) {
@@ -100,16 +100,7 @@ public final class UserProfileImpl implements UserProfile {
     }
 
     public byte[] getBytes() {
-        byte[] profile = null;
-        try {
-            profile = buildXml().getBytes("ISO-8859-1");
-        }
-        catch (UnsupportedEncodingException e) {
-            throw new UnsupportedOperationException(MessageFormat.format(
-                    rb.getString("UNSUPPORTEDENCODE"),
-                    e.getMessage()));
-        }
-        return profile;
+        return buildXml().getBytes(StandardCharsets.UTF_8);
     }
 
     @Override
@@ -118,11 +109,10 @@ public final class UserProfileImpl implements UserProfile {
     }
 
     private String buildXml() {
-        final Settings settings = SettingsManager.getSettings();
         StringBuilder builder = new StringBuilder();
-        builder.append("<?xml version=\"1.0\" encoding=\"ISO-8859-1\"?>").append(NEW_LINE);
+        builder.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>").append(NEW_LINE);
         //builder.append("<!DOCTYPE profile SYSTEM \"profile.dtd\">").append(NEW_LINE).append(NEW_LINE);
-        builder.append("<profile protocol=\"").append(settings.getLoggerProtocol().toUpperCase()).append("\">").append(NEW_LINE);
+        builder.append("<profile protocol=\"").append(attribute(protocol)).append("\">").append(NEW_LINE);
         if (!params.isEmpty()) {
             builder.append("    <parameters>").append(NEW_LINE);
             appendLoggerDataElements(builder, "parameter", params, true);
@@ -130,7 +120,7 @@ public final class UserProfileImpl implements UserProfile {
         }
         if (!switches.isEmpty()) {
             builder.append("    <switches>").append(NEW_LINE);
-            appendLoggerDataElements(builder, "switch", switches, false);
+            appendLoggerDataElements(builder, "switch", switches, true);
             builder.append("    </switches>").append(NEW_LINE);
         }
         if (!external.isEmpty()) {
@@ -148,14 +138,49 @@ public final class UserProfileImpl implements UserProfile {
     private void appendLoggerDataElements(StringBuilder builder, String dataType, Map<String, UserProfileItem> dataMap, boolean showUnits) {
         for (String id : dataMap.keySet()) {
             UserProfileItem item = dataMap.get(id);
-            builder.append("        <").append(dataType).append(" id=\"").append(id).append("\"");
+            builder.append("        <").append(dataType).append(" id=\"").append(attribute(id)).append("\"");
             if (item.isLiveDataSelected()) builder.append(" livedata=\"selected\"");
             if (item.isGraphSelected()) builder.append(" graph=\"selected\"");
             if (item.isDashSelected()) builder.append(" dash=\"selected\"");
             if (showUnits && !isNullOrEmpty(item.getUnits()))
-                builder.append(" units=\"").append(item.getUnits()).append("\"");
+                builder.append(" units=\"").append(attribute(item.getUnits())).append("\"");
             builder.append("/>").append(NEW_LINE);
         }
+    }
+
+    private static Map<String, UserProfileItem> snapshot(Map<String, UserProfileItem> source) {
+        Map<String, UserProfileItem> result = new LinkedHashMap<>();
+        source.forEach((id, item) -> {
+            if (id == null || id.isEmpty() || item == null)
+                throw new IllegalArgumentException("Profile IDs and items are required");
+            result.put(id, new UserProfileItemImpl(item.getUnits(), item.isLiveDataSelected(),
+                    item.isGraphSelected(), item.isDashSelected()));
+        });
+        return Collections.unmodifiableMap(result);
+    }
+
+    /** XML 1.0 attributes: preserve whitespace and reject unrepresentable text. */
+    private static String attribute(String value) {
+        StringBuilder escaped = new StringBuilder();
+        for (int offset = 0; offset < value.length();) {
+            int code = value.codePointAt(offset);
+            offset += Character.charCount(code);
+            if (!(code == 9 || code == 10 || code == 13 || (code >= 0x20 && code <= 0xd7ff)
+                    || (code >= 0xe000 && code <= 0xfffd) || (code >= 0x10000 && code <= 0x10ffff)))
+                throw new IllegalArgumentException("Profile contains text that XML 1.0 cannot represent");
+            switch (code) {
+                case '&': escaped.append("&amp;"); break;
+                case '<': escaped.append("&lt;"); break;
+                case '>': escaped.append("&gt;"); break;
+                case '"': escaped.append("&quot;"); break;
+                case '\'': escaped.append("&apos;"); break;
+                case 9: escaped.append("&#9;"); break;
+                case 10: escaped.append("&#10;"); break;
+                case 13: escaped.append("&#13;"); break;
+                default: escaped.appendCodePoint(code);
+            }
+        }
+        return escaped.toString();
     }
 
     private UserProfileItem getUserProfileItem(LoggerData loggerData) {

@@ -8,6 +8,10 @@ https://github.com/Natzirt-BK/RomRaider2/releases/latest
 What changed for 1.1.3
 ---------------------
 
+- Desktop XML profiles preserve Unicode and escaped attributes, captured protocol,
+  immutable selections and switch units. Saves/backups use synced atomic
+  replacement; loading never rewrites the source. This prepares desktop setup
+  transfer but does not yet add its exchange controls or global order persistence.
 - Android adds reviewed channel-setup import/export using a bounded shared
   format. Protocol, ordered IDs/units and an exact definition fingerprint transfer
   without ROMs, definition contents, recordings or connection state. Failed/stale

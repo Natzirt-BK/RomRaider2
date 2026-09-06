@@ -644,7 +644,7 @@ public final class LoggerDesktopRuntime implements EcuRelatedMessageListener,
         try {
             Path parent = target.getParent();
             if (parent != null) Files.createDirectories(parent);
-            Files.write(target, currentProfile().getBytes());
+            com.romraider.logger.ecu.profile.UserProfileWriter.save(currentProfile(), target);
             if (LOGGER.isDebugEnabled()) {
                 LOGGER.debug("Backup profile saved");
             }

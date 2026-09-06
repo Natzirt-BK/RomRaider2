@@ -24,8 +24,9 @@ import com.romraider.logger.ecu.profile.UserProfileImpl;
 import com.romraider.logger.ecu.profile.UserProfileItem;
 import com.romraider.logger.ecu.profile.UserProfileItemImpl;
 import org.xml.sax.Attributes;
+import org.xml.sax.SAXException;
 import org.xml.sax.helpers.DefaultHandler;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 public final class UserProfileHandler extends DefaultHandler {
@@ -44,15 +45,21 @@ public final class UserProfileHandler extends DefaultHandler {
     private Map<String, UserProfileItem> switches;
     private Map<String, UserProfileItem> external;
     private String protocol;
+    private boolean foundProfile;
 
     public void startDocument() {
-        params = new HashMap<String, UserProfileItem>();
-        switches = new HashMap<String, UserProfileItem>();
-        external = new HashMap<String, UserProfileItem>();
+        params = new LinkedHashMap<String, UserProfileItem>();
+        switches = new LinkedHashMap<String, UserProfileItem>();
+        external = new LinkedHashMap<String, UserProfileItem>();
+        protocol = null;
+        foundProfile = false;
     }
 
-    public void startElement(String uri, String localName, String qName, Attributes attributes) {
+    public void startElement(String uri, String localName, String qName, Attributes attributes) throws SAXException {
+        if (!foundProfile && !TAG_PROFILE.equals(qName)) throw new SAXException("Logger profile root is missing");
         if (TAG_PROFILE.equals(qName)) {
+            if (foundProfile) throw new SAXException("Nested logger profiles are not supported");
+            foundProfile = true;
             protocol = attributes.getValue(ATTR_PROTOCOL);
         } else if (TAG_PARAMETER.equals(qName)) {
             params.put(attributes.getValue(ATTR_ID), getUserProfileItem(attributes));
@@ -64,6 +71,7 @@ public final class UserProfileHandler extends DefaultHandler {
     }
 
     public UserProfile getUserProfile() {
+        if (!foundProfile) throw new IllegalArgumentException("Logger profile is missing");
         return new UserProfileImpl(params, switches, external, protocol);
     }
 

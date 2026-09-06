@@ -117,6 +117,8 @@ an explicitly captured table snapshot, with manual axis-channel mapping.
 heatmaps and 2D/3D mean plots with explicit gaps and bounded background work.
 [Run comparisons](docs/RUN_COMPARISONS.md) align independent CSV ranges in common
 bins, with count-aware overlays/differences and bounded second-log imports.
+[Desktop profile persistence](docs/DESKTOP_PROFILE_INTEGRITY.md) preserves Unicode
+units and captured protocol, with escaped XML and atomic save/backup replacement.
 These follow-ups are not in the published 1.1.2 downloads.
 
 - Tabbed calibration workspace with favorites, recent and changed maps, ROM
