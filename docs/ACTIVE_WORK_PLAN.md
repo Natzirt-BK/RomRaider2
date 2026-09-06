@@ -103,5 +103,12 @@ intercept is not a voltage-dependent latency curve. Public packages remain 1.1.2
 The optional [recorded-time rate filter](FUEL_RATE_FILTER.md) is implemented in
 1.1.3 source, including explicit time scaling/gap limits, adjacent-row semantics,
 linked condition drafts, strict version-2 setups and curve invalidation. This
-advances transient filtering; named/full operating-condition filtering is still
-open, along with the remaining analysis/mobile backlog and supervised acceptance.
+advances transient filtering; named-condition progress is recorded below. The
+remaining analysis/mobile backlog and supervised acceptance remain open.
+
+[Named operating conditions](FUEL_OPERATING_CONDITIONS.md) are now implemented
+for saved logs: all eight scalar gate categories, independent custom/rate filters,
+explicit mappings and limits, strict version-3 setups and linked review. This
+advances the filter migration without claiming automatic presets or live-capture
+parity. Cursor/statistics linkage, injector transfer, tracing/comparisons, remaining
+mobile work and supervised qualification are still open.

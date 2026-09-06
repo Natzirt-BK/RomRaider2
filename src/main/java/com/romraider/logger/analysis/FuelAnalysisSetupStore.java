@@ -45,7 +45,7 @@ public final class FuelAnalysisSetupStore {
             values.load(new StringReader(content));
             Set<String> used = new HashSet<>();
             String version = required(values, used, "format.version");
-            if (!Set.of("1", "2").contains(version)) throw new IllegalArgumentException("Unsupported analysis setup version");
+            if (!Set.of("1", "2", "3").contains(version)) throw new IllegalArgumentException("Unsupported analysis setup version");
             FuelAnalysisSetup.Kind kind = FuelAnalysisSetup.Kind.valueOf(required(values, used, "kind"));
             var x = channel(values, used, "x"); var y = channel(values, used, "y");
             var correction = kind == FuelAnalysisSetup.Kind.MAF ? channel(values, used, "correction") : null;
@@ -60,10 +60,28 @@ public final class FuelAnalysisSetupStore {
                         number(values, used, prefix + ".minimum"), number(values, used, prefix + ".maximum")));
             }
             FuelAnalysisSetup.Rate rate = null;
-            if (version.equals("2")) rate = new FuelAnalysisSetup.Rate(channel(values, used, "rate.signal"), channel(values, used, "rate.time"),
+            boolean hasRate = version.equals("2");
+            if (version.equals("3")) {
+                String enabled = required(values, used, "rate.enabled");
+                if (!Set.of("true", "false").contains(enabled)) throw new IllegalArgumentException("Invalid rate enabled state");
+                hasRate = enabled.equals("true");
+            }
+            if (hasRate) rate = new FuelAnalysisSetup.Rate(channel(values, used, "rate.signal"), channel(values, used, "rate.time"),
                     number(values, used, "rate.seconds.per.time.unit"), number(values, used, "rate.maximum"), number(values, used, "rate.maximum.gap.seconds"));
+            var conditions = new ArrayList<FuelAnalysisSetup.Condition>();
+            if (version.equals("3")) {
+                int conditionCount = Integer.parseInt(required(values, used, "condition.count"));
+                if (conditionCount < 0 || conditionCount > FuelOperatingCondition.values().length) throw new IllegalArgumentException("Invalid operating condition count");
+                for (int i = 0; i < conditionCount; i++) {
+                    String prefix = "condition." + i;
+                    var condition = FuelOperatingCondition.valueOf(required(values, used, prefix + ".kind"));
+                    Double minimum = condition.mode() == FuelOperatingCondition.Mode.MAXIMUM ? null : number(values, used, prefix + ".minimum");
+                    Double maximum = condition.mode() == FuelOperatingCondition.Mode.MINIMUM ? null : number(values, used, prefix + ".maximum");
+                    conditions.add(new FuelAnalysisSetup.Condition(condition, channel(values, used, prefix), minimum, maximum));
+                }
+            }
             if (!used.equals(values.stringPropertyNames())) throw new IllegalArgumentException("Unknown analysis setup fields");
-            return new FuelAnalysisSetup(kind, x, y, correction, width, afr, density, filters, rate);
+            return new FuelAnalysisSetup(kind, x, y, correction, width, afr, density, filters, rate, conditions);
         } catch (IllegalArgumentException failure) {
             throw new IOException("Invalid analysis setup: " + failure.getMessage(), failure);
         }
@@ -78,7 +96,17 @@ public final class FuelAnalysisSetupStore {
             throw new IOException("Cannot replace a directory or linked setup file");
         }
         Properties values = new Properties();
-        values.setProperty("format.version", setup.rate() == null ? "1" : "2"); values.setProperty("kind", setup.kind().name());
+        values.setProperty("format.version", !setup.conditions().isEmpty() ? "3" : setup.rate() == null ? "1" : "2"); values.setProperty("kind", setup.kind().name());
+        if (!setup.conditions().isEmpty()) {
+            values.setProperty("rate.enabled", Boolean.toString(setup.rate() != null));
+            values.setProperty("condition.count", Integer.toString(setup.conditions().size()));
+            for (int i = 0; i < setup.conditions().size(); i++) {
+                var condition = setup.conditions().get(i); String prefix = "condition." + i;
+                values.setProperty(prefix + ".kind", condition.kind().name()); putChannel(values, prefix, condition.channel());
+                if (condition.minimum() != null) values.setProperty(prefix + ".minimum", Double.toString(condition.minimum()));
+                if (condition.maximum() != null) values.setProperty(prefix + ".maximum", Double.toString(condition.maximum()));
+            }
+        }
         putChannel(values, "x", setup.x()); putChannel(values, "y", setup.y());
         if (setup.correction() != null) putChannel(values, "correction", setup.correction());
         values.setProperty("bin.width", Double.toString(setup.binWidth()));

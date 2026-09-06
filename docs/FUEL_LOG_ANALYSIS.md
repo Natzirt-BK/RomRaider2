@@ -62,7 +62,9 @@ development source, [Curve review](FUEL_CURVE_REVIEW.md) adds piecewise bin
 interpolation, raw-sample polynomial/linear fits and explicitly unverified
 injector estimates. It also adds a separate [reviewed MAF-table transfer](REVIEWED_MAF_TRANSFER.md)
 to the explicitly selected open ROM, with stored-value review and grouped Undo.
-Full legacy filtering and injector transfer remain open; the injector estimates
+The source also adds explicit [named operating conditions](FUEL_OPERATING_CONDITIONS.md)
+and [recorded-time transient filtering](FUEL_RATE_FILTER.md). Injector transfer
+and broader workflow parity remain open; the injector estimates
 are not measured calibration. No analysis action connects to or writes an ECU.
 
 Synthetic regression tests check inherited arithmetic, finite/missing handling,
@@ -82,7 +84,9 @@ The bounded UTF-8 properties document contains its schema version, analysis kind
 exact channel labels/units, bin width, up to three filters, stoichiometric AFR and
 fuel density. An enabled [recorded-time rate filter](FUEL_RATE_FILTER.md) adds its
 signal/time identities and limits in schema version 2; setups without it remain
-version 1. Importing version 1 clears that optional condition. The file deliberately
+version 1. [Named operating conditions](FUEL_OPERATING_CONDITIONS.md) use schema
+version 3, with or without a rate filter. Older schemas clear the named conditions;
+version 1 also clears the rate condition. The file deliberately
 excludes CSV contents, source paths, ROM data,
 sample indices and unit confirmation. Channel names themselves can contain
 personal information; inspect a setup before sharing it.
@@ -118,7 +122,8 @@ Both tabs initially keep independent ranges and filters. After loading a CSV,
 select **Link MAF / Injector range and filters…** in the tab whose conditions
 you want to use. The native review dialog lists its inclusive sample range and
 numeric filters, with one-based CSV column numbers to distinguish duplicate
-headers, plus any enabled [recorded-time rate condition](FUEL_RATE_FILTER.md).
+headers, plus any enabled [recorded-time rate condition](FUEL_RATE_FILTER.md)
+and [named operating conditions](FUEL_OPERATING_CONDITIONS.md).
 Approving replaces the other tab's range and filters; cancelling changes
 neither setup. Invalid ranges, unresolved filters, nonfinite/reversed limits and
 channels from another dataset are rejected before review. Changes made to either

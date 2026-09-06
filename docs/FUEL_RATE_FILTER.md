@@ -57,8 +57,11 @@ values, and clear both tabs' unit confirmations and results. Injector and MAF
 projections may still accept different samples. Setup import, dataset replacement
 and closing a pane retain their existing disconnection behavior.
 
-`.rr2analysis` exports with an enabled rate condition use strict schema version 2.
-They store signal/time label-and-unit identities and the three numeric limits,
+`.rr2analysis` exports with an enabled rate condition and no named conditions use
+strict schema version 2.
+When named operating conditions are also enabled, the combined setup uses
+[schema version 3](FUEL_OPERATING_CONDITIONS.md). The schemas store
+signal/time label-and-unit identities and the three numeric limits,
 not timestamps, captured data, file paths, sample ranges or approval. Exports
 without it remain version 1. Version 1 imports explicitly clear the rate filter;
 old readers reject version 2 instead of silently dropping its condition.
@@ -79,8 +82,9 @@ only after earlier checks pass. Missing optional inputs can bypass checks.
 This saved-log filter deliberately uses explicit recorded-time adjacency and
 rejects missing required rate inputs. It is not a claim of byte-for-byte legacy
 filter parity, an automatic closed-loop/transient classifier or verified tuning
-conditions. Named operating-condition controls and the broader legacy filter
-workflow remain separate backlog items. No vehicle connection, ECU write or
+conditions. [Named scalar condition controls](FUEL_OPERATING_CONDITIONS.md) are
+now available separately; broader live-capture/workflow parity is not claimed.
+No vehicle connection, ECU write or
 automatic ROM change is introduced.
 
 Synthetic checks cover both analysis projections, inclusive bounds, range starts,

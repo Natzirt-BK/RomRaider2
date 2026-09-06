@@ -69,6 +69,32 @@ public class FuelAnalysisSetupStoreTest {
         assertNull(channel("Time (sec)", "sec").resolveTime(data));
         assertNull(channel("Signal (V)", "V").resolveTime(data));
     }
+    @Test public void namedConditionsUseVersionThreeAndCoexistWithRateAndCustomFilters() throws Exception {
+        var base = setup(true); Path path = file("named.rr2analysis");
+        var conditions = List.of(new FuelAnalysisSetup.Condition(FuelOperatingCondition.LOOP_STATE, channel("State", ""), 8.0, 8.0),
+                new FuelAnalysisSetup.Condition(FuelOperatingCondition.INTAKE_TEMPERATURE, channel("IAT (C)", "C"), null, 45.0),
+                new FuelAnalysisSetup.Condition(FuelOperatingCondition.COOLANT_TEMPERATURE, channel("ECT (C)", "C"), 70.0, null));
+        for (boolean withRate : new boolean[] {false, true}) {
+            var rate = withRate ? new FuelAnalysisSetup.Rate(base.x(), channel("Time (msec)", "msec"), .001, 2, 1) : null;
+            var value = new FuelAnalysisSetup(base.kind(), base.x(), base.y(), base.correction(), base.binWidth(), base.stoichAfr(), base.fuelDensity(), base.filters(), rate, conditions);
+            store.write(path, value); assertEquals(value, store.read(path)); String valid = Files.readString(path);
+            assertTrue(valid.contains("format.version=3")); assertTrue(valid.contains("rate.enabled=" + withRate));
+            for (String invalid : List.of(valid.replace("format.version=3", "format.version=2"),
+                    valid.replace("condition.count=3", "condition.count=9"), valid.replace("rate.enabled=" + withRate, "rate.enabled=maybe"),
+                    valid.replace("condition.0.maximum=8.0", "condition.0.maximum=9.0"), valid + "condition.1.minimum=0\n",
+                    valid.replace("condition.2.kind=COOLANT_TEMPERATURE", "condition.2.kind=UNKNOWN"))) {
+                Files.writeString(path, invalid); rejects(() -> store.read(path));
+            }
+        }
+    }
+    @Test public void duplicateNamedConditionsAreRejectedAndOldSchemasHaveNone() throws Exception {
+        var base = setup(true); var condition = new FuelAnalysisSetup.Condition(FuelOperatingCondition.TIP_IN, channel("Tip", ""), 0.0, 0.0);
+        rejects(() -> new FuelAnalysisSetup(base.kind(), base.x(), base.y(), base.correction(), base.binWidth(), base.stoichAfr(), base.fuelDensity(), base.filters(), null, List.of(condition, condition)));
+        Path path = file("old.rr2analysis"); store.write(path, base); assertTrue(store.read(path).conditions().isEmpty());
+        var rate = new FuelAnalysisSetup.Rate(base.x(), channel("Time (msec)", "msec"), .001, 2, 1);
+        store.write(path, new FuelAnalysisSetup(base.kind(), base.x(), base.y(), base.correction(), base.binWidth(), base.stoichAfr(), base.fuelDensity(), base.filters(), rate));
+        assertTrue(store.read(path).conditions().isEmpty()); assertNotNull(store.read(path).rate());
+    }
 
     @Test public void rejectsVersionUnknownDuplicateAndMissingFields() throws Exception {
         Path path = file("invalid.rr2analysis"); store.write(path, setup(true));

@@ -6,11 +6,21 @@ import java.util.Objects;
 
 /** Portable inputs only: no captured data, file paths, sample indices or approval. */
 public record FuelAnalysisSetup(Kind kind, Channel x, Channel y, Channel correction,
-        double binWidth, double stoichAfr, double fuelDensity, List<Filter> filters, Rate rate) {
+        double binWidth, double stoichAfr, double fuelDensity, List<Filter> filters, Rate rate, List<Condition> conditions) {
     public enum Kind { MAF, INJECTOR }
     public FuelAnalysisSetup(Kind kind, Channel x, Channel y, Channel correction,
             double binWidth, double stoichAfr, double fuelDensity, List<Filter> filters) {
-        this(kind, x, y, correction, binWidth, stoichAfr, fuelDensity, filters, null);
+        this(kind, x, y, correction, binWidth, stoichAfr, fuelDensity, filters, null, List.of());
+    }
+    public FuelAnalysisSetup(Kind kind, Channel x, Channel y, Channel correction,
+            double binWidth, double stoichAfr, double fuelDensity, List<Filter> filters, Rate rate) {
+        this(kind, x, y, correction, binWidth, stoichAfr, fuelDensity, filters, rate, List.of());
+    }
+    public record Condition(FuelOperatingCondition kind, Channel channel, Double minimum, Double maximum) {
+        public Condition {
+            Objects.requireNonNull(kind, "Operating condition"); Objects.requireNonNull(channel, "Condition channel");
+            kind.validate(minimum, maximum);
+        }
     }
     public record Rate(Channel signal, Channel time, double secondsPerTimeUnit, double maximumRate, double maximumGapSeconds) {
         public Rate {
@@ -78,6 +88,9 @@ public record FuelAnalysisSetup(Kind kind, Channel x, Channel y, Channel correct
         positive(fuelDensity, "Fuel density");
         filters = List.copyOf(filters);
         if (filters.size() > 3) throw new IllegalArgumentException("At most three analysis filters are supported");
+        conditions = List.copyOf(conditions);
+        var used = java.util.EnumSet.noneOf(FuelOperatingCondition.class);
+        for (Condition condition : conditions) if (!used.add(condition.kind())) throw new IllegalArgumentException("Duplicate operating condition");
     }
 
     private static void positive(double value, String label) {

@@ -73,9 +73,10 @@ Injector transfer still needs its own evidence-backed mapping; line-fit intercep
 must not be treated as a voltage-dependent latency curve.
 An optional [recorded-time rate filter](FUEL_RATE_FILTER.md) now supplies explicit
 adjacent-row transient filtering, shared conditions and versioned setup transfer.
-It does not infer suitable operating conditions or complete the named legacy
-filter pipeline.
-Continue full legacy operating-condition filtering, injector transfer, log-to-map
+The [eight named scalar condition controls](FUEL_OPERATING_CONDITIONS.md) are also
+implemented, with explicit mappings/limits, linked review and strict version-3
+setups. Neither feature infers suitable operating conditions or claims live-capture
+parity. Continue Log Analysis cursor/statistics linkage, injector transfer, log-to-map
 tracing and binned/run-comparison views. Portable logger-setup export/import and
 bounded large-log review follow. Background recording needs its own Android
 service/USB/notification and failure-recovery design; switching to GAUGES is not

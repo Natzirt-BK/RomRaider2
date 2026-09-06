@@ -52,6 +52,7 @@ final class FxFuelAnalysisPane extends BorderPane implements AutoCloseable {
     private final ScatterChart<Number, Number> chart;
     private final FxFuelCurvePane curve;
     private final FxFuelRateFilterPane rateFilter;
+    private final FxFuelOperatingConditionsPane operating;
     private final Button calculate = new Button("Analyze saved log");
     private final Button copy = new Button("Copy results");
     private final Button saveSetup = new Button("Save analysis setup…");
@@ -75,6 +76,7 @@ final class FxFuelAnalysisPane extends BorderPane implements AutoCloseable {
         boolean maf = mode == Mode.MAF;
         curve = new FxFuelCurvePane(!maf);
         rateFilter = new FxFuelRateFilterPane(this::conditionsChanged);
+        operating = new FxFuelOperatingConditionsPane(this::conditionsChanged);
         binWidth = new TextField(maf ? "0.05" : "0.1");
         NumberAxis horizontal = new NumberAxis(), vertical = new NumberAxis();
         horizontal.setLabel(maf ? "Observed mean MAF voltage (V)" : "Observed mean pulse width (ms)");
@@ -114,7 +116,7 @@ final class FxFuelAnalysisPane extends BorderPane implements AutoCloseable {
             if (conditionsLink == null) return;
             try {
                 if (!linkConditions.isSelected()) conditionsLink.disconnect();
-                else conditionsLink.enable(this, () -> FxDialogs.confirm(
+                else conditionsLink.enable(this, () -> FxDialogs.confirmScrollable(
                         getScene() == null ? null : getScene().getWindow(), "Link analysis conditions?",
                         "Use the current " + mode + " conditions in BOTH tabs? This replaces the other tab's range and filters.\n\n"
                                 + conditionsDraft().summary()
@@ -136,7 +138,7 @@ final class FxFuelAnalysisPane extends BorderPane implements AutoCloseable {
         calculate.setMaxWidth(Double.MAX_VALUE); calculate.setDisable(true);
         calculate.setOnAction(event -> analyze());
         status.setWrapText(true);
-        setup.getChildren().addAll(rateFilter, confirmed, calculate, status);
+        setup.getChildren().addAll(operating, rateFilter, confirmed, calculate, status);
         setup.setPadding(new Insets(10));
         ScrollPane scroll = new ScrollPane(setup); scroll.setFitToWidth(true);
         scroll.setPrefViewportWidth(340); scroll.setMinWidth(270); scroll.setMinHeight(0);
@@ -182,6 +184,7 @@ final class FxFuelAnalysisPane extends BorderPane implements AutoCloseable {
         if (conditionsLink != null) conditionsLink.disconnect();
         invalidate(); dataset = next;
         rateFilter.setDataset(next);
+        operating.setDataset(next);
         List<LogChannel> channels = next.getChannels().stream().filter(channel -> !channel.isTimeChannel()).toList();
         for (ComboBox<LogChannel> mapping : List.of(x, y, correction)) {
             mapping.setItems(FXCollections.observableArrayList(channels)); mapping.setValue(null);
@@ -203,7 +206,7 @@ final class FxFuelAnalysisPane extends BorderPane implements AutoCloseable {
     long inputRevision() { return generation; }
     FxFuelAnalysisLink.Draft conditionsDraft() {
         return new FxFuelAnalysisLink.Draft(dataset, first.getText(), last.getText(), filters.stream()
-                .map(row -> new FxFuelAnalysisLink.FilterDraft(row.channel.getValue(), row.minimum.getText(), row.maximum.getText())).toList(), rateFilter.draft());
+                .map(row -> new FxFuelAnalysisLink.FilterDraft(row.channel.getValue(), row.minimum.getText(), row.maximum.getText())).toList(), rateFilter.draft(), operating.draft());
     }
     void applyConditionsDraft(FxFuelAnalysisLink.Draft draft) {
         if (!conditionsAvailable() || draft.dataset() != dataset || draft.filters().size() != filters.size()) {
@@ -212,6 +215,7 @@ final class FxFuelAnalysisPane extends BorderPane implements AutoCloseable {
         invalidateConditions();
         first.setText(draft.first()); last.setText(draft.last());
         rateFilter.apply(draft.rate());
+        operating.apply(draft.operating());
         for (int i = 0; i < filters.size(); i++) {
             FilterRow row = filters.get(i);
             FxFuelAnalysisLink.FilterDraft next = draft.filters().get(i);
@@ -269,7 +273,7 @@ final class FxFuelAnalysisPane extends BorderPane implements AutoCloseable {
                 FuelAnalysisSetup.Channel.of(x.getValue()), FuelAnalysisSetup.Channel.of(y.getValue()),
                 mode == Mode.MAF ? FuelAnalysisSetup.Channel.of(correction.getValue()) : null,
                 decimal(binWidth, "Bin width"), decimal(stoich, "Stoichiometric AFR"),
-                decimal(density, "Fuel density"), savedFilters, rateFilter.setup(dataset));
+                decimal(density, "Fuel density"), savedFilters, rateFilter.setup(dataset), operating.draft().setup(dataset));
     }
 
     Future<?> saveSetup(Path target) {
@@ -326,6 +330,7 @@ final class FxFuelAnalysisPane extends BorderPane implements AutoCloseable {
             } else { row.channel.setValue(null); row.minimum.clear(); row.maximum.clear(); row.channel.setTooltip(null); }
         }
         rateFilter.restore(setup.rate(), dataset, unresolved);
+        operating.restore(setup.conditions(), dataset, unresolved);
         first.setText("1"); last.setText(Integer.toString(dataset.getRowCount()));
         status.setText("Setup loaded for review. Sample range reset to all " + dataset.getRowCount()
                 + " rows; review the range, units, filters and assumptions before analyzing."
@@ -396,6 +401,7 @@ final class FxFuelAnalysisPane extends BorderPane implements AutoCloseable {
             selectedFilters.add(new FuelLogAnalysis.Filter(selected(filter.channel),
                     decimal(filter.minimum, "Filter minimum"), decimal(filter.maximum, "Filter maximum")));
         }
+        selectedFilters.addAll(operating.draft().filters(input));
         if (mode == Mode.MAF) {
             int correctionIndex = selected(correction);
             var rate = rateFilter.draft().filter(input);

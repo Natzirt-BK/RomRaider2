@@ -48,6 +48,14 @@ final class FxDialogs {
 
     static boolean confirm(Window owner, String title, String message,
             String approve) {
+        return confirm(owner, title, message, approve, false);
+    }
+
+    static boolean confirmScrollable(Window owner, String title, String message, String approve) {
+        return confirm(owner, title, message, approve, true);
+    }
+
+    private static boolean confirm(Window owner, String title, String message, String approve, boolean scrollable) {
         return runAndWait(() -> {
             ButtonType yes = new ButtonType(approve,
                     ButtonBar.ButtonData.OK_DONE);
@@ -58,6 +66,15 @@ final class FxDialogs {
             alert.initOwner(owner);
             alert.setTitle(title);
             alert.setHeaderText(title);
+            if (scrollable) {
+                javafx.scene.control.Label text = new javafx.scene.control.Label(message); text.setWrapText(true);
+                text.setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
+                javafx.scene.control.ScrollPane scroll = new javafx.scene.control.ScrollPane(text); scroll.setFitToWidth(true);
+                scroll.setPrefViewportHeight(320); scroll.setPrefViewportWidth(640); scroll.setMinHeight(100);
+                alert.getDialogPane().setContent(scroll); alert.setResizable(true);
+                ((javafx.scene.control.Button) alert.getDialogPane().lookupButton(yes)).setDefaultButton(false);
+                ((javafx.scene.control.Button) alert.getDialogPane().lookupButton(no)).setDefaultButton(true);
+            }
             FxTheme.applyDialog(alert.getDialogPane());
             Optional<ButtonType> result = alert.showAndWait();
             return result.orElse(no) == yes;
