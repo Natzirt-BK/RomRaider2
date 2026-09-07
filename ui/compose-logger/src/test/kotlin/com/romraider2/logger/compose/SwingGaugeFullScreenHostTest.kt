@@ -58,14 +58,17 @@ class SwingGaugeFullScreenHostTest {
             await { mounts.get() == 1 }
             val originalBounds = edt { owner.bounds }
             repeat(3) { index ->
+                lateinit var full: JFrame
                 edt {
                     host.setFullScreen(true)
-                    val full = owner.graphicsConfiguration.device.fullScreenWindow as JFrame
+                    full = owner.graphicsConfiguration.device.fullScreenWindow as JFrame
                     assertTrue(full.isUndecorated)
                     assertSame(full, SwingUtilities.getWindowAncestor(host.composePanel))
-                    assertEquals(owner.graphicsConfiguration.bounds, full.bounds)
                     displayRevision.intValue = index * 2 + 1
                 }
+                // Window-manager placement is asynchronous; require the exact
+                // final bounds rather than asserting during the transition.
+                await { edt { owner.graphicsConfiguration.bounds == full.bounds } }
                 await { hasText(host, "Retained composition ${index * 2 + 1}") }
                 edt {
                     host.setFullScreen(false)

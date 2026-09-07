@@ -67,6 +67,7 @@ dependencyLocking {
 
 tasks.test {
     useJUnitPlatform()
+    testLogging.exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
     systemProperty("romraider2.displayAwake.disabled", "true")
     inputs.property("nativeWindowSmoke", providers.environmentVariable("RR2_COMPOSE_WINDOW_SMOKE").orElse("0"))
 }
