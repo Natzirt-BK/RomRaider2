@@ -110,6 +110,7 @@ public final class LoggerDesktopRuntime implements EcuRelatedMessageListener,
     private volatile boolean closed;
     private LoggerDefinitionSource definitionSource;
     private String loadedProtocol = "";
+    private boolean definitionLoadFailed;
     private long channelRevision;
     private boolean setupRecoveryRequired;
 
@@ -477,16 +478,25 @@ public final class LoggerDesktopRuntime implements EcuRelatedMessageListener,
     private synchronized void reloadDefinitionAndChannels(boolean startup) {
         if (closed) return;
         String previousProtocol = loadedProtocol;
+        boolean hadDefinition = definitionSource != null || definitionLoadFailed;
+        definitionLoadFailed = hadDefinition;
         definitionSource = null;
         loadedProtocol = "";
         Set<String> restore = new LinkedHashSet<String>(selectedIds);
         clearRegistrations();
+        // The special recording query is not owned by channel registrations.
+        // Remove it before parsing so failures cannot retain the old address.
+        controller.setFileLoggerSwitchMonitor(null);
 
         List<EcuParameter> parameters = new ArrayList<EcuParameter>();
         List<EcuSwitch> switches = new ArrayList<EcuSwitch>();
         List<EcuSwitch> diagnosticCodes = new ArrayList<EcuSwitch>();
         String definitionPath = settings.getLoggerDefinitionFilePath();
         if (isNullOrEmpty(definitionPath)) {
+            definitionLoadFailed = hadDefinition;
+            settings.setFileLoggingControllerSwitchActive(false);
+            settings.setLoggerConnectionProperties(null);
+            settings.setDestinationTarget(null);
             settings.setLogExternalsOnly(true);
             LOGGER.warn("Logger definition file not configured; ECU channels "
                     + "are unavailable");
@@ -507,11 +517,19 @@ public final class LoggerDesktopRuntime implements EcuRelatedMessageListener,
                 installFileLoggingSwitch(loader.getFileLoggingControllerSwitch());
                 definitionSource = source;
                 loadedProtocol = settings.getLoggerProtocol();
+                definitionLoadFailed = false;
                 LOGGER.info("Loaded Logger protocol "
                         + settings.getLoggerProtocol() + ": "
                         + parameters.size() + " parameters, "
                         + switches.size() + " switches");
             } catch (ConfigurationException | IOException failure) {
+                definitionLoadFailed = true;
+                parameters.clear();
+                switches.clear();
+                diagnosticCodes.clear();
+                controller.setFileLoggerSwitchMonitor(null);
+                settings.setFileLoggingControllerSwitchActive(false);
+                settings.setLoggerConnectionProperties(null);
                 settings.setDestinationTarget(null);
                 settings.setLogExternalsOnly(true);
                 reportError("Unable to load Logger definition", failure);
@@ -535,7 +553,8 @@ public final class LoggerDesktopRuntime implements EcuRelatedMessageListener,
         LoggerSearchCatalog.publish(parameters, diagnosticCodes);
 
         UserProfile profile = loadProfile();
-        if (!previousProtocol.isEmpty() && !previousProtocol.equalsIgnoreCase(loadedProtocol)) restore.clear();
+        if (!previousProtocol.isEmpty() && !previousProtocol.equalsIgnoreCase(loadedProtocol))
+            restore.removeIf(id -> !(dataById.get(id) instanceof ExternalData));
         if (profile != null && !isNullOrEmpty(profile.getProtocol())
                 && !profile.getProtocol().equalsIgnoreCase(settings.getLoggerProtocol())) {
             LOGGER.warn("Saved Logger profile protocol does not match the current definition; selections were not imported");
@@ -781,8 +800,8 @@ public final class LoggerDesktopRuntime implements EcuRelatedMessageListener,
     }
 
     private boolean backupCurrentProfile() {
-        // A rollback fault must not overwrite the last usable recovery profile.
-        if (setupRecoveryRequired) return false;
+        // Rollback faults and failed definitions must not replace a usable recovery profile.
+        if (setupRecoveryRequired || definitionLoadFailed) return false;
         Path target = LoggerProfileStorage.backupPath(
                 SettingsManager.getSettingsDirectory());
         try {
@@ -877,6 +896,7 @@ public final class LoggerDesktopRuntime implements EcuRelatedMessageListener,
     public synchronized void close() {
         if (closed) return;
         closed = true;
+        controller.setFileLoggerSwitchMonitor(null);
         session.close();
         controller.stop();
         backupCurrentProfile();

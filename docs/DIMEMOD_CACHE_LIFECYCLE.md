@@ -320,9 +320,40 @@ Qualification: seven added regressions pass, as do the full Ant suite/Linux
 build, shared-core checks and all 293 desktop UI tests (40 Compose, 253 JavaFX).
 Native-window checks were enabled, with no UI test skips. Both hosted desktop
 builds for the preceding catalog-reload checkpoint `5cc1ca58` passed; those hosted
-results do not cover this later invalidation change. The modern runtime's
-failed-parser path (distinct from a successfully loaded definition with no
-recording switch) still needs a monitor-removal check in the next audit pass.
+results do not cover this later invalidation change.
+
+## Modern desktop failed-definition recovery
+
+The modern runtime now removes its automatic recording-switch monitor before
+parsing a replacement definition and on closure. Missing paths, missing files
+and malformed XML clear the destination, connection properties and any partially
+prepared ECU catalog. They disable automatic switch-controlled recording.
+External channels remain selected and registered when ECU channels disappear.
+
+Failed loads also prevent automatic backup from replacing the last usable
+recovery profile. A subsequent valid load permits backup again. Starting a new
+workspace intentionally without a definition is still valid external-only use,
+not a failed replacement, and may save its profile normally.
+
+Real-runtime synthetic regressions reproduced retained recording-switch bindings
+after parse failure and closure, plus lost external selection, against the prior
+core JAR. The added coverage exercises malformed XML, a deleted definition, a
+cleared path, successful recovery, healthy monitor replacement and intentional
+external-only startup. Fixtures isolate settings and use temporary definitions
+and profiles; controllers remain stopped and no adapters are opened.
+
+Qualification: the full Ant suite and Linux build pass, along with shared-core
+checks and all 297 desktop UI tests (40 Compose, 257 JavaFX, no UI skips).
+The four added regression methods pass within the 21-test setup-transfer suite.
+Native-window checks were enabled; a local pass does not resolve the intermittent
+hosted presentation failure described below.
+
+The preceding source checkpoint `e1c28196` passed one hosted desktop build;
+[the other run](https://github.com/Natzirt-BK/RomRaider2/actions/runs/34074380631)
+failed its Compose native-window test. Its retained XML shows Escape returned to
+setup and released the awake lease, but restored Floating instead of Maximized.
+That presentation-state race remains a separate follow-up, not a logger-parser
+failure or evidence that both hosted builds passed.
 
 ## Existing cache boundary
 

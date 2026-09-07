@@ -82,6 +82,9 @@ paired initialization snapshot and a superseding token; stale dialog
 continuations and profile reviews cannot start subsequent reload/application
 stages. Failed definitions now invalidate ECU registrations and recording-switch
 bindings while preserving external sensors and recovery-profile backup contents.
+Modern desktop parse failures and closure now clear recording-switch monitors;
+failed replacements preserve external selection and the previous recovery file.
+Intentional external-only startup can still save a profile.
 Installer-worker lifetime and full ECU/session binding remain separate work. Invalidating a cache must not
 silently increase discovery writes.
 

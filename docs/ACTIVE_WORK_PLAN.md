@@ -36,7 +36,12 @@ is open. See the [lifecycle audit](DIMEMOD_CACHE_LIFECYCLE.md#profile-review-aft
 Catalog reloads now also carry a paired initialization snapshot and a superseding
 reload token through their remaining stages. Failed definitions now clear ECU
 registrations while retaining external sensors and the prior recovery profile;
-removed recording-switch monitors reject stale replies. Installer-worker ownership
+removed recording-switch monitors reject stale replies. The modern runtime now
+also removes those monitors before failed parses and on closure, retains external
+selections and protects recovery-profile backups until a valid definition loads.
+A hosted native-window check exposed an intermittent Floating restoration after
+Escape from maximized full screen; investigate before claiming fresh package
+qualification. Installer-worker ownership
 and firmware/session cache identity remain
 open; these guards do not initiate discovery or enable vehicle writes.
 

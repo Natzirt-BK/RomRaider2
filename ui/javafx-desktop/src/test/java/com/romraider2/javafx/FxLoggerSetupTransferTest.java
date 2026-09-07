@@ -36,6 +36,106 @@ class FxLoggerSetupTransferTest {
                 + "</address><conversions><conversion units='V' expr='x' format='0'/><conversion units='mV' expr='x*1000' format='0'/></conversions></parameter>";
     }
 
+    @Test void failedOrMissingDefinitionRemovesSwitchAndPreservesRecoveryProfile() throws Exception {
+        for (int failure = 0; failure < 3; failure++) {
+            try (Fixture fixture = new Fixture(); DimeStateSnapshot ignored = new DimeStateSnapshot()) {
+                fixture.settings.setFileLoggingControllerSwitchId("S1");
+                FxTestRuntime.run(fixture.runtime::reloadConfiguration);
+                fixture.settings.setFileLoggingControllerSwitchActive(true);
+                fixture.apply(ordered("P1", "V"));
+                Object manager = field(field(fixture.runtime, "controller"), "queryManager");
+                assertNotNull(field(manager, "fileLoggerBinding"));
+                Path backup = Path.of(fixture.settings.getLoggerProfileFilePath());
+                byte[] saved = Files.readAllBytes(backup);
+                if (failure == 0) Files.writeString(fixture.definition, "<logger><broken>");
+                else if (failure == 1) Files.delete(fixture.definition);
+                else fixture.settings.setLoggerDefinitionFilePath("");
+                EcuInitCallback callback = ecuCallback(fixture.runtime);
+                FxTestRuntime.run(() -> callback.callback(syntheticEcu("2222222222")));
+                assertNull(field(manager, "fileLoggerBinding"), "Old automatic recording address retained");
+                assertFalse(fixture.settings.isFileLoggingControllerSwitchActive());
+                assertNull(fixture.settings.getLoggerConnectionProperties());
+                assertNull(fixture.settings.getDestinationTarget());
+                assertTrue(fixture.runtime.getWorkspaceContext().getChannels().getChannels().isEmpty());
+                assertTrue(fixture.settings.isLogExternalsOnly());
+                assertFalse(((com.romraider.logger.ecu.comms.controller.LoggerController)
+                        field(fixture.runtime, "controller")).isStarted());
+                FxTestRuntime.run(fixture.runtime::close);
+                assertArrayEquals(saved, Files.readAllBytes(backup), "Failed definition replaced recovery profile");
+            }
+        }
+    }
+
+    @Test void healthyReloadReplacesRecordingSwitchAndClosureRemovesIt() throws Exception {
+        try (Fixture fixture = new Fixture()) {
+            fixture.settings.setFileLoggingControllerSwitchId("S1");
+            FxTestRuntime.run(fixture.runtime::reloadConfiguration);
+            fixture.settings.setFileLoggingControllerSwitchActive(true);
+            Object manager = field(field(fixture.runtime, "controller"), "queryManager");
+            Object first = field(manager, "fileLoggerBinding");
+            assertNotNull(first);
+            FxTestRuntime.run(fixture.runtime::reloadConfiguration);
+            assertNotSame(first, field(manager, "fileLoggerBinding"));
+            assertNotNull(field(manager, "fileLoggerBinding"));
+            assertTrue(fixture.settings.isFileLoggingControllerSwitchActive());
+            FxTestRuntime.run(fixture.runtime::close);
+            assertNull(field(manager, "fileLoggerBinding"));
+        }
+    }
+
+    @Test void intentionalExternalOnlyStartupCanStillSaveItsEmptyProfile() throws Exception {
+        try (Fixture fixture = new Fixture()) {
+            fixture.apply(ordered("P1", "V"));
+            Path backup = Path.of(fixture.settings.getLoggerProfileFilePath());
+            byte[] withEcu = Files.readAllBytes(backup);
+            fixture.settings.setLoggerDefinitionFilePath("");
+            fixture.reopen();
+            assertTrue(fixture.runtime.getWorkspaceContext().getChannels().getChannels().isEmpty());
+            FxTestRuntime.run(fixture.runtime::close);
+            assertFalse(Arrays.equals(withEcu, Files.readAllBytes(backup)),
+                    "Intentional external-only startup was mistaken for a failed loaded definition");
+        }
+    }
+
+    @Test void failedDefinitionKeepsExternalSelectionAndLaterValidDefinitionRecovers() throws Exception {
+        try (Fixture fixture = new Fixture(); DimeStateSnapshot ignored = new DimeStateSnapshot()) {
+            List<ExternalData> external = field(fixture.runtime, "externalData");
+            external.add(new ExternalData() {
+                final EcuDataConvertor converter = new EcuParameterConvertorImpl();
+                public String getId() { return "E1"; }
+                public String getName() { return "Synthetic external"; }
+                public String getDescription() { return "No source or device"; }
+                public EcuDataConvertor getSelectedConvertor() { return converter; }
+                public EcuDataConvertor[] getConvertors() { return new EcuDataConvertor[] {converter}; }
+                public void selectConvertor(EcuDataConvertor next) { }
+                public EcuDataType getDataType() { return EcuDataType.EXTERNAL; }
+                public boolean isSelected() { return false; }
+                public void setSelected(boolean selected) { }
+                public void addConvertorUpdateListener(ConvertorUpdateListener listener) { }
+            });
+            FxTestRuntime.run(fixture.runtime::reloadConfiguration);
+            fixture.apply(ordered("P1", "V"));
+            FxTestRuntime.run(() -> fixture.runtime.getWorkspaceContext().getChannels().setSelected("E1", true));
+            Files.writeString(fixture.definition, "<logger><broken>");
+            EcuInitCallback callback = ecuCallback(fixture.runtime);
+            FxTestRuntime.run(() -> callback.callback(syntheticEcu("2222222222")));
+            List<LoggerChannel> channels = fixture.runtime.getWorkspaceContext().getChannels().getChannels();
+            assertEquals(1, channels.size());
+            assertEquals("E1", channels.get(0).getParameterId());
+            assertTrue(channels.get(0).isSelected(), "External selection lost during ECU failure");
+            assertEquals(List.of("E1"), fixture.recordedOrder());
+            Files.writeString(fixture.definition, XML);
+            FxTestRuntime.run(fixture.runtime::reloadConfiguration);
+            assertEquals(4, fixture.runtime.getWorkspaceContext().getChannels().getChannels().size());
+            assertFalse(fixture.settings.isLogExternalsOnly());
+            fixture.apply(ordered("P2", "V"));
+            Path backup = Path.of(fixture.settings.getLoggerProfileFilePath());
+            byte[] healthy = Files.readAllBytes(backup);
+            FxTestRuntime.run(fixture.runtime::close);
+            assertArrayEquals(healthy, Files.readAllBytes(backup));
+        }
+    }
+
     @Test void desktopAndPortableExchangePreservesOrderedUnitsAndRestartWithoutConnecting() throws Exception {
         try (Fixture fixture = new Fixture()) {
             fixture.apply(ordered("P2", "mV", "S1", "On/Off", "P1", "V"));
@@ -377,6 +477,11 @@ class FxLoggerSetupTransferTest {
         final Settings settings = SettingsManager.getSettings();
         final String oldDefinition = settings.getLoggerDefinitionFilePath(), oldProfile = settings.getLoggerProfileFilePath(), oldProtocol = settings.getLoggerProtocol();
         final String oldTransport = settings.getTransportProtocol(), oldTarget = settings.getTargetModule();
+        final String oldControlSwitch = settings.getFileLoggingControllerSwitchId();
+        final boolean oldControlActive = settings.isFileLoggingControllerSwitchActive();
+        final boolean oldExternalOnly = settings.isLogExternalsOnly();
+        final com.romraider.io.connection.ConnectionProperties oldConnectionProperties = settings.getLoggerConnectionProperties();
+        final com.romraider.logger.ecu.definition.Module oldDestination = settings.getDestinationTarget();
         final Vector<File> oldDefinitions = settings.getEcuDefinitionFiles();
         final String oldPlugins = System.getProperty("romraider2.plugins.dir");
         final Object oldDirectory;
@@ -427,6 +532,11 @@ class FxLoggerSetupTransferTest {
             finally {
                 settings.setLoggerDefinitionFilePath(oldDefinition); settings.setLoggerProfileFilePath(oldProfile); settings.setLoggerProtocol(oldProtocol);
                 settings.setTransportProtocol(oldTransport); settings.setTargetModule(oldTarget); settings.setEcuDefinitionFiles(oldDefinitions);
+                settings.setFileLoggingControllerSwitchId(oldControlSwitch);
+                settings.setFileLoggingControllerSwitchActive(oldControlActive);
+                settings.setLogExternalsOnly(oldExternalOnly);
+                settings.setLoggerConnectionProperties(oldConnectionProperties);
+                settings.setDestinationTarget(oldDestination);
                 SettingsManager.setTesting(oldTesting); setStatic(SettingsManager.class, "settingsDir", oldDirectory);
                 if (oldPlugins == null) System.clearProperty("romraider2.plugins.dir"); else System.setProperty("romraider2.plugins.dir", oldPlugins);
             }
