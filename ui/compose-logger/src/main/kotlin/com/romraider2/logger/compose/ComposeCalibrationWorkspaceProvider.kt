@@ -278,6 +278,9 @@ internal fun diagnosticTroubleCodeEnabled(
     cell: CalibrationCellSnapshot
 ): Boolean = cell.rawValue != 0.0
 
+internal fun diagnosticControlIsMonitorGate(snapshot: CalibrationGridSnapshot): Boolean =
+    snapshot.unit.trim().equals("monitor gate", ignoreCase = true)
+
 @Composable
 private fun DiagnosticTroubleCodeWorkspace(
     snapshot: CalibrationGridSnapshot,
@@ -291,6 +294,8 @@ private fun DiagnosticTroubleCodeWorkspace(
     val enabled = cell?.let(::diagnosticTroubleCodeEnabled) ?: false
     val code = Regex("\\(([PBCU][0-9A-Fa-f]{4})\\)")
         .find(snapshot.tableName)?.groupValues?.getOrNull(1).orEmpty()
+    val monitorGate = diagnosticControlIsMonitorGate(snapshot)
+    val subject = code + if (monitorGate) " monitor gate" else ""
     val description = snapshot.tableName
         .replace(Regex("^\\s*\\([PBCU][0-9A-Fa-f]{4}\\)\\s*"), "")
         .trim()
@@ -301,8 +306,8 @@ private fun DiagnosticTroubleCodeWorkspace(
                     if (requested) "1" else "0")
                 onSnapshot(result.snapshot)
                 onStatus(if (result.isChanged)
-                    "$code ${if (requested) "enabled" else "disabled"}."
-                else "$code is already ${if (requested) "enabled" else "disabled"}.")
+                    "$subject ${if (requested) "enabled" else "disabled"}."
+                else "$subject is already ${if (requested) "enabled" else "disabled"}.")
             } catch (failure: Exception) {
                 onStatus(failure.message ?: "The diagnostic trouble code state could not be changed.")
             }
@@ -343,7 +348,7 @@ private fun DiagnosticTroubleCodeWorkspace(
                 .border(1.dp, raised(dark), RoundedCornerShape(10.dp))
                 .padding(horizontal = 34.dp, vertical = 30.dp),
                 horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("DIAGNOSTIC TROUBLE CODE",
+                Text(if (monitorGate) "DIAGNOSTIC MONITOR GATE" else "DIAGNOSTIC TROUBLE CODE",
                     color = calibrationSteel, fontSize = 10.sp,
                     fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(12.dp))
@@ -359,10 +364,15 @@ private fun DiagnosticTroubleCodeWorkspace(
                         enabled = controller != null && cell != null,
                         modifier = Modifier.semantics {
                             contentDescription = if (enabled)
-                                "Disable $code" else "Enable $code"
+                                "Disable $subject" else "Enable $subject"
                         })
                     Text("Enabled", color = if (enabled) MaterialTheme.colors.onSurface
                         else secondary(dark), fontWeight = FontWeight.SemiBold)
+                }
+                if (monitorGate) {
+                    Spacer(Modifier.height(12.dp))
+                    Text("This switch controls one monitor gate. Other paths may still report this code.",
+                        color = secondary(dark), fontSize = 11.sp, textAlign = TextAlign.Center)
                 }
                 if (!status.isNullOrBlank()) {
                     Spacer(Modifier.height(18.dp))
@@ -378,7 +388,8 @@ private fun DiagnosticTroubleCodeWorkspace(
                             val result = controller.restoreCellValue(
                                 cell.row, cell.column)
                             onSnapshot(result.snapshot)
-                            onStatus("Saved DTC state restored.")
+                            onStatus(if (monitorGate) "Saved monitor gate state restored."
+                                else "Saved DTC state restored.")
                         } catch (failure: Exception) {
                             onStatus(failure.message
                                 ?: "The saved DTC state could not be restored.")

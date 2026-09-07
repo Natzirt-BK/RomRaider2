@@ -743,11 +743,11 @@ final class FxCalibrationPane extends BorderPane implements AutoCloseable {
     }
 
     private Node diagnosticControl() {
-        CalibrationCellSnapshot cell = snapshot.cellAt(0, 0);
-        String code = DTC.matcher(snapshot.getTableName()).find()
-                ? snapshot.getTableName().substring(1, 6).toUpperCase(Locale.ROOT)
-                : "DTC";
-        Label kicker = new Label("DIAGNOSTIC TROUBLE CODE");
+        var codeMatch = DTC.matcher(snapshot.getTableName());
+        String code = codeMatch.find() ? codeMatch.group(1).toUpperCase(Locale.ROOT) : "DTC";
+        boolean monitorGate = isDiagnosticMonitorGate(snapshot);
+        String subject = code + (monitorGate ? " monitor gate" : "");
+        Label kicker = new Label(monitorGate ? "DIAGNOSTIC MONITOR GATE" : "DIAGNOSTIC TROUBLE CODE");
         kicker.getStyleClass().add("section-kicker");
         Label codeLabel = new Label(code);
         codeLabel.getStyleClass().add("title");
@@ -758,13 +758,23 @@ final class FxCalibrationPane extends BorderPane implements AutoCloseable {
         updateDiagnosticState();
         dtcToggle.setOnAction(event -> runEdit(() -> controller.setCellValue(0, 0,
                 dtcToggle.isSelected() ? "1" : "0").getSnapshot(),
-                code + (dtcToggle.isSelected() ? " enabled" : " disabled")));
+                subject + (dtcToggle.isSelected() ? " enabled" : " disabled")));
         Button restore = new Button("Restore saved state");
         restore.setOnAction(event -> runEdit(() -> controller
-                .restoreCellValue(0, 0).getSnapshot(), "Saved DTC state restored"));
+                .restoreCellValue(0, 0).getSnapshot(), monitorGate
+                        ? "Saved monitor gate state restored" : "Saved DTC state restored"));
         VBox card = new VBox(13, kicker, codeLabel, dtcState, dtcToggle,
                 restore, status);
         card.setAlignment(Pos.CENTER);
+        if (monitorGate) {
+            Label scope = new Label("This switch controls one monitor gate. Other paths may still report this code.");
+            scope.setId("dtc-scope-note");
+            scope.setWrapText(true);
+            scope.setMaxWidth(380);
+            scope.setTextAlignment(javafx.scene.text.TextAlignment.CENTER);
+            scope.getStyleClass().add("muted");
+            card.getChildren().add(scope);
+        }
         card.setMaxWidth(460);
         card.getStyleClass().add("dtc-card");
         StackPane center = new StackPane(card);
@@ -880,7 +890,12 @@ final class FxCalibrationPane extends BorderPane implements AutoCloseable {
         boolean enabled = snapshot.cellAt(0, 0).getRawValue() != 0.0;
         dtcToggle.setSelected(enabled);
         dtcToggle.setText(enabled ? "Enabled" : "Disabled");
-        dtcState.setText(enabled ? "Code enabled" : "Code disabled");
+        dtcState.setText((isDiagnosticMonitorGate(snapshot) ? "Monitor gate" : "Code")
+                + (enabled ? " enabled" : " disabled"));
+    }
+
+    static boolean isDiagnosticMonitorGate(CalibrationGridSnapshot value) {
+        return "monitor gate".equalsIgnoreCase(value.getUnit().trim());
     }
 
     static boolean isDiagnosticTroubleCode(CalibrationGridSnapshot value) {

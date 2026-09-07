@@ -149,6 +149,23 @@ class CalibrationPreviewModelTest {
     }
 
     @Test
+    fun monitorGateWordingUsesExplicitDefinitionUnits() {
+        val table = TableSwitch().apply {
+            name = "(P0130) Oxygen sensor monitor A"
+            storageAddress = 0
+            dataSize = 1
+        }
+        val rom = Rom(RomID())
+        rom.addTableByName(table)
+        rom.populateTables(byteArrayOf(1), JProgressPane())
+        assertTrue(!diagnosticControlIsMonitorGate(CalibrationGridProjectionService.project(table)))
+        table.currentScale.unit = " Monitor Gate "
+        assertTrue(diagnosticControlIsMonitorGate(CalibrationGridProjectionService.project(table)))
+        table.currentScale.unit = "state"
+        assertTrue(!diagnosticControlIsMonitorGate(CalibrationGridProjectionService.project(table)))
+    }
+
+    @Test
     fun keyboardSelectionMovesByRowsAndColumnsWithoutLeavingTheGrid() {
         val table = Table1D().apply {
             name = "Line"
