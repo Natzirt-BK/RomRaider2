@@ -50,8 +50,9 @@ JavaFX native checks cover all six layouts at portrait, landscape and tiny
 viewport sizes, missing readings, actual full-screen state, tap/reset/timeout/
 exit, and retained synthetic session/selection/history. Compose native captures
 cover setup and six fitted instruments. The Swing-embedded native checks below
-now cover Compose menu input and focus behavior; qualification of the separate
-Compose-owned window placement remains a follow-up, alongside native display-awake qualification.
+cover Compose menu input and focus behavior. The separate Compose-owned window
+now has a production-window lifecycle fixture, described below. Physical platform
+acceptance and Gaming Mode service availability remain separate checks.
 
 September 6 verification: 252 JavaFX tests, 37 Compose tests and 18 focused core
 settings/display tests pass. Render inspection caught and corrected missing
@@ -69,7 +70,7 @@ switches native focus away and back, and exits via menu, Escape and native windo
 close. All these view changes leave the recording state, sample identity and
 display assignment intact without issuing a session command. No `LoggerDesktopRuntime`, USB
 provider or vehicle is constructed. Run native checks in a separate Xvfb display
-with `RR2_COMPOSE_WINDOW_SMOKE=1`; ordinary headless runs skip these two tests.
+with `RR2_COMPOSE_WINDOW_SMOKE=1`; ordinary headless runs skip native-window tests.
 CI runs these separately from JavaFX so competing test windows cannot steal focus.
 
 The bridge uses Compose's SwingGraphics rendering path: testing the native
@@ -84,6 +85,32 @@ describes retained removal and the application's cleanup responsibility.
 The bridge checkpoint passes all 39 Compose tests, including both opted-in native
 tests. Actual synthetic captures: [full screen](images/swing-gauge-display-fullscreen.png)
 and [tap-revealed exit menu](images/swing-gauge-display-menu.png).
+
+The Compose-owned logger uses `GaugeLoggerWindow` in both production and its
+synthetic native fixture. The fixture verifies live readings after entering full
+screen, tap/reset/timeout, focus loss/regain, exact saved floating-window geometry,
+maximized restoration with Escape, externally initiated native exit, minimize/
+restore, and closing while active. Recording state and sample identity are retained
+without session commands. It constructs no `LoggerDesktopRuntime` or adapter.
+The complete Compose suite passes all 40 tests with native checks enabled; runtime
+staging also passes.
+
+This qualification caught and corrected three presentation defects: a retained
+native menu strip, loss of the saved window position, and Escape not reaching the
+root keyboard handler. Restoring maximized mode is ordered after AWT's intermediate
+floating-state callbacks. The screen-awake gate checks actual native full-screen
+state as well as intent, focus, visibility and minimization. Native placement is
+observed while full-screen gauges are active and external exits return to setup.
+
+The native fixture checks that the actual on-screen **client canvas** exactly fills
+the display. X11 AWT may retain hidden decoration insets in its outer frame bounds;
+those cached bounds are not the visible canvas. Captures use the display bounds:
+[full-screen Evolution-style fixture](images/compose-owned-gauge-display-fullscreen.png)
+and [tap menu](images/compose-owned-gauge-display-menu.png).
+Run this fixture with `packaging/run-desktop-window-tests.sh` and
+`RR2_COMPOSE_WINDOW_SMOKE=1`; minimize/restore requires the isolated Openbox window
+manager, not bare Xvfb. This native-window qualification runs on Linux/X11; it does
+not establish physical Windows/macOS/Deck window-manager or idle-timeout behavior.
 
 This is development source, not a replacement for the public 1.1.2 RC1 packages.
 No physical adapter or vehicle was used in these checks.

@@ -16,15 +16,23 @@ in Gauges. Only Full Screen keeps the screen awake; a tap reveals an exit menu
 that times out. Desktop/handheld searchable style galleries and per-channel
 persistence are now implemented; see [their contract](DESKTOP_GAUGE_STYLES.md).
 [Independent slots and fitted 1–6 layouts](DESKTOP_GAUGE_DISPLAY.md) are now implemented
-on desktop/handheld, with native-window full-screen menus. The next gauge work is
-native display-awake and Compose-owned window qualification, followed by package
-qualification. [Screen-awake requests](DESKTOP_DISPLAY_AWAKE.md) now have window-scoped
+on desktop/handheld, with native-window full-screen menus. The Compose-owned window
+now has direct native lifecycle checks; the remaining gauge work is fresh package
+qualification and physical platform acceptance. [Screen-awake requests](DESKTOP_DISPLAY_AWAKE.md) now have window-scoped
 ownership, OS backends and an unavailable indicator; service/physical platform
 acceptance remains explicit. The legacy Swing bridge now has a retained,
 borderless full-screen host; its native input/lifecycle checks cover updates,
 tap/reset/timeout/exit and owner cleanup without logger commands. Public downloads
 remain 1.1.2 RC1. Resume the parked DimeMod channel-pointer span audit afterward;
 neither the gauge work nor synthetic logging tests qualify vehicle writes.
+
+The screen-awake checkpoint `e4de5e42` passed both desktop builds and
+[all platform packages](https://github.com/Natzirt-BK/RomRaider2/actions/runs/34069217817).
+Native API acquisition/release passed on Windows and both macOS architectures;
+physical screen-idle acceptance remains untested. The following Compose-owned
+window fix preserves geometry/mode, removes retained menu chrome and repairs root
+Escape handling. Its native fixture uses an isolated Xvfb/Openbox desktop and
+synthetic recording, not a logger runtime or vehicle.
 
 The 25-style checkpoint `a5676f2f` passed both hosted Android regression runs,
 both desktop build runs, and [all platform packages](https://github.com/Natzirt-BK/RomRaider2/actions/runs/34064071712).

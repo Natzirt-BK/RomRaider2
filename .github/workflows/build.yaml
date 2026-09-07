@@ -40,7 +40,7 @@ jobs:
           timeout 10m xvfb-run -a ant clean unittest
           /usr/bin/python3 packaging/test-display-awake.py "$JAVA_HOME/bin/java" 'build/test:lib/common/*:lib/testing/*'
           ant clean build-linux
-          xvfb-run -a -s '-screen 0 1280x1024x24' env RR2_COMPOSE_WINDOW_SMOKE=1 SKIKO_RENDER_API=SOFTWARE gradle --no-daemon :platform:shared-core:check :ui:compose-logger:test
+          env RR2_COMPOSE_WINDOW_SMOKE=1 SKIKO_RENDER_API=SOFTWARE bash packaging/run-desktop-window-tests.sh gradle --no-daemon :platform:shared-core:check :ui:compose-logger:test
           env RR2_FX_WINDOW_SMOKE=1 bash packaging/run-desktop-window-tests.sh gradle --no-daemon :ui:javafx-desktop:test :ui:javafx-desktop:stageJavaFxLinux
           packaging/java21/audit-runtime-modules.sh build/linux/lib/RomRaider2.jar
           packaging/java21/build-linux-app-image.sh build/release-1.1.3

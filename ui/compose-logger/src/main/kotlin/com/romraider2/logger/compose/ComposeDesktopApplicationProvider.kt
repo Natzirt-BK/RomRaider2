@@ -146,10 +146,6 @@ private fun LoggerDesktopWindow(
     onClose: () -> Unit
 ) {
     val loggerWindowState = rememberFittedWindowState(1380, 860)
-    var gaugeFullScreen by remember { mutableStateOf(false) }
-    var previousPlacement by remember { mutableStateOf(loggerWindowState.placement) }
-    val displayAwake = remember(runtime) { com.romraider.ui.DesktopDisplayAwake() }
-    val gaugeAwakeStatus = rememberDisplayAwakeStatus(displayAwake)
     val windowIcon = romRaiderWindowIcon()
     val context = remember(runtime) { runtime.workspaceContext }
     val configurationMissing = remember(runtime) {
@@ -172,21 +168,12 @@ private fun LoggerDesktopWindow(
         context.session.addStateListener(listener)
         onDispose { context.session.removeStateListener(listener) }
     }
-    Window(
-        onCloseRequest = onClose,
+    GaugeLoggerWindow(
+        onClose = onClose,
         title = "${Version.PRODUCT_NAME} ${Version.VERSION} | Logger",
         icon = windowIcon,
         state = loggerWindowState
-    ) {
-        val awakeBinding = remember(window, displayAwake) {
-            com.romraider.ui.AwtDisplayAwakeBinding(window, displayAwake) {
-                gaugeFullScreen && loggerWindowState.placement == androidx.compose.ui.window.WindowPlacement.Fullscreen
-            }
-        }
-        LaunchedEffect(gaugeFullScreen, loggerWindowState.placement) { awakeBinding.update() }
-        DisposableEffect(awakeBinding) {
-            onDispose { awakeBinding.close(); displayAwake.close() }
-        }
+    ) { gaugeWindow, gaugeAwakeStatus ->
         val commandHandler = remember(runtime, window) {
             DesktopApplicationCommands.Handler { arguments ->
                 if (arguments.any {
@@ -205,7 +192,7 @@ private fun LoggerDesktopWindow(
             DesktopApplicationCommands.register(commandHandler)
             onDispose { DesktopApplicationCommands.unregister(commandHandler) }
         }
-        if (!gaugeFullScreen) MenuBar {
+        if (!gaugeWindow.fullScreen) MenuBar {
             Menu("File") {
                 Item(if (loadingLog) "Opening CSV log..." else "Open CSV log...",
                     enabled = !loadingLog,
@@ -247,15 +234,10 @@ private fun LoggerDesktopWindow(
                     enabled = sessionState == LoggerSessionState.RECORDING)
             }
         }
-        LoggerWorkspace(context, onOpenSetup = { showSetup = true }, onGaugeFullScreen = { enabled ->
-            if (enabled != gaugeFullScreen) {
-                if (enabled) {
-                    previousPlacement = loggerWindowState.placement
-                    loggerWindowState.placement = androidx.compose.ui.window.WindowPlacement.Fullscreen
-                } else loggerWindowState.placement = previousPlacement
-                gaugeFullScreen = enabled
-            }
-        }, gaugeAwakeStatus = gaugeAwakeStatus)
+        LoggerWorkspace(context, onOpenSetup = { showSetup = true },
+            onGaugeFullScreen = gaugeWindow::requestFullScreen,
+            gaugeFullScreenExitRevision = gaugeWindow.exitRevision,
+            gaugeAwakeStatus = gaugeAwakeStatus)
         LaunchedEffect(runtime) {
             if (!configurationMissing && runtime.settings.autoConnectOnStartup &&
                 context.session.state == LoggerSessionState.STOPPED) {

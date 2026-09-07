@@ -77,16 +77,18 @@ is already part of the packaged desktop runtime. Android code is unchanged.
   abrupt process exit and a socket that never completes authentication. The fake
   service checks the same sender's unsigned cookie and verifies no inhibition leaks.
 - Native UI tests inject fake leases; they do not inhibit the developer's real
-  desktop. JavaFX covers setup/full-screen/focus/minimize/exit/close. The Swing-hosted
-  production Compose workspace additionally retains the synthetic recording and
-  arriving readings across menu, focus and native-window operations.
-  The complete local suites passed: 253 JavaFX tests and 39 Compose tests.
+  desktop. JavaFX covers setup/full-screen/focus/minimize/exit/close. Both the
+  Swing-hosted and Compose-owned production window fixtures retain a synthetic
+  recording and arriving readings across menu, focus and native-window operations.
+  The complete local suites passed: 253 JavaFX tests and 40 Compose tests.
   Native captures show the [request status in the tap menu](images/swing-gauge-display-menu.png)
   and the [unavailable indicator after the menu hides](images/swing-gauge-display-awake-unavailable.png).
 - Hosted Windows and both macOS architectures have an opt-in transient native
   acquire/release probe. A successful probe establishes API acceptance/cleanup,
-  not a physical display's idle-timeout behavior. Inspect the current workflow
-  results before treating those platform checks as passed.
+  not a physical display's idle-timeout behavior. Checkpoint `e4de5e42` passed
+  native acquisition/release twice on [Windows Server 2025](https://github.com/Natzirt-BK/RomRaider2/actions/runs/34069218121)
+  and [both macOS architectures](https://github.com/Natzirt-BK/RomRaider2/actions/runs/34069217817).
+  Both desktop builds and all platform-package jobs passed at that checkpoint.
 
 Linux fixture (after compiling its test probe):
 
@@ -98,7 +100,7 @@ Linux fixture (after compiling its test probe):
 This launches private test buses. UI suites set
 `romraider2.displayAwake.disabled=true`; injected test backends remain usable.
 Native UI runs require their existing Xvfb opt-in flags and separate displays.
-JavaFX minimize/restore checks additionally use
+JavaFX and Compose-owned minimize/restore checks additionally use
 `packaging/run-desktop-window-tests.sh`, which starts a private Xvfb display and
 Openbox instance with a repository-owned minimal configuration. This requires
 Openbox and `xprop` (`x11-utils` on Ubuntu). Bare Xvfb cannot complete a native

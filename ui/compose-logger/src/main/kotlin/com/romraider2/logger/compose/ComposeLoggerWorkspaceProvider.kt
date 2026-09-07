@@ -205,6 +205,9 @@ internal fun LoggerWorkspace(
     }
     val rootFocus = remember { FocusRequester() }
     val searchFocus = remember { FocusRequester() }
+    LaunchedEffect(mountedFullScreen, gaugeWindowFocused) {
+        if (mountedFullScreen && gaugeWindowFocused) rootFocus.requestFocus()
+    }
     val pendingSamples = remember(context) {
         ConcurrentLinkedQueue<LiveDataSample>()
     }
@@ -293,7 +296,6 @@ internal fun LoggerWorkspace(
         Surface(
             Modifier.fillMaxSize()
                 .focusRequester(rootFocus)
-                .focusable()
                 .onPreviewKeyEvent { event ->
                     if (event.type != KeyEventType.KeyDown) {
                         false
@@ -322,7 +324,7 @@ internal fun LoggerWorkspace(
                     } else {
                         false
                     }
-                },
+                }.focusable(),
             color = colors.background
         ) {
             Column(Modifier.fillMaxSize()) {
