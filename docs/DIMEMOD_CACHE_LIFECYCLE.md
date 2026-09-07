@@ -241,7 +241,8 @@ rediscovery. Preserve the distinction between read-only runtime refresh and
 discovery negotiation. Android still needs a verified read-only discovery source
 or a separately authorized, accurately labelled flow.
 
-Other advertised channel/RAM-tune address spans, cache/session identity,
+Published-channel wire spans are now checked by the linked metadata follow-up.
+RAM-tune/uninterpreted address spans, cache/session identity,
 in-flight UI reload cancellation, and negotiation cleanup remain open. See the
 [metadata and discovery audit](DIMEMOD_CHANNEL_AUDIT.md) for completed bounds
 checks and their limits. No production ECU-writing or live-tuning capability is

@@ -85,8 +85,8 @@ including the derived debug channels spans 13 bytes on 2.0 and 38 on later
 layouts; memorized errors span 4 or 16 bytes; feature/input flags span 4 and 2.
 None may cross the 24-bit wire boundary. Existing masking of upper address bytes
 is preserved. This is a wire-range check, **not** proof that an address belongs
-to a particular ECU, valid RAM region or discovery source. Other advertised
-channel and RAM-tune spans still need separate validation.
+to a particular ECU, valid RAM region or discovery source. The published-channel
+span follow-up is described below; RAM-tune spans remain separate validation work.
 
 Discovery-byte exports and runtime-error arrays are defensive copies. Published
 channel collections are unmodifiable structural snapshots, so a later update
@@ -115,6 +115,37 @@ together (30 tests). Ant Linux build and the complete unit suite pass, retaining
 the three optional/native corpus skips. Shared-core checks and all 222 JavaFX /
 35 Compose tests pass against the rebuilt core with no JavaFX/Compose skips.
 These are synthetic/source results, not physical ECU or release acceptance.
+
+## Published-channel address spans
+
+The next offline regression reproduced 720 accepted boundary-crossing cases in
+the previous reader. It checked the actual byte widths of every published channel
+in nine version/build fixtures, including fields whose runtime inputs/features had
+not yet been enabled. Checking only the four runtime/status pointers was not enough.
+
+`MetadataReader.getChannelAddress` now checks each known multi-byte channel pointer
+as it is read: floats occupy four bytes, the valet code occupies two, and the
+knock-sum base covers all four derived cylinder bytes. This preserves the existing
+version/feature parsing gates and upper-byte aliases. One-byte values cannot cross
+the boundary; no extra restriction is imposed on them. Rejection includes the
+metadata section and field name and occurs before discovery can be published.
+
+The independent fixture sweep resolves metadata offsets from the existing published
+channel addresses and widths, rather than using the new validation helper as its
+expected result. All 756 crossing cases reject; all 888 exact-endpoint/upper-alias
+cases remain accepted with the same channel IDs and valid complete read spans.
+Coverage counts are asserted so silently hiding channels cannot shrink the sweep.
+The existing 3,112 truncation checks also remain green. All 20 metadata/channel
+tests and the complete Ant unit suite pass, and the Linux core builds successfully.
+Against that rebuilt core, shared-core checks, all 40 Compose tests and all 253
+JavaFX tests pass with native checks enabled; both desktop runtimes stage successfully.
+
+This check only establishes that a read does not wrap the established 24-bit wire
+address space. It does **not** validate ECU identity, RAM ownership, firmware
+compatibility or address provenance. Unpublished VIN-lock data, RAM-tune/LUT sizes
+and other uninterpreted fields have not been assigned guessed read widths. The
+legacy negotiation sequence is unchanged; no physical discovery, adapter access
+or ECU write was performed.
 
 ## Why Android discovery is still separate
 
@@ -145,9 +176,9 @@ writes by simply clearing cached data. It does not claim complete ECU binding.
 - Define and verify a genuinely read-only discovery source, or a separately
   authorized handshake with accurate UI wording; do not silently reuse the
   legacy write sequence under a read-only label.
-- Continue validation of other contained addresses, RAM-tune sizes/regions, cache
+- Continue validation of uninterpreted contained addresses, RAM-tune sizes/regions, cache
   identity and negotiation cleanup before claiming robust dynamic discovery.
-  Bounded parsing and runtime-pointer spans are covered above, not all metadata
+  Bounded parsing, runtime-pointer and published-channel spans are covered above, not all metadata
   semantics. The legacy CAN exception for a nonstandard negotiation-exit reply
   is retained; this pass does not invent new cleanup writes or prove all
   negotiation-error behavior safe. Frame/chunk checks do not validate every

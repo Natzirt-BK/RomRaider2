@@ -167,31 +167,31 @@ public class DmInit {
             memorizedErrorCodesAddress = buf.getInt();
             activeFeaturesAddress = buf.getInt();
             activeInputsAddress = buf.getInt();
-            afrAddress = buf.getInt();
-            egtAddress = buf.getInt();
-            fuelPressAddress = buf.getInt();
-            fuelDiffPressAddress = buf.getInt();
-            backPressAddress = buf.getInt();
+            afrAddress = buf.getChannelAddress(4, "afrAddress");
+            egtAddress = buf.getChannelAddress(4, "egtAddress");
+            fuelPressAddress = buf.getChannelAddress(4, "fuelPressAddress");
+            fuelDiffPressAddress = buf.getChannelAddress(4, "fuelDiffPressAddress");
+            backPressAddress = buf.getChannelAddress(4, "backPressAddress");
             if (minorVer >= 3) {
-                oilTempAddress = buf.getInt();
-                oilPressAddress = buf.getInt();
+                oilTempAddress = buf.getChannelAddress(4, "oilTempAddress");
+                oilPressAddress = buf.getChannelAddress(4, "oilPressAddress");
             }
-            ethanolContentAddress = buf.getInt();
+            ethanolContentAddress = buf.getChannelAddress(4, "ethanolContentAddress");
             ffsTriggerStateAddress = buf.getInt();
             extFailsafeStateAddress = buf.getInt();
 
-            afrVoltageAddress = buf.getInt();
-            egtVoltageAddress = buf.getInt();
-            fuelPressVoltageAddress = buf.getInt();
-            backPressVoltageAddress = buf.getInt();
+            afrVoltageAddress = buf.getChannelAddress(4, "afrVoltageAddress");
+            egtVoltageAddress = buf.getChannelAddress(4, "egtVoltageAddress");
+            fuelPressVoltageAddress = buf.getChannelAddress(4, "fuelPressVoltageAddress");
+            backPressVoltageAddress = buf.getChannelAddress(4, "backPressVoltageAddress");
             if (minorVer >= 3) {
-                oilTempVoltageAddress = buf.getInt();
-                oilPressVoltageAddress = buf.getInt();
+                oilTempVoltageAddress = buf.getChannelAddress(4, "oilTempVoltageAddress");
+                oilPressVoltageAddress = buf.getChannelAddress(4, "oilPressVoltageAddress");
             }
-            ethanolContentVoltageAddress = buf.getInt();
-            ffsTriggerVoltageAddress = buf.getInt();
-            extFailsafeVoltageAddress = buf.getInt();
-            extMapSwitchVoltageAddress = buf.getInt();
+            ethanolContentVoltageAddress = buf.getChannelAddress(4, "ethanolContentVoltageAddress");
+            ffsTriggerVoltageAddress = buf.getChannelAddress(4, "ffsTriggerVoltageAddress");
+            extFailsafeVoltageAddress = buf.getChannelAddress(4, "extFailsafeVoltageAddress");
+            extMapSwitchVoltageAddress = buf.getChannelAddress(4, "extMapSwitchVoltageAddress");
 
             if (isRamTuneEnabled) {
                 buf.section("RAM_TUNE");
@@ -212,7 +212,7 @@ public class DmInit {
                 failsafeStateAddress = buf.getInt();
                 failsafeMemorizedStateAddress = buf.getInt();
                 failsafeStageAddress = buf.getInt();
-                failsafeReqTrqLimitAddress = buf.getInt();
+                failsafeReqTrqLimitAddress = buf.getChannelAddress(4, "failsafeReqTrqLimitAddress");
             }
 
             if (isCelFlashEnabled) {
@@ -230,7 +230,7 @@ public class DmInit {
                 if (signature != 0xDEAD0006) {
                     throw new IllegalStateException("DimeMod params reading failure at KS_BY_CYLS");
                 }
-                knockSumCyl1Address = buf.getInt();
+                knockSumCyl1Address = buf.getChannelAddress(4, "knockSumCyl1Address");
                 knockSumCyl3Address = knockSumCyl1Address + 1;
                 knockSumCyl2Address = knockSumCyl1Address + 2;
                 knockSumCyl4Address = knockSumCyl1Address + 3;
@@ -248,21 +248,21 @@ public class DmInit {
                     failsafeStateAddress = buf.getInt();
                     failsafeMemorizedStateAddress = buf.getInt();
                 }
-                flexFuelBoostSetBlendAddress = buf.getInt();
-                flexFuelFuelingSetBlendAddress = buf.getInt();
-                flexFuelIgnitionSetBlendAddress = buf.getInt();
-                flexFuelOtherSetBlendAddress = buf.getInt();
-                flexFuelInjFlowValueAddress = buf.getInt();
+                flexFuelBoostSetBlendAddress = buf.getChannelAddress(4, "flexFuelBoostSetBlendAddress");
+                flexFuelFuelingSetBlendAddress = buf.getChannelAddress(4, "flexFuelFuelingSetBlendAddress");
+                flexFuelIgnitionSetBlendAddress = buf.getChannelAddress(4, "flexFuelIgnitionSetBlendAddress");
+                flexFuelOtherSetBlendAddress = buf.getChannelAddress(4, "flexFuelOtherSetBlendAddress");
+                flexFuelInjFlowValueAddress = buf.getChannelAddress(4, "flexFuelInjFlowValueAddress");
                 if (minorVer > 0 || buildNum > 1) {
-                    diffPressureCompensationAddress = buf.getInt();
-                    targetStoichAddress = buf.getInt();
-                    stoichCompensationAddress = buf.getInt();
-                    convertedAfrAddress = buf.getInt();
+                    diffPressureCompensationAddress = buf.getChannelAddress(4, "diffPressureCompensationAddress");
+                    targetStoichAddress = buf.getChannelAddress(4, "targetStoichAddress");
+                    stoichCompensationAddress = buf.getChannelAddress(4, "stoichCompensationAddress");
+                    convertedAfrAddress = buf.getChannelAddress(4, "convertedAfrAddress");
                     if ((minorVer == 1 && buildNum >= 300) ||
                             (minorVer == 3 && buildNum >= 100) ||
                             (minorVer > 3)) {
-                        tipInMultiplierAddress = buf.getInt();
-                        crankingMultiplierAddress = buf.getInt();
+                        tipInMultiplierAddress = buf.getChannelAddress(4, "tipInMultiplierAddress");
+                        crankingMultiplierAddress = buf.getChannelAddress(4, "crankingMultiplierAddress");
                     }
                 }
             }
@@ -273,20 +273,20 @@ public class DmInit {
                 if (signature != 0xDEAD0009) {
                     throw new IllegalStateException("DimeMod params reading failure at SPEED_DENSITY");
                 }
-                sdPortTempAddress = buf.getInt();
-                sdIatCompensationAddress = buf.getInt();
-                sdTipInCompensationAddress = buf.getInt();
-                sdAtmPressCompensationAddress = buf.getInt();
-                sdBlendingRatioAddress = buf.getInt();
-                sdBaseVeAddress = buf.getInt();
-                sdFinalVeAddress = buf.getInt();
-                alphaNIatCompensationAddress = buf.getInt();
-                alphaNAtmPressCompensationAddress = buf.getInt();
-                alphaNBaseMassAirflowAddress = buf.getInt();
-                alphaNFinalMassAirflowAddress = buf.getInt();
-                sensorMassAirflowAddress = buf.getInt();
+                sdPortTempAddress = buf.getChannelAddress(4, "sdPortTempAddress");
+                sdIatCompensationAddress = buf.getChannelAddress(4, "sdIatCompensationAddress");
+                sdTipInCompensationAddress = buf.getChannelAddress(4, "sdTipInCompensationAddress");
+                sdAtmPressCompensationAddress = buf.getChannelAddress(4, "sdAtmPressCompensationAddress");
+                sdBlendingRatioAddress = buf.getChannelAddress(4, "sdBlendingRatioAddress");
+                sdBaseVeAddress = buf.getChannelAddress(4, "sdBaseVeAddress");
+                sdFinalVeAddress = buf.getChannelAddress(4, "sdFinalVeAddress");
+                alphaNIatCompensationAddress = buf.getChannelAddress(4, "alphaNIatCompensationAddress");
+                alphaNAtmPressCompensationAddress = buf.getChannelAddress(4, "alphaNAtmPressCompensationAddress");
+                alphaNBaseMassAirflowAddress = buf.getChannelAddress(4, "alphaNBaseMassAirflowAddress");
+                alphaNFinalMassAirflowAddress = buf.getChannelAddress(4, "alphaNFinalMassAirflowAddress");
+                sensorMassAirflowAddress = buf.getChannelAddress(4, "sensorMassAirflowAddress");
                 if (minorVer > 0 || buildNum > 0) {
-                    sdAtmPressAddress = buf.getInt();
+                    sdAtmPressAddress = buf.getChannelAddress(4, "sdAtmPressAddress");
                 }
                 int engineLoadSmoothingAAddress = buf.getInt();
                 int engineLoadSmoothingBAddress = buf.getInt();
@@ -346,7 +346,7 @@ public class DmInit {
                 if (signature != 0xDEAD000E) {
                     throw new IllegalStateException("DimeMod params reading failure at VALET_MODE");
                 }
-                valetCurrentCodeAddress = buf.getInt();
+                valetCurrentCodeAddress = buf.getChannelAddress(2, "valetCurrentCodeAddress");
             }
             // Preserve the existing low-24-bit wire mapping (including SH
             // upper-byte aliases), but never let runtime reads or the derived
@@ -378,6 +378,15 @@ public class DmInit {
         byte get() { require(1); return bytes.get(); }
         short getShort() { require(2); return bytes.getShort(); }
         int getInt() { require(4); return bytes.getInt(); }
+
+        // Validate the entire published read before runtime flags can enable it.
+        // The caller supplies the channel width, not the four-byte metadata field
+        // width. Unpublished VIN/RAM-tune data does not acquire guessed semantics.
+        int getChannelAddress(int length, String field) {
+            int address = getInt();
+            requireWireSpan(address, length, section + "/" + field);
+            return address; // Preserve the established upper-byte address aliases.
+        }
 
         private void require(int length) {
             if (bytes.remaining() < length) {

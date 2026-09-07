@@ -65,7 +65,9 @@ validation and verified mobile runtime/version/address mapping.
 
 The metadata follow-up now bounds each field read, isolates retained buffers and
 channel collections, rejects runtime-pointer spans that wrap on the wire, and
-aligns DM02C's version gate with its parsed address. Other channel/RAM-tune spans,
+aligns DM02C's version gate with its parsed address. Published-channel spans now
+also reject boundary crossings before runtime activation, with endpoint/alias
+compatibility preserved across nine fixtures. RAM-tune/uninterpreted spans,
 ECU-bound cache identity and negotiation cleanup remain; none of these checks
 qualifies the legacy write handshake for Android's read-only logger.
 

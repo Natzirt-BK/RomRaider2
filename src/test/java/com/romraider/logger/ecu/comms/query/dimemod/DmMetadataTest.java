@@ -135,6 +135,88 @@ public class DmMetadataTest {
         assertEquals("2.3 build 100", new DmInit(Arrays.copyOf(full, 65535)).getDimeModVersion());
     }
 
+    @Test public void allPublishedChannelSpansRejectWrappingDiscoveryBeforeRuntimeActivation() {
+        List<String> accepted = new ArrayList<>();
+        int checked = 0;
+        for (int[] version : VERSIONS) {
+            byte[] full = fixture(version[0], version[1]);
+            for (Map.Entry<Integer, Integer> span : channelSpans(full).entrySet()) {
+                int width = span.getValue();
+                if (width == 1) continue; // A single byte cannot cross the wire boundary.
+                for (int alias : new int[] {0, 0xFF000000}) {
+                    byte[] invalid = full.clone();
+                    ByteBuffer.wrap(invalid).putInt(span.getKey(), alias | (0x1000000 - width + 1));
+                    try {
+                        new DmInit(invalid); // Must reject even with no runtime features/inputs active yet.
+                        accepted.add("2." + version[0] + "." + version[1] + " byte " + span.getKey());
+                    } catch (IllegalStateException expected) {
+                        assertTrue(expected.getMessage(), expected.getMessage().contains("span wraps"));
+                    }
+                    checked++;
+                }
+            }
+        }
+        assertTrue("Wrapping channel spans accepted (" + accepted.size() + "): "
+                + accepted.subList(0, Math.min(12, accepted.size())), accepted.isEmpty());
+        assertEquals("Published channel coverage changed; review the fixture sweep", 756, checked);
+        System.out.println("DimeMod channel wrapping checks: " + checked + " across " + VERSIONS.length + " layouts");
+    }
+
+    @Test public void allPublishedChannelSpansAcceptExactWireEndpointsAndUpperAliases() {
+        int checked = 0;
+        for (int[] version : VERSIONS) {
+            byte[] full = fixture(version[0], version[1]);
+            DmInit baseline = new DmInit(full);
+            baseline.updateRuntimeData(-1, 0x3ff, new int[8], new int[8]);
+            List<String> ids = new ArrayList<>();
+            for (EcuParameter channel : baseline.getEcuParams()) ids.add(channel.getId());
+            for (Map.Entry<Integer, Integer> span : channelSpans(full).entrySet()) {
+                for (int alias : new int[] {0, 0xFF000000}) {
+                    byte[] valid = full.clone();
+                    ByteBuffer.wrap(valid).putInt(span.getKey(), alias | (0x1000000 - span.getValue()));
+                    DmInit boundary = new DmInit(valid);
+                    boundary.updateRuntimeData(-1, 0x3ff, new int[8], new int[8]);
+                    List<String> actual = new ArrayList<>();
+                    for (EcuParameter channel : boundary.getEcuParams()) {
+                        actual.add(channel.getId());
+                        long address = Long.decode(channel.getAddress().getAddresses()[0]);
+                        assertTrue(channel.getId(), address >= 0 && address + channel.getAddress().getLength() <= 0x1000000L);
+                    }
+                    assertEquals("Boundary validation hid channels", ids, actual);
+                    checked++;
+                }
+            }
+        }
+        assertEquals("Published channel coverage changed; review the fixture sweep", 888, checked);
+        System.out.println("DimeMod channel endpoint/alias checks: " + checked);
+    }
+
+    /** Independently resolve fixture pointers from every actual published channel and its byte width. */
+    private static Map<Integer, Integer> channelSpans(byte[] full) {
+        DmInit discovery = new DmInit(full);
+        discovery.updateRuntimeData(-1, 0x3ff, new int[8], new int[8]);
+        Map<Integer, Integer> spans = new LinkedHashMap<>();
+        for (EcuParameter channel : discovery.getEcuParams()) {
+            String id = channel.getId();
+            // These derived debug bytes share the current-error block's separately tested 13/38-byte span.
+            if (id.equals("DM666") || id.equals("DM667")) continue;
+            int derived = id.equals("DM002") ? 2 : id.equals("DM003") ? 1 : id.equals("DM004") ? 3 : 0;
+            long address = Long.decode(channel.getAddress().getAddresses()[0]) - derived;
+            int offset = -1;
+            for (int at = 16; at < full.length; at += 4) {
+                if ((ByteBuffer.wrap(full).getInt(at) & 0xFFFFFFL) != address) continue;
+                assertEquals("Fixture pointer must be unique: " + id, -1, offset);
+                offset = at;
+            }
+            assertTrue("No fixture pointer for " + id, offset >= 16);
+            int width = channel.getAddress().getLength() + derived;
+            if (id.equals("DM900")) width = discovery.getMinorVer() == 0 ? 13 : 38;
+            if (id.equals("DM901")) width = discovery.getMinorVer() == 0 ? 4 : 16;
+            spans.merge(offset, width, Math::max);
+        }
+        return spans;
+    }
+
     private static boolean has(Collection<? extends EcuParameter> channels, String id) {
         for (EcuParameter channel : channels) if (id.equals(channel.getId())) return true;
         return false;

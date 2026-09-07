@@ -23,8 +23,11 @@ ownership, OS backends and an unavailable indicator; service/physical platform
 acceptance remains explicit. The legacy Swing bridge now has a retained,
 borderless full-screen host; its native input/lifecycle checks cover updates,
 tap/reset/timeout/exit and owner cleanup without logger commands. Public downloads
-remain 1.1.2 RC1. Resume the parked DimeMod channel-pointer span audit afterward;
-neither the gauge work nor synthetic logging tests qualify vehicle writes.
+remain 1.1.2 RC1. The parked DimeMod published-channel span audit is now implemented:
+crossing reads reject before runtime activation, while valid endpoints and aliases
+remain compatible. RAM-tune/uninterpreted spans, cache identity and negotiation
+cleanup remain separate work; neither these checks nor synthetic logging qualify
+vehicle writes.
 
 The screen-awake checkpoint `e4de5e42` passed both desktop builds and
 [all platform packages](https://github.com/Natzirt-BK/RomRaider2/actions/runs/34069217817).
