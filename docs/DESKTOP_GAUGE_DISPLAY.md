@@ -139,3 +139,22 @@ with expected Maximized / actual Floating, then passed in both directions after
 the capture fix. All 41 Compose tests pass with native checks enabled; shared-core
 checks pass and the unchanged 257-test JavaFX suite remains up to date and green.
 No core, transport, definition or session-command code changed in this follow-up.
+
+### Delayed exit-notification follow-up
+
+Hosted run `34078435631` confirmed a separate exit race: the saved return mode
+was Maximized, Escape reached setup and released the awake lease, but native and
+Compose state subsequently both became Floating. The button-layout checks passed.
+
+Maximized restoration now reconciles native and model placement every 50 ms until
+they agree for 500 ms, with a two-second ceiling. Reentry and owner disposal cancel
+the reconciliation and invalidate queued restoration callbacks. This short window
+can also reapply Maximized to a manual unmaximize performed immediately after exit;
+once it settles, normal window-manager changes are unrestricted.
+
+A deterministic native regression injects the delayed Floating notification after
+the original queued restoration. It failed before the fix, then passed, including
+a later deliberate unmaximize. A second regression covers cancellation on reentry
+and disposal. The complete 45-test Compose suite passes locally with native checks
+enabled; shared-core checks pass and the 258-test JavaFX suite remains up to date
+and green. Physical Steam Deck acceptance remains outstanding.

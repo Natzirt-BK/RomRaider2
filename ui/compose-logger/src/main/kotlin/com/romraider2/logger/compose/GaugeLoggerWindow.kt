@@ -18,6 +18,7 @@ import androidx.compose.ui.window.WindowState
 import com.romraider.ui.AwtDisplayAwakeBinding
 import com.romraider.ui.DesktopDisplayAwake
 import javax.swing.SwingUtilities
+import javax.swing.Timer
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 
@@ -31,11 +32,15 @@ internal class GaugeWindowPresentation(private val state: WindowState) {
     private var previousPosition = state.position
     private var previousSize = state.size
     private var nativeWindow: ComposeWindow? = null
+    private var restoreTimer: Timer? = null
+    private var transitionRevision = 0
 
     fun attach(window: ComposeWindow) { nativeWindow = window }
 
     fun requestFullScreen(enabled: Boolean) {
         if (enabled == fullScreen) return
+        cancelRestoration()
+        val revision = transitionRevision
         if (enabled) {
             // Native maximize/restore notifications can lag behind a user tap.
             // Save the visible window's placement, not its preceding model state.
@@ -52,15 +57,45 @@ internal class GaugeWindowPresentation(private val state: WindowState) {
             // full screen. Apply the requested mode after those native callbacks.
             SwingUtilities.invokeLater {
                 val window = nativeWindow
-                if (!fullScreen && window != null && window.isDisplayable) {
+                if (revision == transitionRevision && !fullScreen && window != null && window.isDisplayable) {
                     if (previousPlacement == WindowPlacement.Floating) restoreGeometry()
                     window.placement = previousPlacement
                     state.placement = previousPlacement
+                    if (previousPlacement == WindowPlacement.Maximized) settleMaximizedRestore(window)
                 }
             }
         }
         fullScreen = enabled
     }
+
+    private fun settleMaximizedRestore(window: ComposeWindow) {
+        // X11 normal-state callbacks can arrive after invokeLater has already
+        // re-applied Maximized. Briefly reconcile both native and Compose state
+        // until they agree continuously, with a hard limit for unsupported WMs.
+        // This is transition-only: never keep enforcing a user's window mode.
+        val deadline = System.nanoTime() + 2_000_000_000L
+        var stableSince = System.nanoTime()
+        restoreTimer = Timer(50) {
+            val now = System.nanoTime()
+            if (fullScreen || !window.isDisplayable || now >= deadline) {
+                cancelRestoration()
+            } else if (window.placement != WindowPlacement.Maximized || state.placement != WindowPlacement.Maximized) {
+                stableSince = now
+                if (window.placement != WindowPlacement.Maximized) window.placement = WindowPlacement.Maximized
+                state.placement = WindowPlacement.Maximized
+            } else if (now - stableSince >= 500_000_000L) {
+                cancelRestoration()
+            }
+        }.apply { start() }
+    }
+
+    private fun cancelRestoration() {
+        transitionRevision++
+        restoreTimer?.stop()
+        restoreTimer = null
+    }
+
+    fun close() { cancelRestoration(); nativeWindow = null }
 
     fun nativePlacementChanged() {
         if (fullScreen && state.placement != WindowPlacement.Fullscreen) {
@@ -135,7 +170,7 @@ internal fun GaugeLoggerWindow(
             }
             binding.update()
         }
-        DisposableEffect(binding) { onDispose { binding.close() } }
+        DisposableEffect(binding) { onDispose { presentation.close(); binding.close() } }
         content(presentation, status)
     }
 }

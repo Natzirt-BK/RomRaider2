@@ -44,6 +44,48 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalComposeUiApi::class, androidx.compose.runtime.tooling.ComposeToolingApi::class)
 @org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable(named = "RR2_COMPOSE_WINDOW_SMOKE", matches = "1")
 class GaugeLoggerWindowTest {
+    @Test fun fullScreenExitRepairsDelayedFloatingNotification() {
+        val window = edt { ComposeWindow().apply { setSize(800, 600); isVisible = true } }
+        val state = WindowState(placement = WindowPlacement.Maximized)
+        val presentation = GaugeWindowPresentation(state)
+        try {
+            edt { window.placement = WindowPlacement.Maximized }
+            fun awaitPlacement(expected: WindowPlacement) {
+                val deadline = System.nanoTime() + 5_000_000_000L
+                while (edt { window.placement != expected || state.placement != expected }) {
+                    check(System.nanoTime() < deadline) { "Expected restored $expected, native=${edt { window.placement }} model=${edt { state.placement }}" }
+                    Thread.sleep(40)
+                }
+            }
+            awaitPlacement(WindowPlacement.Maximized)
+            edt {
+                presentation.attach(window)
+                presentation.requestFullScreen(true)
+                window.placement = WindowPlacement.Fullscreen
+                presentation.requestFullScreen(false)
+            }
+            // Emulate the delayed WM/model normal-state notification seen in CI,
+            // after the existing invokeLater restoration has already run.
+            edt { }
+            Thread.sleep(120)
+            edt {
+                window.placement = WindowPlacement.Floating
+                state.placement = WindowPlacement.Floating
+                presentation.nativePlacementChanged()
+            }
+            awaitPlacement(WindowPlacement.Maximized)
+            // Restoration must settle; a later deliberate unmaximize is allowed.
+            Thread.sleep(800)
+            edt {
+                window.placement = WindowPlacement.Floating
+                state.placement = WindowPlacement.Floating
+                presentation.nativePlacementChanged()
+            }
+            Thread.sleep(300)
+            awaitPlacement(WindowPlacement.Floating)
+        } finally { edt { presentation.close(); window.dispose() } }
+    }
+
     @Test fun fullScreenEntryCapturesNativePlacementBeforeDelayedModelNotification() {
         val window = edt { ComposeWindow().apply {
             setSize(800, 600)
@@ -70,11 +112,45 @@ class GaugeLoggerWindowTest {
                     presentation.requestFullScreen(false)
                     assertEquals(actual, state.placement,
                         "Return mode must match the native window, not a delayed model notification")
+                    presentation.close()
                 }
                 // Drain the owner's queued restoration before the next case.
                 edt { }
             }
         } finally { edt { window.dispose() } }
+    }
+
+    @Test fun pendingRestoreIsCancelledByReentryOrClose() {
+        for (reenter in listOf(true, false)) {
+            val window = edt { ComposeWindow().apply { setSize(800, 600); isVisible = true } }
+            val state = WindowState(placement = WindowPlacement.Maximized)
+            val presentation = GaugeWindowPresentation(state)
+            try {
+                edt { window.placement = WindowPlacement.Maximized }
+                val deadline = System.nanoTime() + 5_000_000_000L
+                while (edt { window.placement != WindowPlacement.Maximized }) {
+                    check(System.nanoTime() < deadline) { "Native maximize timed out" }
+                    Thread.sleep(40)
+                }
+                edt {
+                    presentation.attach(window)
+                    presentation.requestFullScreen(true)
+                    window.placement = WindowPlacement.Fullscreen
+                    presentation.requestFullScreen(false)
+                }
+                edt { }
+                edt {
+                    if (reenter) presentation.requestFullScreen(true)
+                    else {
+                        presentation.close()
+                        state.placement = WindowPlacement.Floating
+                    }
+                }
+                Thread.sleep(300)
+                assertEquals(if (reenter) WindowPlacement.Fullscreen else WindowPlacement.Floating,
+                    edt { state.placement }, "Old restoration must not overwrite a new transition or closed owner")
+            } finally { edt { presentation.close(); window.dispose() } }
+        }
     }
 
     @Test fun nativeWindowLifecyclePreservesRecordingAndRestoresSetup() {
