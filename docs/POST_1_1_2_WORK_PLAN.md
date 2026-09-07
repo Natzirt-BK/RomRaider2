@@ -80,8 +80,9 @@ stores accepted state synchronously, discards superseded UI notifications and
 rejects closed-owner callbacks/cache requests. Swing catalog reloads now use a
 paired initialization snapshot and a superseding token; stale dialog
 continuations and profile reviews cannot start subsequent reload/application
-stages. Installer-worker lifetime, failed-definition catalog invalidation and
-full ECU/session binding remain separate work. Invalidating a cache must not
+stages. Failed definitions now invalidate ECU registrations and recording-switch
+bindings while preserving external sensors and recovery-profile backup contents.
+Installer-worker lifetime and full ECU/session binding remain separate work. Invalidating a cache must not
 silently increase discovery writes.
 
 Initialization callbacks now carry an attempt-lifetime token through the shared

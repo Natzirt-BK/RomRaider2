@@ -8,6 +8,84 @@ import static org.junit.Assert.assertTrue;
 import org.junit.Test;
 
 public class QueryManagerImplTest {
+    @Test public void removedOrReplacedRecordingSwitchCannotReceiveAnOlderReply() throws Exception {
+        QueryManagerImpl manager = manager();
+        var settings = com.romraider.util.SettingsManager.getSettings();
+        boolean previous = settings.isFileLoggingControllerSwitchActive();
+        RecordingSwitch first = new RecordingSwitch("S1");
+        RecordingSwitch replacement = new RecordingSwitch("S2");
+        try {
+            settings.setFileLoggingControllerSwitchActive(true);
+            manager.setFileLoggerSwitchMonitor(first);
+            assertEquals(1, send(manager).size());
+            manager.handleFileLoggerSwitchResponse();
+            manager.handleFileLoggerSwitchResponse();
+            assertEquals(1, first.replies);
+            send(manager);
+            manager.setFileLoggerSwitchMonitor(replacement);
+            manager.handleFileLoggerSwitchResponse();
+            assertEquals(1, first.replies);
+            assertEquals(0, replacement.replies);
+            assertEquals(1, send(manager).size());
+            manager.handleFileLoggerSwitchResponse();
+            assertEquals(1, replacement.replies);
+            send(manager);
+            manager.setFileLoggerSwitchMonitor(null);
+            manager.handleFileLoggerSwitchResponse();
+            assertEquals(1, replacement.replies);
+            assertTrue(send(manager).isEmpty()); // Active preference alone cannot revive the old address.
+            manager.handleFileLoggerSwitchResponse();
+        } finally {
+            manager.setFileLoggerSwitchMonitor(null);
+            settings.setFileLoggingControllerSwitchActive(previous);
+        }
+    }
+
+    @Test public void unqueriedRecordingSwitchCannotConsumeAReplyAfterEnabling() throws Exception {
+        QueryManagerImpl manager = manager();
+        var settings = com.romraider.util.SettingsManager.getSettings();
+        boolean previous = settings.isFileLoggingControllerSwitchActive();
+        RecordingSwitch monitor = new RecordingSwitch("S1");
+        try {
+            settings.setFileLoggingControllerSwitchActive(false);
+            manager.setFileLoggerSwitchMonitor(monitor);
+            assertTrue(send(manager).isEmpty());
+            settings.setFileLoggingControllerSwitchActive(true);
+            manager.handleFileLoggerSwitchResponse();
+            assertEquals(0, monitor.replies);
+        } finally {
+            manager.setFileLoggerSwitchMonitor(null);
+            settings.setFileLoggingControllerSwitchActive(previous);
+        }
+    }
+
+    private static java.util.List<com.romraider.logger.ecu.comms.query.EcuQuery> send(QueryManagerImpl manager) throws Exception {
+        var sent = new java.util.ArrayList<com.romraider.logger.ecu.comms.query.EcuQuery>();
+        TransmissionManager tx = new TransmissionManager() {
+            public void start() { throw new AssertionError("No transport start permitted"); }
+            public void sendQueries(java.util.Collection<com.romraider.logger.ecu.comms.query.EcuQuery> queries, PollingState state) {
+                sent.addAll(queries); // Capture objects only; no connection, framing or adapter.
+            }
+            public void endQueries() { }
+            public void stop() { }
+        };
+        var method = QueryManagerImpl.class.getDeclaredMethod("sendEcuQueries", TransmissionManager.class);
+        method.setAccessible(true);
+        method.invoke(manager, tx);
+        return sent;
+    }
+
+    private static final class RecordingSwitch implements com.romraider.logger.ecu.ui.handler.file.FileLoggerControllerSwitchMonitor {
+        private final com.romraider.logger.ecu.definition.EcuSwitch ecuSwitch;
+        int replies;
+        RecordingSwitch(String id) {
+            ecuSwitch = new com.romraider.logger.ecu.definition.EcuSwitchImpl(id, id, "Synthetic",
+                    new com.romraider.logger.ecu.definition.EcuAddressImpl("000001", 1, 0), null, null, null,
+                    new com.romraider.logger.ecu.definition.EcuDataConvertor[] {new com.romraider.logger.ecu.definition.EcuParameterConvertorImpl()});
+        }
+        public com.romraider.logger.ecu.definition.EcuSwitch getEcuSwitch() { return ecuSwitch; }
+        public void monitorFileLoggerSwitch(double value) { replies++; }
+    }
     @Test public void queuedSelectionUsesTheLastIntentBeforePolling() throws Exception {
         QueryManagerImpl manager = manager();
         var data = parameter("P1");

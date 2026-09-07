@@ -268,13 +268,61 @@ Both GitHub desktop builds for the preceding profile-review checkpoint
 This cancels subsequent stages; it is not transactional rollback of a stage
 already executing. Preloaded definitions are still parsed by the installer's
 separate worker, whose origin/configuration lifetime needs its own review. The
-retained old catalog after a definition-load failure also needs explicit
-availability/registration handling: `ParameterListTableModel.clear()` clears its
-registration broker, but a parser failure never reaches `loadEcuParams` and its
-model-clearing step. Neither captured Java object references nor
+failed-definition registration boundary is addressed in the following section.
+Neither captured Java object references nor
 the existing ECU-ID cache key prove physical firmware identity. The modern
 runtime serializes its definition reload under its owner monitor, which does not
 establish that identity either. No discovery command or handshake is changed.
+
+## Failed-definition catalog invalidation
+
+A current missing/failed Swing definition load now clears ECU registrations from
+the live, graph, gauge, MAF, injector and dyno brokers before reporting the error
+or opening a definition dialog. Parameter/switch rows, analysis channel lists,
+diagnostic-code search entries, module choices and connection properties are
+removed. Failed loads are not reported as completed initialization reloads and
+do not trigger an automatic profile restore.
+
+External-sensor registrations are retained. Clearing a parameter table now
+deregisters only its own rows: the old implementation cleared the entire shared
+broker, including selected external and switch rows. Failed reloads do not
+recreate an already loaded external catalog. This does not promise that a
+successful user-requested reconfiguration retains every live selection or CSV
+schema; the existing successful reload/profile workflow remains in use.
+
+An owner-local availability state selects external-only operation while the
+definition is unavailable. A successful definition reload restores the preceding
+mode choice. Once the controller has actually stopped, shutdown also restores
+that preference before saving settings, without lifting the invalid-profile
+backup guard. Automatic recovery-profile backup is skipped while invalid, so
+empty ECU rows cannot overwrite the earlier recovery profile. The automatic
+recording-switch preference stays off until explicitly enabled again.
+
+The controller/query manager now accept a null recording-switch monitor to
+remove its old address. A volatile binding pairs each monitor with its query;
+responses are delivered only to the same binding that was queried during that
+cycle, at most once. Removal/replacement cannot make the new monitor consume an
+old reply, and an active preference without a monitor produces no switch query.
+The modern runtime also clears its monitor when the new definition has no
+recording switch. Switch and external-only flags are visible across threads.
+
+Synthetic tests cover selective table/broker cleanup, all six broker roles,
+external registration retention, failure/recovery/preference/backup state, and
+recording-switch removal/replacement/disabled-cycle response handling. They use
+real brokers, row models and query selection with fake controllers/transmission;
+they do not construct the Swing logger or qualify a physical reconnect. Existing
+initialization tests cover stale reload rejection before invalidation can run.
+A transport operation or response callback already executing is not rolled back.
+Installer-worker provenance, full firmware identity and negotiated ECU cleanup
+remain separate work; no adapter was opened to test these changes.
+
+Qualification: seven added regressions pass, as do the full Ant suite/Linux
+build, shared-core checks and all 293 desktop UI tests (40 Compose, 253 JavaFX).
+Native-window checks were enabled, with no UI test skips. Both hosted desktop
+builds for the preceding catalog-reload checkpoint `5cc1ca58` passed; those hosted
+results do not cover this later invalidation change. The modern runtime's
+failed-parser path (distinct from a successfully loaded definition with no
+recording switch) still needs a monitor-removal check in the next audit pass.
 
 ## Existing cache boundary
 
@@ -314,7 +362,7 @@ or a separately authorized, accurately labelled flow.
 
 Published-channel wire spans are now checked by the linked metadata follow-up.
 RAM-tune/uninterpreted address spans, cache/session identity,
-installer-worker lifetime, failed-definition catalog invalidation, and negotiation
+installer-worker lifetime and negotiation
 cleanup remain open. See the
 [metadata and discovery audit](DIMEMOD_CHANNEL_AUDIT.md) for completed bounds
 checks and their limits. No production ECU-writing or live-tuning capability is

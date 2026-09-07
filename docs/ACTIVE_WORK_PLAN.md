@@ -34,9 +34,17 @@ The Swing profile-review follow-up now rejects obsolete initialization snapshots
 after a protocol-confirmation dialog, including owner closure while that dialog
 is open. See the [lifecycle audit](DIMEMOD_CACHE_LIFECYCLE.md#profile-review-after-initialization-changes).
 Catalog reloads now also carry a paired initialization snapshot and a superseding
-reload token through their remaining stages. Installer-worker ownership,
-failed-definition catalog availability and firmware/session cache identity remain
+reload token through their remaining stages. Failed definitions now clear ECU
+registrations while retaining external sensors and the prior recovery profile;
+removed recording-switch monitors reject stale replies. Installer-worker ownership
+and firmware/session cache identity remain
 open; these guards do not initiate discovery or enable vehicle writes.
+
+Owner follow-up: the exact EVO IX GT-A `88780008` editor definitions do not yet
+include named per-code DTC enable/disable controls. Their structural/table audit
+does not establish complete diagnostic-switch coverage. Verified code-to-address
+and bit mappings are needed before adding those controls; generic Evo periphery
+addresses are not sufficient evidence for this firmware.
 
 The screen-awake checkpoint `e4de5e42` passed both desktop builds and
 [all platform packages](https://github.com/Natzirt-BK/RomRaider2/actions/runs/34069217817).

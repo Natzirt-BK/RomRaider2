@@ -238,10 +238,10 @@ public class Settings implements Serializable {
     private static String loggerProfileFilePath = "";
     private static String loggerOutputDirPath = System.getProperty("user.home");
     private String fileLoggingControllerSwitchId = "S20"; // defogger switch by default
-    private boolean fileLoggingControllerSwitchActive = false;
+    private volatile boolean fileLoggingControllerSwitchActive = false;
     private boolean fileLoggingAbsoluteTimestamp;
     private String logfileNameText;
-    private boolean logExternalsOnly;
+    private volatile boolean logExternalsOnly;
     private boolean autoConnectOnStartup = true;
     private static String userLocale = SYSTEM_NUMFORMAT;
 

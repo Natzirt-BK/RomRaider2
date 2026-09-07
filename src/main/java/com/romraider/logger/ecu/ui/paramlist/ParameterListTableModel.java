@@ -115,7 +115,10 @@ public final class ParameterListTableModel extends AbstractTableModel {
     }
 
     public synchronized void clear() {
-        broker.clear();
+        // Parameter, switch and external tables share a broker. Clear only the
+        // registrations owned by these rows, not the other tables' selections.
+        for (LoggerData data : registeredLoggerData)
+            broker.deregisterLoggerDataFromLogging(data);
         paramRowMap.clear();
         registeredLoggerData.clear();
         try {

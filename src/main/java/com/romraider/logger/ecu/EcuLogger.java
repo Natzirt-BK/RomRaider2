@@ -297,6 +297,7 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
     private LoggerChannelService channelService;
     private LoggerWorkspacePreferences workspacePreferences;
     private boolean channelRefreshPending;
+    private boolean externalChannelsLoaded;
 
     public EcuInit getEcuInit() {
         return initialization.getEcuInit();
@@ -305,6 +306,7 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
     private final SwingLoggerInitialization initialization = new SwingLoggerInitialization(
             SwingUtilities::invokeLater, EcuLogger::publishInitialization, this::applyInitialization);
     private long renderedInitializationRevision = -1;
+    private final SwingLoggerDefinitionAvailability definitionAvailability = new SwingLoggerDefinitionAvailability();
     private JToggleButton logToFileButton;
     private List<ExternalDataSource> externalDataSources;
     private List<EcuParameter> ecuParams;
@@ -581,11 +583,12 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
     private boolean loadLoggerParams(EcuDataLoader preloadedDefinition,
             SwingLoggerInitialization.Snapshot state) {
         SwingLoggerInitialization.Reload reload = initialization.beginReload(state);
+        boolean[] definitionLoaded = {false};
         return reload != null && reload.run(
-                () -> loadLoggerConfig(preloadedDefinition, reload),
-                () -> loadFromExternalDataSources(reload),
+                () -> definitionLoaded[0] = loadLoggerConfig(preloadedDefinition, reload),
+                () -> { if (definitionLoaded[0] || !externalChannelsLoaded) loadFromExternalDataSources(reload); },
                 this::refreshChannelCatalog,
-                () -> LoggerParameterFocusService.getInstance().retryPending());
+                () -> LoggerParameterFocusService.getInstance().retryPending()) && definitionLoaded[0];
     }
 
     private void installChannelCatalogListeners() {
@@ -749,16 +752,14 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
         }
     }
 
-    private void loadLoggerConfig(EcuDataLoader preloadedDefinition,
+    private boolean loadLoggerConfig(EcuDataLoader preloadedDefinition,
             SwingLoggerInitialization.Reload reload) {
         String loggerConfigFilePath = getSettings().getLoggerDefinitionFilePath();
         String protocol = getSettings().getLoggerProtocol();
         String controlSwitch = getSettings().getFileLoggingControllerSwitchId();
         if (isNullOrEmpty(loggerConfigFilePath)) {
+            if (!reload.run(this::invalidateEcuCatalog)) return false;
             showMissingConfigDialog(reload);
-            if (reload.isCurrent() && isNullOrEmpty(getSettings().getLoggerDefinitionFilePath())) {
-                getSettings().setLogExternalsOnly(true);
-            }
         }
         else {
             try {
@@ -771,13 +772,14 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
                 // Never combine parsed identity A with a later metadata cache B,
                 // or append dynamic channels into a reusable preloaded definition.
                 List<EcuParameter> ecuParams = reload.parameters(dataLoader.getEcuParameters());
-                if (!reload.isCurrent()) return;
+                if (!reload.isCurrent()) return false;
                 addConvertorUpdateListeners(ecuParams);
                 loadEcuParams(ecuParams);
                 loadEcuSwitches(dataLoader.getEcuSwitches());
                 dtcodes = dataLoader.getEcuCodes();
                 LoggerSearchCatalog.publish(ecuParams, dtcodes);
                 protocolList = dataLoader.getProtocols();
+                definitionAvailability.available(getSettings());
                 buildModuleSelectPanel();
                 final EcuSwitch fileLogCntrlSw = dataLoader.getFileLoggingControllerSwitch();
                 final RadioButtonMenuItem flc = (RadioButtonMenuItem) componentList.get("fileLoggingControl");
@@ -789,6 +791,8 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
                     }
                 }
                 else {
+                    controller.setFileLoggerSwitchMonitor(null);
+                    getSettings().setFileLoggingControllerSwitchActive(false);
                     if (flc != null) {
                         flc.setSelected(false);
                         flc.setEnabled(false);
@@ -810,15 +814,37 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
                         dataLoader.getEcuSwitches().size(),
                         defVersion);
                 LOGGER.info(loadResult);
+                return true;
             } catch (ConfigurationException cfe) {
-                if (!reload.isCurrent()) return;
-                reportError(cfe);
-                if (reload.isCurrent()) showErrorConfigDialog(cfe);
+                reload.run(this::invalidateEcuCatalog, () -> reportError(cfe),
+                        () -> showErrorConfigDialog(cfe));
             }
             catch (Exception e) {
-                if (reload.isCurrent()) reportError(e);
+                reload.run(this::invalidateEcuCatalog, () -> reportError(e));
             }
         }
+        return false;
+    }
+
+    private void invalidateEcuCatalog() {
+        definitionAvailability.unavailable(getSettings());
+        controller.setFileLoggerSwitchMonitor(null);
+        for (DataRegistrationBroker broker : new DataRegistrationBroker[] {
+                dataTabBroker, graphTabBroker, dashboardTabBroker,
+                mafTabBroker, injectorTabBroker, dynoTabBroker}) broker.clearEcuData();
+        loadEcuParams(new ArrayList<>());
+        loadEcuSwitches(new ArrayList<>());
+        dtcodes = new ArrayList<>();
+        LoggerSearchCatalog.publish(ecuParams, dtcodes);
+        protocolList = new HashMap<>();
+        defVersion = "Unavailable";
+        getSettings().setLoggerConnectionProperties(null);
+        moduleSelectPanel.removeAll();
+        moduleSelectPanel.revalidate();
+        moduleSelectPanel.repaint();
+        RadioButtonMenuItem control = (RadioButtonMenuItem) componentList.get("fileLoggingControl");
+        if (control != null) { control.setSelected(false); control.setEnabled(false); }
+        refreshChannelCatalog();
     }
 
     private void showErrorConfigDialog(Exception e) {
@@ -863,6 +889,7 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
             if (!reload.isCurrent()) return;
             loadExternalDatas(externalDatas);
             addExternalConvertorUpdateListeners(externalDatas);
+            externalChannelsLoaded = true;
         } catch (Exception e) {
             if (reload.isCurrent()) reportError(e);
         }
@@ -1912,11 +1939,12 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
 	}
 
     private Map<Transport, Collection<Module>> getTransportMap() {
-        return protocolList.get(getSettings().getLoggerProtocol());
+        return protocolList.getOrDefault(getSettings().getLoggerProtocol(), java.util.Collections.emptyMap());
     }
 
     private Collection<Module> getModuleList() {
-        return getTransportMap().get(getTransportById(getSettings().getTransportProtocol()));
+        return getTransportMap().getOrDefault(getTransportById(getSettings().getTransportProtocol()),
+                java.util.Collections.emptyList());
     }
 
     public String getDefVersion() {
@@ -2211,6 +2239,7 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
             if (sessionService != null) sessionService.close();
             LoggerParameterFocusService.getInstance().removeListener(
                     parameterFocusListener);
+            if (!controller.isStarted()) definitionAvailability.restorePreferenceAfterStop(getSettings());
             saveSettings();
             backupCurrentProfile();
             LOGGER.info("Logger shutdown successful");
@@ -2320,6 +2349,10 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
     }
 
     private void backupCurrentProfile() {
+        if (!definitionAvailability.canBackupProfile()) {
+            LOGGER.warn("Recovery profile preserved because the Logger definition is unavailable");
+            return;
+        }
         try {
             saveProfileToFile(getCurrentProfile(), new File(HOME + BACKUP_PROFILE));
             if (LOGGER.isDebugEnabled())

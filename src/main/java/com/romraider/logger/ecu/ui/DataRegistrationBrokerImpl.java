@@ -70,6 +70,13 @@ public final class DataRegistrationBrokerImpl implements DataRegistrationBroker 
         registeredLoggerData.clear();
     }
 
+    public synchronized void clearEcuData() {
+        for (LoggerData data : new ArrayList<>(registeredLoggerData)) {
+            if (data.getDataType() != com.romraider.logger.ecu.definition.EcuDataType.EXTERNAL)
+                deregisterLoggerDataFromLogging(data);
+        }
+    }
+
     public synchronized void connecting() {
     }
 

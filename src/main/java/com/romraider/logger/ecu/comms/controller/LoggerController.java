@@ -25,6 +25,7 @@ import com.romraider.logger.ecu.ui.handler.file.FileLoggerControllerSwitchMonito
 
 public interface LoggerController {
 
+    /** Null removes the definition-backed automatic recording switch. */
     void setFileLoggerSwitchMonitor(FileLoggerControllerSwitchMonitor monitor);
 
     void addLogger(String callerId, LoggerData loggerData);

@@ -561,6 +561,7 @@ public final class LoggerDesktopRuntime implements EcuRelatedMessageListener,
 
     private void installFileLoggingSwitch(EcuSwitch ecuSwitch) {
         if (ecuSwitch == null) {
+            controller.setFileLoggerSwitchMonitor(null);
             settings.setFileLoggingControllerSwitchActive(false);
             return;
         }

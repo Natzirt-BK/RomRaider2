@@ -67,8 +67,7 @@ public final class LoggerControllerImpl implements LoggerController {
 
     @Override
     public void setFileLoggerSwitchMonitor(FileLoggerControllerSwitchMonitor monitor) {
-        checkNotNull(monitor);
-        if (LOGGER.isDebugEnabled())
+        if (monitor != null && LOGGER.isDebugEnabled())
             LOGGER.debug("Setting file logger switch monitor: [" + monitor.getEcuSwitch().getId() + "] " + monitor.getEcuSwitch().getName());
         queryManager.setFileLoggerSwitchMonitor(monitor);
     }

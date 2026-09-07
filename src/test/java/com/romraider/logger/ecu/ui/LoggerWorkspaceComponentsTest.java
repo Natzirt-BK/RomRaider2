@@ -245,6 +245,7 @@ public class LoggerWorkspaceComponentsTest {
         public void registerLoggerDataForLogging(LoggerData loggerData) { }
         public void deregisterLoggerDataFromLogging(LoggerData loggerData) { }
         public void clear() { }
+        public void clearEcuData() { }
         public void connecting() { }
         public void readingData() { }
         public void readingDataExternal() { }

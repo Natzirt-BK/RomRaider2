@@ -29,4 +29,7 @@ public interface DataRegistrationBroker extends StatusChangeListener {
 
     void clear();
 
+    /** Removes definition-backed registrations while retaining external sensors. */
+    void clearEcuData();
+
 }

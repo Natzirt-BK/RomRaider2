@@ -87,8 +87,16 @@ public final class QueryManagerImpl implements QueryManager {
     private final Consumer<Runnable> notificationExecutor;
     private final Supplier<LoggerConnection> connectionFactory;
     private final AtomicReference<InitializationAttempt> activeInitialization = new AtomicReference<>();
-    private FileLoggerControllerSwitchMonitor monitor;
-    private EcuQuery fileLoggerQuery;
+    private static final class FileLoggerBinding {
+        final FileLoggerControllerSwitchMonitor monitor;
+        final EcuQuery query;
+        FileLoggerBinding(FileLoggerControllerSwitchMonitor monitor) {
+            this.monitor = monitor;
+            query = new EcuQueryImpl(monitor.getEcuSwitch());
+        }
+    }
+    private volatile FileLoggerBinding fileLoggerBinding;
+    private FileLoggerBinding queriedFileLoggerBinding;
     private Thread queryManagerThread;
     private volatile boolean started;
     private volatile boolean stop;
@@ -143,9 +151,8 @@ public final class QueryManagerImpl implements QueryManager {
 
     @Override
     public void setFileLoggerSwitchMonitor(FileLoggerControllerSwitchMonitor monitor) {
-        checkNotNull(monitor);
-        this.monitor = monitor;
-        fileLoggerQuery = new EcuQueryImpl(monitor.getEcuSwitch());
+        fileLoggerBinding = monitor == null ? null : new FileLoggerBinding(monitor);
+        pollState.setNewQuery(true);
     }
 
     @Override
@@ -405,6 +412,7 @@ public final class QueryManagerImpl implements QueryManager {
             boolean lastPollState = settings.isFastPoll();
             while (!stop) {
                 pollState.setFastPoll(settings.isFastPoll());
+                queriedFileLoggerBinding = null;
                 updateQueryList();
                 if (queryMap.isEmpty()) {
                     if (pollState.isLastQuery() &&
@@ -504,10 +512,10 @@ public final class QueryManagerImpl implements QueryManager {
 
     private void sendEcuQueries(TransmissionManager txManager) {
         final List<EcuQuery> ecuQueries = filterEcuQueries(queryMap.values());
-        if (fileLoggerQuery != null
-                && settings.isFileLoggingControllerSwitchActive())
-            ecuQueries.add(fileLoggerQuery);
-            txManager.sendQueries(ecuQueries, pollState);
+        FileLoggerBinding binding = fileLoggerBinding;
+        queriedFileLoggerBinding = settings.isFileLoggingControllerSwitchActive() ? binding : null;
+        if (queriedFileLoggerBinding != null) ecuQueries.add(queriedFileLoggerBinding.query);
+        txManager.sendQueries(ecuQueries, pollState);
     }
 
     private void sendExternalQueries() {
@@ -526,12 +534,18 @@ public final class QueryManagerImpl implements QueryManager {
     }
 
     private void handleQueryResponse() {
-        if (settings.isFileLoggingControllerSwitchActive())
-            monitor.monitorFileLoggerSwitch(fileLoggerQuery.getResponse());
+        handleFileLoggerSwitchResponse();
         final Response response = buildResponse(queryMap.values());
 
 
         dataUpdater.addResponse(response);
+    }
+
+    void handleFileLoggerSwitchResponse() {
+        FileLoggerBinding sent = queriedFileLoggerBinding;
+        queriedFileLoggerBinding = null;
+        if (sent != null && sent == fileLoggerBinding && settings.isFileLoggingControllerSwitchActive())
+            sent.monitor.monitorFileLoggerSwitch(sent.query.getResponse());
     }
 
     private Response buildResponse(Collection<Query> queries) {

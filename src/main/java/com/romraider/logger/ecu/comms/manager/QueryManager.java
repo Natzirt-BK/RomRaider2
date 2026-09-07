@@ -25,6 +25,7 @@ import com.romraider.logger.ecu.ui.handler.file.FileLoggerControllerSwitchMonito
 
 public interface QueryManager extends Runnable {
 
+    /** Null removes the definition-backed automatic recording switch. */
     void setFileLoggerSwitchMonitor(FileLoggerControllerSwitchMonitor monitor);
 
     void addQuery(String callerId, LoggerData loggerData);
