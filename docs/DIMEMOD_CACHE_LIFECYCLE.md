@@ -383,6 +383,21 @@ discovered dynamic addresses still belong to the connected firmware.
 
 ## Next contract work
 
+The retained `InstallLoggerDefinitionAction` needs an independent worker boundary:
+its background task reads the live protocol/switch settings after the chooser,
+and completion saves the installed path before requesting a fresh catalog token.
+Thus the catalog's token cannot prove that the prepared loader still belongs to
+the initiating owner/configuration. The failure path also restores saved settings
+without first checking whether another action has changed them.
+
+`LoggerDefinitionInstaller.Installation.rollback()` currently uses the shared
+`logger.previous.xml` and does not verify ownership of the current managed file.
+A later installation can replace both that backup and the destination before an
+earlier worker rolls back. The next repair must capture preparation inputs, reject
+obsolete activation before settings writes, and make rollback specific to its own
+installation without overwriting a newer result. These are source-level findings,
+not a tested concurrency fix; use temporary-file regressions before implementation.
+
 Do not simply clear the cache on every reconnect: under the existing dispatcher
 that would increase write-based discovery attempts. Define how cached data is
 bound to observed ECU/module/transport/session identity, how stale or unbound
