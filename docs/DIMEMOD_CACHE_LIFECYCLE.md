@@ -205,6 +205,38 @@ Verification passes: 14 initialization tests, 71 focused logger tests overall,
 the full Ant suite/Linux build, shared checks, and all 284 desktop UI tests.
 No physical connection or ECU command was executed.
 
+## Profile review after initialization changes
+
+The Swing profile path now captures the initialization snapshot before parsing
+the profile. Initialization-triggered restores carry their original snapshot
+instead of adopting a newer one between the caller's check and file loading.
+The production review gate checks it before confirmation and again immediately
+before applying selections and units. A protocol-mismatch dialog can run a nested
+Swing event loop; choosing Load after an ECU/DimeMod update or owner closure no
+longer applies that obsolete profile. Dismissing the dialog also cancels rather
+than implicitly accepting the mismatch.
+
+Three regression tests exercise that gate with the real initialization owner:
+stale/closed state before review, identity/metadata/closure changes inside a real
+nested event loop, and unchanged-state approval/cancellation/same-ID cache reuse.
+They do not instantiate the logger frame or access a device. The owner monitor is
+not held while prompting. This is an entry guard, not rollback of a profile
+application already executing, nor complete cancellation of definition/catalog
+reloads. It does not change the discovery handshake or cache key.
+
+Verification: all 18 Swing initialization tests, the full Ant unit suite/Linux
+build, shared-core checks and all 293 desktop UI tests (40 Compose, 253 JavaFX)
+pass. Native-window tests were enabled on an isolated Xvfb/Openbox display;
+neither desktop UI suite skipped tests. No physical device was accessed.
+
+The next reload boundary is `EcuLogger.loadLoggerParams`: after
+`loadLoggerConfig` returns from a missing/invalid-definition dialog, it still
+loads external rows and republishes the catalog without an originating snapshot.
+Its loader also obtains ECU and DimeMod state separately. A broader fix needs a
+consistent captured input and guarded publication, not just the profile check
+above. The modern runtime instead serializes its definition reload under its
+owner monitor; that does not establish physical cache identity either.
+
 ## Existing cache boundary
 
 The remaining cache is **ECU-ID keyed, not fully ECU/session bound**:

@@ -30,6 +30,12 @@ remain compatible. RAM-tune/uninterpreted spans, cache identity and negotiation
 cleanup remain separate work; neither these checks nor synthetic logging qualify
 vehicle writes.
 
+The Swing profile-review follow-up now rejects obsolete initialization snapshots
+after a protocol-confirmation dialog, including owner closure while that dialog
+is open. See the [lifecycle audit](DIMEMOD_CACHE_LIFECYCLE.md#profile-review-after-initialization-changes).
+Broader catalog-reload cancellation and firmware/session cache identity remain
+open; this guard does not initiate discovery or enable vehicle writes.
+
 The screen-awake checkpoint `e4de5e42` passed both desktop builds and
 [all platform packages](https://github.com/Natzirt-BK/RomRaider2/actions/runs/34069217817).
 Native API acquisition/release passed on Windows and both macOS architectures;

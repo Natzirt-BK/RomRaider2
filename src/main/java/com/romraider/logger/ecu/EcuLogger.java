@@ -554,7 +554,7 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
             // Definition errors can open a nested Swing event loop. Do not
             // restore an old profile if that loop closed or replaced this state.
             if (initialization.isCurrent(state))
-                loadUserProfile(getSettings().getLoggerProfileFilePath());
+                loadUserProfile(getSettings().getLoggerProfileFilePath(), state);
         }
     }
 
@@ -866,11 +866,16 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
     }
 
     public boolean loadUserProfile(String profileFilePath) {
+        return loadUserProfile(profileFilePath, initialization.snapshot());
+    }
+
+    private boolean loadUserProfile(String profileFilePath, SwingLoggerInitialization.Snapshot state) {
+        if (!initialization.isCurrent(state)) return false;
         try {
             UserProfileLoader profileLoader = new UserProfileLoaderImpl();
             String path = isNullOrEmpty(profileFilePath) ? (HOME + BACKUP_PROFILE) : profileFilePath;
             UserProfile profile = profileLoader.loadProfile(path);
-            if(applyUserProfile(profile)) {
+            if(applyUserProfile(profile, state)) {
                 final File profileFile = new File(path);
                 if (profileFile.exists()) {
                     reportMessageInTitleBar(
@@ -907,38 +912,39 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
         }));
     }
 
-    private boolean applyUserProfile(UserProfile profile) {
+    private boolean applyUserProfile(UserProfile profile, SwingLoggerInitialization.Snapshot state) {
         if (profile != null) {
             final String profileProto =
                     profile.getProtocol() == null ? "SSM" : profile.getProtocol();
 
-            if (!profileProto.equalsIgnoreCase(getSettings().getLoggerProtocol())) {
-                Object[] options = {rb.getString("LOAD"), rb.getString("CANCEL")};
-                int answer = IntegratedOptionDialog.show(this,
-                        MessageFormat.format(
-                                rb.getString("PROFILEWRONGPROTO"),
-                                profileProto),
-                                rb.getString("PROTOCOLMISMATCH"),
-                        WARNING_MESSAGE,
-                        options,
-                        options[1]);
-                if (answer == 1) {
-                    final String cancelMsg = "Profile load canceled by user";
-                    LOGGER.info(cancelMsg);
-                    return false;
+            return initialization.applyReviewedUpdate(state, () -> {
+                if (!profileProto.equalsIgnoreCase(getSettings().getLoggerProtocol())) {
+                    Object[] options = {rb.getString("LOAD"), rb.getString("CANCEL")};
+                    int answer = IntegratedOptionDialog.show(this,
+                            MessageFormat.format(
+                                    rb.getString("PROFILEWRONGPROTO"),
+                                    profileProto),
+                                    rb.getString("PROTOCOLMISMATCH"),
+                            WARNING_MESSAGE,
+                            options,
+                            options[1]);
+                    if (answer != 0) {
+                        LOGGER.info("Profile load canceled by user");
+                        return false;
+                    }
                 }
-            }
-
-            applyUserProfileToLiveDataTabParameters(dataTabParamListTableModel, profile);
-            applyUserProfileToLiveDataTabParameters(dataTabSwitchListTableModel, profile);
-            applyUserProfileToLiveDataTabParameters(dataTabExternalListTableModel, profile);
-            applyUserProfileToGraphTabParameters(graphTabParamListTableModel, profile);
-            applyUserProfileToGraphTabParameters(graphTabSwitchListTableModel, profile);
-            applyUserProfileToGraphTabParameters(graphTabExternalListTableModel, profile);
-            applyUserProfileToDashTabParameters(dashboardTabParamListTableModel, profile);
-            applyUserProfileToDashTabParameters(dashboardTabSwitchListTableModel, profile);
-            applyUserProfileToDashTabParameters(dashboardTabExternalListTableModel, profile);
-            return true;
+                return true;
+            }, () -> {
+                applyUserProfileToLiveDataTabParameters(dataTabParamListTableModel, profile);
+                applyUserProfileToLiveDataTabParameters(dataTabSwitchListTableModel, profile);
+                applyUserProfileToLiveDataTabParameters(dataTabExternalListTableModel, profile);
+                applyUserProfileToGraphTabParameters(graphTabParamListTableModel, profile);
+                applyUserProfileToGraphTabParameters(graphTabSwitchListTableModel, profile);
+                applyUserProfileToGraphTabParameters(graphTabExternalListTableModel, profile);
+                applyUserProfileToDashTabParameters(dashboardTabParamListTableModel, profile);
+                applyUserProfileToDashTabParameters(dashboardTabSwitchListTableModel, profile);
+                applyUserProfileToDashTabParameters(dashboardTabExternalListTableModel, profile);
+            });
         }
         return false;
     }

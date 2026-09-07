@@ -7,6 +7,7 @@ import com.romraider.logger.ecu.comms.query.InitializationAttempt;
 import com.romraider.logger.ecu.comms.query.dimemod.DmInit;
 import com.romraider.logger.ecu.comms.query.dimemod.DmInitCallback;
 import java.util.Objects;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import javax.swing.SwingUtilities;
 
@@ -73,7 +74,19 @@ final class SwingLoggerInitialization {
     DmInitCallback dimeCallback() { return dimeCallback; }
     synchronized EcuInit getEcuInit() { return current.ecu; }
     synchronized DmInit getDmInit() { return current.dime; }
+    synchronized Snapshot snapshot() { return current; }
     synchronized boolean isCurrent(Snapshot snapshot) { return !closed && current == snapshot; }
+
+    /**
+     * A confirmation can pump a nested Swing event loop. Recheck ownership after
+     * it returns, without holding the owner monitor across a modal dialog.
+     * This guards entry to an update; it does not roll back an update in flight.
+     */
+    boolean applyReviewedUpdate(Snapshot snapshot, BooleanSupplier confirm, Runnable update) {
+        if (!isCurrent(snapshot) || !confirm.getAsBoolean() || !isCurrent(snapshot)) return false;
+        update.run();
+        return true;
+    }
 
     private synchronized DmInit cacheForConnection() {
         // Returning null here after closure could select legacy discovery writes.

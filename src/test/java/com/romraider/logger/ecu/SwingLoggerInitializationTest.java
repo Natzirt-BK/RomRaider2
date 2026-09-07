@@ -20,6 +20,67 @@ import static org.junit.Assert.*;
 
 /** Production callback owner with controlled EDT delivery; no JFrame, controller or device. */
 public class SwingLoggerInitializationTest {
+    @Test
+    public void reviewedUpdateRejectsSupersededOrClosedStateBeforePrompting() throws Exception {
+        Fixture f = initialized();
+        SwingLoggerInitialization.Snapshot before = f.owner.snapshot();
+        f.owner.ecuCallback().callback(ecu("2222222222"));
+        SwingUtilities.invokeAndWait(() -> {
+            assertFalse(f.owner.applyReviewedUpdate(before,
+                    () -> { fail("Stale review prompted"); return true; },
+                    () -> fail("Stale profile applied")));
+            SwingLoggerInitialization.Snapshot current = f.owner.snapshot();
+            f.owner.close();
+            assertFalse(f.owner.applyReviewedUpdate(current,
+                    () -> { fail("Closed owner prompted"); return true; },
+                    () -> fail("Closed owner applied profile")));
+        });
+    }
+
+    @Test(timeout = 10000)
+    public void nestedReviewCannotApplyAfterIdentityMetadataChangeOrClosure() throws Exception {
+        for (int operation = 0; operation < 3; operation++) {
+            Fixture f = initialized();
+            SwingLoggerInitialization.Snapshot before = f.owner.snapshot();
+            final int change = operation;
+            SwingUtilities.invokeAndWait(() -> {
+                assertFalse(f.owner.applyReviewedUpdate(before, () -> {
+                    // Exercise the nested event dispatch used by a modal dialog,
+                    // without constructing a logger, adapter or visible dialog.
+                    java.awt.SecondaryLoop loop = java.awt.Toolkit.getDefaultToolkit()
+                            .getSystemEventQueue().createSecondaryLoop();
+                    SwingUtilities.invokeLater(() -> {
+                        try {
+                            if (change == 0) f.owner.ecuCallback().callback(ecu("2222222222"));
+                            else if (change == 1) f.owner.dimeCallback().callback(dime(), true);
+                            else f.owner.close();
+                        } finally { loop.exit(); }
+                    });
+                    assertTrue(loop.enter());
+                    return true; // User chose Load, but its owner changed while reviewing.
+                }, () -> fail("Obsolete profile applied after nested review")));
+            });
+        }
+    }
+
+    @Test
+    public void reviewedUpdatePreservesApprovalCancellationAndSameIdCache() throws Exception {
+        Fixture f = initialized();
+        SwingUtilities.invokeAndWait(() -> {
+            SwingLoggerInitialization.Snapshot current = f.owner.snapshot();
+            List<String> applications = new ArrayList<>();
+            assertTrue(f.owner.applyReviewedUpdate(current, () -> {
+                f.owner.ecuCallback().callback(ecu(current.ecu.getEcuId()));
+                return true;
+            }, () -> applications.add("accepted")));
+            assertEquals(java.util.Collections.singletonList("accepted"), applications);
+            assertFalse(f.owner.applyReviewedUpdate(current, () -> false,
+                    () -> fail("Cancelled profile applied")));
+            assertSame(current, f.owner.snapshot());
+            assertSame(current.dime, f.owner.dimeCallback().getDmInit());
+        });
+    }
+
     @Test(timeout = 10000)
     public void expiredAttemptIsRecheckedAfterWaitingForTheOwnerLock() throws Exception {
         for (int operation = 0; operation < 3; operation++) {
