@@ -65,6 +65,7 @@ class GaugeLoggerWindowTest {
         val context = LoggerWorkspaceContext(bus, session, channels, preferences, true)
         val windowRef = AtomicReference<ComposeWindow>()
         val stateRef = AtomicReference<WindowState>()
+        val presentationRef = AtomicReference<GaugeWindowPresentation>()
         val exitRef = AtomicReference<() -> Unit>()
         val failure = AtomicReference<Throwable>()
         val app = thread(name = "Synthetic Compose logger application", isDaemon = true) {
@@ -74,7 +75,7 @@ class GaugeLoggerWindowTest {
                     SideEffect { stateRef.set(state); exitRef.set { exitApplication() } }
                     GaugeLoggerWindow("Synthetic Compose recording · no adapter", state,
                         onClose = { exitApplication() }, awakeFactory = { awake }) { display, status ->
-                        SideEffect { windowRef.set(window) }
+                        SideEffect { windowRef.set(window); presentationRef.set(display) }
                         if (!display.fullScreen) MenuBar { Menu("Fixture") { Item("Close", onClick = { exitApplication() }) } }
                         LoggerWorkspace(context, onGaugeFullScreen = display::requestFullScreen,
                             gaugeFullScreenExitRevision = display.exitRevision, gaugeAwakeStatus = status)
@@ -170,19 +171,28 @@ class GaugeLoggerWindowTest {
                 throw error
             }
             await("exit releases awake") { held.get() == 0 }
-            // Restore maximized placement, not always a floating window.
-            edt { state.placement = WindowPlacement.Maximized }
-            await("maximized native window") { edt { window.placement == WindowPlacement.Maximized } }
-            enter()
-            robot.keyPress(KeyEvent.VK_ESCAPE); robot.keyRelease(KeyEvent.VK_ESCAPE)
-            try {
-                await("Escape restores maximized setup") { has("Full screen") && edt { window.placement == WindowPlacement.Maximized } }
-            } catch (error: Throwable) {
-                val setupVisible = has("Full screen")
-                System.err.println(edt { "Escape setup=$setupVisible placement=${window.placement} state=${state.placement} bounds=${window.bounds} awake=${awake.status} focusOwner=${window.focusOwner}" })
-                throw error
+            // Repeat rapid transitions: asynchronous native state notifications
+            // must not make a later entry forget the maximized setup placement.
+            repeat(5) { transition ->
+                edt { state.placement = WindowPlacement.Maximized }
+                await("maximized native window") { edt { window.placement == WindowPlacement.Maximized } }
+                val beforeEntry = edt { "native=${window.placement} state=${state.placement}" }
+                enter()
+                val savedPlacement = edt {
+                    GaugeWindowPresentation::class.java.getDeclaredField("previousPlacement").apply {
+                        isAccessible = true
+                    }.get(presentationRef.get())
+                }
+                robot.keyPress(KeyEvent.VK_ESCAPE); robot.keyRelease(KeyEvent.VK_ESCAPE)
+                try {
+                    await("Escape restores maximized setup") { has("Full screen") && edt { window.placement == WindowPlacement.Maximized } }
+                } catch (error: Throwable) {
+                    val setupVisible = has("Full screen")
+                    System.err.println(edt { "Escape transition=$transition beforeEntry=[$beforeEntry] saved=$savedPlacement setup=$setupVisible placement=${window.placement} state=${state.placement} bounds=${window.bounds} awake=${awake.status} focusOwner=${window.focusOwner}" })
+                    throw error
+                }
+                await("Escape releases awake") { held.get() == 0 }
             }
-            await("Escape releases awake") { held.get() == 0 }
             enter()
             // Native placement change bypasses the workspace callback, like a WM exit.
             edt { window.placement = WindowPlacement.Floating }
