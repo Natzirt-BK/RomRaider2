@@ -17,8 +17,9 @@ that times out. Desktop/handheld searchable style galleries and per-channel
 persistence are now implemented; see [their contract](DESKTOP_GAUGE_STYLES.md).
 [Independent slots and fitted 1–6 layouts](DESKTOP_GAUGE_DISPLAY.md) are now implemented
 on desktop/handheld, with native-window full-screen menus. The Compose-owned window
-now has direct native lifecycle checks; the remaining gauge work is fresh package
-qualification and physical platform acceptance. [Screen-awake requests](DESKTOP_DISPLAY_AWAKE.md) now have window-scoped
+now has direct native lifecycle checks. The [current source/package checkpoint](GAUGE_PACKAGE_QUALIFICATION.md)
+passed both desktop builds and all platform packages; physical platform acceptance
+remains open. [Screen-awake requests](DESKTOP_DISPLAY_AWAKE.md) now have window-scoped
 ownership, OS backends and an unavailable indicator; service/physical platform
 acceptance remains explicit. The legacy Swing bridge now has a retained,
 borderless full-screen host; its native input/lifecycle checks cover updates,

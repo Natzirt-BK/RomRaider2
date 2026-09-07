@@ -28,5 +28,6 @@ status. Historical records are not a list of available applications.
 
 - [Gauge/editor and companion audit](GAUGE_EDITOR_AUDIT_2026-09-06.md)
 - [Window placement audit](WINDOW_PLACEMENT_AUDIT.md)
+- [Gauge source/package verification](GAUGE_PACKAGE_QUALIFICATION.md)
 - [DimeMod cache and callback lifecycle](DIMEMOD_CACHE_LIFECYCLE.md)
 - [Open-source provenance](OPEN_SOURCE_PROVENANCE.md)
