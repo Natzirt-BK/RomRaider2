@@ -694,7 +694,9 @@ public final class MainActivity extends Activity {
         if (loggerProtocol == PortableLoggerProtocol.MUT2) {
             result.append("\nMUT2_GENERIC confirms a response, not a calibration ID. "
                     + "Use definitions verified for your vehicle. All selected PIDs "
-                    + "are polled each cycle; fewer channels means faster updates.");
+                    + "are polled each cycle; fewer channels means faster updates. "
+                    + "Start performs a five-baud engine handshake and grounds diagnostic pin 1 "
+                    + "while connected. Stop releases it; no ECU memory writes are performed.");
         }
         if (definition != null) {
             result.append("\nDefinition: ").append(loggerDefinitionName)
@@ -814,8 +816,8 @@ public final class MainActivity extends Activity {
         usbState = "Preparing OpenPort 2.0...";
         refreshUsbStatus();
         workerExecutor.execute(() -> {
-            if (previous != null) previous.close();
             try {
+                if (previous != null) previous.close();
                 UsbManager manager = (UsbManager) getSystemService(USB_SERVICE);
                 OpenPortUsbTransport prepared = OpenPortUsbTransport.open(
                         manager, device);

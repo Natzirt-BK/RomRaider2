@@ -68,6 +68,16 @@ adapter support is not included; use OpenPort 2.0 for connected logging.
 
 ## EVO VIII/IX MUT-II with OpenPort 2.0
 
+The **1.1.4 test build** adds slow five-baud initialization before the first
+engine request. It grounds diagnostic pin 1 during the MUT-II session and
+releases it on Stop or failed startup; no flash voltage or ECU memory write is
+used. This change is not in the published 1.1.3 APK. Its automated tests pass,
+but successful communication with the owner's Evo is still unconfirmed.
+Allow several seconds for initialization. If it fails, preserve the complete
+error text: it now distinguishes startup operations from the subsequent PID
+request. If pin release cannot be confirmed, stop and disconnect the adapter
+when safe. See [the investigation](EVO_MUT2_CONNECTION_DIAGNOSIS.md).
+
 1. Connect the OpenPort through a **USB host/OTG data** adapter. A charging-only
    adapter is insufficient. Grant Android USB permission and use **Prepare
    OpenPort** to check adapter access; this does not start ECU logging.
@@ -106,8 +116,10 @@ controls while parked. See [the service contract and test limits](ANDROID_BACKGR
 Real OpenPort/background behavior still needs supervised phone/vehicle acceptance;
 the automated service tests use an isolated emulator and synthetic transport.
 
-No pin-voltage, fault-clear, reset, flashing, or ECU memory-write operation is
-exposed. Unsupported logcfg options are rejected, not executed. The importer
+No arbitrary pin-voltage, fault-clear, reset, flashing, or ECU memory-write
+operation is exposed. The 1.1.4 MUT-II startup uses only the fixed diagnostic
+pin 1 ground/release described above. Unsupported logcfg options are rejected,
+not executed. The importer
 supports `paramname`, one-byte `paramid`, arithmetic `scalingrpn` (`x`, numeric
 constants, `+ - * /`) and validated `priority`. Priority is informational here:
 all selected PIDs are polled each cycle. Unspecified units are labeled `raw` or

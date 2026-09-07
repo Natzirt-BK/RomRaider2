@@ -15,6 +15,8 @@ import android.hardware.usb.UsbManager;
 import com.romraider.portable.openport.OpenPortWireProtocol;
 import com.romraider.portable.openport.OpenPortKLineFrameDecoder;
 import com.romraider.portable.openport.OpenPortControlResponse;
+import com.romraider.portable.openport.OpenPortMut2Startup;
+import com.romraider.portable.openport.OpenPortStartupResponse;
 import com.romraider.portable.logger.ReadOnlyLoggerTransport;
 import com.romraider.portable.logger.PortableLoggerProtocol;
 import com.romraider.portable.logger.ReadOnlyMut2Protocol;
@@ -35,10 +37,7 @@ public final class OpenPortUsbTransport implements Closeable,
     private static final int MAX_VEHICLE_RESPONSE_BYTES = 16 * 1024;
 
     private final UsbDevice device;
-    private final UsbDeviceConnection connection;
-    private final UsbInterface usbInterface;
-    private final UsbEndpoint input;
-    private final UsbEndpoint output;
+    private final UsbIo io;
     private final String firmwareVersion;
     private final Integer batteryMillivolts;
     private final OpenPortKLineFrameDecoder kLineDecoder =
@@ -47,18 +46,47 @@ public final class OpenPortUsbTransport implements Closeable,
     private PortableLoggerProtocol activeProtocol;
     private java.util.function.BooleanSupplier cancelled = () -> false;
     private boolean closed;
+    private final OpenPortMut2Startup mut2Startup = new OpenPortMut2Startup();
+
+    /** Small I/O boundary so the actual transport can be tested without Android USB. */
+    interface UsbIo {
+        int read(byte[] buffer, int timeoutMs);
+        int write(byte[] buffer, int timeoutMs);
+        int packetSize();
+        long elapsedRealtime();
+        void close();
+    }
+
+    OpenPortUsbTransport(UsbIo io) {
+        this(null, io, "offline-test", null);
+    }
+
+    private OpenPortUsbTransport(UsbDevice device, UsbIo io,
+            String firmwareVersion, Integer batteryMillivolts) {
+        this.device = device;
+        this.io = io;
+        this.firmwareVersion = firmwareVersion;
+        this.batteryMillivolts = batteryMillivolts;
+    }
 
     private OpenPortUsbTransport(UsbDevice device,
             UsbDeviceConnection connection, UsbInterface usbInterface,
             UsbEndpoint input, UsbEndpoint output, String firmwareVersion,
             Integer batteryMillivolts) {
-        this.device = device;
-        this.connection = connection;
-        this.usbInterface = usbInterface;
-        this.input = input;
-        this.output = output;
-        this.firmwareVersion = firmwareVersion;
-        this.batteryMillivolts = batteryMillivolts;
+        this(device, new UsbIo() {
+            public int read(byte[] buffer, int timeout) {
+                return connection.bulkTransfer(input, buffer, buffer.length, timeout);
+            }
+            public int write(byte[] buffer, int timeout) {
+                return connection.bulkTransfer(output, buffer, buffer.length, timeout);
+            }
+            public int packetSize() { return input.getMaxPacketSize(); }
+            public long elapsedRealtime() { return android.os.SystemClock.elapsedRealtime(); }
+            public void close() {
+                try { connection.releaseInterface(usbInterface); }
+                finally { connection.close(); }
+            }
+        }, firmwareVersion, batteryMillivolts);
     }
 
     public static boolean isOpenPort(UsbDevice device) {
@@ -127,7 +155,7 @@ public final class OpenPortUsbTransport implements Closeable,
     }
 
     public boolean matches(UsbDevice candidate) {
-        return candidate != null
+        return device != null && candidate != null
                 && device.getDeviceId() == candidate.getDeviceId();
     }
 
@@ -151,9 +179,13 @@ public final class OpenPortUsbTransport implements Closeable,
             checkCancelled();
             exchange(OpenPortWireProtocol.kLinePassFilterRequest(),
                     OpenPortControlResponse.forKLineFilter(protocol));
+            if (protocol == PortableLoggerProtocol.MUT2) {
+                mut2Startup.start(this::exchangeStartup, cancelled);
+            }
             activeProtocol = protocol;
-        } catch (IOException ex) {
-            closeReadOnlyKLine();
+        } catch (IOException | RuntimeException ex) {
+            try { closeReadOnlyKLine(); }
+            catch (RuntimeException cleanup) { ex.addSuppressed(cleanup); }
             throw ex;
         }
     }
@@ -200,9 +232,12 @@ public final class OpenPortUsbTransport implements Closeable,
     }
 
     public synchronized void closeReadOnlyKLine() {
-        if (closed || !kLineOpen) return;
+        if (closed) return;
+        IOException pinFailure = null;
+        try { mut2Startup.release(this::exchangeStartup); }
+        catch (IOException ex) { pinFailure = ex; }
         try {
-            exchange(OpenPortWireProtocol.closeSsmKLineRequest(), "aro\r\n", "channel close");
+            if (kLineOpen) exchange(OpenPortWireProtocol.closeSsmKLineRequest(), "aro\r\n", "channel close");
         } catch (IOException ignored) {
             // A timeout or detach is a normal channel-close path.
         } finally {
@@ -210,21 +245,25 @@ public final class OpenPortUsbTransport implements Closeable,
             activeProtocol = null;
             kLineDecoder.reset();
         }
+        if (pinFailure != null) throw new IllegalStateException(
+                "MUT-II diagnostic pin release was not confirmed. Disconnect the OpenPort when safe.", pinFailure);
     }
 
     @Override
     public synchronized void close() {
         if (closed) return;
+        RuntimeException cleanupFailure = null;
         try {
-            closeReadOnlyKLine();
+            try { closeReadOnlyKLine(); }
+            catch (RuntimeException ex) { cleanupFailure = ex; }
             exchange(OpenPortWireProtocol.closeRequest(), "aro\r\n", "adapter close");
         } catch (IOException ignored) {
             // Detach and timeout are normal close paths.
         } finally {
             closed = true;
-            try { connection.releaseInterface(usbInterface); }
-            finally { connection.close(); }
+            io.close();
         }
+        if (cleanupFailure != null) throw cleanupFailure;
     }
 
     private byte[] exchange(byte[] request, String expected, String operation)
@@ -237,14 +276,28 @@ public final class OpenPortUsbTransport implements Closeable,
         ensureOpen();
         write(request, CONTROL_TIMEOUT_MS);
 
-        long deadline = android.os.SystemClock.elapsedRealtime()
+        long deadline = io.elapsedRealtime()
                 + CONTROL_TIMEOUT_MS;
-        byte[] chunk = new byte[Math.max(64, input.getMaxPacketSize())];
-        while (android.os.SystemClock.elapsedRealtime() < deadline) {
-            int count = connection.bulkTransfer(input, chunk, chunk.length,
-                    READ_SLICE_MS);
+        byte[] chunk = new byte[Math.max(64, io.packetSize())];
+        while (io.elapsedRealtime() < deadline) {
+            int count = io.read(chunk, READ_SLICE_MS);
             if (count <= 0) continue;
             if (reply.accept(chunk, count)) return reply.bytes();
+        }
+        throw new IOException(reply.timeoutMessage());
+    }
+
+    private void exchangeStartup(byte[] request, OpenPortStartupResponse reply,
+            int timeoutMs, boolean cancellable) throws IOException {
+        ensureOpen();
+        if (cancellable) checkCancelled();
+        write(request, CONTROL_TIMEOUT_MS);
+        long deadline = io.elapsedRealtime() + timeoutMs;
+        byte[] chunk = new byte[Math.max(64, io.packetSize())];
+        while (io.elapsedRealtime() < deadline) {
+            if (cancellable) checkCancelled();
+            int count = io.read(chunk, READ_SLICE_MS);
+            if (count > 0 && reply.accept(chunk, count)) return;
         }
         throw new IOException(reply.timeoutMessage());
     }
@@ -261,14 +314,13 @@ public final class OpenPortUsbTransport implements Closeable,
         write(OpenPortWireProtocol.transmitSsmKLineRequest(frame),
                 CONTROL_TIMEOUT_MS);
 
-        long deadline = android.os.SystemClock.elapsedRealtime()
+        long deadline = io.elapsedRealtime()
                 + VEHICLE_TIMEOUT_MS;
         int receivedBytes = 0;
-        byte[] chunk = new byte[Math.max(64, input.getMaxPacketSize())];
-        while (android.os.SystemClock.elapsedRealtime() < deadline) {
+        byte[] chunk = new byte[Math.max(64, io.packetSize())];
+        while (io.elapsedRealtime() < deadline) {
             checkCancelled();
-            int count = connection.bulkTransfer(input, chunk, chunk.length,
-                    READ_SLICE_MS);
+            int count = io.read(chunk, READ_SLICE_MS);
             if (count <= 0) continue;
             receivedBytes += count;
             if (receivedBytes > MAX_VEHICLE_RESPONSE_BYTES) {
@@ -289,10 +341,9 @@ public final class OpenPortUsbTransport implements Closeable,
     }
 
     private void drainInput() {
-        byte[] chunk = new byte[Math.max(64, input.getMaxPacketSize())];
+        byte[] chunk = new byte[Math.max(64, io.packetSize())];
         for (int attempt = 0; attempt < 16; attempt++) {
-            int count = connection.bulkTransfer(input, chunk, chunk.length,
-                    DRAIN_SLICE_MS);
+            int count = io.read(chunk, DRAIN_SLICE_MS);
             if (count <= 0) return;
         }
     }
@@ -302,8 +353,7 @@ public final class OpenPortUsbTransport implements Closeable,
     }
 
     private void write(byte[] request, int timeoutMs) throws IOException {
-        int written = connection.bulkTransfer(output, request, request.length,
-                timeoutMs);
+        int written = io.write(request, timeoutMs);
         if (written != request.length) {
             throw new IOException("OpenPort USB write failed.");
         }

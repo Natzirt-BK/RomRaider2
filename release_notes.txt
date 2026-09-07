@@ -1,9 +1,18 @@
-RomRaider2 ECU Studio 1.1.3
+RomRaider2 ECU Studio 1.1.4
 ================================
 
-Development source for the next patch. Public downloads remain 1.1.2 until a
+Development source for the next patch. Public downloads remain 1.1.3 until a
 separately verified release is published. For published packages:
 https://github.com/Natzirt-BK/RomRaider2/releases
+
+What changed for 1.1.4
+---------------------
+
+- Android MUT-II now performs a transaction-matched five-baud engine handshake
+  before PID polling, with diagnostic pin 1 ground/release and failure cleanup.
+  Offline tests do not establish parked Evo hardware acceptance.
+- JavaFX and Compose distinguish individual DTC monitor gates from whole-code
+  disable controls, including a warning that other monitor paths may report it.
 
 What changed for 1.1.3
 ---------------------

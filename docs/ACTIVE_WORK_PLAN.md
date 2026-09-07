@@ -4,7 +4,14 @@ Owner priority: finish the gauge work first and show actual application renders,
 then continue the remaining automated work. Physical in-car tests are deferred
 until the owner is available; never initiate hardware polling to fill that gap.
 
-Current owner override: implement verified EVO IX `88780008` DTC coverage before
+Latest owner override: repair the Android Evo MUT-II connection timeout. The
+1.1.4 development build adds OpenPort five-baud engine initialization, matched
+startup replies and diagnostic-pin cleanup. Android unit tests, shared-core
+checks, lint and both APK builds pass; actual Evo acceptance remains pending.
+See [startup evidence and test limits](EVO_MUT2_CONNECTION_DIAGNOSIS.md).
+Public downloads remain 1.1.3 RC1 until a separately verified publication.
+
+Previous owner override: implement verified EVO IX `88780008` DTC coverage before
 resuming the installer audit. Binary tracing and the definition implementation
 gates are recorded in the Evo-Definitions workspace's
 `analysis/DTC_COVERAGE_PLAN.md`. Do not claim DTC coverage from the older table
