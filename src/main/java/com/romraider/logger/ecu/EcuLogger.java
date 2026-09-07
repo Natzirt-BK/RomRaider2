@@ -548,9 +548,9 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
         dmLabel.setText(!state.dimeKnown ? "" : dime == null
                 ? "DimeMod: Not Present" : "DimeMod v" + dime.getDimeModVersion());
         if (renderedInitializationRevision != state.channelRevision && initialization.isCurrent(state)) {
-            renderedInitializationRevision = state.channelRevision;
             loadResult = String.format("Loading logger config for %s ID: %s, ", target, ecuId);
-            loadLoggerParams();
+            if (!loadLoggerParams(null, state)) return;
+            renderedInitializationRevision = state.channelRevision;
             // Definition errors can open a nested Swing event loop. Do not
             // restore an old profile if that loop closed or replaced this state.
             if (initialization.isCurrent(state))
@@ -575,10 +575,17 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
      * A null loader keeps the normal startup and reload path.
      */
     public void loadLoggerParams(EcuDataLoader preloadedDefinition) {
-        loadLoggerConfig(preloadedDefinition);
-        loadFromExternalDataSources();
-        refreshChannelCatalog();
-        LoggerParameterFocusService.getInstance().retryPending();
+        loadLoggerParams(preloadedDefinition, initialization.snapshot());
+    }
+
+    private boolean loadLoggerParams(EcuDataLoader preloadedDefinition,
+            SwingLoggerInitialization.Snapshot state) {
+        SwingLoggerInitialization.Reload reload = initialization.beginReload(state);
+        return reload != null && reload.run(
+                () -> loadLoggerConfig(preloadedDefinition, reload),
+                () -> loadFromExternalDataSources(reload),
+                this::refreshChannelCatalog,
+                () -> LoggerParameterFocusService.getInstance().retryPending());
     }
 
     private void installChannelCatalogListeners() {
@@ -588,7 +595,7 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
     }
 
     private void scheduleChannelCatalogRefresh() {
-        if (channelRefreshPending) return;
+        if (channelRefreshPending || !initialization.isOpen()) return;
         channelRefreshPending = true;
         invokeLater(new Runnable() {
             public void run() {
@@ -599,7 +606,7 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
     }
 
     private void refreshChannelCatalog() {
-        if (channelService == null) return;
+        if (channelService == null || !initialization.isOpen()) return;
         List<LoggerChannel> channels = new ArrayList<LoggerChannel>();
         addChannelGroup(channels, dataTabParamListTableModel,
                 LoggerChannelKind.PARAMETER);
@@ -742,28 +749,29 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
         }
     }
 
-    private void loadLoggerConfig(EcuDataLoader preloadedDefinition) {
+    private void loadLoggerConfig(EcuDataLoader preloadedDefinition,
+            SwingLoggerInitialization.Reload reload) {
         String loggerConfigFilePath = getSettings().getLoggerDefinitionFilePath();
-        if (isNullOrEmpty(loggerConfigFilePath))
-        	{
-        		showMissingConfigDialog();
-				if (isNullOrEmpty(getSettings()
-						.getLoggerDefinitionFilePath())) {
-					getSettings().setLogExternalsOnly(true);
-				}
-        	}
+        String protocol = getSettings().getLoggerProtocol();
+        String controlSwitch = getSettings().getFileLoggingControllerSwitchId();
+        if (isNullOrEmpty(loggerConfigFilePath)) {
+            showMissingConfigDialog(reload);
+            if (reload.isCurrent() && isNullOrEmpty(getSettings().getLoggerDefinitionFilePath())) {
+                getSettings().setLogExternalsOnly(true);
+            }
+        }
         else {
             try {
                 EcuDataLoader dataLoader = preloadedDefinition;
                 if (dataLoader == null) {
                     dataLoader = new EcuDataLoaderImpl();
                     dataLoader.loadConfigFromXml(loggerConfigFilePath,
-                            getSettings().getLoggerProtocol(),
-                            getSettings().getFileLoggingControllerSwitchId(),
-                            getEcuInit());
+                            protocol, controlSwitch, reload.state.ecu);
                 }
-                List<EcuParameter> ecuParams = dataLoader.getEcuParameters();
-                updateDmEcuParams(ecuParams);
+                // Never combine parsed identity A with a later metadata cache B,
+                // or append dynamic channels into a reusable preloaded definition.
+                List<EcuParameter> ecuParams = reload.parameters(dataLoader.getEcuParameters());
+                if (!reload.isCurrent()) return;
                 addConvertorUpdateListeners(ecuParams);
                 loadEcuParams(ecuParams);
                 loadEcuSwitches(dataLoader.getEcuSwitches());
@@ -797,27 +805,20 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
                 loadResult = String.format(
                         "%sloaded protocol %s: %d parameters, %d switches from def version %s. ",
                         loadResult,
-                        getSettings().getLoggerProtocol(),
+                        protocol,
                         ecuParams.size(),
                         dataLoader.getEcuSwitches().size(),
                         defVersion);
                 LOGGER.info(loadResult);
             } catch (ConfigurationException cfe) {
+                if (!reload.isCurrent()) return;
                 reportError(cfe);
-                showErrorConfigDialog(cfe);
+                if (reload.isCurrent()) showErrorConfigDialog(cfe);
             }
             catch (Exception e) {
-                reportError(e);
+                if (reload.isCurrent()) reportError(e);
             }
         }
-    }
-
-    private void updateDmEcuParams(List<EcuParameter> ecuParams) {
-        final DmInit dmInit = getDmInit();
-        if (dmInit == null) {
-            return;
-        }
-        ecuParams.addAll(dmInit.getEcuParams());
     }
 
     private void showErrorConfigDialog(Exception e) {
@@ -830,7 +831,7 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
                 options[0]);
     }
 
-    private void showMissingConfigDialog() {
+    private void showMissingConfigDialog(SwingLoggerInitialization.Reload reload) {
         Object[] options = {rb.getString("OPEN_LOGGER_DEFS"),
                 rb.getString("CONTINUE_EXTERNALS")};
         int answer = IntegratedOptionDialog.show(this,
@@ -839,6 +840,7 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
                 WARNING_MESSAGE,
                 options,
                 options[0]);
+        if (!reload.isCurrent()) return;
         if (answer == 0) {
             new InstallLoggerDefinitionAction(this).actionPerformed(null);
         }
@@ -855,13 +857,14 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
         }
     }
 
-    private void loadFromExternalDataSources() {
+    private void loadFromExternalDataSources(SwingLoggerInitialization.Reload reload) {
         try {
-            List<ExternalData> externalDatas = getExternalData(externalDataSources);
+            List<ExternalData> externalDatas = getExternalData(externalDataSources, reload);
+            if (!reload.isCurrent()) return;
             loadExternalDatas(externalDatas);
             addExternalConvertorUpdateListeners(externalDatas);
         } catch (Exception e) {
-            reportError(e);
+            if (reload.isCurrent()) reportError(e);
         }
     }
 
@@ -1051,15 +1054,18 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
         dynoTab.setEcuSwitches(ecuSwitches);
     }
 
-    private List<ExternalData> getExternalData(List<ExternalDataSource> externalDataSources) {
+    private List<ExternalData> getExternalData(List<ExternalDataSource> externalDataSources,
+            SwingLoggerInitialization.Reload reload) {
         List<ExternalData> externalDatas = new ArrayList<ExternalData>();
         for (ExternalDataSource dataSource : externalDataSources) {
+            if (!reload.isCurrent()) return externalDatas;
             try {
                 List<? extends ExternalDataItem> dataItems = dataSource.getDataItems();
                 for (ExternalDataItem item : dataItems) {
                     externalDatas.add(new ExternalDataImpl(item, dataSource));
                 }
             } catch (Exception e) {
+                if (!reload.isCurrent()) return externalDatas;
                 reportError(MessageFormat.format(
                         rb.getString("LOADPLUGINERR"),
                         dataSource.getName(),

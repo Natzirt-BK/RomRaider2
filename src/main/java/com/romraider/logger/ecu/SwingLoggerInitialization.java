@@ -6,6 +6,9 @@ import com.romraider.logger.ecu.comms.query.EcuInitCallback;
 import com.romraider.logger.ecu.comms.query.InitializationAttempt;
 import com.romraider.logger.ecu.comms.query.dimemod.DmInit;
 import com.romraider.logger.ecu.comms.query.dimemod.DmInitCallback;
+import com.romraider.logger.ecu.definition.EcuParameter;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
@@ -36,6 +39,7 @@ final class SwingLoggerInitialization {
     private final Consumer<Snapshot> statePublisher;
     private final Consumer<Snapshot> listener;
     private Snapshot current = new Snapshot(null, null, false, 0);
+    private Reload currentReload;
     private boolean closed;
     private final EcuInitCallback ecuCallback = new EcuInitCallback() {
         public void callback(EcuInit next) { acceptEcu(next); }
@@ -75,7 +79,42 @@ final class SwingLoggerInitialization {
     synchronized EcuInit getEcuInit() { return current.ecu; }
     synchronized DmInit getDmInit() { return current.dime; }
     synchronized Snapshot snapshot() { return current; }
+    synchronized boolean isOpen() { return !closed; }
     synchronized boolean isCurrent(Snapshot snapshot) { return !closed && current == snapshot; }
+
+    /** Captures both initialization inputs and supersedes an earlier catalog reload. */
+    synchronized Reload beginReload(Snapshot snapshot) {
+        if (!isCurrent(snapshot)) return null;
+        currentReload = new Reload(snapshot);
+        return currentReload;
+    }
+
+    final class Reload {
+        final Snapshot state;
+
+        private Reload(Snapshot state) { this.state = state; }
+
+        List<EcuParameter> parameters(List<EcuParameter> definitionParameters) {
+            List<EcuParameter> result = new ArrayList<>(definitionParameters);
+            if (state.dime != null) result.addAll(state.dime.getEcuParams());
+            return result;
+        }
+
+        boolean isCurrent() {
+            synchronized (SwingLoggerInitialization.this) {
+                return currentReload == this && SwingLoggerInitialization.this.isCurrent(state);
+            }
+        }
+
+        /** Stages can pump nested event loops. Never hold the owner lock across them. */
+        boolean run(Runnable... stages) {
+            for (Runnable stage : stages) {
+                if (!isCurrent()) return false;
+                stage.run();
+            }
+            return isCurrent();
+        }
+    }
 
     /**
      * A confirmation can pump a nested Swing event loop. Recheck ownership after
@@ -83,7 +122,15 @@ final class SwingLoggerInitialization {
      * This guards entry to an update; it does not roll back an update in flight.
      */
     boolean applyReviewedUpdate(Snapshot snapshot, BooleanSupplier confirm, Runnable update) {
-        if (!isCurrent(snapshot) || !confirm.getAsBoolean() || !isCurrent(snapshot)) return false;
+        final Reload reviewedCatalog;
+        synchronized (this) {
+            if (!isCurrent(snapshot)) return false;
+            reviewedCatalog = currentReload;
+        }
+        if (!confirm.getAsBoolean()) return false;
+        synchronized (this) {
+            if (!isCurrent(snapshot) || currentReload != reviewedCatalog) return false;
+        }
         update.run();
         return true;
     }

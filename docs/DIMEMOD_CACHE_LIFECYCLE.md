@@ -229,13 +229,52 @@ build, shared-core checks and all 293 desktop UI tests (40 Compose, 253 JavaFX)
 pass. Native-window tests were enabled on an isolated Xvfb/Openbox display;
 neither desktop UI suite skipped tests. No physical device was accessed.
 
-The next reload boundary is `EcuLogger.loadLoggerParams`: after
-`loadLoggerConfig` returns from a missing/invalid-definition dialog, it still
-loads external rows and republishes the catalog without an originating snapshot.
-Its loader also obtains ECU and DimeMod state separately. A broader fix needs a
-consistent captured input and guarded publication, not just the profile check
-above. The modern runtime instead serializes its definition reload under its
-owner monitor; that does not establish physical cache identity either.
+## Catalog reload snapshots and cancellation
+
+`EcuLogger.loadLoggerParams` now carries an owner-scoped reload token through its
+definition, external-row, catalog and pending-focus stages. A newer reload
+supersedes the previous token even if initialization has not changed. ECU or
+DimeMod updates and owner closure invalidate it as well. Each stage checks the
+token before entry, and the pipeline checks again after its final stage; obsolete
+work is not recorded as the rendered initialization revision.
+
+Normal definition parsing uses the captured snapshot's ECU identity and appends
+only that snapshot's DimeMod channels. The merged list is a fresh copy, so repeated
+use does not append dynamic channels into a preloaded definition's own list. A
+check after parsing prevents stale preparation from starting model updates.
+Missing-definition dialog continuations check their token before scheduling an
+installation, changing external-only settings or continuing the reload. Stale
+errors do not open another definition-error dialog. Queued catalog refreshes
+reject a closed owner. External-source preparation checks before each source,
+before reporting an error and before installing the prepared rows, so a nested
+plugin-error dialog cannot resume into stale row installation.
+
+Profile confirmation also captures the current catalog token. A nested reload
+with the same initialization snapshot cancels the pending profile application;
+an unchanged catalog still permits explicit approval.
+
+Five added tests exercise the production reload/review gates and parameter
+merger: nested identity/metadata/closure/reload replacement, ordered current
+stages, rejection of stale starts without cancelling newer work, final-stage
+invalidation, paired retained inputs, unchanged preloaded lists, and same-state
+catalog replacement during profile review. They use synthetic metadata and a
+real nested Swing event loop without constructing the logger or accessing an
+adapter. All 23 initialization tests and the full Ant suite/Linux build pass.
+The rebuilt core also passes shared-core checks and all 293 desktop UI tests
+(40 Compose, 253 JavaFX), with native-window checks enabled and no UI test skips.
+Both GitHub desktop builds for the preceding profile-review checkpoint
+`57483b29` passed; those hosted results do not cover this later reload change.
+
+This cancels subsequent stages; it is not transactional rollback of a stage
+already executing. Preloaded definitions are still parsed by the installer's
+separate worker, whose origin/configuration lifetime needs its own review. The
+retained old catalog after a definition-load failure also needs explicit
+availability/registration handling: `ParameterListTableModel.clear()` clears its
+registration broker, but a parser failure never reaches `loadEcuParams` and its
+model-clearing step. Neither captured Java object references nor
+the existing ECU-ID cache key prove physical firmware identity. The modern
+runtime serializes its definition reload under its owner monitor, which does not
+establish that identity either. No discovery command or handshake is changed.
 
 ## Existing cache boundary
 
@@ -275,7 +314,8 @@ or a separately authorized, accurately labelled flow.
 
 Published-channel wire spans are now checked by the linked metadata follow-up.
 RAM-tune/uninterpreted address spans, cache/session identity,
-in-flight UI reload cancellation, and negotiation cleanup remain open. See the
+installer-worker lifetime, failed-definition catalog invalidation, and negotiation
+cleanup remain open. See the
 [metadata and discovery audit](DIMEMOD_CHANNEL_AUDIT.md) for completed bounds
 checks and their limits. No production ECU-writing or live-tuning capability is
 qualified by this lifecycle repair.

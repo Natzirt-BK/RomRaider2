@@ -20,6 +20,105 @@ import static org.junit.Assert.*;
 
 /** Production callback owner with controlled EDT delivery; no JFrame, controller or device. */
 public class SwingLoggerInitializationTest {
+    @Test(timeout = 10000)
+    public void nestedReloadCancelsRemainingStagesForNewIdentityMetadataOwnerOrReload() throws Exception {
+        for (int operation = 0; operation < 4; operation++) {
+            Fixture f = initialized();
+            SwingLoggerInitialization.Reload reload = f.owner.beginReload(f.owner.snapshot());
+            List<String> stages = new ArrayList<>();
+            final int change = operation;
+            SwingUtilities.invokeAndWait(() -> {
+                assertFalse(reload.run(() -> {
+                    stages.add("definition dialog");
+                    java.awt.SecondaryLoop loop = java.awt.Toolkit.getDefaultToolkit()
+                            .getSystemEventQueue().createSecondaryLoop();
+                    AtomicReference<Throwable> nestedFailure = new AtomicReference<>();
+                    SwingUtilities.invokeLater(() -> {
+                        try {
+                            if (change == 0) f.owner.ecuCallback().callback(ecu("2222222222"));
+                            else if (change == 1) f.owner.dimeCallback().callback(dime(), true);
+                            else if (change == 2) f.owner.close();
+                            else {
+                                SwingLoggerInitialization.Reload replacement = f.owner.beginReload(f.owner.snapshot());
+                                assertTrue(replacement.run(() -> stages.add("new catalog")));
+                            }
+                        } catch (Throwable failure) { nestedFailure.set(failure); }
+                        finally { loop.exit(); }
+                    });
+                    assertTrue(loop.enter());
+                    if (nestedFailure.get() != null) throw new AssertionError(nestedFailure.get());
+                }, () -> fail("Stale external rows loaded"),
+                        () -> fail("Stale catalog published"),
+                        () -> fail("Stale focus request applied")));
+                assertEquals(change == 3 ? java.util.Arrays.asList("definition dialog", "new catalog")
+                        : java.util.Collections.singletonList("definition dialog"), stages);
+            });
+        }
+    }
+
+    @Test
+    public void reloadKeepsPairedInputsAndDoesNotModifyPreloadedParameters() throws Exception {
+        Fixture f = initialized();
+        SwingLoggerInitialization.Snapshot state = f.owner.snapshot();
+        state.dime.updateRuntimeData(0, 0, new int[4], new int[4]);
+        assertFalse(state.dime.getEcuParams().isEmpty());
+        SwingLoggerInitialization.Reload reload = f.owner.beginReload(state);
+        List<com.romraider.logger.ecu.definition.EcuParameter> original =
+                java.util.Collections.singletonList(state.dime.getEcuParams().iterator().next());
+        List<com.romraider.logger.ecu.definition.EcuParameter> prepared = reload.parameters(original);
+        assertEquals(1, original.size());
+        assertEquals(1 + state.dime.getEcuParams().size(), prepared.size());
+        assertNotSame(original, prepared);
+        assertEquals(prepared.size(), reload.parameters(original).size());
+        f.owner.ecuCallback().callback(ecu("2222222222"));
+        assertSame(state.ecu, reload.state.ecu);
+        assertSame(state.dime, reload.state.dime);
+        assertNull(f.owner.getDmInit());
+        assertFalse(reload.isCurrent());
+        SwingUtilities.invokeAndWait(() -> assertFalse(reload.run(() -> fail("Stale prepared catalog applied"))));
+    }
+
+    @Test
+    public void reloadRunsCurrentStagesInOrderAndStaleBeginCannotCancelReplacement() throws Exception {
+        Fixture f = initialized();
+        SwingLoggerInitialization.Snapshot older = f.owner.snapshot();
+        f.owner.ecuCallback().callback(ecu("2222222222"));
+        SwingLoggerInitialization.Reload current = f.owner.beginReload(f.owner.snapshot());
+        assertNull(f.owner.beginReload(older));
+        SwingUtilities.invokeAndWait(() -> {
+            List<String> stages = new ArrayList<>();
+            assertTrue(current.run(() -> stages.add("definition"), () -> stages.add("external"),
+                    () -> stages.add("catalog"), () -> stages.add("focus")));
+            assertEquals(java.util.Arrays.asList("definition", "external", "catalog", "focus"), stages);
+            assertTrue(f.owner.isOpen());
+            f.owner.close();
+            assertFalse(f.owner.isOpen());
+            assertNull(f.owner.beginReload(f.owner.snapshot()));
+            assertFalse(current.run(() -> fail("Closed owner published")));
+        });
+    }
+
+    @Test
+    public void lastReloadStageInvalidationDoesNotReportCompletion() throws Exception {
+        Fixture f = initialized();
+        SwingLoggerInitialization.Reload reload = f.owner.beginReload(f.owner.snapshot());
+        SwingUtilities.invokeAndWait(() -> assertFalse(reload.run(f.owner::close)));
+    }
+
+    @Test
+    public void reviewedProfileRejectsCatalogReplacementEvenWithUnchangedInitialization() throws Exception {
+        Fixture f = initialized();
+        SwingLoggerInitialization.Snapshot state = f.owner.snapshot();
+        SwingUtilities.invokeAndWait(() -> {
+            assertFalse(f.owner.applyReviewedUpdate(state, () -> {
+                assertNotNull(f.owner.beginReload(state));
+                return true;
+            }, () -> fail("Profile applied to replaced catalog")));
+            assertSame(state, f.owner.snapshot());
+            assertTrue(f.owner.applyReviewedUpdate(state, () -> true, () -> { }));
+        });
+    }
+
     @Test
     public void reviewedUpdateRejectsSupersededOrClosedStateBeforePrompting() throws Exception {
         Fixture f = initialized();

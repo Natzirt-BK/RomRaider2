@@ -33,8 +33,10 @@ vehicle writes.
 The Swing profile-review follow-up now rejects obsolete initialization snapshots
 after a protocol-confirmation dialog, including owner closure while that dialog
 is open. See the [lifecycle audit](DIMEMOD_CACHE_LIFECYCLE.md#profile-review-after-initialization-changes).
-Broader catalog-reload cancellation and firmware/session cache identity remain
-open; this guard does not initiate discovery or enable vehicle writes.
+Catalog reloads now also carry a paired initialization snapshot and a superseding
+reload token through their remaining stages. Installer-worker ownership,
+failed-definition catalog availability and firmware/session cache identity remain
+open; these guards do not initiate discovery or enable vehicle writes.
 
 The screen-awake checkpoint `e4de5e42` passed both desktop builds and
 [all platform packages](https://github.com/Natzirt-BK/RomRaider2/actions/runs/34069217817).
