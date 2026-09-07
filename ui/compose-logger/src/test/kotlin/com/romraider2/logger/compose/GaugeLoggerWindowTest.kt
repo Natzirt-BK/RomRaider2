@@ -44,6 +44,39 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalComposeUiApi::class, androidx.compose.runtime.tooling.ComposeToolingApi::class)
 @org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable(named = "RR2_COMPOSE_WINDOW_SMOKE", matches = "1")
 class GaugeLoggerWindowTest {
+    @Test fun fullScreenEntryCapturesNativePlacementBeforeDelayedModelNotification() {
+        val window = edt { ComposeWindow().apply {
+            setSize(800, 600)
+            isVisible = true
+        } }
+        try {
+            for (actual in listOf(WindowPlacement.Maximized, WindowPlacement.Floating)) {
+                edt { window.placement = actual }
+                val deadline = System.nanoTime() + 10_000_000_000L
+                while (edt { window.placement != actual }) {
+                    check(System.nanoTime() < deadline) { "Native placement did not become $actual" }
+                    Thread.sleep(40)
+                }
+                edt {
+                    // Window-manager changes can precede Compose's state listener.
+                    // Deliberately hold the model at the preceding placement.
+                    val stale = if (actual == WindowPlacement.Maximized)
+                        WindowPlacement.Floating else WindowPlacement.Maximized
+                    val state = WindowState(placement = stale)
+                    val presentation = GaugeWindowPresentation(state)
+                    presentation.attach(window)
+                    presentation.requestFullScreen(true)
+                    assertEquals(WindowPlacement.Fullscreen, state.placement)
+                    presentation.requestFullScreen(false)
+                    assertEquals(actual, state.placement,
+                        "Return mode must match the native window, not a delayed model notification")
+                }
+                // Drain the owner's queued restoration before the next case.
+                edt { }
+            }
+        } finally { edt { window.dispose() } }
+    }
+
     @Test fun nativeWindowLifecyclePreservesRecordingAndRestoresSetup() {
         val bus = LoggerLiveDataBus.getInstance()
         bus.clearSamples(); bus.loggingData()

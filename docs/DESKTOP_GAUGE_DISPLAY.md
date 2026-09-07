@@ -114,3 +114,28 @@ not establish physical Windows/macOS/Deck window-manager or idle-timeout behavio
 
 This is development source, not a replacement for the public 1.1.2 RC1 packages.
 No physical adapter or vehicle was used in these checks.
+
+### Native placement capture follow-up
+
+A later hosted run returned from full screen to Floating instead of Maximized,
+although Escape reached setup and released the awake lease. The native lifecycle
+fixture now repeats the maximized entry/exit cycle five times and records both
+the saved return placement and the pre-entry native/model values on failure.
+
+A separate regression reproduces a concrete capture defect: a visible native
+window can be maximized while Compose's model still reports its preceding
+floating placement. Saving that model value selects the wrong return mode.
+Entry now saves the visible native placement, falling back to the model only
+when no window is showing. The regression deliberately delays model notification
+in both directions; it uses a real native window but no logger or adapter.
+
+This fixes the demonstrated capture mismatch. It does not by itself prove the
+cause of every intermittent hosted failure or rule out a separate late callback
+overwriting an otherwise correctly saved return mode. Those cases remain visible
+in the expanded native lifecycle test rather than being hidden by retries.
+
+Local qualification: the new regression failed against the preceding source
+with expected Maximized / actual Floating, then passed in both directions after
+the capture fix. All 41 Compose tests pass with native checks enabled; shared-core
+checks pass and the unchanged 257-test JavaFX suite remains up to date and green.
+No core, transport, definition or session-command code changed in this follow-up.

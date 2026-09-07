@@ -41,7 +41,10 @@ also removes those monitors before failed parses and on closure, retains externa
 selections and protects recovery-profile backups until a valid definition loads.
 A hosted native-window check exposed an intermittent Floating restoration after
 Escape from maximized full screen; investigate before claiming fresh package
-qualification. Installer-worker ownership
+qualification. A [native/model placement mismatch](DESKTOP_GAUGE_DISPLAY.md#native-placement-capture-follow-up)
+now has a failing-before/passing-after regression and captures the visible native
+return mode. Repeated entry/exit diagnostics remain in place for any separate
+late-restoration failure. Installer-worker ownership
 and firmware/session cache identity remain
 open; these guards do not initiate discovery or enable vehicle writes.
 

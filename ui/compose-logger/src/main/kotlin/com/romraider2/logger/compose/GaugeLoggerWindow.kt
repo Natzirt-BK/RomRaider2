@@ -37,7 +37,10 @@ internal class GaugeWindowPresentation(private val state: WindowState) {
     fun requestFullScreen(enabled: Boolean) {
         if (enabled == fullScreen) return
         if (enabled) {
-            previousPlacement = state.placement
+            // Native maximize/restore notifications can lag behind a user tap.
+            // Save the visible window's placement, not its preceding model state.
+            previousPlacement = nativeWindow?.takeIf { it.isShowing }?.placement
+                ?: state.placement
             previousPosition = state.position
             previousSize = state.size
             state.placement = WindowPlacement.Fullscreen
