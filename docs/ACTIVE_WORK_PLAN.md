@@ -4,6 +4,27 @@ Owner priority: finish the gauge work first and show actual application renders,
 then continue the remaining automated work. Physical in-car tests are deferred
 until the owner is available; never initiate hardware polling to fill that gap.
 
+Current owner override: implement verified EVO IX `88780008` DTC coverage before
+resuming the installer audit. Binary tracing and the definition implementation
+gates are recorded in the Evo-Definitions workspace's
+`analysis/DTC_COVERAGE_PLAN.md`. Do not claim DTC coverage from the older table
+inventory or copy generic Evo code labels without tracing this firmware.
+
+New owner follow-up: fix clipped gauge-button text on Steam Deck. The bounded
+layout changes and failing-before regressions are recorded in
+[Handheld gauge button sizing](HANDHELD_GAUGE_BUTTONS.md). Physical device
+acceptance remains separate from simulated viewport/text-scale checks.
+The layout fix `497d9136` and maximized-restoration follow-up `b7c81765` are
+pushed to both maintained branches. Both hosted builds of `b7c81765` passed
+([run 34079178979](https://github.com/Natzirt-BK/RomRaider2/actions/runs/34079178979),
+[run 34079178981](https://github.com/Natzirt-BK/RomRaider2/actions/runs/34079178981)).
+These fixes now ship in [1.1.3 RC1](RELEASE_1_1_3.md), built from `b7c81765`.
+The signed Android packages, five desktop packages and seven checksum sidecars
+are published. All release builds and Android regression checks passed. Public
+APK download verification matched the uploaded checksum. The 1.1.2 release
+downloads were archived locally and removed; source tags are retained. Nothing
+was installed on the owner's Steam Deck by this publication.
+
 Current gauge brief supersedes the earlier three/nine/eleven-face counts: **25
 selectable styles** across Android, JavaFX and Compose. The four latest native
 faces are Apex 24, Ion OLED, Loop Drive and Chrono Roll; references and actual
@@ -24,7 +45,7 @@ ownership, OS backends and an unavailable indicator; service/physical platform
 acceptance remains explicit. The legacy Swing bridge now has a retained,
 borderless full-screen host; its native input/lifecycle checks cover updates,
 tap/reset/timeout/exit and owner cleanup without logger commands. Public downloads
-remain 1.1.2 RC1. The parked DimeMod published-channel span audit is now implemented:
+are 1.1.3 RC1. The parked DimeMod published-channel span audit is now implemented:
 crossing reads reject before runtime activation, while valid endpoints and aliases
 remain compatible. RAM-tune/uninterpreted spans, cache identity and negotiation
 cleanup remain separate work; neither these checks nor synthetic logging qualify
@@ -40,19 +61,41 @@ removed recording-switch monitors reject stale replies. The modern runtime now
 also removes those monitors before failed parses and on closure, retains external
 selections and protects recovery-profile backups until a valid definition loads.
 A hosted native-window check exposed an intermittent Floating restoration after
-Escape from maximized full screen; investigate before claiming fresh package
-qualification. A [native/model placement mismatch](DESKTOP_GAUGE_DISPLAY.md#native-placement-capture-follow-up)
+Escape from maximized full screen, subsequently fixed in `b7c81765` and verified
+in the 1.1.3 release builds. A [native/model placement mismatch](DESKTOP_GAUGE_DISPLAY.md#native-placement-capture-follow-up)
 now has a failing-before/passing-after regression and captures the visible native
 return mode. Repeated entry/exit diagnostics remain in place for any separate
 late-restoration failure. Installer-worker ownership
 and firmware/session cache identity remain
 open; these guards do not initiate discovery or enable vehicle writes.
 
-Owner follow-up: the exact EVO IX GT-A `88780008` editor definitions do not yet
-include named per-code DTC enable/disable controls. Their structural/table audit
-does not establish complete diagnostic-switch coverage. Verified code-to-address
-and bit mappings are needed before adding those controls; generic Evo periphery
-addresses are not sufficient evidence for this firmware.
+Owner follow-up: the Evo-Definitions workspace now has a standalone RomRaider
+`88780008_RomRaider_DTC_v6.xml` extension with nine code-traced monitor gates,
+each represented for all eight configuration variants. It preserves the 156
+baseline calibration tables. Actual headless loader/controller/history/file
+round trips pass against the pinned validation and stock ROMs: 144 individual
+toggles/reloads, combined edits, reversal and out-of-range bit preservation.
+This is partial DTC coverage, not a new paired public release. EcuFlash v6 remains
+unchanged pending qualified individual-bit encoding and application save tests;
+other diagnostic groups remain withheld. The workspace's
+`analysis/DTC_COVERAGE.md` records normalization, dependencies and limitations.
+The ninth gate is P0135, whose shared helper's sibling heater reports are
+excluded by flags set at this firmware's entry. The installed EcuFlash 1.44
+parser and packed-bit write path are now recovered and hash-pinned from an
+isolated, device-free probe. The remaining gate is an actual XML representation
+for the independent bit positions, followed by real application file round trips.
+The full RomRaider v6 extension test now also passes with the core and dependencies
+extracted from the published Linux 1.1.3 RC1 ZIP, independently of the dirty local
+installer build. All 144 individual/combined edits and reloads passed against
+both pinned ROMs; this still does not qualify EcuFlash parity or vehicle writes.
+
+Owner requested the Evo logger definition separately. The existing
+`definitions/logger/88780008_OpenPort2_MUTII_logcfg.txt` was delivered and
+accepted by the portable importer: 33 channels, 8,517 offline assertions.
+Its new adjacent README gives Android import steps and distinguishes those from
+standalone microSD logging. These sample-derived channels are not exact-Evo
+hardware qualification. Adapter expansion is pending the owner's OBDLink or
+VAG-COM/KKL model details; 1.1.3 Android remains OpenPort-only.
 
 The screen-awake checkpoint `e4de5e42` passed both desktop builds and
 [all platform packages](https://github.com/Natzirt-BK/RomRaider2/actions/runs/34069217817).
