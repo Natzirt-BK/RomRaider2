@@ -67,6 +67,7 @@ dependencyLocking {
 
 tasks.test {
     useJUnitPlatform()
+    systemProperty("romraider2.displayAwake.disabled", "true")
     inputs.property("nativeWindowSmoke", providers.environmentVariable("RR2_COMPOSE_WINDOW_SMOKE").orElse("0"))
 }
 

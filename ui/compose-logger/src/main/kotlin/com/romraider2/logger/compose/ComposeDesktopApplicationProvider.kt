@@ -148,6 +148,8 @@ private fun LoggerDesktopWindow(
     val loggerWindowState = rememberFittedWindowState(1380, 860)
     var gaugeFullScreen by remember { mutableStateOf(false) }
     var previousPlacement by remember { mutableStateOf(loggerWindowState.placement) }
+    val displayAwake = remember(runtime) { com.romraider.ui.DesktopDisplayAwake() }
+    val gaugeAwakeStatus = rememberDisplayAwakeStatus(displayAwake)
     val windowIcon = romRaiderWindowIcon()
     val context = remember(runtime) { runtime.workspaceContext }
     val configurationMissing = remember(runtime) {
@@ -176,6 +178,15 @@ private fun LoggerDesktopWindow(
         icon = windowIcon,
         state = loggerWindowState
     ) {
+        val awakeBinding = remember(window, displayAwake) {
+            com.romraider.ui.AwtDisplayAwakeBinding(window, displayAwake) {
+                gaugeFullScreen && loggerWindowState.placement == androidx.compose.ui.window.WindowPlacement.Fullscreen
+            }
+        }
+        LaunchedEffect(gaugeFullScreen, loggerWindowState.placement) { awakeBinding.update() }
+        DisposableEffect(awakeBinding) {
+            onDispose { awakeBinding.close(); displayAwake.close() }
+        }
         val commandHandler = remember(runtime, window) {
             DesktopApplicationCommands.Handler { arguments ->
                 if (arguments.any {
@@ -244,7 +255,7 @@ private fun LoggerDesktopWindow(
                 } else loggerWindowState.placement = previousPlacement
                 gaugeFullScreen = enabled
             }
-        })
+        }, gaugeAwakeStatus = gaugeAwakeStatus)
         LaunchedEffect(runtime) {
             if (!configurationMissing && runtime.settings.autoConnectOnStartup &&
                 context.session.state == LoggerSessionState.STOPPED) {

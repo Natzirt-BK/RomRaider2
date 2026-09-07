@@ -32,15 +32,16 @@ jobs:
         with:
           gradle-version: "9.5.0"
       - name: Install Ant
-        run: sudo apt-get update && sudo apt-get install -y ant xvfb
+        run: sudo apt-get update && sudo apt-get install -y ant xvfb openbox x11-utils dbus-daemon python3-gi
       - name: Verify dependencies, test, and build
         run: |
           packaging/java21/verify-audited-dependencies.sh
           cp packaging/default/settings.xml settings.xml
           timeout 10m xvfb-run -a ant clean unittest
+          /usr/bin/python3 packaging/test-display-awake.py "$JAVA_HOME/bin/java" 'build/test:lib/common/*:lib/testing/*'
           ant clean build-linux
           xvfb-run -a -s '-screen 0 1280x1024x24' env RR2_COMPOSE_WINDOW_SMOKE=1 SKIKO_RENDER_API=SOFTWARE gradle --no-daemon :platform:shared-core:check :ui:compose-logger:test
-          xvfb-run -a -s '-screen 0 1280x1024x24' env RR2_FX_WINDOW_SMOKE=1 gradle --no-daemon :ui:javafx-desktop:test :ui:javafx-desktop:stageJavaFxLinux
+          env RR2_FX_WINDOW_SMOKE=1 bash packaging/run-desktop-window-tests.sh gradle --no-daemon :ui:javafx-desktop:test :ui:javafx-desktop:stageJavaFxLinux
           packaging/java21/audit-runtime-modules.sh build/linux/lib/RomRaider2.jar
           packaging/java21/build-linux-app-image.sh build/release-1.1.3
           packaging/java21/build-linux-release.sh
@@ -84,6 +85,9 @@ jobs:
           $PSNativeCommandUseErrorActionPreference = $true
           Copy-Item packaging/default/settings.xml settings.xml
           ant clean unittest
+          $env:RR2_NATIVE_AWAKE_TEST = "1"
+          java -cp "build/test;lib/common/*;lib/testing/*" com.romraider.ui.DesktopDisplayAwakeNativeProbe
+          $env:RR2_NATIVE_AWAKE_TEST = $null
           ant clean build-windows
           gradle --no-daemon :platform:shared-core:check :ui:compose-logger:test :ui:javafx-desktop:test :ui:javafx-desktop:stageJavaFxWindows
       - name: Build J2534 architecture helpers

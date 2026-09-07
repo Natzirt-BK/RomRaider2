@@ -143,7 +143,8 @@ internal fun LoggerWorkspace(
     context: LoggerWorkspaceContext,
     onOpenSetup: (() -> Unit)? = null,
     onGaugeFullScreen: ((Boolean) -> Unit)? = null,
-    gaugeFullScreenExitRevision: Int = 0
+    gaugeFullScreenExitRevision: Int = 0,
+    gaugeAwakeStatus: com.romraider.ui.DesktopDisplayAwake.Status = com.romraider.ui.DesktopDisplayAwake.Status.OFF
 ) {
     val steamOs = remember { RuntimeUiProfile.isSteamOs() }
     val gaugeAlerts = remember(context) { LoggerGaugeAlertTracker() }
@@ -347,7 +348,11 @@ internal fun LoggerWorkspace(
                         Button(onClick = { mountedFullScreen = false }) { Text("Exit full screen") }
                         Button(onClick = { context.session.stopRecording(); mountedMenuTap = System.nanoTime() },
                             enabled = sessionState == LoggerSessionState.RECORDING) { Text("Stop recording") }
+                        Text(gaugeAwakeStatus.label, Modifier.align(Alignment.CenterVertically), fontSize = 12.sp)
                     }
+                    if (mountedFullScreen && gaugeAwakeStatus == com.romraider.ui.DesktopDisplayAwake.Status.UNAVAILABLE)
+                        Text("Screen awake unavailable", Modifier.align(Alignment.BottomCenter)
+                            .background(MaterialTheme.colors.surface).padding(8.dp), color = Color(0xFFFFBC72), fontSize = 12.sp)
                 }
               } else {
                 if (!context.hasHostSessionControls()) {

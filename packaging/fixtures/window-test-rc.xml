@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<openbox_config xmlns="http://openbox.org/3.4/rc">
+  <focus>
+    <focusNew>yes</focusNew>
+    <followMouse>no</followMouse>
+    <underMouse>no</underMouse>
+    <focusLast>yes</focusLast>
+  </focus>
+</openbox_config>

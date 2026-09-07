@@ -23,6 +23,7 @@ import javax.swing.WindowConstants
 /** Owns window presentation only; it must never own or restart a logger session. */
 @OptIn(ExperimentalComposeUiApi::class)
 internal class SwingGaugeFullScreenHost(
+    val displayAwake: com.romraider.ui.DesktopDisplayAwake = com.romraider.ui.DesktopDisplayAwake(),
     private val onHostExit: () -> Unit
 ) : JPanel(BorderLayout()) {
     // SwingGraphics keeps invalidation working when this embedded view moves to a
@@ -31,6 +32,7 @@ internal class SwingGaugeFullScreenHost(
     private var mountedWindow: JFrame? = null
     private var mountedDevice: GraphicsDevice? = null
     private var previousFullScreenWindow: Window? = null
+    private var awakeBinding: com.romraider.ui.AwtDisplayAwakeBinding? = null
     // ComposePanel's retained attach path does not restore LocalAwtWindow itself.
     var currentWindow: Window? by mutableStateOf(null)
         private set
@@ -65,6 +67,7 @@ internal class SwingGaugeFullScreenHost(
         mountedDevice = device
         previousFullScreenWindow = device.fullScreenWindow
         currentWindow = frame
+        awakeBinding = com.romraider.ui.AwtDisplayAwakeBinding(frame, displayAwake) { mountedWindow === frame }
         try {
             // Preserve the existing composition (including its listeners, history and
             // view state) while transferring between native windows. Restore automatic
@@ -87,6 +90,8 @@ internal class SwingGaugeFullScreenHost(
         val frame = mountedWindow ?: return
         val device = mountedDevice
         val previous = previousFullScreenWindow
+        awakeBinding?.close()
+        awakeBinding = null
         mountedWindow = null
         mountedDevice = null
         previousFullScreenWindow = null
@@ -121,6 +126,7 @@ internal class SwingGaugeFullScreenHost(
         // The embedded workspace or its owner is being removed; no orphan window or
         // Compose subscription may survive. Do not dispatch a logger stop here.
         leaveFullScreen(restorePanel = false)
+        displayAwake.close()
         currentWindow = null
         super.removeNotify()
     }

@@ -50,6 +50,7 @@ java {
 
 tasks.test {
     useJUnitPlatform()
+    systemProperty("romraider2.displayAwake.disabled", "true")
     systemProperty("romraider2.settings.dir", temporaryDir.resolve("settings").absolutePath)
     systemProperty("romraider2.log.dir", temporaryDir.resolve("logs").absolutePath)
 }

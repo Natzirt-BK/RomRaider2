@@ -89,6 +89,15 @@ class SwingGaugeFullScreenHostTest {
         bus.clearSamples()
         bus.loggingData()
         val commands = AtomicInteger()
+        val heldAwake = AtomicInteger()
+        val denyAwake = java.util.concurrent.atomic.AtomicBoolean()
+        val awake = com.romraider.ui.DesktopDisplayAwake {
+            if (denyAwake.get()) throw IllegalStateException("Synthetic desktop denial")
+            assertEquals(1, heldAwake.incrementAndGet())
+            object : com.romraider.ui.DesktopDisplayAwake.Lease {
+                override fun close() { assertEquals(0, heldAwake.decrementAndGet()) }
+            }
+        }
         val session = LoggerSessionService(bus, { commands.incrementAndGet() }, { commands.incrementAndGet() },
             { commands.incrementAndGet() }, { commands.incrementAndGet() }, { throw it })
         val channels = LoggerChannelService({ _, _ -> commands.incrementAndGet() }, { throw it })
@@ -99,7 +108,7 @@ class SwingGaugeFullScreenHostTest {
         lateinit var owner: JFrame
         lateinit var host: SwingGaugeFullScreenHost
         edt {
-            host = ComposeLoggerWorkspaceProvider().createWorkspace(
+            host = ComposeLoggerWorkspaceProvider { awake }.createWorkspace(
                 LoggerWorkspaceContext(bus, session, channels, preferences, true)) as SwingGaugeFullScreenHost
             owner = JFrame("Synthetic recording · no adapter").apply {
                 contentPane.add(host); setBounds(30, 40, 1000, 800); isVisible = true
@@ -109,10 +118,12 @@ class SwingGaugeFullScreenHostTest {
             await { hasText(host, "Gauges only") }
             click(host, "Gauges only")
             await { hasText(host, "Full screen") }
+            assertEquals(0, heldAwake.get(), "Gauge setup must not keep the display awake")
             click(host, "Full screen")
             await { edt { owner.graphicsConfiguration.device.fullScreenWindow != null } }
             await { !hasText(host, "Full screen") }
             await { edt { SwingUtilities.getWindowAncestor(host.composePanel).isFocused } }
+            await { heldAwake.get() == 1 }
             assertFalse(hasText(host, "Exit full screen"))
             // Readings continue arriving through the existing bus after the transfer.
             val sample = com.romraider.logger.api.LiveDataSample("fixture", "Synthetic RPM", 2345.0, "2345", "rpm",
@@ -162,15 +173,18 @@ class SwingGaugeFullScreenHostTest {
             } }
             try {
                 await { edt { probe.isFocused } }
+                await { heldAwake.get() == 0 }
                 await { !hasText(host, "Exit full screen") }
             } finally { edt { probe.dispose(); SwingUtilities.getWindowAncestor(host.composePanel).requestFocus() } }
             await { edt { SwingUtilities.getWindowAncestor(host.composePanel).isFocused } }
+            await { heldAwake.get() == 1 }
             assertFalse(hasText(host, "Exit full screen"))
             tap()
             await { hasText(host, "Exit full screen") }
             click(host, "Exit full screen")
             await { hasText(host, "Full screen") }
             await { edt { host.composePanel.parent === host } }
+            await { heldAwake.get() == 0 }
             // Native close (e.g. Alt-F4) exits the display, not the host logger.
             click(host, "Full screen")
             await { edt { owner.graphicsConfiguration.device.fullScreenWindow != null } }
@@ -191,8 +205,19 @@ class SwingGaugeFullScreenHostTest {
             assertEquals(0, commands.get(), "Changing presentation issued a logger command")
             assertEquals(listOf("fixture"), preferences.gaugeDisplay.visibleChannels)
             assertSame(sample, bus.latestSamples.single())
+            denyAwake.set(true)
+            click(host, "Full screen")
+            await { awake.status == com.romraider.ui.DesktopDisplayAwake.Status.UNAVAILABLE }
+            await { hasText(host, "Screen awake unavailable") }
+            assertFalse(hasText(host, "Exit full screen"))
+            assertEquals(0, heldAwake.get())
+            capture("unavailable")
+            assertEquals(LoggerSessionState.RECORDING, session.state)
+            assertEquals(0, commands.get(), "A denied awake request affected recording")
         } finally {
             edt { owner.dispose() }
+            awake.close()
+            await { heldAwake.get() == 0 && awake.status == com.romraider.ui.DesktopDisplayAwake.Status.OFF }
             session.close()
             bus.stopped()
             bus.clearSamples()

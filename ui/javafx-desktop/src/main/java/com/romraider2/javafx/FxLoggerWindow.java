@@ -107,6 +107,9 @@ final class FxLoggerWindow {
     private VBox mountedSetup;
     private StackPane mountedViewport;
     private HBox mountedMenu;
+    private final com.romraider.ui.DesktopDisplayAwake displayAwake;
+    private final Label mountedAwakeStatus = new Label();
+    private final Label mountedAwakeWarning = new Label("Screen awake unavailable");
     private Dialog<?> mountedChannelPicker;
     private final javafx.animation.PauseTransition mountedMenuTimeout =
             new javafx.animation.PauseTransition(javafx.util.Duration.seconds(5));
@@ -158,6 +161,12 @@ final class FxLoggerWindow {
 
     FxLoggerWindow(Runnable closed,
             Function<File, CompletableFuture<LogDataset>> logParser) {
+        this(closed, logParser, new com.romraider.ui.DesktopDisplayAwake());
+    }
+
+    FxLoggerWindow(Runnable closed, Function<File, CompletableFuture<LogDataset>> logParser,
+            com.romraider.ui.DesktopDisplayAwake displayAwake) {
+        this.displayAwake = java.util.Objects.requireNonNull(displayAwake);
         this.closed = closed;
         logLoads = new FxLogLoadCoordinator(logParser, Platform::runLater,
                 this::showDataset, (file, failure) -> {
@@ -243,10 +252,14 @@ final class FxLoggerWindow {
         stage.setScene(scene);
         stage.fullScreenProperty().addListener((value, oldState, full) -> {
             if (mountedFullScreen && !full) { previousFullScreen = false; setMountedFullScreen(false); }
+            updateDisplayAwake();
         });
         stage.focusedProperty().addListener((value, oldFocus, focused) -> {
             if (!focused && mountedMenu != null) { mountedMenuTimeout.stop(); mountedMenu.setVisible(false); }
+            updateDisplayAwake();
         });
+        stage.showingProperty().addListener((value, oldState, showing) -> updateDisplayAwake());
+        stage.iconifiedProperty().addListener((value, oldState, minimized) -> updateDisplayAwake());
         stage.setTitle(Version.PRODUCT_NAME + " " + Version.VERSION
                 + " | JavaFX Logger");
         stage.setMinWidth(900);
@@ -524,6 +537,7 @@ final class FxLoggerWindow {
     }
 
     private void refreshViews() {
+        refreshDisplayAwakeStatus();
         if (disposed) return;
         viewHistory = context.getLiveData().getRecentSamples();
         if (gaugesOnly) { refreshMountedGauges(); return; }
@@ -763,10 +777,16 @@ final class FxLoggerWindow {
         Button stop = new Button("Stop recording"); stop.setMinHeight(48);
         stop.setOnAction(event -> { if (context.getSession().getState() == LoggerSessionState.RECORDING)
             context.getSession().stopRecording(); });
-        mountedMenu = new HBox(12, exitFull, stop); mountedMenu.setStyle(mountedStyle);
+        mountedMenu = new HBox(12, exitFull, stop, mountedAwakeStatus); mountedMenu.setStyle(mountedStyle);
+        mountedMenu.setAlignment(Pos.CENTER_LEFT);
         mountedMenu.setPadding(new Insets(8)); mountedMenu.setMaxHeight(64);
         StackPane.setAlignment(mountedMenu, Pos.TOP_CENTER);
         mountedViewport.getChildren().add(mountedMenu); mountedMenu.setVisible(false);
+        mountedAwakeWarning.setStyle("-fx-background-color: #17212b; -fx-text-fill: #ffbc72; -fx-padding: 8;");
+        mountedAwakeWarning.setMouseTransparent(true);
+        StackPane.setAlignment(mountedAwakeWarning, Pos.BOTTOM_CENTER);
+        mountedViewport.getChildren().add(mountedAwakeWarning);
+        refreshDisplayAwakeStatus();
         mountedMenuTimeout.setOnFinished(event -> mountedMenu.setVisible(false));
         mountedViewport.addEventHandler(javafx.scene.input.MouseEvent.MOUSE_CLICKED, event -> {
             if (mountedFullScreen) showMountedMenu();
@@ -872,6 +892,17 @@ final class FxLoggerWindow {
         } else {
             stage.setFullScreen(previousFullScreen); refreshMountedSetup();
         }
+        updateDisplayAwake();
+    }
+    private void updateDisplayAwake() {
+        displayAwake.setActive(!disposed && gaugesOnly && mountedFullScreen && stage.isFullScreen()
+                && stage.isShowing() && stage.isFocused() && !stage.isIconified());
+        refreshDisplayAwakeStatus();
+    }
+    private void refreshDisplayAwakeStatus() {
+        var state = displayAwake.getStatus();
+        mountedAwakeStatus.setText(state.getLabel());
+        mountedAwakeWarning.setVisible(mountedFullScreen && state == com.romraider.ui.DesktopDisplayAwake.Status.UNAVAILABLE);
     }
     private void showMountedMenu() {
         if (!mountedFullScreen) return;
@@ -1283,6 +1314,7 @@ final class FxLoggerWindow {
     private void dispose() {
         if (disposed) return;
         disposed = true;
+        displayAwake.close();
         mountedMenuTimeout.stop();
         if (mountedChannelPicker != null) mountedChannelPicker.close();
         if (gaugeStylePicker != null) gaugeStylePicker.close();

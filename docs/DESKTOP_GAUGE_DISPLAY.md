@@ -31,9 +31,13 @@ place; the host window's size and state are not changed. Closing the gauge windo
 returns to setup rather than closing the logger. Closing/removing the embedded
 workspace cleans up its full-screen window and composition.
 
-This is not yet full mobile parity: desktop display-awake inhibition remains
-unimplemented. Android's already verified full-screen keep-awake behavior is
-unaffected. Configure displays while parked.
+[Desktop screen-awake requests](DESKTOP_DISPLAY_AWAKE.md) now follow visible,
+focused full-screen gauges in all three desktop hosts. The menu reports request
+status and an unavailable warning stays visible if the desktop cannot provide
+it. Native platform acceptance and Gaming Mode service availability remain
+qualification work; an accepted request does not override deliberate sleep.
+Android's already verified full-screen keep-awake behavior is unchanged.
+Configure displays while parked.
 
 Desktop settings store `gauge-display` schema 1, a count and six bounded channel
 IDs. Old settings start with empty slots. Invalid display settings are ignored;
@@ -47,7 +51,7 @@ viewport sizes, missing readings, actual full-screen state, tap/reset/timeout/
 exit, and retained synthetic session/selection/history. Compose native captures
 cover setup and six fitted instruments. The Swing-embedded native checks below
 now cover Compose menu input and focus behavior; qualification of the separate
-Compose-owned window placement remains a follow-up, alongside display-awake support.
+Compose-owned window placement remains a follow-up, alongside native display-awake qualification.
 
 September 6 verification: 252 JavaFX tests, 37 Compose tests and 18 focused core
 settings/display tests pass. Render inspection caught and corrected missing

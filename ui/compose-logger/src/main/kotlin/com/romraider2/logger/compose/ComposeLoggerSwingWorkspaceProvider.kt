@@ -11,7 +11,10 @@ import javax.swing.JComponent
 import javax.swing.SwingUtilities
 
 /** Legacy bridge used only when the explicitly selected Swing shell hosts Compose. */
-class ComposeLoggerWorkspaceProvider : LoggerWorkspaceProvider {
+class ComposeLoggerWorkspaceProvider internal constructor(
+    private val displayAwakeFactory: () -> com.romraider.ui.DesktopDisplayAwake
+) : LoggerWorkspaceProvider {
+    constructor() : this({ com.romraider.ui.DesktopDisplayAwake() })
     override fun getName(): String = "Compose Desktop Logger"
 
     override fun createWorkspace(context: LoggerWorkspaceContext): JComponent {
@@ -24,13 +27,14 @@ class ComposeLoggerWorkspaceProvider : LoggerWorkspaceProvider {
     @OptIn(ExperimentalComposeUiApi::class)
     private fun panel(context: LoggerWorkspaceContext): JComponent {
         val exitRevision = mutableIntStateOf(0)
-        val host = SwingGaugeFullScreenHost { exitRevision.intValue++ }
+        val host = SwingGaugeFullScreenHost(displayAwakeFactory()) { exitRevision.intValue++ }
         host.composePanel.setContent {
             CompositionLocalProvider(LocalAwtWindow provides host.currentWindow) {
                 LoggerWorkspace(context, onGaugeFullScreen = { enabled ->
                     // Never detach a ComposePanel inside its own composition/frame callback.
                     SwingUtilities.invokeLater { host.setFullScreen(enabled) }
-                }, gaugeFullScreenExitRevision = exitRevision.intValue)
+                }, gaugeFullScreenExitRevision = exitRevision.intValue,
+                    gaugeAwakeStatus = rememberDisplayAwakeStatus(host.displayAwake))
             }
         }
         return host

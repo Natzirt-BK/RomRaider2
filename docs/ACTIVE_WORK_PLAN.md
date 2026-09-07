@@ -17,8 +17,10 @@ that times out. Desktop/handheld searchable style galleries and per-channel
 persistence are now implemented; see [their contract](DESKTOP_GAUGE_STYLES.md).
 [Independent slots and fitted 1–6 layouts](DESKTOP_GAUGE_DISPLAY.md) are now implemented
 on desktop/handheld, with native-window full-screen menus. The next gauge work is
-desktop display-awake support and native Compose-owned window qualification,
-followed by package qualification. The legacy Swing bridge now has a retained,
+native display-awake and Compose-owned window qualification, followed by package
+qualification. [Screen-awake requests](DESKTOP_DISPLAY_AWAKE.md) now have window-scoped
+ownership, OS backends and an unavailable indicator; service/physical platform
+acceptance remains explicit. The legacy Swing bridge now has a retained,
 borderless full-screen host; its native input/lifecycle checks cover updates,
 tap/reset/timeout/exit and owner cleanup without logger commands. Public downloads
 remain 1.1.2 RC1. Resume the parked DimeMod channel-pointer span audit afterward;
