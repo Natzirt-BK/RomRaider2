@@ -7,13 +7,13 @@
 ECU editing, read-only logging, gauges and log analysis for Subaru and Mitsubishi
 Lancer Evolution. Built on RomRaider and DimeMod, with desktop and Android interfaces.
 
-RomRaider2 is in development. **The current download is 1.1.2 RC1; a stable
+RomRaider2 is in development. **The current download is 1.1.3 RC1; a stable
 release is not available yet.**
 
 ## Downloads
 
-[Download 1.1.2 RC1](https://github.com/Natzirt-BK/RomRaider2/releases/tag/romraider2-1.1.2)
-· [Release notes](docs/RELEASE_1_1_2.md)
+[Download 1.1.3 RC1](https://github.com/Natzirt-BK/RomRaider2/releases/tag/romraider2-1.1.3)
+· [Release notes](docs/RELEASE_1_1_3.md)
 
 | Platform | Package |
 | --- | --- |
@@ -44,16 +44,15 @@ sequence. See [versioning](docs/RELEASE_VERSIONING.md).
 Platform features differ. Read the [Android guide](docs/ANDROID_PREVIEW_TESTING.md)
 before connecting an OpenPort 2.0 through a USB host/OTG adapter.
 
-### In development
+### New in 1.1.3
 
-The **1.1.3 source** adds [fullscreen gauges](docs/ANDROID_MOUNTED_DISPLAY.md)
+This release adds [fullscreen gauges](docs/ANDROID_MOUNTED_DISPLAY.md)
 with seamless layouts for 1–6 instruments, a [25-style gauge collection](docs/GAUGE_DESIGN.md),
 and channel-by-channel styles with visual pickers on Android and desktop/handheld. It also adds
 [Android background recording](docs/ANDROID_BACKGROUND_RECORDING.md),
 [calculated channels](docs/CALCULATED_LOGGER_CHANNELS.md),
 [portable logger setups](docs/PORTABLE_LOGGER_SETUP.md), and expanded
 [saved-log analysis](docs/FUEL_LOG_ANALYSIS.md).
-These changes are not yet in the RC1 downloads.
 
 See the [development roadmap](docs/POST_1_1_2_WORK_PLAN.md) and
 [technical documentation](docs/README.md) for details.

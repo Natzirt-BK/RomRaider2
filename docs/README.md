@@ -2,7 +2,7 @@
 
 ## Start here
 
-- [Current release candidate](RELEASE_1_1_2.md)
+- [Current release candidate](RELEASE_1_1_3.md)
 - [Android setup and testing](ANDROID_PREVIEW_TESTING.md)
 - [Building RomRaider2](Building_RomRaider_VSCode.md)
 - [Versioning](RELEASE_VERSIONING.md)
@@ -17,7 +17,7 @@
 - [Android background recording](ANDROID_BACKGROUND_RECORDING.md) and [recovery](ANDROID_RECORDING_RECOVERY.md)
 - [Android build signing and saved setup](ANDROID_UPDATE_RELIABILITY.md)
 
-Guides identify features that are still in development and not in current downloads.
+Release notes identify shipped features and remaining compatibility limits.
 
 ## Maintainer records
 

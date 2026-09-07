@@ -1,14 +1,12 @@
 # Android testing
 
-Development-source follow-up: [calculated logger channels](CALCULATED_LOGGER_CHANNELS.md)
-are implemented for 1.1.3. The public-package instructions and limits below still
-describe 1.1.2 until the next verified release is published.
-Version 1.1.3 source also adds [reviewed interrupted-recording recovery](ANDROID_RECORDING_RECOVERY.md).
+Version 1.1.3 includes [calculated logger channels](CALCULATED_LOGGER_CHANNELS.md)
+and [reviewed interrupted-recording recovery](ANDROID_RECORDING_RECOVERY.md).
 It preserves the original spool and validates completed records before exporting;
 omitting an unfinished tail requires explicit review.
 
-This guide covers Android **1.1.2 RC1**. Check the
-[release candidate](https://github.com/Natzirt-BK/RomRaider2/releases/tag/romraider2-1.1.2)
+This guide covers Android **1.1.3 RC1**. Check the
+[release candidate](https://github.com/Natzirt-BK/RomRaider2/releases/tag/romraider2-1.1.3)
 for published downloads. Packages are sideloaded and
 remain debuggable, so Android or Play Protect may warn about an unknown app.
 Back up recordings and saved work before replacing an installation.
@@ -33,9 +31,11 @@ MUT-II vehicle qualification remain open.
   logs.
 - Import a RomRaider v370 Logger definition and an existing Logger profile.
 - Run the clearly marked simulated Logger and save its CSV.
-- Review the responsive gauge dashboard, choose from 16 styles, reset measured
-  peaks and use the simulated gauge demo without an ECU. Switching between
-  LOGGER and GAUGES preserves the active session and recording.
+- Choose from 25 gauge styles, mix styles per channel, reset measured peaks and
+  show or hide the simulated gauge demo without an ECU. Set up 1–6 fullscreen
+  gauges independently, or copy the logger selection. Fullscreen mode keeps the
+  screen awake; tap for temporary exit controls. Switching between LOGGER and
+  GAUGES preserves the active session and recording.
 - Open About / licenses to review the bundled software license and brand notice.
 - Check whether Android detects an attached OpenPort 2.0 and grants USB
   permission.
@@ -61,9 +61,10 @@ and exact EVO/MUT-II qualification remain open. Use careful, parked testing only
 - stop if the adapter, phone, or vehicle behaves unexpectedly;
 - do not rely on the app for safety-critical monitoring.
 
-CAN, transmission sessions, calculated
-parameters, serial external sensors, ECU writing, and flashing are not
+CAN, transmission sessions, serial external sensors, ECU writing, and flashing are not
 available in this Android version.
+Definition-backed calculated parameters are supported. OBDLink and VAG-COM/KKL
+adapter support is not included; use OpenPort 2.0 for connected logging.
 
 ## EVO VIII/IX MUT-II with OpenPort 2.0
 
@@ -75,19 +76,19 @@ available in this Android version.
    a `MUT2` protocol. A ROM editor definition is not a logger definition.
 3. Use **Choose channels**. Start with RPM and battery voltage for the parked
    test; add channels after checking those values. All selected channels are
-   recorded; the dashboard shows at most eight gauges.
+   recorded; fullscreen mode shows 1–6 independently configured gauges.
 4. Try **Start offline preview** first. Those values are simulated, not vehicle
    measurements. Stop it before the connected test.
 5. With the vehicle parked, ignition on and engine off, start the read-only
    logger. `MUT2_GENERIC` means a plausible battery-PID response, **not** a match
    to a particular ECU calibration. Verify the definition against your vehicle.
 6. Stop and wait for completion, then **Save live CSV**. Switching between
-   LOGGER and GAUGES preserves the session. Public 1.1.2 stops on backgrounding;
-   1.1.3 development source uses the background service described below. USB
+   LOGGER and GAUGES preserves the session. Recording can continue in the
+   background through the service described below. USB
    disconnection stops capture, and the Editor cannot be opened during recording.
    The app does not automatically reconnect or resume ECU requests.
 
-### Background recording in 1.1.3 development source
+### Background recording
 
 Start remains explicit. After the first notification-permission prompt, press
 Start again; granting permission alone does not query the ECU. An accepted
@@ -118,7 +119,7 @@ export recordings** exports earlier sessions after an app restart; exporting
 does not delete the recovery copy. Back these up before uninstalling or clearing
 app data. Storage use grows with retained recordings. The current cycle may be
 lost or incomplete after abrupt process/power loss; this is not a crash-proof
-data recorder. Version 1.1.2 restores saved definitions/channel selections
+data recorder. The app restores saved definitions/channel selections
 after restart or Activity recreation; this does not migrate data across an
 uninstall or automatically restore a USB/logging session. Keep source setup
 files as a backup. Phone-specific USB,

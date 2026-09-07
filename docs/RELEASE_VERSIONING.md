@@ -6,8 +6,8 @@ Desktop and Android share `major.minor.patch` versions:
 - Milestones: `1.2.0`, followed by `1.2.x` updates.
 - Rare major changes: `2.0.0`.
 
-The current downloadable candidate is **RomRaider2 1.1.2 RC1**. Current development
-source is **1.1.3**, with Android versionCode **110407**. There is no stable release yet.
+The current downloadable candidate is **RomRaider2 1.1.3 RC1**, with Android
+versionCode **110407**. There is no stable release yet.
 
 **RC1 describes the release stage.** Keep it separate from application versions,
 package filenames and numeric Android versionName values. Release titles may use
@@ -27,8 +27,10 @@ IDs and signing identity; historical `.preview` ID segments are installation
 identifiers, not display labels.
 
 `packaging/verify-version.sh` checks shared version components, build consumers,
-release-note headings and artifact names. The current development baseline is
-1.1.2 / Android 110406. Update the baseline deliberately when publishing.
+release-note headings and artifact names. The 1.1.3 release checks compare against
+the previous release baseline, 1.1.2 / Android 110406. Advance that baseline to
+1.1.3 / 110407 when opening the next development version, so the published 1.1.3
+source remains buildable with its original checks.
 `packaging/test-version-check.sh` tests rejection of inconsistent metadata.
 
 Package checks inspect embedded versions, APK identity and signatures, not just
