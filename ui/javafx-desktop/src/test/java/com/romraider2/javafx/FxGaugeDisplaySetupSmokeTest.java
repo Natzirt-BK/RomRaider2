@@ -15,6 +15,40 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
 @EnabledIfEnvironmentVariable(named = "RR2_FX_WINDOW_SMOKE", matches = "1")
 class FxGaugeDisplaySetupSmokeTest {
+    @Test void handheldSetupShowsTheCompleteChannelButtonLabel() throws Exception {
+        FxLoggerWindow[] window = new FxLoggerWindow[1];
+        String name = "Manifold Relative Pressure - Corrected Measurement";
+        try {
+            FxTestRuntime.run(() -> {
+                window[0] = new FxLoggerWindow(() -> {});
+                Stage stage = field(window[0], "stage");
+                stage.setWidth(1280); stage.setHeight(800); stage.show();
+                context(window[0]).getChannels().replaceChannels(java.util.List.of(
+                    new LoggerChannel("synthetic-long-name", name, "psi", LoggerChannelKind.PARAMETER, true)));
+                context(window[0]).getPreferences().setGaugeDisplay(new LoggerGaugeDisplay()
+                    .withCount(1).withChannel(0, "synthetic-long-name"));
+            });
+            FxTestRuntime.run(() -> {
+                window[0].setGaugesOnly(true);
+                javafx.scene.layout.VBox setup = field(window[0], "mountedSetup");
+                setup.setStyle("-fx-font-size: 18px;");
+                javafx.scene.layout.BorderPane root = field(window[0], "root"); root.applyCss(); root.layout();
+                Button channel = setup.lookupAll(".button").stream().filter(node -> node instanceof Button button
+                    && button.getText().equals("1: " + name)).map(node -> (Button) node).findFirst().orElseThrow();
+                javafx.scene.text.Text rendered = (javafx.scene.text.Text) channel.lookup(".text");
+                assertNotNull(rendered);
+                assertEquals(channel.getText(), rendered.getText(), "Channel button text was ellipsized");
+                assertTrue(rendered.getBoundsInParent().getMaxY() <= channel.getHeight(), "Wrapped label exceeded button height");
+            });
+        } finally {
+            FxTestRuntime.run(() -> {
+                if (window[0] != null) {
+                    context(window[0]).getPreferences().setGaugeDisplay(new LoggerGaugeDisplay());
+                    window[0].close();
+                }
+            });
+        }
+    }
     @Test void independentSlotsFitAllLayoutsAndTransientMenuPreservesSession() throws Exception {
         FxLoggerWindow[] window = new FxLoggerWindow[1];
         try {

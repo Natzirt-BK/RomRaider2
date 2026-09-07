@@ -838,7 +838,8 @@ final class FxLoggerWindow {
             int slot = i; String id = display.getSlots().get(i);
             String name = channelSnapshot.stream().filter(channel -> channel.getParameterId().equals(id))
                     .map(LoggerChannel::getName).findFirst().orElse(id.isEmpty() ? "Choose channel" : id);
-            Button channel = new Button((i + 1) + ": " + name); channel.setMaxWidth(250);
+            Button channel = new Button((i + 1) + ": " + name);
+            channel.setWrapText(true); channel.setPrefWidth(250); channel.setMaxWidth(250);
             channel.setOnAction(event -> chooseMountedChannel(slot));
             Button face = new Button("Style"); face.setDisable(id.isEmpty());
             face.setOnAction(event -> chooseGaugeStyle(id));

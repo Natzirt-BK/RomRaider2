@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
@@ -586,6 +588,7 @@ internal fun gaugeDisplayChannels(display: LoggerGaugeDisplay, channels: List<Lo
     display.visibleChannels.map { id -> channels.firstOrNull { it.parameterId == id }
         ?: LoggerChannel(id, id, "", LoggerChannelKind.PARAMETER, false) }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun GaugeDisplaySetup(channels: List<LoggerChannel>, display: LoggerGaugeDisplay,
     preferences: LoggerWorkspacePreferences, defaultStyle: LoggerGaugeTheme,
@@ -596,8 +599,9 @@ internal fun GaugeDisplaySetup(channels: List<LoggerChannel>, display: LoggerGau
     var stylingDefault by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxWidth().heightIn(max = 230.dp).verticalScroll(rememberScrollState()).padding(8.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("Layout", Modifier.padding(top = 10.dp))
+        FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("Layout", Modifier.align(Alignment.CenterVertically))
             (1..6).forEach { count -> GaugeControlChip(count.toString(), display.count == count, true) { onDisplay(display.withCount(count)) } }
             TextButton(onClick = { onDisplay(display.useLoggerChannels(channels)) }) { Text("Use Logger Channels") }
             TextButton(onClick = { stylingDefault = true }) { Text("Default style") }
@@ -605,12 +609,21 @@ internal fun GaugeDisplaySetup(channels: List<LoggerChannel>, display: LoggerGau
         (0 until display.count).forEach { slot ->
             val id = display.slots[slot]
             val channel = channels.firstOrNull { it.parameterId == id }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                TextButton(onClick = { editingSlot = slot }, modifier = Modifier.weight(1f)) {
-                    Text("${slot + 1}: ${channel?.name ?: id.ifEmpty { "Choose channel" }}", maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-                TextButton(onClick = { stylingSlot = id }, enabled = id.isNotEmpty()) {
-                    Text("Style: ${preferences.getDashboardTile(id)?.gaugeTheme?.displayName ?: "Default"}", maxLines = 1)
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                val channelLabel = "${slot + 1}: ${channel?.name ?: id.ifEmpty { "Choose channel" }}"
+                val styleLabel = "Style: ${preferences.getDashboardTile(id)?.gaugeTheme?.displayName ?: "Default"}"
+                if (maxWidth < 640.dp) {
+                    Column(Modifier.fillMaxWidth()) {
+                        TextButton(onClick = { editingSlot = slot }, modifier = Modifier.fillMaxWidth()) { Text(channelLabel) }
+                        TextButton(onClick = { stylingSlot = id }, enabled = id.isNotEmpty(),
+                            modifier = Modifier.fillMaxWidth()) { Text(styleLabel) }
+                    }
+                } else {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        TextButton(onClick = { editingSlot = slot }, modifier = Modifier.weight(1f)) { Text(channelLabel) }
+                        TextButton(onClick = { stylingSlot = id }, enabled = id.isNotEmpty(),
+                            modifier = Modifier.widthIn(max = 280.dp)) { Text(styleLabel) }
+                    }
                 }
             }
         }
@@ -1605,7 +1618,7 @@ private fun DashboardWorkspace(
                     },
                     Modifier.fillMaxWidth().height(
                         tile.size.cardHeight(gaugeLayout) +
-                            if (arranging) 44.dp else 0.dp)
+                            if (arranging) 96.dp else 0.dp)
                 )
             }
         }
@@ -1735,7 +1748,7 @@ internal fun GaugeStyleGallery(title: String, selected: LoggerGaugeTheme?, allow
                                 if (theme == selected) MaterialTheme.colors.primary else MaterialTheme.colors.onSurface.copy(.2f),
                                 RoundedCornerShape(8.dp)).padding(6.dp)
                             .semantics { contentDescription = "${theme.displayName}, sample reading" + if (theme == selected) ", selected" else "" }) {
-                            Text(theme.displayName, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 12.sp)
+                            Text(theme.displayName, fontSize = 12.sp)
                             val instrument = runCatching { GaugeFaceRenderer.Style.valueOf(theme.name) }.getOrNull()
                             val frame = Modifier.fillMaxWidth().aspectRatio(320f / 250f)
                             if (instrument != null) InstrumentGauge(instrument, GaugeFaceRenderer.Reading(
@@ -1840,7 +1853,7 @@ private fun GaugeControlChip(
     TextButton(
         onClick = onClick,
         enabled = enabled,
-        modifier = Modifier.height(36.dp)
+        modifier = Modifier.heightIn(min = 36.dp)
             .background(
                 if (active) MaterialTheme.colors.primary.copy(.16f)
                 else MaterialTheme.colors.surface,
@@ -1984,32 +1997,20 @@ private fun LiveGaugeCard(
             }
             if (!arranging) {
                 TextButton(onClick = onChooseStyle,
-                    modifier = Modifier.requiredWidth(48.dp).height(30.dp),
+                    modifier = Modifier.widthIn(min = 48.dp).heightIn(min = 30.dp),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)) {
                     Text("STYLE", fontSize = 9.sp, fontWeight = FontWeight.Bold)
                 }
                 TextButton(onClick = onConfigure,
-                    modifier = Modifier.requiredWidth(44.dp).height(30.dp),
+                    modifier = Modifier.widthIn(min = 44.dp).heightIn(min = 30.dp),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)) {
                     Text("SET", fontSize = 9.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }
         if (arranging) {
-            Row(Modifier.fillMaxWidth().padding(top = 3.dp),
-                horizontalArrangement = Arrangement.spacedBy(5.dp),
-                verticalAlignment = Alignment.CenterVertically) {
-                TileArrangeButton("←", canMovePrevious, onMovePrevious,
-                    Modifier.width(42.dp), "Move previous")
-                TileArrangeButton("→", canMoveNext, onMoveNext,
-                    Modifier.width(42.dp), "Move next")
-                TileArrangeButton(tile.role.displayName, true, onCycleRole,
-                    Modifier.weight(1f),
-                    "Change role; current ${tile.role.displayName}")
-                TileArrangeButton(tile.size.displayName, true, onCycleSize,
-                    Modifier.weight(1f),
-                    "Change size; current ${tile.size.displayName}")
-            }
+            GaugeTileArrangeControls(tile.role.displayName, tile.size.displayName,
+                canMovePrevious, canMoveNext, onMovePrevious, onMoveNext, onCycleRole, onCycleSize)
         }
         when (tile.role) {
             LoggerDashboardTileRole.GAUGE -> if (gaugeTheme in listOf(LoggerGaugeTheme.RALLY_PRECISION,
@@ -2049,6 +2050,23 @@ private fun LiveGaugeCard(
 }
 
 @Composable
+internal fun GaugeTileArrangeControls(role: String, size: String,
+    canMovePrevious: Boolean, canMoveNext: Boolean,
+    onMovePrevious: () -> Unit, onMoveNext: () -> Unit,
+    onCycleRole: () -> Unit, onCycleSize: () -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(top = 3.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+            TileArrangeButton("←", canMovePrevious, onMovePrevious, Modifier.weight(1f), "Move previous")
+            TileArrangeButton("→", canMoveNext, onMoveNext, Modifier.weight(1f), "Move next")
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+            TileArrangeButton(role, true, onCycleRole, Modifier.weight(1f), "Change role; current $role")
+            TileArrangeButton(size, true, onCycleSize, Modifier.weight(1f), "Change size; current $size")
+        }
+    }
+}
+
+@Composable
 private fun TileArrangeButton(
     label: String,
     enabled: Boolean,
@@ -2056,7 +2074,7 @@ private fun TileArrangeButton(
     modifier: Modifier = Modifier,
     accessibilityLabel: String = label
 ) {
-    Box(modifier.height(42.dp)
+    Box(modifier.heightIn(min = 42.dp)
             .background(MaterialTheme.colors.surface, RoundedCornerShape(6.dp))
             .border(1.dp, MaterialTheme.colors.onSurface.copy(.16f),
                 RoundedCornerShape(6.dp))
@@ -2067,8 +2085,8 @@ private fun TileArrangeButton(
         Text(label,
             color = MaterialTheme.colors.onSurface.copy(
                 if (enabled) .76f else .28f),
-            fontSize = 10.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
-            overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
+            fontSize = 10.sp, fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.Center)
     }
 }
 
