@@ -43,10 +43,11 @@ def main():
                 if text == "AT WS":
                     attempts += 1
                     reply = b"AT WS\rELM327 v2.3\r>\r\n"
-                elif text in {"AT E0", "AT L0", "AT H0", "AT CAF1", "AT TP 0"}:
+                elif text in {"AT E0", "AT L0", "AT H0", "AT CAF1", "AT TP 0", "AT TP 3"}:
                     reply = command + b"\rOK\r>"
                 elif text == "0100":
-                    reply = b"SEARCHING...\r41 00 08 18 00 00\r>"
+                    progress = b"BUS INIT: ...OK\r" if attempts % 2 == 0 else b"SEARCHING...\r"
+                    reply = progress + b"41 00 08 18 00 00\r>"
                 elif text == "010C":
                     reply = (b"41 0D 01\r>" if attempts == 3 else
                              b"41 0C 1A" if attempts == 4 else

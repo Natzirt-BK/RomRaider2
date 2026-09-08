@@ -60,6 +60,7 @@ class ElmAdapterTestRunTest {
         ElmAdapterTestRun.Factory factory = (port, baud) -> { opens.incrementAndGet(); throw new IOException("must not open"); };
         var run = new ElmAdapterTestRun(config(target), factory, new Elm327ReadOnlyRecorder()); run.run();
         assertEquals(0, opens.get()); assertFalse(run.isCreated()); assertEquals("keep me", Files.readString(target));
+        assertTrue(run.status().contains("CSV already exists"));
         if (!System.getProperty("os.name").startsWith("Windows")) {
             Path symlink = directory.resolve("link.csv"); Files.createSymbolicLink(symlink, target);
             var linked = new ElmAdapterTestRun(config(symlink), factory, new Elm327ReadOnlyRecorder()); linked.run();

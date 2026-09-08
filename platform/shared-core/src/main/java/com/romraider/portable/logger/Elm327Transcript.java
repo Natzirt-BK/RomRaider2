@@ -103,7 +103,11 @@ public final class Elm327Transcript {
             if (value.isEmpty() || value.equals(echo)) continue;
             // Progress can precede the reply on the same line.
             if (value.startsWith("SEARCHING...")) value = value.substring(12);
-            if (value.startsWith("BUSINIT...OK")) value = value.substring(12);
+            // ELM uses a colon; slow init adds dots, fast init does not.
+            // Retain the colon-free variants used by compatible implementations.
+            for (String prefix : new String[] {"BUSINIT:...OK", "BUSINIT:OK", "BUSINIT...OK", "BUSINITOK"}) {
+                if (value.startsWith(prefix)) { value = value.substring(prefix.length()); break; }
+            }
             if (value.isEmpty()) continue;
             Status lineFailure = null;
             if (value.equals("NODATA")) lineFailure = Status.NO_DATA;

@@ -73,16 +73,16 @@ internal class GaugeWindowPresentation(private val state: WindowState) {
                     if (previousPlacement == WindowPlacement.Floating) restoreGeometry()
                     window.placement = previousPlacement
                     state.placement = previousPlacement
-                    if (previousPlacement == WindowPlacement.Maximized) settleMaximizedRestore(window)
+                    settleRestore(window)
                 }
             }
         }
         fullScreen = enabled
     }
 
-    private fun settleMaximizedRestore(window: ComposeWindow) {
+    private fun settleRestore(window: ComposeWindow) {
         // X11 normal-state callbacks can arrive after invokeLater has already
-        // re-applied Maximized. Briefly reconcile both native and Compose state
+        // restored placement/geometry. Briefly reconcile native and Compose state
         // until they agree continuously, with a hard limit for unsupported WMs.
         // This is transition-only: never keep enforcing a user's window mode.
         val deadline = System.nanoTime() + 2_000_000_000L
@@ -91,15 +91,28 @@ internal class GaugeWindowPresentation(private val state: WindowState) {
             val now = System.nanoTime()
             if (fullScreen || !window.isDisplayable || now >= deadline) {
                 cancelRestoration()
-            } else if (window.placement != WindowPlacement.Maximized || state.placement != WindowPlacement.Maximized) {
+            } else if (previousPlacement == WindowPlacement.Floating &&
+                (window.placement == WindowPlacement.Maximized || state.placement == WindowPlacement.Maximized)) {
+                // A new maximize action is user intent, not a stale floating
+                // ConfigureNotify. Never turn it into a lost maximize request.
+                cancelRestoration()
+            } else if (window.placement != previousPlacement || state.placement != previousPlacement ||
+                (previousPlacement == WindowPlacement.Floating && !floatingGeometryMatches(window))) {
                 stableSince = now
-                if (window.placement != WindowPlacement.Maximized) window.placement = WindowPlacement.Maximized
-                state.placement = WindowPlacement.Maximized
+                if (window.placement != previousPlacement) window.placement = previousPlacement
+                state.placement = previousPlacement
+                if (previousPlacement == WindowPlacement.Floating) restoreGeometry()
             } else if (now - stableSince >= 500_000_000L) {
                 cancelRestoration()
             }
         }.apply { start() }
     }
+
+    private fun floatingGeometryMatches(window: ComposeWindow): Boolean =
+        state.position == previousPosition && state.size == previousSize &&
+            (!previousPosition.isSpecified ||
+                (window.x == previousPosition.x.value.toInt() && window.y == previousPosition.y.value.toInt() &&
+                    window.width == previousSize.width.value.toInt() && window.height == previousSize.height.value.toInt()))
 
     private fun cancelRestoration() {
         transitionRevision++
@@ -113,6 +126,7 @@ internal class GaugeWindowPresentation(private val state: WindowState) {
         if (fullScreen && state.placement != WindowPlacement.Fullscreen) {
             fullScreen = false
             if (previousPlacement == WindowPlacement.Floating) restoreGeometry()
+            nativeWindow?.takeIf { it.isDisplayable }?.let { settleRestore(it) }
             exitRevision++
         }
     }

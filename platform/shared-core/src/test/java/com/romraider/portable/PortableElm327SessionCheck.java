@@ -35,7 +35,7 @@ public final class PortableElm327SessionCheck {
                     : command.equals("0100") ? "SEARCHING...\rBUS INIT: ERROR\r>"
                     : "41 0C 1A F8\r>";
             // PIDs 05, 0C and 0D only.
-            if (command.equals("0100")) reply = "BUS INIT...OK\r41 00 08 18 00 00\r>\r\n";
+            if (command.equals("0100")) reply = "BUS INIT: ...OK\r41 00 08 18 00 00\r>\r\n";
             if (command.equals(overrideCommand)) reply = overrideReply;
             if (reply != null) enqueue(reply);
         }

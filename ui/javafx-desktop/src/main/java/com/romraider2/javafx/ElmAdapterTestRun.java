@@ -63,7 +63,11 @@ final class ElmAdapterTestRun implements Runnable {
                     : successful ? "Recording complete. Review the CSV and compare readings with the vehicle."
                     : "No valid values recorded. This is not a successful compatibility test.";
         } catch (Exception | LinkageError failure) {
-            String message = failure.getMessage() == null ? failure.getClass().getSimpleName() : failure.getMessage();
+            String message = failure instanceof java.nio.file.FileAlreadyExistsException
+                    ? "CSV already exists; choose a new filename."
+                    : failure instanceof java.nio.file.AccessDeniedException
+                    ? "CSV location is not writable; choose a writable folder."
+                    : failure.getMessage() == null ? failure.getClass().getSimpleName() : failure.getMessage();
             status = cancelled.get() ? "Stopped. " + message : "Test stopped: " + message;
             if (failure.getSuppressed().length > 0) status += " Cleanup also reported an error; unplug the adapter before retrying.";
         } finally {

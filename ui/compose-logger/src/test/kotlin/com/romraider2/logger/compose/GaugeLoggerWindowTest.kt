@@ -44,6 +44,25 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalComposeUiApi::class, androidx.compose.runtime.tooling.ComposeToolingApi::class)
 @org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable(named = "RR2_COMPOSE_WINDOW_SMOKE", matches = "1")
 class GaugeLoggerWindowTest {
+    @Test fun floatingRestorationDoesNotOverrideANewMaximizeAction() {
+        val window = edt { ComposeWindow().apply { setSize(800, 600); isVisible = true } }
+        val state = WindowState()
+        val presentation = GaugeWindowPresentation(state)
+        try {
+            edt {
+                presentation.attach(window)
+                presentation.requestFullScreen(true)
+                window.placement = WindowPlacement.Fullscreen
+                presentation.requestFullScreen(false)
+            }
+            edt { }
+            edt { state.placement = WindowPlacement.Maximized; window.placement = WindowPlacement.Maximized }
+            Thread.sleep(700)
+            assertEquals(WindowPlacement.Maximized, edt { state.placement })
+            assertEquals(WindowPlacement.Maximized, edt { window.placement })
+        } finally { edt { presentation.close(); window.dispose() } }
+    }
+
     @Test fun floatingRestoreUsesVisibleGeometryInsteadOfDelayedModelCoordinates() {
         val window = edt { ComposeWindow().apply { setBounds(140, 112, 800, 600); isVisible = true } }
         val state = WindowState(position = androidx.compose.ui.window.WindowPosition(
@@ -70,6 +89,21 @@ class GaugeLoggerWindowTest {
                 check(System.nanoTime() < deadline) { "Expected native floating bounds $expected, got ${edt { window.bounds }}" }
                 Thread.sleep(40)
             }
+            // A late full-screen ConfigureNotify can overwrite the first restore.
+            Thread.sleep(120)
+            edt {
+                window.setLocation(0, 0)
+                state.position = androidx.compose.ui.window.WindowPosition(androidx.compose.ui.unit.Dp(0f), androidx.compose.ui.unit.Dp(0f))
+            }
+            val settled = System.nanoTime() + 3_000_000_000L
+            while (edt { window.bounds != expected }) {
+                check(System.nanoTime() < settled) { "Late native notification lost floating geometry: ${edt { window.bounds }}" }
+                Thread.sleep(40)
+            }
+            Thread.sleep(800)
+            edt { window.setLocation(40, 40) }
+            Thread.sleep(200)
+            assertEquals(java.awt.Point(40, 40), edt { window.location }, "Restoration must not enforce position after settling")
         } finally { edt { presentation.close(); window.dispose() } }
     }
 

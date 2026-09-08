@@ -10,7 +10,7 @@ public final class ElmSerialNativeProbe {
             throw new IllegalArgumentException("Only an emulator-created /dev/pts endpoint is allowed");
         for (int attempt = 1; attempt <= 6; attempt++) {
             try (var session = new Elm327Session(ElmSerialLink.open(args[0], 38400))) {
-                session.initialize(Elm327Session.Protocol.AUTOMATIC, 4000, () -> false);
+                session.initialize(attempt % 2 == 0 ? Elm327Session.Protocol.ISO9141_2 : Elm327Session.Protocol.AUTOMATIC, 4000, () -> false);
                 if (!session.supports(12)) throw new AssertionError("Synthetic RPM support missing");
                 if (attempt == 3 || attempt == 4) {
                     try { session.readMode01(12, 2, 300, () -> false); throw new AssertionError("Invalid fixture accepted"); }

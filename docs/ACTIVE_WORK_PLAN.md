@@ -20,6 +20,10 @@ The first hosted 1.1.6 build exposed a Compose floating-window restore failure:
 full-screen exit returned to `(0, 0)` instead of the visible pre-entry position.
 The follow-up snapshots native floating geometry, with a failing-before,
 passing-after regression. This does not change logger sessions or adapter I/O.
+Hosted retesting also reproduced a later native callback that overwrote the
+initial restore. A short, bounded reconciliation now covers floating geometry
+as well as maximized placement; it releases control after settling and cancels
+on re-entry or close. The regression injects that late callback explicitly.
 
 ## Earlier checkpoints
 

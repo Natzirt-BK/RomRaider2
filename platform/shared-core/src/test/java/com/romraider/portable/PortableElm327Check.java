@@ -17,7 +17,9 @@ public final class PortableElm327Check {
         rejects(() -> Elm327Transcript.mode01Command(-1));
         rejects(() -> Elm327Transcript.mode01Command(256));
         for (String valid : new String[] {"41 0C 1A F8\r>", "010c\r\n410c1af8\r\n>\r\n",
-                "SEARCHING...\r41\t0C 1A F8\r>", "SEARCHING...410C1AF8\r>"}) {
+                "SEARCHING...\r41\t0C 1A F8\r>", "SEARCHING...410C1AF8\r>",
+                "BUS INIT: ...OK\r41 0C 1A F8\r>", "BUS INIT: OK\r41 0C 1A F8\r>",
+                "BUS INIT: ...OK410C1AF8>", "BUS INIT...OK\r410C1AF8>"}) {
             for (int split = 0; split <= valid.length(); split++) {
                 Elm327Transcript transcript = new Elm327Transcript();
                 transcript.accept(valid.substring(0, split));
@@ -37,6 +39,9 @@ public final class PortableElm327Check {
         check("NO DATA\r>", Status.NO_DATA);
         check("STOPPED\r>", Status.STOPPED);
         check("BUS INIT: ERROR\r>", Status.BUS_ERROR);
+        check("BUS INIT: ...ERROR\r41 0C 1A F8\r>", Status.BUS_ERROR);
+        check("BUS INIT: ...OK\r>", Status.MALFORMED);
+        check("BUS INIT: ...OKAY\r41 0C 1A F8\r>", Status.MALFORMED);
         check("CAN ERROR\r>", Status.BUS_ERROR);
         check("7F 01 12\r>", Status.NEGATIVE_RESPONSE);
         check("41 0C 1A F8\r7F0112\r>", Status.NEGATIVE_RESPONSE);
