@@ -58,13 +58,18 @@ final class FxLoggerSetup {
         Runnable refreshTargets = () -> {
             String current = target.getValue();
             target.getItems().setAll(runtime.getTargetModuleChoices(
-                    protocol.getText(), transport.getText(), current));
+                    definition.getText(), protocol.getText(), transport.getText(), current));
             target.setValue(current);
         };
         protocol.textProperty().addListener((o, before, after) -> refreshTargets.run());
         transport.textProperty().addListener((o, before, after) -> refreshTargets.run());
+        definition.textProperty().addListener((o, before, after) -> refreshTargets.run());
         CheckBox autoConnect = new CheckBox("Connect automatically at startup");
         autoConnect.setSelected(settings.getAutoConnectOnStartup());
+        Button stopAttempts = new Button("Disconnect / stop attempts");
+        stopAttempts.setOnAction(event -> runtime.getWorkspaceContext().getSession().disconnect());
+        Label startupHelp = new Label("Startup preference can be saved at any time. Disconnect also stops connection attempts.");
+        startupHelp.setWrapText(true);
 
         GridPane form = new GridPane();
         form.setHgap(10);
@@ -79,6 +84,7 @@ final class FxLoggerSetup {
         form.addRow(4, new Label("Transport"), transport);
         form.addRow(5, new Label("Target module"), target);
         form.add(autoConnect, 1, 6, 2, 1);
+        form.addRow(7, stopAttempts, startupHelp);
         GridPane.setHgrow(definition, Priority.ALWAYS);
         GridPane.setHgrow(output, Priority.ALWAYS);
 
@@ -99,21 +105,9 @@ final class FxLoggerSetup {
         save.setDefaultButton(true);
         save.setOnAction(event -> {
             try {
-                runtime.requireConfigurationEditable();
-                settings.setLoggerDefinitionFilePath(definition.getText().trim());
-                settings.setLoggerOutputDirPath(output.getText().trim());
-                settings.setLoggerPort(port.getText().trim());
-                settings.setLoggerProtocol(protocol.getText().trim());
-                settings.setTransportProtocol(transport.getText().trim());
-                settings.setTargetModule(target.getValue() == null ? "" : target.getValue().trim());
-                settings.setAutoConnectOnStartup(autoConnect.isSelected());
-                File selectedDefinition = path(definition.getText());
-                if (selectedDefinition != null) {
-                    settings.setLastDefinitionDir(
-                            selectedDefinition.getParentFile());
-                }
-                runtime.reloadConfiguration();
-                SettingsManager.save(settings);
+                runtime.applySetup(definition.getText(), output.getText(),
+                        port.getText(), protocol.getText(), transport.getText(), target.getValue(),
+                        autoConnect.isSelected(), () -> SettingsManager.save(settings));
                 applied.run();
                 stage.close();
             } catch (RuntimeException failure) {
@@ -124,7 +118,7 @@ final class FxLoggerSetup {
         HBox actions = new HBox(8, fill, cancel, save);
         actions.setPadding(new Insets(10));
         BorderPane root = new BorderPane(form, introduction, null, actions, null);
-        Scene scene = new Scene(root, 780, 430);
+        Scene scene = new Scene(root, 780, 490);
         FxTheme.apply(stage, scene);
         FxTheme.closeOnEscape(stage, scene);
         stage.setScene(scene);
@@ -144,7 +138,7 @@ final class FxLoggerSetup {
         target.setValue(choices.stream().filter(value -> value.equalsIgnoreCase(current))
                 .findFirst().orElse(current));
         target.setTooltip(new javafx.scene.control.Tooltip(
-                "Modules from the loaded definition. After changing the definition file, save and reopen setup to refresh choices."));
+                "Modules from the chosen definition and transport. Invalid selections are rejected when saving."));
         return target;
     }
 

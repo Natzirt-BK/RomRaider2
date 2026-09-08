@@ -43,6 +43,10 @@ class FxMountedGaugesSmokeTest {
                 window[0] = new FxLoggerWindow(() -> { });
                 Stage stage = FxEditorControlsSmokeTest.field(window[0], "stage");
                 FxWindowPlacement.show(stage); // No startup or hardware commands.
+                javafx.scene.control.TabPane tabs = FxEditorControlsSmokeTest.field(window[0], "views");
+                assertEquals(8, tabs.getTabs().size());
+                assertFalse(tabs.getTabs().stream().anyMatch(tab -> tab.getText().equals("Gauges only")));
+                tabs.getSelectionModel().select(3);
                 LoggerWorkspaceContext context = context(window[0]);
                 context.getChannels().replaceChannels(List.of(new LoggerChannel("gauge-fixture",
                         "Synthetic boost", "psi", LoggerChannelKind.PARAMETER, true, List.of(), "psi")));
@@ -54,6 +58,17 @@ class FxMountedGaugesSmokeTest {
                 LoggerWorkspaceContext context = context(window[0]);
                 Object session = context.getSession();
                 int historySize = context.getLiveData().getRecentSamples().get("gauge-fixture").size();
+                Stage stage = FxEditorControlsSmokeTest.field(window[0], "stage");
+                stage.getScene().getRoot().applyCss(); stage.getScene().getRoot().layout();
+                javafx.scene.control.TitledPane customization = (javafx.scene.control.TitledPane)
+                        stage.getScene().lookup("#dashboard-tile-customization");
+                assertFalse(customization.isExpanded());
+                captureDashboard(stage);
+                ((javafx.scene.control.Button) stage.getScene().lookup("#dashboard-open-gauge-display")).fire();
+                assertTrue((Boolean) FxEditorControlsSmokeTest.field(window[0], "gaugesOnly"));
+                window[0].setGaugesOnly(false);
+                javafx.scene.control.TabPane tabs = FxEditorControlsSmokeTest.field(window[0], "views");
+                assertEquals("Dashboard", tabs.getSelectionModel().getSelectedItem().getText());
                 for (LoggerGaugeTheme theme : LoggerGaugeTheme.values()) {
                     context.getPreferences().setGaugeTheme(theme);
                     window[0].setGaugesOnly(true);
@@ -97,6 +112,16 @@ class FxMountedGaugesSmokeTest {
     private static FxInstrumentView face(FxLoggerWindow window) throws Exception {
         FxMountedGaugePane gauges = FxEditorControlsSmokeTest.field(window, "mountedGauges");
         return (FxInstrumentView) gauges.getChildren().getFirst();
+    }
+    private static void captureDashboard(Stage stage) throws Exception {
+        String directory = System.getenv("RR2_CHANNEL_CAPTURE_DIR");
+        if (directory == null) return;
+        var image = stage.getScene().getRoot().snapshot(null, null);
+        var bitmap = new java.awt.image.BufferedImage((int) image.getWidth(), (int) image.getHeight(),
+                java.awt.image.BufferedImage.TYPE_INT_ARGB);
+        for (int y = 0; y < bitmap.getHeight(); y++) for (int x = 0; x < bitmap.getWidth(); x++)
+            bitmap.setRGB(x, y, image.getPixelReader().getArgb(x, y));
+        javax.imageio.ImageIO.write(bitmap, "png", new java.io.File(directory, "desktop-dashboard.png"));
     }
     private static LoggerWorkspaceContext context(FxLoggerWindow window) throws Exception {
         return FxEditorControlsSmokeTest.field(window, "context");

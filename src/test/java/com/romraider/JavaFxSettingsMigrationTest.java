@@ -13,6 +13,17 @@ import org.junit.rules.TemporaryFolder;
 import com.romraider.swing.JProgressPane;
 
 public class JavaFxSettingsMigrationTest {
+    @Test public void failedSettingsSerializationPreservesPreviousFile() throws Exception {
+        var file = temporary.newFile("atomic-settings.xml");
+        java.nio.file.Files.writeString(file.toPath(), "previous settings");
+        try {
+            new DOMSettingsBuilder().buildSettings(new Settings(), file,
+                    (message, percent) -> { if (percent == 100) throw new IllegalStateException("Synthetic write failure"); }, "test");
+            fail("Expected synthetic write failure");
+        } catch (IllegalStateException expected) { assertEquals("Synthetic write failure", expected.getMessage()); }
+        assertEquals("previous settings", java.nio.file.Files.readString(file.toPath()));
+        assertEquals(1, temporary.getRoot().listFiles().length);
+    }
     @Rule public TemporaryFolder temporary = new TemporaryFolder();
     private Settings load(String xml) throws Exception {
         return new DOMSettingsUnmarshaller().unmarshallSettings(DocumentBuilderFactory.newInstance()

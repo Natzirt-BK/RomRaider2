@@ -451,7 +451,7 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
                     }
                 }));
         LoggerLiveDataBus liveDataBus = LoggerLiveDataBus.getInstance();
-        fileUpdateHandler.addListener(liveDataBus);
+        fileUpdateHandler.addListener(new com.romraider.logger.api.LoggerRecordingStatusListener(liveDataBus));
         sessionService = new LoggerSessionService(liveDataBus,
                 this::startLogging,
                 this::stopLogging,

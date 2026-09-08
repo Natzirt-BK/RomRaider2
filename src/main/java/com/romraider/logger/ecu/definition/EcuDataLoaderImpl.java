@@ -86,18 +86,25 @@ public final class EcuDataLoaderImpl implements EcuDataLoader {
                                   String protocol,
                                   String fileLoggingControllerSwitchId,
                                   EcuInit ecuInit) {
-        loadConfig(loggerConfigFilePath, protocol, fileLoggingControllerSwitchId, ecuInit, null);
+        loadConfig(loggerConfigFilePath, protocol, fileLoggingControllerSwitchId, ecuInit, null, false);
     }
 
     /** Parse caller-captured bytes, retaining the source URI without reopening it. */
     public void loadConfigFromSnapshot(String sourcePath, byte[] snapshot, String protocol,
             String fileLoggingControllerSwitchId, EcuInit ecuInit) {
         checkNotNull(snapshot, "snapshot");
-        loadConfig(sourcePath, protocol, fileLoggingControllerSwitchId, ecuInit, snapshot.clone());
+        loadConfig(sourcePath, protocol, fileLoggingControllerSwitchId, ecuInit, snapshot.clone(), false);
+    }
+
+    /** Desktop setup validation must never rewrite the application's settings while parsing. */
+    public void loadConfigForDesktop(String sourcePath, byte[] snapshot, String protocol,
+            String fileLoggingControllerSwitchId, EcuInit ecuInit) {
+        loadConfig(sourcePath, protocol, fileLoggingControllerSwitchId, ecuInit,
+                snapshot == null ? null : snapshot.clone(), true);
     }
 
     private void loadConfig(String loggerConfigFilePath, String protocol,
-            String fileLoggingControllerSwitchId, EcuInit ecuInit, byte[] snapshot) {
+            String fileLoggingControllerSwitchId, EcuInit ecuInit, byte[] snapshot, boolean strict) {
         checkNotNullOrEmpty(loggerConfigFilePath, "loggerConfigFilePath");
         checkNotNullOrEmpty(protocol, "protocol");
         checkNotNullOrEmpty(fileLoggingControllerSwitchId, "fileLoggingControllerSwitchId");
@@ -128,7 +135,9 @@ public final class EcuDataLoaderImpl implements EcuDataLoader {
                             "Logger definition contains no protocols");
                 }
                 
-                valid = isCurrentProtocolValid();
+                if (strict && !protocolList.containsKey(protocol))
+                    throw new ConfigurationException("Unsupported Logger protocol: " + protocol);
+                valid = strict || isCurrentProtocolValid();
 
 				if(!valid) {
                     String firstProtocol = protocolList.keySet().iterator().next();
@@ -163,7 +172,7 @@ public final class EcuDataLoaderImpl implements EcuDataLoader {
         // because only the loaded protocol gets parsed fully
         if(!valid && isCurrentProtocolValid()) {
             loadConfig(loggerConfigFilePath, s.getLoggerProtocol(),
-                    fileLoggingControllerSwitchId, ecuInit, snapshot);
+                    fileLoggingControllerSwitchId, ecuInit, snapshot, false);
         }
     }
     

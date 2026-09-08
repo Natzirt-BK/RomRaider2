@@ -33,7 +33,7 @@ public final class FileLoggingConnectionMonitor implements StatusChangeListener 
 
     @Override
     public void stopped() {
-        fileUpdateHandler.stop();
-        stoppedCallback.run();
+        try { fileUpdateHandler.stop(); }
+        finally { stoppedCallback.run(); }
     }
 }

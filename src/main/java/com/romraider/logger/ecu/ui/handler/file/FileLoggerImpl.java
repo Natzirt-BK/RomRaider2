@@ -23,7 +23,6 @@ import static com.romraider.util.ParamChecker.checkNotNull;
 
 import java.io.BufferedOutputStream;
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.OutputStream;
 import java.text.MessageFormat;
 import java.text.SimpleDateFormat;
@@ -46,62 +45,78 @@ public final class FileLoggerImpl implements FileLogger {
     private final SimpleDateFormat dateFormat = new SimpleDateFormat("yyyyMMdd_HHmmss");
     private final SimpleDateFormat timestampFormat = new SimpleDateFormat("HH:mm:ss.SSS");
     private final EcuRelatedMessageListener messageListener;
+    private final java.util.function.Supplier<Date> clock;
     private boolean started;
     private OutputStream os;
     private File activeFile;
     private long startTimestamp;
+    private boolean timestampInitialized;
     //private boolean zero;
 
     public FileLoggerImpl(EcuRelatedMessageListener messageListener) {
+        this(messageListener, Date::new);
+    }
+
+    FileLoggerImpl(EcuRelatedMessageListener messageListener, java.util.function.Supplier<Date> clock) {
         checkNotNull(messageListener);
         this.messageListener = messageListener;
+        this.clock = java.util.Objects.requireNonNull(clock);
     }
 
     @Override
-    public void start() {
+    public synchronized void start() {
         if (!started) {
             stop();
             try {
                 String filePath = buildFilePath();
-                activeFile = new File(filePath).getAbsoluteFile();
-                os = new BufferedOutputStream(new FileOutputStream(activeFile));
+                File requested = new File(filePath).getAbsoluteFile();
+                for (int suffix = 0; ; suffix++) {
+                    File candidate = suffix == 0 ? requested : new File(requested.getParentFile(),
+                            requested.getName().replaceFirst("\\.csv$", "_" + suffix + ".csv"));
+                    try {
+                        os = new BufferedOutputStream(java.nio.file.Files.newOutputStream(candidate.toPath(),
+                                java.nio.file.StandardOpenOption.CREATE_NEW, java.nio.file.StandardOpenOption.WRITE));
+                        activeFile = candidate;
+                        break;
+                    } catch (java.nio.file.FileAlreadyExistsException collision) { /* Never overwrite another capture. */ }
+                }
                 messageListener.reportMessageInTitleBar(MessageFormat.format(
                         rb.getString("STARTLOG"),
-                        FormatFilename.getShortName(filePath)));
+                        FormatFilename.getShortName(activeFile.getPath())));
             } catch (Exception e) {
-                stop();
+                try { stop(); } catch (RuntimeException cleanup) { e.addSuppressed(cleanup); }
                 throw new FileLoggerException(e);
             }
             
             started = true;
             startTimestamp = 0;
+            timestampInitialized = false;
         }
     }
 
     @Override
-    public void stop() {
+    public synchronized void stop() {
         File completed = activeFile;
-        if (os != null) {
+        OutputStream closing = os;
+        os = null; started = false; activeFile = null;
+        if (closing != null) {
             try {
-                os.close();
-                os = null;
+                closing.close();
                 messageListener.reportMessageInTitleBar(rb.getString("STOPLOG"));
             } catch (Exception e) {
                 throw new FileLoggerException(e);
             }
         }
-        started = false;
-        activeFile = null;
         RecentLogCaptureService.getInstance().completed(completed);
     }
 
     @Override
-    public boolean isStarted() {
+    public synchronized boolean isStarted() {
         return started;
     }
 
     @Override
-    public void writeHeaders(String headers) {
+    public synchronized void writeHeaders(String headers) {
         String timeHeader = "Time";
         if (!SettingsManager.getSettings().isFileLoggingAbsoluteTimestamp()) {
             timeHeader = timeHeader  + " (msec)";
@@ -110,7 +125,7 @@ public final class FileLoggerImpl implements FileLogger {
     }
 
     @Override
-    public void writeLine(String line, long timestamp) {
+    public synchronized void writeLine(String line, long timestamp) {
         writeText(prependTimestamp(line, timestamp));
     }
 
@@ -121,7 +136,7 @@ public final class FileLoggerImpl implements FileLogger {
                 os.write(NEW_LINE.getBytes());
             }
         } catch (Exception e) {
-            stop();
+            try { stop(); } catch (RuntimeException cleanup) { e.addSuppressed(cleanup); }
             throw new FileLoggerException(e);
         }
     }
@@ -131,7 +146,7 @@ public final class FileLoggerImpl implements FileLogger {
         if (SettingsManager.getSettings().isFileLoggingAbsoluteTimestamp()) {
             formattedTimestamp = timestampFormat.format(new Date(timestamp));
         } else {
-        	if(startTimestamp == 0) startTimestamp = timestamp;
+            if (!timestampInitialized) { startTimestamp = timestamp; timestampInitialized = true; }
         	formattedTimestamp = String.valueOf(timestamp - startTimestamp);          
         }
         return new StringBuilder(formattedTimestamp).append(line).toString();
@@ -149,7 +164,7 @@ public final class FileLoggerImpl implements FileLogger {
         }
         String ecuId = messageListener.getEcuInit() == null ? "EXTERNAL"
                 : messageListener.getEcuInit().getEcuId();
-        logDir += dateFormat.format(new Date()) + "_[" + ecuId + "]" + ".csv";
+        logDir += dateFormat.format(clock.get()) + "_[" + ecuId + "]" + ".csv";
         return logDir;
     }
 

@@ -64,6 +64,7 @@ public final class FileUpdateHandlerImpl implements FileUpdateHandler, Convertor
                     : locales.contains(language + "_" + country) ? SEMICOLON : COMMA;
 
     private Line currentLine = new Line(loggerDatas.keySet());
+    private boolean recordingNotified;
 
     public FileUpdateHandlerImpl(EcuRelatedMessageListener messageListener) {
         this(new FileLoggerImpl(messageListener));
@@ -93,6 +94,7 @@ public final class FileUpdateHandlerImpl implements FileUpdateHandler, Convertor
 
     @Override
     public synchronized void handleDataUpdate(Response response) {
+      try {
         if (fileLogger.isStarted()) {
             for (LoggerData loggerData : response.getData()) {
                 double value = response.getDataValue(loggerData);
@@ -104,6 +106,10 @@ public final class FileUpdateHandlerImpl implements FileUpdateHandler, Convertor
                 resetLine();
             }
         }
+      } catch (RuntimeException failure) {
+          try { stop(); } catch (RuntimeException cleanup) { failure.addSuppressed(cleanup); }
+          throw failure;
+      }
     }
 
     @Override
@@ -119,13 +125,12 @@ public final class FileUpdateHandlerImpl implements FileUpdateHandler, Convertor
 
     @Override
     public synchronized void cleanUp() {
-        if (fileLogger.isStarted()) {
-            fileLogger.stop();
-        }
+        stop();
     }
 
     @Override
     public synchronized void reset() {
+        resetLine();
     }
 
     @Override
@@ -137,17 +142,28 @@ public final class FileUpdateHandlerImpl implements FileUpdateHandler, Convertor
     @Override
     public synchronized void start() {
         if (!fileLogger.isStarted()) {
-            fileLogger.start();
-            notifyListeners(true);
-            writeHeaders();
+            resetLine();
+            try {
+                fileLogger.start();
+                writeHeaders();
+                recordingNotified = true;
+                notifyListeners(true);
+            } catch (RuntimeException failure) {
+                try { stop(); } catch (RuntimeException cleanup) { failure.addSuppressed(cleanup); }
+                throw failure;
+            }
         }
     }
 
     @Override
     public synchronized void stop() {
-        if (fileLogger.isStarted()) {
-            fileLogger.stop();
-            notifyListeners(false);
+        boolean wasRecording = recordingNotified || fileLogger.isStarted();
+        try {
+            if (fileLogger.isStarted()) fileLogger.stop();
+        } finally {
+            recordingNotified = false;
+            resetLine();
+            if (wasRecording) notifyListeners(false);
         }
     }
 
@@ -188,6 +204,7 @@ public final class FileUpdateHandlerImpl implements FileUpdateHandler, Convertor
         }
 
         public synchronized boolean isFull() {
+            if (loggerDataValues.isEmpty()) return false;
             for (LoggerData loggerData : loggerDataValues.keySet()) {
                 if (loggerDataValues.get(loggerData) == null) {
                     return false;
@@ -199,8 +216,8 @@ public final class FileUpdateHandlerImpl implements FileUpdateHandler, Convertor
         public synchronized String headers() {
             final StringBuilder buffer = new StringBuilder();
             for (LoggerData loggerData : loggerDataValues.keySet()) {
-                buffer.append(delimiter).append(loggerData.getName()).append(" (")
-                .append(loggerData.getSelectedConvertor().getUnits()).append(')');
+                buffer.append(delimiter).append(csvField(loggerData.getName() + " ("
+                        + loggerData.getSelectedConvertor().getUnits() + ")"));
             }
             return buffer.toString();
         }
@@ -209,9 +226,15 @@ public final class FileUpdateHandlerImpl implements FileUpdateHandler, Convertor
             final StringBuilder buffer = new StringBuilder();
             for (LoggerData loggerData : loggerDataValues.keySet()) {
                 String value = loggerDataValues.get(loggerData);
-                buffer.append(delimiter).append(value);
+                buffer.append(delimiter).append(csvField(value));
             }
             return buffer.toString();
         }
+    }
+
+    private String csvField(String value) {
+        if (value == null) return "";
+        return value.contains(delimiter) || value.contains("\"") || value.contains("\n") || value.contains("\r")
+                ? "\"" + value.replace("\"", "\"\"") + "\"" : value;
     }
 }

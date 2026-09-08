@@ -92,7 +92,10 @@ final class FxLoggerWindow {
     private final TabPane views = new TabPane();
     private final FlowPane overview = new FlowPane(10, 10);
     private final TableView<LiveDataSample> data = new TableView<>();
-    private final LiveGraph graph = new LiveGraph();
+    private final FxLiveGraph graph = new FxLiveGraph();
+    private final Map<String, VBox> overviewCards = new LinkedHashMap<>();
+    private final Map<String, VBox> dashboardCards = new LinkedHashMap<>();
+    private final Map<String, String> dashboardCardKeys = new LinkedHashMap<>();
     private final FlowPane dashboard = new FlowPane(12, 12);
     private final FxMountedGaugePane mountedGauges = new FxMountedGaugePane();
     private final Label mountedStatus = new Label();
@@ -397,16 +400,15 @@ final class FxLoggerWindow {
                 fixedTab("Dyno", dynoWorkspace()),
                 fixedTab("Log Analysis", analysisWorkspace()),
                 fixedTab("MAF", mafAnalysis = new FxFuelAnalysisPane(FxFuelAnalysisPane.Mode.MAF, this::openLog)),
-                fixedTab("Injector", injectorAnalysis = new FxFuelAnalysisPane(FxFuelAnalysisPane.Mode.INJECTOR, this::openLog)),
-                fixedTab("Gauges only", new StackPane()));
+                fixedTab("Injector", injectorAnalysis = new FxFuelAnalysisPane(FxFuelAnalysisPane.Mode.INJECTOR, this::openLog)));
         new FxFuelAnalysisLink(mafAnalysis, injectorAnalysis);
         views.getSelectionModel().select(tabFor(
                 context.getPreferences().getView()));
         views.getSelectionModel().selectedIndexProperty().addListener(
                 (value, oldIndex, newIndex) -> {
-                    if (newIndex.intValue() == 8) { setGaugesOnly(true); return; }
                     LoggerWorkspaceView selected = viewFor(newIndex.intValue());
                     if (selected != null) context.getPreferences().setView(selected);
+                    refreshViews();
                 });
 
         workspace.setOrientation(Orientation.HORIZONTAL);
@@ -419,12 +421,13 @@ final class FxLoggerWindow {
     private Node dashboardWorkspace(Node cards) {
         Button gaugeTheme = new Button("Default gauge style…");
         gaugeTheme.setOnAction(event -> chooseGaugeStyle(null));
-        Button mounted = new Button("Gauges only");
+        Button mounted = new Button("Open gauge display");
+        mounted.setId("dashboard-open-gauge-display");
+        mounted.setMinHeight(38);
+        mounted.getStyleClass().add("dashboard-primary");
         mounted.setOnAction(event -> setGaugesOnly(true));
         dashboardSelection.getStyleClass().add("muted");
-        HBox selection = new HBox(6,
-                styled("SELECTED GAUGE", "section-kicker"),
-                dashboardSelection);
+        HBox selection = new HBox(8, styled("SELECTED TILE", "section-kicker"), dashboardSelection);
         HBox roles = new HBox(6,
                 roleButton(LoggerDashboardTileRole.GAUGE),
                 roleButton(LoggerDashboardTileRole.VALUE),
@@ -437,11 +440,31 @@ final class FxLoggerWindow {
         selection.setAlignment(Pos.CENTER_LEFT);
         roles.setAlignment(Pos.CENTER_LEFT);
         sizes.setAlignment(Pos.CENTER_LEFT);
-        FlowPane styles = new FlowPane(12, 6, gaugeTheme, mounted, selection, roles, sizes);
-        styles.setAlignment(Pos.CENTER_LEFT);
-        styles.setPadding(new Insets(8, 12, 8, 12));
+        Label title = styled("Dashboard", "title");
+        Label subtitle = styled("Your live instruments. Choose a style, customize a tile, or open the dedicated gauge display.", "muted");
+        subtitle.setWrapText(true);
+        VBox intro = new VBox(4, title, subtitle);
+        HBox.setHgrow(intro, Priority.ALWAYS);
+        FlowPane actions = new FlowPane(8, 6, gaugeTheme, mounted);
+        actions.setAlignment(Pos.CENTER_RIGHT);
+        VBox header = new VBox(10, intro, actions);
+        header.getStyleClass().add("dashboard-header");
+        VBox roleGroup = new VBox(5, styled("DISPLAY TYPE", "section-kicker"), roles);
+        VBox sizeGroup = new VBox(5, styled("TILE SIZE", "section-kicker"), sizes);
+        FlowPane choices = new FlowPane(22, 10, roleGroup, sizeGroup);
+        Label guidance = styled("Click a dashboard tile to select it. Use its Customize menu for style, limits, color, or a detached window.", "muted");
+        guidance.setWrapText(true);
+        VBox editor = new VBox(10, selection, choices, guidance);
+        editor.setPadding(new Insets(10));
+        javafx.scene.control.TitledPane customization = new javafx.scene.control.TitledPane("Customize selected tile", editor);
+        customization.setId("dashboard-tile-customization");
+        customization.setExpanded(false);
+        customization.setAnimated(false);
+        VBox controls = new VBox(8, header, customization);
+        controls.setPadding(new Insets(12, 14, 6, 14));
         BorderPane pane = new BorderPane(cards);
-        pane.setTop(styles);
+        pane.setId("desktop-dashboard");
+        pane.setTop(controls);
         return pane;
     }
 
@@ -491,6 +514,10 @@ final class FxLoggerWindow {
         addStatisticColumn("Minimum", FxLoggerStatistics::minimum);
         addStatisticColumn("Maximum", FxLoggerStatistics::maximum);
         addStatisticColumn("Average", FxLoggerStatistics::average);
+        name.setMinWidth(120); name.setPrefWidth(200);
+        value.setMinWidth(65); value.setPrefWidth(85);
+        units.setMinWidth(55); units.setPrefWidth(65);
+        data.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
         data.setPlaceholder(styled(
                 "Select channels from the rail to populate live data.",
                 "muted"));
@@ -502,6 +529,7 @@ final class FxLoggerWindow {
         reset.setTooltip(new Tooltip("Reset rolling statistics and graph history; keep current readings and recording"));
         reset.setOnAction(event -> {
             context.getLiveData().resetHistory();
+            if (dyno != null) dyno.invalidate();
             refreshViews();
             status.setText("View statistics reset. Recording and saved logs are unchanged.");
         });
@@ -524,7 +552,7 @@ final class FxLoggerWindow {
                     sample.getParameterId(), List.of()), sample.getUnits());
             return new ReadOnlyStringWrapper(stats.display(value.applyAsDouble(stats)));
         });
-        column.setPrefWidth(125);
+        column.setMinWidth(65); column.setPrefWidth(80);
         data.getColumns().add(column);
     }
 
@@ -548,27 +576,38 @@ final class FxLoggerWindow {
                         selectedDashboardParameter))) {
             selectedDashboardParameter = null;
         }
-        data.setItems(FXCollections.observableArrayList(selected));
-        overview.getChildren().clear();
-        dashboard.getChildren().clear();
+        LiveDataSample previousSelection = data.getSelectionModel().getSelectedItem();
+        data.getItems().setAll(selected);
+        if (previousSelection != null) selected.stream().filter(s -> s.getParameterId().equals(previousSelection.getParameterId()))
+                .findFirst().ifPresent(s -> data.getSelectionModel().select(s));
+        List<Node> overviewNodes = new ArrayList<>(), dashboardNodes = new ArrayList<>();
         int index = 0;
         for (LiveDataSample sample : selected) {
-            VBox card = valueCard(sample, false);
+            VBox card = overviewCards.computeIfAbsent(sample.getParameterId(), id -> valueCard(sample, false));
+            ((Label) card.getChildren().get(0)).setText(sample.getName());
+            ((Label) card.getChildren().get(1)).setText(sample.getDisplayValue());
+            ((Label) card.getChildren().get(2)).setText(sample.getUnits());
             card.setPrefWidth(190);
-            overview.getChildren().add(card);
-            dashboard.getChildren().add(dashboardCard(sample, index++, false));
+            overviewNodes.add(card);
+            dashboardNodes.add(dashboardCard(sample, index++, false));
         }
         if (selected.isEmpty()) {
-            overview.getChildren().add(emptyLoggerState(
+            overviewNodes.add(emptyLoggerState(
                     "No live channels selected",
                     "Choose channels from the left rail to build the overview."));
-            dashboard.getChildren().add(emptyLoggerState(
+            dashboardNodes.add(emptyLoggerState(
                     "No dashboard gauges yet",
                     "Select channels first, then choose each gauge style and size."));
         }
+        if (!overview.getChildren().equals(overviewNodes)) overview.getChildren().setAll(overviewNodes);
+        if (!dashboard.getChildren().equals(dashboardNodes)) dashboard.getChildren().setAll(dashboardNodes);
+        var activeIds = selected.stream().map(LiveDataSample::getParameterId).collect(java.util.stream.Collectors.toSet());
+        overviewCards.keySet().retainAll(activeIds);
+        dashboardCards.keySet().removeIf(key -> !activeIds.contains(key.substring(2)));
+        dashboardCardKeys.keySet().retainAll(dashboardCards.keySet());
         updateDashboardControls();
         refreshDetachedGauges(selected);
-        graph.setData(viewHistory, selected);
+        if (views.getSelectionModel().getSelectedIndex() == 2) graph.setData(viewHistory, selected);
         if (dyno != null) dyno.refresh(channelSnapshot);
     }
 
@@ -586,6 +625,25 @@ final class FxLoggerWindow {
         LoggerDashboardTile tile = tileFor(sample.getParameterId(), order);
         Color accent = gaugeColors.computeIfAbsent(sample.getParameterId(),
                 ignored -> savedGaugeColor(tile));
+        String cacheId = (detached ? "D:" : "A:") + sample.getParameterId();
+        String signature = tile.getRole() + "/" + tile.getSize() + "/" + tile.getCustomWidth() + "/" + tile.getCustomHeight()
+                + "/" + tile.resolveGaugeTheme(context.getPreferences().getGaugeTheme()) + "/" + accent + "/" + sample.getConversionIdentity()
+                + "/" + sample.getName() + "/" + sample.getUnits();
+        VBox cached = dashboardCards.get(cacheId);
+        if (cached != null && signature.equals(dashboardCardKeys.get(cacheId))) {
+            Node body = cached.getChildren().get(1);
+            if (body instanceof FxInstrumentView instrument) instrument.setReading(gaugeReading(sample));
+            else if (body instanceof FxLegacyGaugeView legacy) legacy.setReading(gaugeReading(sample));
+            else cached.getChildren().set(1, switch (tile.getRole()) {
+                case GAUGE -> analogGauge(sample, accent);
+                case VALUE -> digitalGauge(sample, accent);
+                case TREND -> trendGauge(sample, accent);
+                case ALARM -> alarmGauge(sample, accent);
+            });
+            cached.getStyleClass().remove("logger-card-selected");
+            if (sample.getParameterId().equals(selectedDashboardParameter)) cached.getStyleClass().add("logger-card-selected");
+            return cached;
+        }
         Label name = styled(sample.getName(), "section-kicker");
         Label units = styled(sample.getUnits(), "muted");
         Node body = switch (tile.getRole()) {
@@ -610,7 +668,14 @@ final class FxLoggerWindow {
         resize.setVisible(tile.getSize() == LoggerDashboardTileSize.WIDE
                 && !detached);
         resize.setManaged(resize.isVisible());
-        FlowPane footer = new FlowPane(6, 4, units, resize, styleChoice, settings, color, detach);
+        javafx.scene.control.MenuButton customize = new javafx.scene.control.MenuButton("Customize");
+        customize.setAccessibleText("Customize " + sample.getName());
+        MenuItem detachItem = item(detached ? "Already detached" : "Detach window", event -> detach.fire());
+        detachItem.setDisable(detached);
+        customize.getItems().addAll(item("Gauge style…", event -> styleChoice.fire()),
+                item("Limits and alerts…", event -> settings.fire()),
+                item("Accent color…", event -> color.fire()), detachItem);
+        FlowPane footer = new FlowPane(8, 4, units, resize, customize);
         footer.setVisible(!gaugesOnly); footer.setManaged(!gaugesOnly);
         footer.setAlignment(Pos.CENTER_LEFT);
         VBox card = new VBox(7, name, body, footer);
@@ -670,6 +735,7 @@ final class FxLoggerWindow {
             selectedDashboardParameter = sample.getParameterId();
             refreshViews();
         });
+        dashboardCards.put(cacheId, card); dashboardCardKeys.put(cacheId, signature);
         return card;
     }
 
@@ -1137,8 +1203,11 @@ final class FxLoggerWindow {
                 selectedOrder(), true)), 380, 330);
         FxTheme.apply(detached, scene);
         detached.setScene(scene);
-        detached.setOnHidden(event -> detachedGauges.remove(
-                sample.getParameterId()));
+        detached.setOnHidden(event -> {
+            detachedGauges.remove(sample.getParameterId());
+            dashboardCards.remove("D:" + sample.getParameterId());
+            dashboardCardKeys.remove("D:" + sample.getParameterId());
+        });
         detachedGauges.put(sample.getParameterId(), detached);
         FxWindowPlacement.show(detached);
     }
@@ -1148,9 +1217,10 @@ final class FxLoggerWindow {
         selected.forEach(sample -> byId.put(sample.getParameterId(), sample));
         detachedGauges.forEach((parameterId, detached) -> {
             LiveDataSample sample = byId.get(parameterId);
-            detached.getScene().setRoot(new StackPane(sample != null
-                    ? dashboardCard(sample, selectedOrder(), true)
-                    : styled("Channel removed — no live data", "muted")));
+            StackPane holder = (StackPane) detached.getScene().getRoot();
+            Node content = sample != null ? dashboardCard(sample, selectedOrder(), true)
+                    : styled("Channel removed — no live data", "muted");
+            if (holder.getChildren().size() != 1 || holder.getChildren().getFirst() != content) holder.getChildren().setAll(content);
         });
     }
 
@@ -1199,7 +1269,7 @@ final class FxLoggerWindow {
         channelRail.setRecording(next == LoggerSessionState.RECORDING);
         sessionState.setText(next.getDisplayName());
         connect.setDisable(next != LoggerSessionState.STOPPED);
-        disconnect.setDisable(next == LoggerSessionState.STOPPED);
+        disconnect.setDisable(false); // Also cancels a queued start before CONNECTING is published.
         boolean canRecord = next == LoggerSessionState.LIVE_ECU
                 || next == LoggerSessionState.LIVE_EXTERNAL
                 || next == LoggerSessionState.RECORDING;
@@ -1233,12 +1303,10 @@ final class FxLoggerWindow {
                         : new File(configured).getParentFile());
         if (selected == null) return;
         try {
-            runtime.requireConfigurationEditable();
-            runtime.getSettings().setLoggerDefinitionFilePath(
-                    selected.getAbsolutePath());
-            runtime.getSettings().setLastDefinitionDir(selected.getParentFile());
-            runtime.reloadConfiguration();
-            com.romraider.util.SettingsManager.save(runtime.getSettings());
+            Settings settings = runtime.getSettings();
+            runtime.applySetup(selected.getAbsolutePath(), settings.getLoggerOutputDirPath(), settings.getLoggerPort(),
+                    settings.getLoggerProtocol(), settings.getTransportProtocol(), settings.getTargetModule(),
+                    settings.getAutoConnectOnStartup(), () -> SettingsManager.save(settings));
             status.setText("Loaded Logger definition: " + selected.getName());
             channelRail.update(channelSnapshot);
             considerAutoConnect();
@@ -1393,68 +1461,4 @@ final class FxLoggerWindow {
         return region;
     }
 
-    private static final class LiveGraph extends StackPane {
-        private final Canvas canvas = new Canvas();
-        private final Label empty = styled(
-                "Select live channels to draw the graph.", "muted");
-        private Map<String, List<LiveDataSample>> history = Map.of();
-        private List<LiveDataSample> selected = List.of();
-
-        LiveGraph() {
-            getChildren().addAll(canvas, empty);
-            canvas.widthProperty().bind(widthProperty());
-            canvas.heightProperty().bind(heightProperty());
-            widthProperty().addListener((value, oldWidth, newWidth) -> draw());
-            heightProperty().addListener((value, oldHeight, newHeight) -> draw());
-        }
-
-        void setData(Map<String, List<LiveDataSample>> history,
-                List<LiveDataSample> selected) {
-            this.history = history;
-            this.selected = selected;
-            empty.setVisible(selected.isEmpty());
-            draw();
-        }
-
-        private void draw() {
-            double width = canvas.getWidth();
-            double height = canvas.getHeight();
-            if (width <= 0 || height <= 0) return;
-            GraphicsContext graphics = canvas.getGraphicsContext2D();
-            graphics.setFill(FxTheme.isDark() ? Color.web("#10151b")
-                    : Color.web("#f4f7f9"));
-            graphics.fillRect(0, 0, width, height);
-            graphics.setStroke(FxTheme.isDark() ? Color.web("#34404c")
-                    : Color.web("#d2dbe1"));
-            for (int line = 1; line < 5; line++) {
-                double y = line * height / 5;
-                graphics.strokeLine(0, y, width, y);
-            }
-            Color[] colors = {Color.web("#0d948c"), Color.web("#d92632"),
-                    Color.web("#3b82f6"), Color.web("#f59e0b")};
-            int series = 0;
-            for (LiveDataSample latest : selected) {
-                List<LiveDataSample> values = history.get(latest.getParameterId());
-                if (values == null || values.size() < 2) continue;
-                double min = values.stream().mapToDouble(
-                        LiveDataSample::getRawValue).filter(Double::isFinite).min().orElse(0);
-                double max = values.stream().mapToDouble(
-                        LiveDataSample::getRawValue).filter(Double::isFinite).max().orElse(min + 1);
-                if (max == min) max = min + 1;
-                graphics.setStroke(colors[series++ % colors.length]);
-                graphics.setLineWidth(2);
-                for (int index = 1; index < values.size(); index++) {
-                    if (!Double.isFinite(values.get(index - 1).getRawValue())
-                            || !Double.isFinite(values.get(index).getRawValue())) continue;
-                    double x1 = (index - 1.0) / (values.size() - 1) * width;
-                    double x2 = index / (double) (values.size() - 1) * width;
-                    double y1 = height - (values.get(index - 1).getRawValue()
-                            - min) / (max - min) * height;
-                    double y2 = height - (values.get(index).getRawValue()
-                            - min) / (max - min) * height;
-                    graphics.strokeLine(x1, y1, x2, y2);
-                }
-            }
-        }
-    }
 }

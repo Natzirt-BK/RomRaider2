@@ -10,6 +10,19 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.Test;
 
 public class LoggerSessionServiceTest {
+    @Test public void stopIsRetainedWhileConnectionStartsWithoutPublishedState() throws Exception {
+        LoggerLiveDataBus bus = LoggerLiveDataBus.getInstance(); bus.stopped();
+        CountDownLatch entered = new CountDownLatch(1), release = new CountDownLatch(1), stopped = new CountDownLatch(1);
+        LoggerSessionService service = new LoggerSessionService(bus, () -> {
+            entered.countDown();
+            try { release.await(2, TimeUnit.SECONDS); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+        }, stopped::countDown, () -> {}, () -> {}, failure -> {});
+        try {
+            service.connect(); assertEquals(true, entered.await(2, TimeUnit.SECONDS));
+            service.disconnect(); release.countDown();
+            assertEquals(true, stopped.await(2, TimeUnit.SECONDS));
+        } finally { release.countDown(); service.close(); bus.stopped(); }
+    }
     @Test
     public void suppressesDuplicateCommandsWhileOneIsPending()
             throws Exception {

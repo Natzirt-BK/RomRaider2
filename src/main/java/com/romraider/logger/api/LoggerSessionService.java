@@ -30,6 +30,7 @@ public final class LoggerSessionService implements LoggerLiveDataListener,
     private final CopyOnWriteArrayList<Consumer<LoggerSessionState>> listeners =
             new CopyOnWriteArrayList<Consumer<LoggerSessionState>>();
     private final AtomicBoolean commandPending = new AtomicBoolean();
+    private final AtomicBoolean stopPending = new AtomicBoolean();
     private volatile LoggerSessionState state;
     private volatile boolean closed;
 
@@ -72,7 +73,7 @@ public final class LoggerSessionService implements LoggerLiveDataListener,
         return state;
     }
 
-    public boolean isCommandPending() { return commandPending.get(); }
+    public boolean isCommandPending() { return commandPending.get() || stopPending.get(); }
 
     public void addStateListener(Consumer<LoggerSessionState> listener) {
         if (listener == null || listeners.contains(listener)) return;
@@ -89,14 +90,27 @@ public final class LoggerSessionService implements LoggerLiveDataListener,
     }
 
     public void disconnect() {
-        submit(() -> state != LoggerSessionState.STOPPED, new Runnable() {
-            public void run() {
-                if (state == LoggerSessionState.RECORDING) {
-                    stopRecordingAction.run();
+        // Stop is never dropped behind an in-flight start, even before CONNECTING is published.
+        if (closed || !stopPending.compareAndSet(false, true)) return;
+        try {
+            commands.execute(() -> {
+                try {
+                    if (closed) return;
+                    try {
+                        if (state == LoggerSessionState.RECORDING) stopRecordingAction.run();
+                    } finally {
+                        disconnectAction.run();
+                    }
+                } catch (RuntimeException failure) {
+                    failureHandler.accept(failure);
+                } finally {
+                    stopPending.set(false);
                 }
-                disconnectAction.run();
-            }
-        });
+            });
+        } catch (RuntimeException rejected) {
+            stopPending.set(false);
+            failureHandler.accept(rejected);
+        }
     }
 
     public void startRecording() {
@@ -112,13 +126,13 @@ public final class LoggerSessionService implements LoggerLiveDataListener,
 
     private void submit(final BooleanSupplier allowed,
             final Runnable action) {
-        if (closed || !allowed.getAsBoolean()
+        if (closed || stopPending.get() || !allowed.getAsBoolean()
                 || !commandPending.compareAndSet(false, true)) return;
         try {
             commands.execute(new Runnable() {
                 public void run() {
                     try {
-                        if (allowed.getAsBoolean()) action.run();
+                        if (!closed && !stopPending.get() && allowed.getAsBoolean()) action.run();
                     } catch (RuntimeException failure) {
                         failureHandler.accept(failure);
                     } finally {

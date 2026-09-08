@@ -25,6 +25,78 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 class FxLoggerSetupTransferTest {
+    @Test void setupRejectsInvalidDestinationsAndRestoresFailedSave() throws Exception {
+        try (Fixture fixture = new Fixture()) {
+            fixture.apply(ordered("P2", "mV"));
+            var s = fixture.settings;
+            String definition = s.getLoggerDefinitionFilePath(), port = s.getLoggerPort(), target = s.getTargetModule();
+            boolean automatic = s.getAutoConnectOnStartup();
+            for (String[] invalid : List.of(new String[]{"/missing/rr2-audit.xml", "ISO9141", target},
+                    new String[]{definition, "unsupported", target}, new String[]{definition, "ISO9141", "unsupported"})) {
+                assertThrows(RuntimeException.class, () -> fixture.runtime.applySetup(invalid[0], s.getLoggerOutputDirPath(),
+                        "changed", "SSM", invalid[1], invalid[2], !automatic, () -> fail("Invalid setup must not be persisted")));
+                assertEquals(definition, s.getLoggerDefinitionFilePath()); assertEquals(port, s.getLoggerPort());
+                assertEquals(target, s.getTargetModule()); assertEquals(automatic, s.getAutoConnectOnStartup());
+                assertEquals(3, fixture.runtime.getWorkspaceContext().getChannels().getChannels().size());
+            }
+            FxTestRuntime.run(() -> {
+                assertThrows(RuntimeException.class, () -> fixture.runtime.applySetup(definition, s.getLoggerOutputDirPath(),
+                        "changed", "SSM", "ISO9141", target, !automatic, () -> { throw new IllegalStateException("Synthetic disk failure"); }));
+                assertEquals(port, s.getLoggerPort()); assertEquals(automatic, s.getAutoConnectOnStartup());
+                assertEquals(3, fixture.runtime.getWorkspaceContext().getChannels().getChannels().size());
+                assertEquals(List.of("P2"), fixture.selected());
+                assertEquals("mV", fixture.runtime.captureChannelSetup().selectedChannels().getFirst().getUnits());
+            });
+            Path otherProtocol = folder.resolve("other-protocol.xml");
+            Files.writeString(otherProtocol, XML.replace("id='SSM'", "id='OTHER'"));
+            assertThrows(RuntimeException.class, () -> fixture.runtime.applySetup(otherProtocol.toString(), s.getLoggerOutputDirPath(), port,
+                    "SSM", "ISO9141", target, automatic, () -> {}));
+            assertEquals("SSM", s.getLoggerProtocol()); assertEquals("ISO9141", s.getTransportProtocol());
+            assertEquals(definition, s.getLoggerDefinitionFilePath());
+            Path otherModule = folder.resolve("other-module.xml");
+            Files.writeString(otherModule, XML.replace("id='ecu'", "id='tcu'"));
+            assertTrue(fixture.runtime.getTargetModuleChoices(otherModule.toString(), "SSM", "ISO9141", target).contains("tcu"));
+            assertEquals(target, s.getTargetModule()); assertEquals(definition, s.getLoggerDefinitionFilePath());
+        }
+    }
+    @Test void startupPreferenceCanChangeWhileConnectionWorkerIsActive() throws Exception {
+        try (Fixture fixture = new Fixture()) {
+            boolean original = fixture.settings.getAutoConnectOnStartup();
+            Object controller = field(fixture.runtime, "controller");
+            Field worker = controller.getClass().getDeclaredField("workerThread");
+            worker.setAccessible(true);
+            Object previousWorker = worker.get(controller);
+            try {
+                // Model the active-worker guard without starting any logger/transport.
+                worker.set(controller, Thread.currentThread());
+                assertThrows(IllegalStateException.class, fixture.runtime::requireConfigurationEditable);
+                assertTrue(fixture.runtime.applyStartupPreferenceOnly(
+                        fixture.settings.getLoggerDefinitionFilePath(), fixture.settings.getLoggerOutputDirPath(),
+                        fixture.settings.getLoggerPort(), fixture.settings.getLoggerProtocol(),
+                        fixture.settings.getTransportProtocol(), "ECU", false));
+                assertFalse(fixture.settings.getAutoConnectOnStartup());
+                assertFalse(fixture.runtime.applyStartupPreferenceOnly("changed.xml",
+                        fixture.settings.getLoggerOutputDirPath(), fixture.settings.getLoggerPort(),
+                        fixture.settings.getLoggerProtocol(), fixture.settings.getTransportProtocol(), "ECU", true));
+                assertFalse(fixture.settings.getAutoConnectOnStartup(), "Rejected connection edits must not change startup preference");
+                fixture.runtime.applySetup(fixture.settings.getLoggerDefinitionFilePath(), fixture.settings.getLoggerOutputDirPath(),
+                        fixture.settings.getLoggerPort(), fixture.settings.getLoggerProtocol(), fixture.settings.getTransportProtocol(),
+                        "ECU", true, () -> {});
+                assertTrue(fixture.settings.getAutoConnectOnStartup(), "Actual setup save path must also work during attempts");
+                assertThrows(IllegalStateException.class, () -> fixture.runtime.applySetup("changed.xml", fixture.settings.getLoggerOutputDirPath(),
+                        fixture.settings.getLoggerPort(), fixture.settings.getLoggerProtocol(), fixture.settings.getTransportProtocol(),
+                        "ECU", false, () -> fail("Active connection edits must not persist")));
+                assertTrue(fixture.settings.getAutoConnectOnStartup());
+                assertThrows(IllegalStateException.class, fixture.runtime::requireConfigurationEditable,
+                        "Startup preference must not stop or replace the worker");
+                assertEquals(3, fixture.runtime.getWorkspaceContext().getChannels().getChannels().size());
+            } finally {
+                worker.set(controller, previousWorker);
+                fixture.settings.setAutoConnectOnStartup(original);
+            }
+        }
+    }
+
     @Test void targetDropdownUsesDefinitionAndPreservesExistingSelection() throws Exception {
         try (Fixture fixture = new Fixture()) {
             String xml = Files.readString(fixture.definition).replace("</transport>",

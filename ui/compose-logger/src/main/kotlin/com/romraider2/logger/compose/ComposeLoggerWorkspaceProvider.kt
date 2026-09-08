@@ -511,7 +511,9 @@ internal fun LoggerWorkspace(
                     }
                 }
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Button(onClick = { gaugesOnly = true }, modifier = Modifier.padding(8.dp).heightIn(min = 48.dp)) { Text("Gauges only") }
+                    if (activeView == LoggerWorkspaceView.DASHBOARD) {
+                        Button(onClick = { gaugesOnly = true }, modifier = Modifier.padding(8.dp).heightIn(min = 48.dp)) { Text("Open gauge display") }
+                    }
                     Box(Modifier.weight(1f)) {
                         WorkspaceNavigation(activeView) {
                             activeView = it

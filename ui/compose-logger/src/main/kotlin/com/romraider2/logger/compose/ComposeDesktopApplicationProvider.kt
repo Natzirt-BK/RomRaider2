@@ -335,7 +335,9 @@ private fun LoggerSetupDialog(
         settings.transportProtocol.orEmpty()) }
     var target by remember { mutableStateOf(settings.targetModule.orEmpty()) }
     var targetMenuOpen by remember { mutableStateOf(false) }
-    val targetChoices = runtime.getTargetModuleChoices(protocol, transport, target)
+    val targetChoices = remember(definition, protocol, transport, target) {
+        runtime.getTargetModuleChoices(definition, protocol, transport, target)
+    }
     var outputDirectory by remember { mutableStateOf(
         settings.loggerOutputDirPath.orEmpty()) }
     var autoConnect by remember { mutableStateOf(settings.autoConnectOnStartup) }
@@ -387,7 +389,7 @@ private fun LoggerSetupDialog(
                             }
                         }
                     }
-                    Text("After changing the definition file, save and reopen setup to refresh modules.",
+                    Text("Modules follow the chosen definition and transport. Invalid selections cannot be saved.",
                         style = MaterialTheme.typography.caption)
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -405,24 +407,24 @@ private fun LoggerSetupDialog(
                     Checkbox(autoConnect, { autoConnect = it })
                     Text("Connect when the Logger opens")
                 }
+                TextButton(onClick = { runtime.workspaceContext.session.disconnect() }) {
+                    Text("Disconnect / stop attempts")
+                }
             }
         },
         confirmButton = {
             Button(onClick = {
-                val previous = loggerSetupValues(settings)
                 val requested = LoggerSetupValues(
                     definition.trim(), port.trim(), protocol.trim(),
                     transport.trim(), target.trim(), outputDirectory.trim(),
                     autoConnect)
                 runCatching {
-                    runtime.requireConfigurationEditable()
-                    applyLoggerSetup(settings, requested)
-                    runtime.reloadConfiguration()
-                    SettingsManager.save(settings)
+                    runtime.applySetup(requested.definition, requested.outputDirectory,
+                        requested.port, requested.protocol, requested.transport, requested.target, requested.autoConnect) {
+                        SettingsManager.save(settings)
+                    }
                 }.onSuccess { onDismiss() }
                     .onFailure {
-                        applyLoggerSetup(settings, previous)
-                        runCatching { runtime.reloadConfiguration() }
                         onError(rootMessage(it))
                     }
             }) { Text("Save setup") }
@@ -442,22 +444,6 @@ private data class LoggerSetupValues(
     val outputDirectory: String,
     val autoConnect: Boolean
 )
-
-private fun loggerSetupValues(settings: Settings) = LoggerSetupValues(
-    settings.loggerDefinitionFilePath.orEmpty(),
-    settings.loggerPort.orEmpty(), settings.loggerProtocol.orEmpty(),
-    settings.transportProtocol.orEmpty(), settings.targetModule.orEmpty(),
-    settings.loggerOutputDirPath.orEmpty(), settings.autoConnectOnStartup)
-
-private fun applyLoggerSetup(settings: Settings, values: LoggerSetupValues) {
-    settings.loggerDefinitionFilePath = values.definition
-    settings.loggerPort = values.port
-    settings.loggerProtocol = values.protocol
-    settings.transportProtocol = values.transport
-    settings.targetModule = values.target
-    settings.loggerOutputDirPath = values.outputDirectory
-    settings.autoConnectOnStartup = values.autoConnect
-}
 
 private fun launchEditorShell(startupFiles: List<File>) = application {
     val windowIcon = romRaiderWindowIcon()

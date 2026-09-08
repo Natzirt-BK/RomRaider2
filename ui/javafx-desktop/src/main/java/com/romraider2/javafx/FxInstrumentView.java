@@ -15,7 +15,7 @@ import javafx.scene.text.TextAlignment;
 final class FxInstrumentView extends Region {
     private final Canvas canvas = new Canvas();
     private final GaugeFaceRenderer.Style style;
-    private final GaugeFaceRenderer.Reading reading;
+    private GaugeFaceRenderer.Reading reading;
     private GaugeFaceRenderer.Presentation presentation = GaugeFaceRenderer.Presentation.CARD;
     private final com.romraider.portable.gauge.GaugeMotion motion;
     private final javafx.animation.AnimationTimer animation = new javafx.animation.AnimationTimer() {
@@ -42,6 +42,12 @@ final class FxInstrumentView extends Region {
     }
     void setPresentation(GaugeFaceRenderer.Presentation presentation) {
         this.presentation = java.util.Objects.requireNonNull(presentation);
+        requestLayout();
+    }
+    void setReading(GaugeFaceRenderer.Reading next) {
+        reading = next; motion.update(next.value, System.nanoTime());
+        setAccessibleText(next.name + ", " + (next.available() ? next.display + " " + next.units : "no valid data") + ", " + next.state);
+        if (animated() && getScene() != null) animation.start();
         requestLayout();
     }
     @Override protected void layoutChildren() {

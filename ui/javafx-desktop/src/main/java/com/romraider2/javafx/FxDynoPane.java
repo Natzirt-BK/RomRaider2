@@ -50,6 +50,7 @@ final class FxDynoPane extends BorderPane {
             "Select engine speed and vehicle speed channels.");
     private final LineChart<Number, Number> chart;
     private List<LoggerChannel> available = List.of();
+    private final ScrollPane setupScroll;
 
     FxDynoPane(LoggerWorkspaceContext context) {
         this.context = context;
@@ -64,7 +65,7 @@ final class FxDynoPane extends BorderPane {
         chart.setCreateSymbols(false);
         chart.setTitle("Road Dyno · estimated engine power and torque");
         setTop(header());
-        ScrollPane setupScroll = new ScrollPane(setup());
+        setupScroll = new ScrollPane(setup());
         setupScroll.setFitToWidth(true);
         setupScroll.setPrefViewportWidth(365);
         setupScroll.setMinHeight(0);
@@ -72,6 +73,33 @@ final class FxDynoPane extends BorderPane {
         chart.setMinSize(0, 0);
         setCenter(chart);
         BorderPane.setMargin(chart, new Insets(12));
+        for (TextField input : List.of(mass, drag, area, rolling, loss))
+            input.textProperty().addListener((o, before, after) -> invalidate());
+        rpm.valueProperty().addListener((o, before, after) -> invalidate());
+        speed.valueProperty().addListener((o, before, after) -> invalidate());
+        widthProperty().addListener((o, before, after) -> layoutSetup());
+    }
+
+    private void layoutSetup() {
+        if (getWidth() < 850) {
+            if (getLeft() != null) {
+                setLeft(null);
+                javafx.scene.control.TitledPane drawer = new javafx.scene.control.TitledPane("Run setup and calculate", setupScroll);
+                drawer.setAnimated(false); drawer.setExpanded(false);
+                setupScroll.setPrefViewportHeight(250);
+                setBottom(drawer);
+            }
+        } else if (getLeft() == null) {
+            javafx.scene.control.TitledPane drawer = (javafx.scene.control.TitledPane) getBottom();
+            if (drawer != null) drawer.setContent(null);
+            setBottom(null); setLeft(setupScroll);
+        }
+    }
+
+    void invalidate() {
+        chart.getData().clear();
+        peakPower.setText("— PEAK EST. HP"); peakTorque.setText("— PEAK EST. LB-FT");
+        runStatus.setText("Inputs changed. Calculate a new continuous pull.");
     }
 
     private VBox header() {
@@ -113,7 +141,7 @@ final class FxDynoPane extends BorderPane {
         runStatus.getStyleClass().add("muted");
         VBox box = new VBox(12, form, calculate, runStatus);
         box.setPrefWidth(365);
-        box.setMinWidth(340);
+        box.setMinWidth(0);
         box.setPadding(new Insets(16));
         box.getStyleClass().add("nav-pane");
         return box;
@@ -165,13 +193,16 @@ final class FxDynoPane extends BorderPane {
         LoggerChannel priorRpm = rpm.getValue();
         LoggerChannel priorSpeed = speed.getValue();
         available = new ArrayList<>(selected);
-        rpm.setItems(FXCollections.observableArrayList(available));
-        speed.setItems(FXCollections.observableArrayList(available));
-        rpm.setValue(findPrior(priorRpm, available));
-        speed.setValue(findPrior(priorSpeed, available));
-        if (rpm.getValue() == null) rpm.setValue(guess(available,
+        List<LoggerChannel> rpmChannels = available.stream().filter(c -> c.getUnits().equalsIgnoreCase("rpm")).toList();
+        List<LoggerChannel> speedChannels = available.stream().filter(c -> supportedSpeedUnits(c.getUnits())).toList();
+        rpm.setItems(FXCollections.observableArrayList(rpmChannels));
+        speed.setItems(FXCollections.observableArrayList(speedChannels));
+        rpm.setValue(findPrior(priorRpm, rpmChannels));
+        speed.setValue(findPrior(priorSpeed, speedChannels));
+        if (rpm.getValue() == null) rpm.setValue(guess(rpmChannels,
                 "rpm", "engine speed"));
-        LoggerChannel vehicleSpeed = guessVehicleSpeed(available);
+        LoggerChannel vehicleSpeed = guessVehicleSpeed(speedChannels);
+        if (vehicleSpeed == null && !speedChannels.isEmpty()) vehicleSpeed = speedChannels.getFirst();
         if (speed.getValue() == null || rpm.getValue() != null
                 && speed.getValue().getParameterId().equals(
                         rpm.getValue().getParameterId())) {
@@ -180,9 +211,13 @@ final class FxDynoPane extends BorderPane {
     }
 
     private void calculate() {
+        invalidate();
         try {
             LoggerChannel rpmChannel = required(rpm.getValue(), "engine speed");
             LoggerChannel speedChannel = required(speed.getValue(), "vehicle speed");
+            if (rpmChannel.getParameterId().equals(speedChannel.getParameterId())
+                    || !rpmChannel.getUnits().equalsIgnoreCase("rpm"))
+                throw new IllegalArgumentException("Choose distinct RPM and vehicle-speed channels with supported units");
             double vehicleMass = positive(mass, "Vehicle mass");
             double cd = nonNegative(drag, "Drag coefficient");
             double frontalArea = positive(area, "Frontal area");
@@ -204,7 +239,6 @@ final class FxDynoPane extends BorderPane {
                 throw new IllegalArgumentException(
                         "At least three synchronized RPM and speed samples are required");
             }
-            points.sort(Comparator.comparingDouble(DynoPoint::rpm));
             XYChart.Series<Number, Number> power = new XYChart.Series<>();
             power.setName("Estimated engine horsepower");
             XYChart.Series<Number, Number> torque = new XYChart.Series<>();
@@ -230,7 +264,7 @@ final class FxDynoPane extends BorderPane {
                     maxPower, powerRpm));
             peakTorque.setText(String.format(Locale.ROOT, "%.1f LB-FT @ %.0f",
                     maxTorque, torqueRpm));
-            runStatus.setText(points.size() + " calculated points · "
+            runStatus.setText(points.size() + " points from the latest continuous pull · "
                     + "Use the same road, gear, and vehicle settings when "
                     + "comparing runs.");
             runStatus.getStyleClass().remove("danger");
@@ -245,20 +279,32 @@ final class FxDynoPane extends BorderPane {
     static List<DynoPoint> project(List<LiveDataSample> rpms,
             List<LiveDataSample> speeds, String speedUnits, double mass,
             double cd, double area, double crr, double drivetrainLoss) {
-        int count = Math.min(rpms.size(), speeds.size());
+        if (!supportedSpeedUnits(speedUnits)) throw new IllegalArgumentException("Unsupported vehicle-speed units: " + speedUnits);
+        List<LiveDataSample> timedRpm = rpms.stream()
+                .filter(s -> Double.isFinite(s.getRawValue()) && s.getUnits().equalsIgnoreCase("rpm"))
+                .sorted(Comparator.comparingLong(LiveDataSample::getTimestampMillis)).toList();
         List<DynoPoint> result = new ArrayList<>();
-        for (int index = 1; index < count; index++) {
-            LiveDataSample before = speeds.get(speeds.size() - count + index - 1);
-            LiveDataSample current = speeds.get(speeds.size() - count + index);
-            LiveDataSample currentRpm = rpms.get(rpms.size() - count + index);
+        List<DynoPoint> completed = new ArrayList<>();
+        double priorRpm = 0, priorRatio = 0;
+        for (int index = 1; index < speeds.size(); index++) {
+            LiveDataSample before = speeds.get(index - 1);
+            LiveDataSample current = speeds.get(index);
+            LiveDataSample currentRpm = nearestRpm(timedRpm, current.getTimestampMillis());
             double seconds = (current.getTimestampMillis()
                     - before.getTimestampMillis()) / 1000.0;
-            if (seconds <= 0 || seconds > 2.0) continue;
             double previousSpeed = metersPerSecond(before.getRawValue(), speedUnits);
             double velocity = metersPerSecond(current.getRawValue(), speedUnits);
             double acceleration = (velocity - previousSpeed) / seconds;
-            double engineSpeed = currentRpm.getRawValue();
-            if (velocity <= 0 || acceleration <= 0 || engineSpeed <= 0) continue;
+            double engineSpeed = currentRpm == null ? Double.NaN : currentRpm.getRawValue();
+            double ratio = engineSpeed / velocity;
+            boolean valid = seconds > 0 && seconds <= 2 && Double.isFinite(acceleration)
+                    && Double.isFinite(engineSpeed) && velocity > 0 && acceleration > 0 && engineSpeed > 0
+                    && before.getUnits().equals(current.getUnits()) && current.getUnits().equals(speedUnits);
+            if (!valid || engineSpeed <= priorRpm || priorRatio > 0 && Math.abs(ratio / priorRatio - 1) > .15) {
+                if (result.size() >= 3) completed = new ArrayList<>(result);
+                result.clear(); priorRpm = 0; priorRatio = 0;
+                if (!valid) continue;
+            }
             double force = mass * acceleration + mass * GRAVITY * crr
                     + .5 * AIR_DENSITY * cd * area * velocity * velocity;
             double wheelHp = Math.max(0, force * velocity / 745.699872);
@@ -266,13 +312,32 @@ final class FxDynoPane extends BorderPane {
             double torque = estimatedCrank * 5252.113 / engineSpeed;
             if (Double.isFinite(estimatedCrank) && Double.isFinite(torque)) {
                 result.add(new DynoPoint(engineSpeed, estimatedCrank, torque));
+                priorRpm = engineSpeed; priorRatio = ratio;
             }
         }
-        return result;
+        return result.size() >= 3 || completed.isEmpty() ? result : completed;
+    }
+
+    private static LiveDataSample nearestRpm(List<LiveDataSample> values, long time) {
+        int low = 0, high = values.size();
+        while (low < high) {
+            int mid = (low + high) >>> 1;
+            if (values.get(mid).getTimestampMillis() < time) low = mid + 1; else high = mid;
+        }
+        LiveDataSample best = low < values.size() ? values.get(low) : null;
+        if (low > 0 && (best == null || Math.abs((double) values.get(low - 1).getTimestampMillis() - time)
+                < Math.abs((double) best.getTimestampMillis() - time))) best = values.get(low - 1);
+        return best != null && Math.abs((double) best.getTimestampMillis() - time) <= 250 ? best : null;
+    }
+
+    static boolean supportedSpeedUnits(String units) {
+        return List.of("mph", "km/h", "kph", "kmh", "m/s", "mps").contains(units == null ? "" : units.trim().toLowerCase(Locale.ROOT));
     }
 
     private static double metersPerSecond(double speed, String units) {
-        String normalized = units == null ? "" : units.toLowerCase(Locale.ROOT);
+        String normalized = units == null ? "" : units.trim().toLowerCase(Locale.ROOT);
+        if (!supportedSpeedUnits(units)) throw new IllegalArgumentException("Unsupported vehicle-speed units: " + units);
+        if (normalized.equals("m/s") || normalized.equals("mps")) return speed;
         if (normalized.contains("km") || normalized.contains("kph")) {
             return speed / 3.6;
         }
@@ -303,7 +368,8 @@ final class FxDynoPane extends BorderPane {
         if (first.size() != second.size()) return false;
         for (int index = 0; index < first.size(); index++) {
             if (!first.get(index).getParameterId().equals(
-                    second.get(index).getParameterId())) return false;
+                    second.get(index).getParameterId()) || !first.get(index).getConversionIdentity().equals(
+                            second.get(index).getConversionIdentity()) || !first.get(index).getUnits().equals(second.get(index).getUnits())) return false;
         }
         return true;
     }

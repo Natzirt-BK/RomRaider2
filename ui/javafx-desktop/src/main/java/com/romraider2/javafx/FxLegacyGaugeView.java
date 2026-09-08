@@ -15,13 +15,18 @@ import javafx.scene.text.TextAlignment;
 final class FxLegacyGaugeView extends Region {
     private final Canvas canvas = new Canvas();
     private final LoggerGaugeTheme theme;
-    private final GaugeFaceRenderer.Reading reading;
+    private GaugeFaceRenderer.Reading reading;
     private final Color override;
     FxLegacyGaugeView(LoggerGaugeTheme theme, GaugeFaceRenderer.Reading reading, Color override) {
         this.theme = theme; this.reading = reading; this.override = override;
         getChildren().add(canvas); setMinSize(120, 94); setPrefSize(220, 172);
         setAccessibleText(reading.name + ", " + (reading.available() ? reading.display + " " + reading.units
                 : "no valid data") + ", " + reading.state);
+    }
+    void setReading(GaugeFaceRenderer.Reading next) {
+        reading = next;
+        setAccessibleText(next.name + ", " + (next.available() ? next.display + " " + next.units : "no valid data") + ", " + next.state);
+        requestLayout();
     }
     @Override protected void layoutChildren() {
         canvas.setWidth(getWidth()); canvas.setHeight(getHeight());

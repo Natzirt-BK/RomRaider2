@@ -113,8 +113,29 @@ public final class LoggerDesktopRuntime implements EcuRelatedMessageListener,
 
     /** Read-only setup choices from the loaded definition, never adapter discovery. */
     public synchronized List<String> getTargetModuleChoices(String protocol, String transport, String current) {
+        return targetChoices(setupProtocols, protocol, transport, current);
+    }
+
+    /** Preview a newly chosen definition without applying it or changing live settings. */
+    public synchronized List<String> getTargetModuleChoices(String definition, String protocol, String transport, String current) {
+        if (sameSetupValue(definition, settings.getLoggerDefinitionFilePath()))
+            return getTargetModuleChoices(protocol, transport, current);
+        try {
+            if (clean(definition).isEmpty() || !new File(definition).isFile())
+                return targetChoices(Collections.emptyMap(), protocol, transport, current);
+            EcuDataLoaderImpl loader = new EcuDataLoaderImpl();
+            loader.loadConfigForDesktop(definition, null, clean(protocol), settings.getFileLoggingControllerSwitchId(), ecuInit);
+            return targetChoices(loader.getProtocols(), protocol, transport, current);
+        } catch (ConfigurationException failure) {
+            // Save gives the actionable parse/validation error; an unfinished path is normal while editing.
+            return targetChoices(Collections.emptyMap(), protocol, transport, current);
+        }
+    }
+
+    private static List<String> targetChoices(Map<String, Map<Transport, Collection<Module>>> protocols,
+            String protocol, String transport, String current) {
         List<String> result = new ArrayList<>();
-        for (var entry : setupProtocols.entrySet()) {
+        for (var entry : protocols.entrySet()) {
             if (!entry.getKey().equalsIgnoreCase(protocol == null ? "" : protocol.trim())) continue;
             for (var candidate : entry.getValue().entrySet()) {
                 if (!candidate.getKey().getId().equalsIgnoreCase(transport == null ? "" : transport.trim())) continue;
@@ -193,7 +214,7 @@ public final class LoggerDesktopRuntime implements EcuRelatedMessageListener,
                 new Runnable() {
                     @Override public void run() { }
                 }));
-        fileHandler.addListener(liveData);
+        fileHandler.addListener(new com.romraider.logger.api.LoggerRecordingStatusListener(liveData));
         session = new LoggerSessionService(liveData,
                 this::startController, controller::stop,
                 fileHandler::start, fileHandler::stop,
@@ -220,6 +241,10 @@ public final class LoggerDesktopRuntime implements EcuRelatedMessageListener,
 
     private synchronized void startController() {
         if (setupRecoveryRequired) throw new IllegalStateException("Close and reopen the Logger after the failed setup rollback");
+        if (!isNullOrEmpty(settings.getLoggerDefinitionFilePath())) {
+            validateLoggerConfiguration();
+            if (definitionLoadFailed) throw new IllegalStateException("Reload a valid Logger definition before connecting");
+        }
         if (!closed) controller.start();
     }
 
@@ -382,17 +407,42 @@ public final class LoggerDesktopRuntime implements EcuRelatedMessageListener,
         validateLoggerConfiguration();
         loadEcuDefinitions();
         reloadDefinitionAndChannels(false);
+        if (!isNullOrEmpty(settings.getLoggerDefinitionFilePath()) && definitionLoadFailed)
+            throw new ConfigurationException("Logger definition could not be applied");
     }
 
     public synchronized void requireConfigurationEditable() {
         if (controller.isStarted()) {
             throw new IllegalStateException(
-                    "Disconnect the Logger before changing its configuration");
+                    "Stop the active connection attempt or disconnect the Logger before changing connection settings");
         }
     }
 
+    /** Startup policy is not live transport configuration; do not reload or reconnect. */
+    public synchronized boolean applyStartupPreferenceOnly(String definition, String output,
+            String port, String protocol, String transport, String target, boolean automatic) {
+        if (!sameSetupValue(definition, settings.getLoggerDefinitionFilePath())
+                || !sameSetupValue(output, settings.getLoggerOutputDirPath())
+                || !sameSetupValue(port, settings.getLoggerPort())
+                || !sameSetupValue(protocol, settings.getLoggerProtocol())
+                || !sameSetupValue(transport, settings.getTransportProtocol())
+                || !(target == null ? "" : target.trim()).equalsIgnoreCase(
+                        settings.getTargetModule() == null ? "" : settings.getTargetModule().trim())) return false;
+        settings.setAutoConnectOnStartup(automatic);
+        return true;
+    }
+
+    private static boolean sameSetupValue(String a, String b) {
+        return (a == null ? "" : a.trim()).equals(b == null ? "" : b.trim());
+    }
+
     private void validateLoggerConfiguration() {
-        String definitionPath = settings.getLoggerDefinitionFilePath();
+        validateLoggerConfiguration(settings.getLoggerDefinitionFilePath(), settings.getLoggerProtocol(),
+                settings.getTransportProtocol(), settings.getTargetModule());
+    }
+
+    private void validateLoggerConfiguration(String definitionPath, String protocol,
+            String transport, String target) {
         if (isNullOrEmpty(definitionPath)) return;
         File definition = new File(definitionPath);
         if (!definition.isFile()) {
@@ -404,17 +454,89 @@ public final class LoggerDesktopRuntime implements EcuRelatedMessageListener,
             throw new ConfigurationException(
                     "Logger definitions must be XML files.");
         }
-        if (isNullOrEmpty(settings.getLoggerProtocol())
-                || isNullOrEmpty(settings.getTransportProtocol())
-                || isNullOrEmpty(settings.getTargetModule())) {
+        if (isNullOrEmpty(protocol) || isNullOrEmpty(transport) || isNullOrEmpty(target)) {
             throw new ConfigurationException(
                     "Protocol, transport, and target module are required "
                             + "when an ECU Logger definition is configured.");
         }
-        EcuDataLoader loader = new EcuDataLoaderImpl();
-        loader.loadConfigFromXml(definitionPath,
-                settings.getLoggerProtocol(),
+        EcuDataLoaderImpl loader = new EcuDataLoaderImpl();
+        loader.loadConfigForDesktop(definitionPath, null, protocol,
                 settings.getFileLoggingControllerSwitchId(), ecuInit);
+        requireDestination(loader, protocol, transport, target);
+    }
+
+    /** Validate before mutation, and restore both runtime and settings on apply/save failure. */
+    public synchronized void applySetup(String definition, String output, String port,
+            String protocol, String transport, String target, boolean automatic, Runnable persist) {
+        String[] next = {clean(definition), clean(output), clean(port), clean(protocol), clean(transport), clean(target)};
+        String[] previous = {settings.getLoggerDefinitionFilePath(), settings.getLoggerOutputDirPath(),
+                settings.getLoggerPort(), settings.getLoggerProtocol(), settings.getTransportProtocol(), settings.getTargetModule()};
+        boolean previousAuto = settings.getAutoConnectOnStartup();
+        boolean preferenceOnly = true;
+        for (int i = 0; i < next.length; i++) preferenceOnly &= i == 5
+                ? next[i].equalsIgnoreCase(clean(previous[i])) : sameSetupValue(next[i], previous[i]);
+        if (!preferenceOnly) {
+            requireConfigurationEditable();
+            validateLoggerConfiguration(next[0], next[3], next[4], next[5]);
+        }
+        File previousDir = settings.getLastDefinitionDir();
+        boolean previousFast = settings.isFastPoll();
+        boolean previousSwitch = settings.isFileLoggingControllerSwitchActive();
+        List<String> previousSelection = new ArrayList<>(selectedIds);
+        Map<String, EcuDataConvertor> previousConversions = new LinkedHashMap<>();
+        for (String id : previousSelection) previousConversions.put(id, dataById.get(id).getSelectedConvertor());
+        try {
+            setSetupValues(next, automatic);
+            if (!preferenceOnly) {
+                if (!next[0].isEmpty()) settings.setLastDefinitionDir(new File(next[0]).getParentFile());
+                reloadConfiguration();
+            }
+            persist.run();
+        } catch (RuntimeException failure) {
+            setSetupValues(previous, previousAuto);
+            settings.setLastDefinitionDir(previousDir);
+            settings.setFastPoll(previousFast);
+            if (!preferenceOnly) {
+                try {
+                    reloadConfiguration();
+                    for (String id : new ArrayList<>(selectedIds)) select(id, false);
+                    for (String id : previousSelection) {
+                        if (!dataById.containsKey(id)) throw new IllegalStateException("Previous Logger channel is unavailable: " + id);
+                        if (previousConversions.get(id) != null) {
+                            String identity = com.romraider.logger.api.LoggerConversionIdentity.of(previousConversions.get(id));
+                            EcuDataConvertor restored = null;
+                            for (EcuDataConvertor candidate : dataById.get(id).getConvertors())
+                                if (identity.equals(com.romraider.logger.api.LoggerConversionIdentity.of(candidate))) restored = candidate;
+                            if (restored == null) throw new IllegalStateException("Previous Logger units are unavailable: " + id);
+                            dataById.get(id).selectConvertor(restored);
+                        }
+                        select(id, true);
+                    }
+                    settings.setFileLoggingControllerSwitchActive(previousSwitch);
+                    publishChannels();
+                } catch (RuntimeException rollback) { setupRecoveryRequired = true; failure.addSuppressed(rollback); }
+            }
+            throw failure;
+        }
+    }
+
+    private static String clean(String value) { return value == null ? "" : value.trim(); }
+
+    private void setSetupValues(String[] values, boolean automatic) {
+        settings.setLoggerDefinitionFilePath(values[0]); settings.setLoggerOutputDirPath(values[1]);
+        settings.setLoggerPort(values[2]); settings.setLoggerProtocol(values[3]);
+        settings.setTransportProtocol(values[4]); settings.setTargetModule(values[5]);
+        settings.setAutoConnectOnStartup(automatic);
+    }
+
+    private static Module requireDestination(EcuDataLoader loader, String protocol, String transport, String target) {
+        Map<Transport, Collection<Module>> transports = loader.getProtocols().get(protocol);
+        if (transports != null) for (Map.Entry<Transport, Collection<Module>> entry : transports.entrySet()) {
+            if (entry.getKey().getId().equalsIgnoreCase(transport) && entry.getValue() != null) {
+                for (Module module : entry.getValue()) if (module.getName().equalsIgnoreCase(target)) return module;
+            }
+        }
+        throw new ConfigurationException("Unsupported Logger destination: " + protocol + " / " + transport + " / " + target);
     }
 
     public EcuInit getEcuInit() {
@@ -525,7 +647,7 @@ public final class LoggerDesktopRuntime implements EcuRelatedMessageListener,
             try {
                 LoggerDefinitionSource source = LoggerDefinitionSource.read(definitionPath);
                 EcuDataLoaderImpl loader = new EcuDataLoaderImpl();
-                loader.loadConfigFromSnapshot(source.path, source.bytes(),
+                loader.loadConfigForDesktop(source.path, source.bytes(),
                         settings.getLoggerProtocol(),
                         settings.getFileLoggingControllerSwitchId(), ecuInit);
                 parameters.addAll(loader.getEcuParameters());
@@ -624,39 +746,8 @@ public final class LoggerDesktopRuntime implements EcuRelatedMessageListener,
     }
 
     private void configureDestination(EcuDataLoader loader) {
-        Map<Transport, Collection<Module>> transports = loader.getProtocols()
-                .get(settings.getLoggerProtocol());
-        if (transports == null || transports.isEmpty()) {
-            settings.setDestinationTarget(null);
-            settings.setLogExternalsOnly(true);
-            return;
-        }
-        Transport selectedTransport = null;
-        for (Transport transport : transports.keySet()) {
-            if (transport.getId().equalsIgnoreCase(
-                    settings.getTransportProtocol())) {
-                selectedTransport = transport;
-                break;
-            }
-        }
-        if (selectedTransport == null) {
-            selectedTransport = transports.keySet().iterator().next();
-            settings.setTransportProtocol(selectedTransport.getId());
-        }
-        Collection<Module> modules = transports.get(selectedTransport);
-        if (modules == null || modules.isEmpty()) {
-            settings.setDestinationTarget(null);
-            settings.setLogExternalsOnly(true);
-            return;
-        }
-        Module selectedModule = null;
-        for (Module module : modules) {
-            if (module.getName().equalsIgnoreCase(settings.getTargetModule())) {
-                selectedModule = module;
-                break;
-            }
-        }
-        if (selectedModule == null) selectedModule = modules.iterator().next();
+        Module selectedModule = requireDestination(loader, settings.getLoggerProtocol(),
+                settings.getTransportProtocol(), settings.getTargetModule());
         settings.setDestinationTarget(selectedModule);
         settings.setTargetModule(selectedModule.getName());
         if (!selectedModule.getFastPoll()) settings.setFastPoll(false);

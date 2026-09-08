@@ -153,3 +153,16 @@
     -fx-pref-width: 1.6em;
     -fx-pref-height: 1.6em;
 }
+.dashboard-header {
+    -fx-background-color: -rr-raised;
+    -fx-background-radius: 10;
+    -fx-border-color: -rr-border;
+    -fx-border-radius: 10;
+    -fx-padding: 12 16;
+}
+.dashboard-primary {
+    -fx-background-color: -rr-accent;
+    -fx-text-fill: white;
+    -fx-font-weight: bold;
+    -fx-background-radius: 6;
+}

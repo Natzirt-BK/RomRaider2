@@ -402,15 +402,14 @@ public final class QueryManagerImpl implements QueryManager {
         try {
             txManager.start();
 
-            if(dataUpdater != null && dataUpdater.isRunning()) {
-                dataUpdater.stopUpdater();
-            }
+            stopDataUpdater();
 
             dataUpdater = new AsyncDataUpdateHandler(updateHandlers);
             dataUpdater.start();
 
             boolean lastPollState = settings.isFastPoll();
             while (!stop) {
+                dataUpdater.requireHealthy();
                 pollState.setFastPoll(settings.isFastPoll());
                 queriedFileLoggerBinding = null;
                 updateQueryList();
@@ -490,9 +489,12 @@ public final class QueryManagerImpl implements QueryManager {
             connectionFailed = true;
             initFailureReported = true;
             messageListener.reportError(e);
+            stopDataUpdater();
             notifyStopped();
             sleep(500L);
         } finally {
+          try { stopDataUpdater(); }
+          finally {
             messageListener.reportMessage(rb.getString("STOPPING"));
             try {
                 txManager.stop();
@@ -507,7 +509,21 @@ public final class QueryManagerImpl implements QueryManager {
             }
             pollState.setCurrentState(PollingState.State.STATE_0);
             pollState.setNewQuery(true);
+          }
         }
+    }
+
+    private void stopDataUpdater() {
+        if (dataUpdater == null) return;
+        dataUpdater.stopUpdater();
+        boolean interrupted = Thread.interrupted();
+        try {
+            dataUpdater.join(2000);
+            if (dataUpdater.isAlive()) throw new IllegalStateException("Previous Logger update worker did not stop; refusing overlapping sessions");
+        } catch (InterruptedException cancellation) {
+            interrupted = true;
+            throw new IllegalStateException("Interrupted while stopping Logger data delivery", cancellation);
+        } finally { if (interrupted) Thread.currentThread().interrupt(); }
     }
 
     private void sendEcuQueries(TransmissionManager txManager) {

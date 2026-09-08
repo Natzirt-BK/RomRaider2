@@ -111,6 +111,15 @@ final class FxFuelAnalysisPane extends BorderPane implements AutoCloseable {
         mapping.addRow(4, new Label("First sample (1-based)"), first);
         mapping.addRow(5, new Label("Last sample (inclusive)"), last);
         mapping.addRow(6, new Label(maf ? "Bin width (V)" : "Bin width (ms)"), binWidth);
+        for (var node : mapping.getChildren()) {
+            if (node instanceof Label label) { label.setWrapText(true); label.setMinWidth(110); label.setMaxWidth(150); }
+            else if (node instanceof javafx.scene.layout.Region region) { region.setMinWidth(0); region.setMaxWidth(Double.MAX_VALUE); }
+        }
+        javafx.scene.layout.ColumnConstraints labels = new javafx.scene.layout.ColumnConstraints();
+        labels.setPercentWidth(44);
+        javafx.scene.layout.ColumnConstraints inputs = new javafx.scene.layout.ColumnConstraints();
+        inputs.setPercentWidth(56);
+        mapping.getColumnConstraints().setAll(labels, inputs);
         Label limits = new Label("No automatic operating-condition filters. Choose a suitable sample range and add filters for closed-loop state, temperatures or other conditions as needed. Missing filter values are rejected.");
         limits.setWrapText(true);
         VBox setup = new VBox(10, mapping, limits);
@@ -155,6 +164,16 @@ final class FxFuelAnalysisPane extends BorderPane implements AutoCloseable {
         ScrollPane scroll = new ScrollPane(setup); scroll.setFitToWidth(true);
         scroll.setPrefViewportWidth(340); scroll.setMinWidth(270); scroll.setMinHeight(0);
         setLeft(scroll);
+        javafx.scene.control.TitledPane setupDrawer = new javafx.scene.control.TitledPane("Analysis setup · channels, filters and units", scroll);
+        setupDrawer.setContent(null); setupDrawer.setAnimated(false); setupDrawer.setExpanded(false);
+        widthProperty().addListener((o, before, after) -> {
+            if (after.doubleValue() < 850 && getLeft() != null) {
+                setLeft(null); scroll.setPrefViewportHeight(250);
+                setupDrawer.setContent(scroll); setBottom(setupDrawer);
+            } else if (after.doubleValue() >= 850 && getLeft() == null) {
+                setupDrawer.setContent(null); setBottom(null); setLeft(scroll);
+            }
+        });
 
         addColumn("Bin from (" + xUnits() + ")", bin -> number(bin.getLower()));
         addColumn("Bin to (exclusive)", bin -> number(bin.getUpper()));
@@ -162,6 +181,8 @@ final class FxFuelAnalysisPane extends BorderPane implements AutoCloseable {
         addColumn("Mean (" + yUnits() + ")", bin -> number(bin.getMean()));
         addColumn("Minimum", bin -> number(bin.getMinimum()));
         addColumn("Maximum", bin -> number(bin.getMaximum()));
+        results.getColumns().forEach(column -> { column.setMinWidth(75); column.setPrefWidth(105); });
+        results.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
         copy.setDisable(true); copy.setOnAction(event -> copyResults());
         BorderPane table = new BorderPane(results); table.setBottom(copy);
         TabPane output = new TabPane(tab("Binned results", table), tab("Chart", chart), tab("Curve review", curve), tab("Accepted samples", acceptedSamples));

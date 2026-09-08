@@ -22,7 +22,6 @@ package com.romraider.xml;
 import static com.romraider.util.ParamChecker.isNullOrEmpty;
 
 import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.List;
@@ -78,8 +77,11 @@ public final class DOMSettingsBuilder {
 
         progress.update(rb.getString("WTOF"), 90);
 
-        final FileWriter fos = new FileWriter(output);
+        // Stage beside the destination; a failed serialization must not truncate working settings.
+        final java.nio.file.Path destination = output.toPath().toAbsolutePath();
+        final java.nio.file.Path temporary = java.nio.file.Files.createTempFile(destination.getParent(), ".rr2-settings-", ".tmp");
         try {
+          try (java.io.OutputStream fos = java.nio.file.Files.newOutputStream(temporary)) {
             // https://xml.apache.org/xalan-j/usagepatterns.html
             final TransformerFactory tFactory = TransformerFactory.newInstance();
             final Transformer transformer = tFactory.newTransformer();
@@ -92,12 +94,15 @@ public final class DOMSettingsBuilder {
             transformer.transform(dom, sr); // make sure attributes are not null before transforming
             fos.flush();
             progress.update("Settings saved", 100);
+          }
+          java.nio.file.Files.move(temporary, destination, java.nio.file.StandardCopyOption.ATOMIC_MOVE,
+                  java.nio.file.StandardCopyOption.REPLACE_EXISTING);
         } catch (TransformerConfigurationException e) {
             throw new RuntimeException(e);
         } catch (TransformerException e) {
             throw new RuntimeException(e);
         } finally {
-            fos.close();
+            java.nio.file.Files.deleteIfExists(temporary);
         }
     }
 
