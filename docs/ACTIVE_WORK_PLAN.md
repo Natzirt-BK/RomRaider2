@@ -32,12 +32,6 @@ checks, lint and both APK builds pass; actual Evo acceptance remains pending.
 See [startup evidence and test limits](EVO_MUT2_CONNECTION_DIAGNOSIS.md).
 Public downloads remain 1.1.3 RC1 until a separately verified publication.
 
-Previous owner override: implement verified EVO IX `88780008` DTC coverage before
-resuming the installer audit. Binary tracing and the definition implementation
-gates are recorded in the Evo-Definitions workspace's
-`analysis/DTC_COVERAGE_PLAN.md`. Do not claim DTC coverage from the older table
-inventory or copy generic Evo code labels without tracing this firmware.
-
 New owner follow-up: fix clipped gauge-button text on Steam Deck. The bounded
 layout changes and failing-before regressions are recorded in
 [Handheld gauge button sizing](HANDHELD_GAUGE_BUTTONS.md). Physical device
@@ -97,37 +91,9 @@ late-restoration failure. Installer-worker ownership
 and firmware/session cache identity remain
 open; these guards do not initiate discovery or enable vehicle writes.
 
-Owner follow-up: the Evo-Definitions workspace now has a standalone RomRaider
-`88780008_RomRaider_DTC_v7.xml` extension with eleven code-traced monitor gates,
-each represented for all eight configuration variants. It preserves the 156
-baseline calibration tables. Actual headless loader/controller/history/file
-round trips pass against the pinned validation and stock ROMs: 176 individual
-toggles/reloads, combined edits, reversal and out-of-range bit preservation.
-This is partial DTC coverage, not a new paired public release. EcuFlash v6 remains
-unchanged pending qualified individual-bit encoding and application save tests;
-other diagnostic groups remain withheld. The workspace's
-`analysis/DTC_COVERAGE.md` records normalization, dependencies and limitations.
-The ninth gate is P0135, whose shared helper's sibling heater reports are
-excluded by flags set at this firmware's entry. The installed EcuFlash 1.44
-parser and packed-bit write path are now recovered and hash-pinned from an
-isolated, device-free probe. The remaining gate is an actual XML representation
-for the independent bit positions, followed by real application file round trips.
-The full RomRaider v7 extension test now also passes with the core and dependencies
-extracted from the published Linux 1.1.3 RC1 ZIP, independently of the dirty local
-installer build. All 176 individual/combined edits and reloads passed against
-both pinned ROMs; this still does not qualify EcuFlash parity or vehicle writes.
-V7 adds two independently gated oxygen-sensor monitor paths that both normalize
-to P0130; their A/B labels distinguish paths, not sensor banks. There are now ten
-distinct codes, eleven gates and 88 variant-specific switches. The full display
-inventory is 244 tables. The v5/v6 definitions remain unchanged and reproducible.
-`analysis/DTC_OXYGEN_TRACE.md` records the paths, normalizer and excluded adjacent
-P0136 hypothesis; five builder regressions include 20 mutated-evidence rejections.
 The [DTC monitor-gate UI follow-up](DTC_MONITOR_GATE_UI.md) now distinguishes
 individual monitor gates from complete code enable/disable controls in JavaFX
-and Compose. An actual JavaFX editor probe sees all 88 ordered controls in eight
-initially collapsed categories and verifies all eleven variant-0 UI toggles and
-undo operations against the stock ROM in memory. This local UI change does not
-ship in the published 1.1.3 packages yet.
+and Compose. This changes presentation, not definition coverage.
 
 Owner requested the Evo logger definition separately. The existing
 `definitions/logger/88780008_OpenPort2_MUTII_logcfg.txt` was delivered and

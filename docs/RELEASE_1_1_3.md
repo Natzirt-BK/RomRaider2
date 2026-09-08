@@ -38,8 +38,7 @@ sessions, Evo MUT-II and broader desktop adapter compatibility still need
 hardware qualification. Automated tests do not establish vehicle compatibility.
 
 There is no production flashing or live tuning. Android does not repair ROM
-checksums. Definitions are separate and must match the ROM ID; this release
-does not publish the unfinished Evo IX DTC definition work.
+checksums. Definitions are separate and must match the ROM ID.
 
 Configure gauges and logging while parked. The app does not replace vehicle
 instruments or warning systems. STI branding is unofficial.

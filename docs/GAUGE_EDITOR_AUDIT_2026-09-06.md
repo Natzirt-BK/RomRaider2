@@ -86,12 +86,6 @@ every calibration's physical meaning or tuning value is correct. A private
 legacy ECUFlash shortcut bypasses the maintained companion launcher's checks;
 it was inspected but not launched or silently replaced.
 
-Owner follow-up: neither final `88780008` editor XML defines individual named
-DTC enable/disable switches. The RomRaider file exposes a raw ECU Periphery 3
-value, not a decoded per-code switch list. The table/bounds audit above does not
-establish full DTC coverage. Adding these controls requires verified mappings for
-this exact firmware; this finding is a definition gap, not a catalog-sort issue.
-
 ## Logger-profile and release limits
 
 The Shinji profile contains 18 ECU selections plus an external AEM input. With

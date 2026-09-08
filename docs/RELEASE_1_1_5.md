@@ -46,8 +46,6 @@ further testing. Configure logging and gauges while parked.
 
 Production flashing and live tuning are unavailable. Android does not repair
 ROM checksums. Definitions remain separate and must match the ROM ID exactly.
-This release does not bundle the unfinished Evo calibration definitions or
-definition-installer changes.
 
 ## Verification status
 
