@@ -8,6 +8,9 @@ https://github.com/Natzirt-BK/RomRaider2/releases
 What changed for 1.1.5
 ---------------------
 
+- Desktop Logger setup uses a target-module dropdown populated from the loaded
+  definition. Existing selections are preserved; changing the definition file
+  requires saving and reopening setup to refresh module choices.
 - MUT-II TXT definitions can specify paramunits per channel. Explicit units
   reach channel selection, gauges, recordings and RomRaider CSV headers.
   Files without this field retain raw/scaled units. Labels do not change values.

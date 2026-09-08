@@ -334,6 +334,8 @@ private fun LoggerSetupDialog(
     var transport by remember { mutableStateOf(
         settings.transportProtocol.orEmpty()) }
     var target by remember { mutableStateOf(settings.targetModule.orEmpty()) }
+    var targetMenuOpen by remember { mutableStateOf(false) }
+    val targetChoices = runtime.getTargetModuleChoices(protocol, transport, target)
     var outputDirectory by remember { mutableStateOf(
         settings.loggerOutputDirPath.orEmpty()) }
     var autoConnect by remember { mutableStateOf(settings.autoConnectOnStartup) }
@@ -369,9 +371,25 @@ private fun LoggerSetupDialog(
                         label = { Text("Transport") }, singleLine = true,
                         modifier = Modifier.weight(1f))
                 }
-                OutlinedTextField(target, { target = it },
-                    label = { Text("Target module") }, singleLine = true,
-                    modifier = Modifier.fillMaxWidth())
+                Column {
+                    Text("Target module")
+                    Box {
+                        OutlinedButton(onClick = { targetMenuOpen = true },
+                            enabled = targetChoices.isNotEmpty(), modifier = Modifier.fillMaxWidth()) {
+                            Text(target.ifBlank { "Select target module" } + " ▾")
+                        }
+                        DropdownMenu(expanded = targetMenuOpen,
+                            onDismissRequest = { targetMenuOpen = false }) {
+                            targetChoices.forEach { module ->
+                                DropdownMenuItem(onClick = { target = module; targetMenuOpen = false }) {
+                                    Text(module)
+                                }
+                            }
+                        }
+                    }
+                    Text("After changing the definition file, save and reopen setup to refresh modules.",
+                        style = MaterialTheme.typography.caption)
+                }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     OutlinedTextField(outputDirectory, { outputDirectory = it },
                         label = { Text("Log output directory") },

@@ -11,6 +11,7 @@ import javafx.geometry.Insets;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
+import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.BorderPane;
@@ -52,7 +53,16 @@ final class FxLoggerSetup {
         TextField port = field(settings.getLoggerPort());
         TextField protocol = field(settings.getLoggerProtocol());
         TextField transport = field(settings.getTransportProtocol());
-        TextField target = field(settings.getTargetModule());
+        ComboBox<String> target = targetSelector(runtime.getTargetModuleChoices(
+                protocol.getText(), transport.getText(), settings.getTargetModule()), settings.getTargetModule());
+        Runnable refreshTargets = () -> {
+            String current = target.getValue();
+            target.getItems().setAll(runtime.getTargetModuleChoices(
+                    protocol.getText(), transport.getText(), current));
+            target.setValue(current);
+        };
+        protocol.textProperty().addListener((o, before, after) -> refreshTargets.run());
+        transport.textProperty().addListener((o, before, after) -> refreshTargets.run());
         CheckBox autoConnect = new CheckBox("Connect automatically at startup");
         autoConnect.setSelected(settings.getAutoConnectOnStartup());
 
@@ -95,7 +105,7 @@ final class FxLoggerSetup {
                 settings.setLoggerPort(port.getText().trim());
                 settings.setLoggerProtocol(protocol.getText().trim());
                 settings.setTransportProtocol(transport.getText().trim());
-                settings.setTargetModule(target.getText().trim());
+                settings.setTargetModule(target.getValue() == null ? "" : target.getValue().trim());
                 settings.setAutoConnectOnStartup(autoConnect.isSelected());
                 File selectedDefinition = path(definition.getText());
                 if (selectedDefinition != null) {
@@ -123,6 +133,19 @@ final class FxLoggerSetup {
 
     private static TextField field(String value) {
         return new TextField(value == null ? "" : value);
+    }
+
+    static ComboBox<String> targetSelector(java.util.List<String> choices, String current) {
+        ComboBox<String> target = new ComboBox<>();
+        target.getItems().setAll(choices);
+        target.setEditable(false);
+        target.setMaxWidth(Double.MAX_VALUE);
+        target.setPromptText("Select target module");
+        target.setValue(choices.stream().filter(value -> value.equalsIgnoreCase(current))
+                .findFirst().orElse(current));
+        target.setTooltip(new javafx.scene.control.Tooltip(
+                "Modules from the loaded definition. After changing the definition file, save and reopen setup to refresh choices."));
+        return target;
     }
 
     private static File path(String value) {

@@ -109,6 +109,26 @@ public final class LoggerDesktopRuntime implements EcuRelatedMessageListener,
     private volatile DmInit dmInit;
     private volatile boolean closed;
     private LoggerDefinitionSource definitionSource;
+    private Map<String, Map<Transport, Collection<Module>>> setupProtocols = Collections.emptyMap();
+
+    /** Read-only setup choices from the loaded definition, never adapter discovery. */
+    public synchronized List<String> getTargetModuleChoices(String protocol, String transport, String current) {
+        List<String> result = new ArrayList<>();
+        for (var entry : setupProtocols.entrySet()) {
+            if (!entry.getKey().equalsIgnoreCase(protocol == null ? "" : protocol.trim())) continue;
+            for (var candidate : entry.getValue().entrySet()) {
+                if (!candidate.getKey().getId().equalsIgnoreCase(transport == null ? "" : transport.trim())) continue;
+                for (Module module : candidate.getValue()) {
+                    String name = module.getName();
+                    if (result.stream().noneMatch(name::equalsIgnoreCase)) result.add(name);
+                }
+            }
+        }
+        // Keep an existing custom/legacy selection visible; never silently replace it.
+        if (current != null && !current.isBlank()
+                && result.stream().noneMatch(current.trim()::equalsIgnoreCase)) result.add(current.trim());
+        return Collections.unmodifiableList(result);
+    }
     private String loadedProtocol = "";
     private boolean definitionLoadFailed;
     private long channelRevision;
@@ -482,6 +502,7 @@ public final class LoggerDesktopRuntime implements EcuRelatedMessageListener,
         definitionLoadFailed = hadDefinition;
         definitionSource = null;
         loadedProtocol = "";
+        setupProtocols = Collections.emptyMap();
         Set<String> restore = new LinkedHashSet<String>(selectedIds);
         clearRegistrations();
         // The special recording query is not owned by channel registrations.
@@ -516,6 +537,7 @@ public final class LoggerDesktopRuntime implements EcuRelatedMessageListener,
                 configureDestination(loader);
                 installFileLoggingSwitch(loader.getFileLoggingControllerSwitch());
                 definitionSource = source;
+                setupProtocols = new LinkedHashMap<>(loader.getProtocols());
                 loadedProtocol = settings.getLoggerProtocol();
                 definitionLoadFailed = false;
                 LOGGER.info("Loaded Logger protocol "

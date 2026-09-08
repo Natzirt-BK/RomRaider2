@@ -25,6 +25,31 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 class FxLoggerSetupTransferTest {
+    @Test void targetDropdownUsesDefinitionAndPreservesExistingSelection() throws Exception {
+        try (Fixture fixture = new Fixture()) {
+            String xml = Files.readString(fixture.definition).replace("</transport>",
+                    "<module id='tcu' address='18' tester='F0' desc='Transmission' fastpoll='false'/></transport>");
+            Files.writeString(fixture.definition, xml);
+            FxTestRuntime.run(fixture.runtime::reloadConfiguration);
+            var choices = fixture.runtime.getTargetModuleChoices("ssm", "iso9141", "ECU");
+            assertEquals(Set.of("ecu", "tcu"), new HashSet<>(choices));
+            assertEquals(List.of("custom"), fixture.runtime.getTargetModuleChoices("missing", "iso9141", "custom"));
+            assertTrue(fixture.runtime.getTargetModuleChoices("ssm", "missing", "").isEmpty());
+            FxTestRuntime.run(() -> {
+                var selector = FxLoggerSetup.targetSelector(choices, "ECU");
+                assertFalse(selector.isEditable());
+                assertEquals("ecu", selector.getValue());
+                selector.getSelectionModel().select("tcu");
+                assertEquals("tcu", selector.getValue());
+            });
+            Files.delete(fixture.definition);
+            EcuInitCallback callback = ecuCallback(fixture.runtime);
+            FxTestRuntime.run(() -> callback.callback(syntheticEcu("2222222222")));
+            assertTrue(fixture.runtime.getTargetModuleChoices("SSM", "ISO9141", "").isEmpty(),
+                    "Failed reload must not retain stale module choices");
+        }
+    }
+
     @TempDir Path folder;
     private static final String XML = "<logger version='370'><protocols><protocol id='SSM' baud='4800' databits='8' stopbits='1' parity='0' connect_timeout='1000' send_timeout='1000'>"
             + "<transports><transport id='ISO9141' name='K-Line' desc='Synthetic'><module id='ecu' address='10' tester='F0' desc='Engine' fastpoll='true'/></transport></transports>"
