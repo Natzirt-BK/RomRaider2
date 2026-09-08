@@ -7,13 +7,13 @@
 ECU editing, read-only logging, gauges and log analysis for Subaru and Mitsubishi
 Lancer Evolution. Built on RomRaider and DimeMod, with desktop and Android interfaces.
 
-RomRaider2 is in development. **The current download is 1.1.3 RC1; a stable
+RomRaider2 is in development. **The current download is 1.1.5 RC1; a stable
 release is not available yet.**
 
 ## Downloads
 
-[Download 1.1.3 RC1](https://github.com/Natzirt-BK/RomRaider2/releases/tag/romraider2-1.1.3)
-· [Release notes](docs/RELEASE_1_1_3.md)
+[Download 1.1.5 RC1](https://github.com/Natzirt-BK/RomRaider2/releases/tag/romraider2-1.1.5)
+· [Release notes](docs/RELEASE_1_1_5.md)
 
 | Platform | Package |
 | --- | --- |
@@ -44,23 +44,26 @@ sequence. See [versioning](docs/RELEASE_VERSIONING.md).
 Platform features differ. Read the [Android guide](docs/ANDROID_PREVIEW_TESTING.md)
 before connecting an OpenPort 2.0 through a USB host/OTG adapter.
 
-### New in 1.1.3
+### New in 1.1.5
 
-This release adds [fullscreen gauges](docs/ANDROID_MOUNTED_DISPLAY.md)
-with seamless layouts for 1–6 instruments, a [25-style gauge collection](docs/GAUGE_DESIGN.md),
-and channel-by-channel styles with visual pickers on Android and desktop/handheld. It also adds
-[Android background recording](docs/ANDROID_BACKGROUND_RECORDING.md),
-[calculated channels](docs/CALCULATED_LOGGER_CHANNELS.md),
-[portable logger setups](docs/PORTABLE_LOGGER_SETUP.md), and expanded
-[saved-log analysis](docs/FUEL_LOG_ANALYSIS.md).
+Desktop Logger gains responsive channel controls, inline units, a Target Module
+dropdown and connection/setup fixes. Dashboard opens the full-screen gauge view
+without a duplicate tab. Graphs, Dyno timing checks, CSV recording and desktop
+shutdown are improved. Android includes MUT-II startup fixes and explicit
+imported-channel unit labels.
 
-See the [development roadmap](docs/POST_1_1_2_WORK_PLAN.md) and
+The [25 gauge styles](docs/GAUGE_DESIGN.md), independent 1–6-gauge layouts,
+[background recording](docs/ANDROID_BACKGROUND_RECORDING.md) and
+[saved-log analysis](docs/FUEL_LOG_ANALYSIS.md) remain available.
+
+See the [active work plan](docs/ACTIVE_WORK_PLAN.md) and
 [technical documentation](docs/README.md) for details.
 
 ## Compatibility and limits
 
-Basic Forester SSM logging has been tested in car. Broader Android sessions,
-EVO MUT-II, Windows adapters, macOS and Steam Deck still need hardware testing.
+Basic Forester SSM and Evo MUT-II logging have owner-reported in-car results.
+Channel accuracy, sustained/background sessions, Windows adapters, macOS and
+Steam Deck still need further hardware testing.
 **Production flashing and live tuning are not available.** Android does not
 repair ROM checksums.
 

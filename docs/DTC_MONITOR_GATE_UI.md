@@ -23,4 +23,4 @@ explicit-unit recognition and retains the existing ordinary-switch behavior.
 The complete local desktop suites then passed on a private Xvfb/Openbox display:
 259 JavaFX tests and 46 Compose tests, with no failures, errors or skips.
 
-This UI change is not included in the already-published 1.1.3 RC1 packages.
+This presentation is included in 1.1.5 RC1.

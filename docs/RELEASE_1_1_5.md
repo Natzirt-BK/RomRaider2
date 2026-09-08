@@ -47,7 +47,14 @@ further testing. Configure logging and gauges while parked.
 Production flashing and live tuning are unavailable. Android does not repair
 ROM checksums. Definitions remain separate and must match the ROM ID exactly.
 
-## Verification status
+## Verification
 
-Candidate preparation is in progress. Hosted build, signing and package results
-must be recorded before these release notes are used for publication.
+Built from `863f14b520b77859df5b95882ce6263c9aa6f6b3`.
+[Desktop tests and packages](https://github.com/Natzirt-BK/RomRaider2/actions/runs/34253587043),
+[platform packages](https://github.com/Natzirt-BK/RomRaider2/actions/runs/34253586616)
+and [Android regression checks](https://github.com/Natzirt-BK/RomRaider2/actions/runs/34253588739)
+passed. Downloaded APK signing, versions, service manifests and notices were
+verified. Linux and SteamOS production launch/close checks passed on an isolated
+display; the Linux package also passed synthetic editor and logger probes.
+
+These automated checks do not replace the hardware testing noted above.

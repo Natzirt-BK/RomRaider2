@@ -1,17 +1,18 @@
 # Active work plan — September 8, 2026
 
-Latest priority: broaden logger adapter compatibility on desktop and Android.
-See the [adapter compatibility roadmap](ADAPTER_COMPATIBILITY_ROADMAP.md) for
-the source audit, implementation order, and hardware acceptance gates. The
-desktop Logger audit fixes are pushed in `5551efa3`; hosted checks and release
-publication are separate. No new adapter support is claimed by this plan.
-Evo calibration work and the unfinished definition-installer changes remain
-parked. The checkpoints below retain earlier work history.
+Current release: [1.1.5 RC1](RELEASE_1_1_5.md), built from `863f14b5` for
+Android, Windows, Linux, SteamOS and both macOS architectures. The
+[qualification record](RELEASE_1_1_5_QUALIFICATION.md) separates passing automated
+checks from pending physical-platform and vehicle acceptance.
 
-Current owner priority: park Evo definition/tuning work and qualify/package
-RR2 1.1.5 for desktop and Android. Preserve the unfinished desktop installer
-changes separately; they are not part of this release candidate. Publication
-and platform/device qualification must be reported separately from local builds.
+Next priority: broaden read-only logger adapter compatibility on desktop and
+Android. See the [adapter roadmap](ADAPTER_COMPATIBILITY_ROADMAP.md) for the
+offline implementation checkpoint and transport-integration gates. Definition
+installer changes remain separate. Production live tuning is not available.
+
+## Earlier checkpoints
+
+The following entries describe historical work, not the current download status.
 
 Owner priority: finish the gauge work first and show actual application renders,
 then continue the remaining automated work. Physical in-car tests are deferred
