@@ -248,8 +248,12 @@ class GaugeLoggerWindowTest {
                     throw error
                 }
             }
-            await("gauge tab") { has("Gauges only") }
-            click("Gauges only")
+            await("Dashboard navigation") { has("Dashboard") || has("Dashboard  Ctrl+4") }
+            assertFalse(has("Gauges only"), "Desktop must not restore the duplicate gauge tab")
+            assertFalse(has("Open gauge display"), "Gauge entry belongs to Dashboard")
+            click(if (has("Dashboard")) "Dashboard" else "Dashboard  Ctrl+4")
+            await("Dashboard gauge entry") { has("Open gauge display") }
+            click("Open gauge display")
             assertEquals(0, held.get())
             val originalBounds = edt { window.bounds }
             enter()

@@ -56,6 +56,8 @@ class SwingGaugeFullScreenHostTest {
         }
         try {
             await { mounts.get() == 1 }
+            // Wait for the window manager to apply the requested initial placement.
+            await { edt { owner.bounds == java.awt.Rectangle(40, 50, 800, 600) } }
             val originalBounds = edt { owner.bounds }
             repeat(3) { index ->
                 lateinit var full: JFrame
@@ -74,9 +76,9 @@ class SwingGaugeFullScreenHostTest {
                     host.setFullScreen(false)
                     assertSame(host, host.composePanel.parent)
                     assertTrue(host.composePanel.isDisposeOnRemove)
-                    assertEquals(originalBounds, owner.bounds)
                     displayRevision.intValue = index * 2 + 2
                 }
+                await { edt { originalBounds == owner.bounds } }
                 await { hasText(host, "Retained composition ${index * 2 + 2}") }
             }
             edt { host.setFullScreen(true); owner.dispose() }
@@ -118,8 +120,12 @@ class SwingGaugeFullScreenHostTest {
             }
         }
         try {
-            await { hasText(host, "Gauges only") }
-            click(host, "Gauges only")
+            await { hasText(host, "Dashboard") || hasText(host, "Dashboard  Ctrl+4") }
+            assertFalse(hasText(host, "Gauges only"), "Desktop must not restore the duplicate gauge tab")
+            assertFalse(hasText(host, "Open gauge display"), "Gauge entry belongs to Dashboard")
+            click(host, if (hasText(host, "Dashboard")) "Dashboard" else "Dashboard  Ctrl+4")
+            await { hasText(host, "Open gauge display") }
+            click(host, "Open gauge display")
             await { hasText(host, "Full screen") }
             assertEquals(0, heldAwake.get(), "Gauge setup must not keep the display awake")
             click(host, "Full screen")
