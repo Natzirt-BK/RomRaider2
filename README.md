@@ -10,6 +10,10 @@ Lancer Evolution. Built on RomRaider and DimeMod, with desktop and Android inter
 RomRaider2 is in development. **The current download is 1.1.5 RC1; a stable
 release is not available yet.**
 
+Development source is **1.1.6**, with a separate desktop
+[read-only ELM/OBDLink adapter test](docs/ELM_IN_CAR_TEST.md) awaiting vehicle
+qualification. It is not included in the current download.
+
 ## Downloads
 
 [Download 1.1.5 RC1](https://github.com/Natzirt-BK/RomRaider2/releases/tag/romraider2-1.1.5)

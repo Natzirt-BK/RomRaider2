@@ -72,7 +72,7 @@ if ($JavaSettings -notmatch "os\.arch\s*=\s*(amd64|x86_64)(?:\s|$)") {
 if (-not (Test-Path -LiteralPath $ApplicationJar -PathType Leaf)) {
     throw "Build RomRaider2 for Windows first; jar not found: $ApplicationJar"
 }
-if (-not (Test-Path -LiteralPath (Join-Path $JavaFxRoot "romraider2-javafx-desktop-1.1.5.jar") -PathType Leaf)) {
+if (-not (Test-Path -LiteralPath (Join-Path $JavaFxRoot "romraider2-javafx-desktop-1.1.6.jar") -PathType Leaf)) {
     throw "Stage the JavaFX desktop workspace before packaging."
 }
 foreach ($BridgeFile in @(
@@ -217,7 +217,7 @@ try {
         --input $InputRoot `
         --main-jar RomRaider2.jar `
         --main-class com.romraider.ECUExec `
-        --app-version 1.1.5 `
+        --app-version 1.1.6 `
         --vendor NatZirt `
         --description "RomRaider2 ECU Studio" `
         --icon (Join-Path $RepoRoot "packaging/branding/windows/RomRaider2.ico") `

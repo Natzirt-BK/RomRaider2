@@ -31,6 +31,7 @@ val javafxWindowsRuntime by configurations.creating
 dependencies {
     implementation(project(":platform:shared-core"))
     compileOnly(files(romraiderJar))
+    compileOnly(files("../../lib/common/jSerialComm-2.11.4.jar"))
     listOf("base", "graphics", "controls").forEach { module ->
         implementation("org.openjfx:javafx-$module:$javafxVersion:$hostPlatform")
         javafxLinuxRuntime("org.openjfx:javafx-$module:$javafxVersion:linux")
@@ -40,6 +41,7 @@ dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter:5.14.0")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.14.0")
     testImplementation(files(romraiderJar))
+    testImplementation(files("../../lib/common/jSerialComm-2.11.4.jar"))
     testRuntimeOnly(fileTree(rootProject.layout.projectDirectory.dir(
         "lib/common")) { include("*.jar") })
 }

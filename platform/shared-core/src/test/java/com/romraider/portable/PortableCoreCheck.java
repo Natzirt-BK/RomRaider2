@@ -32,6 +32,7 @@ import com.romraider.portable.logger.definition.PortableLoggerSelectionService;
 public final class PortableCoreCheck {
     public static void main(String[] args) throws Exception {
         PortableElm327Check.main(new String[0]);
+        PortableElm327SessionCheck.main(new String[0]);
         PortableLoggerSetupCheck.main(new String[0]);
         PortableProfileOrderCheck.main(new String[0]);
         PortableCalculatedChannelCheck.main(new String[0]);

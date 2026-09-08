@@ -7,7 +7,7 @@ foreach ($RequiredFile in @(
     "RomRaider2 Logger.exe",
     "runtime/release",
     "app/RomRaider2.jar",
-    "app/romraider2-javafx-desktop-1.1.5.jar",
+    "app/romraider2-javafx-desktop-1.1.6.jar",
     "app/javafx-base-21.0.10-win.jar",
     "app/javafx-controls-21.0.10-win.jar",
     "app/javafx-graphics-21.0.10-win.jar",
@@ -43,8 +43,8 @@ if (Get-ChildItem -LiteralPath (Join-Path $ReleaseRoot "app") -File |
 }
 
 $VersionText = Get-Content -LiteralPath (Join-Path $ReleaseRoot "VERSION.txt") -Raw
-if ($VersionText -notmatch '(?m)^RomRaider2 ECU Studio 1\.1\.5\r?$') {
-    throw "The package is not labeled as RomRaider2 1.1.5."
+if ($VersionText -notmatch '(?m)^RomRaider2 ECU Studio 1\.1\.6\r?$') {
+    throw "The package is not labeled as RomRaider2 1.1.6."
 }
 if ($VersionText -notmatch '(?m)^Source commit: [0-9a-f]{40}\r?$') {
     throw "The package does not identify an exact source commit."

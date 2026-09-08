@@ -10,6 +10,12 @@ Android. See the [adapter roadmap](ADAPTER_COMPATIBILITY_ROADMAP.md) for the
 offline implementation checkpoint and transport-integration gates. Definition
 installer changes remain separate. Production live tuning is not available.
 
+Development 1.1.6 now has a separate desktop ELM/OBDLink serial test window,
+strict shared command sessions and standard-PID CSV recording. The next gate
+is [parked hardware qualification](ELM_IN_CAR_TEST.md), not more protocol guesses.
+Android ELM, responder selection and enhanced SSM/MUT-II on ELM remain future
+work. Existing OpenPort paths are unchanged by this slice.
+
 ## Earlier checkpoints
 
 The following entries describe historical work, not the current download status.

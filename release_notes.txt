@@ -1,9 +1,22 @@
-RomRaider2 ECU Studio 1.1.5
+RomRaider2 ECU Studio 1.1.6
 ================================
 
-Development source for the next patch. Public downloads remain 1.1.3 until a
+Development source for the next patch. Public downloads remain 1.1.5 until a
 separately verified release is published. For published packages:
 https://github.com/Natzirt-BK/RomRaider2/releases
+
+What changed for 1.1.6 (hardware qualification pending)
+---------------------
+
+- Desktop Logger adds a separate Read-only adapter test for ELM327/OBDLink
+  serial adapters. Explicit port, baud and protocol selection precede a short
+  standard OBD-II CSV recording of supported RPM, coolant and speed channels.
+- Strict reply validation, bounded command deadlines, cancellation and
+  no-overwrite CSV output are covered by offline tests. Ambiguous responders
+  stop the test. This does not enable enhanced SSM/MUT-II on ELM adapters,
+  Android ELM connectivity, flashing, live tuning or DTC clearing.
+- Existing OpenPort logging remains unchanged. See docs/ELM_IN_CAR_TEST.md
+  for the parked-vehicle qualification procedure and current limitations.
 
 What changed for 1.1.5
 ---------------------

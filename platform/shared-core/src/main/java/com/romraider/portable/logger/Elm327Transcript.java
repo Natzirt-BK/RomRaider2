@@ -76,6 +76,14 @@ public final class Elm327Transcript {
 
     public boolean isComplete() { return complete && !malformed; }
 
+    public boolean isMalformed() { return malformed; }
+
+    /** Complete adapter reply, excluding the prompt. Never exposes a partial frame. */
+    public String responseText() {
+        if (!isComplete()) throw new IllegalStateException("ELM response is not complete");
+        return response.toString();
+    }
+
     /**
      * Never infer a value from a PID occurring inside arbitrary bytes. A single
      * complete positive service/PID/length match is required. Multiple replies
@@ -95,6 +103,7 @@ public final class Elm327Transcript {
             if (value.isEmpty() || value.equals(echo)) continue;
             // Progress can precede the reply on the same line.
             if (value.startsWith("SEARCHING...")) value = value.substring(12);
+            if (value.startsWith("BUSINIT...OK")) value = value.substring(12);
             if (value.isEmpty()) continue;
             Status lineFailure = null;
             if (value.equals("NODATA")) lineFailure = Status.NO_DATA;

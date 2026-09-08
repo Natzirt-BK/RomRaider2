@@ -150,6 +150,7 @@ final class FxLoggerWindow {
     private FxLogAnalysisPane analysisPane;
     private FxAnalysisRangeLink analysisRanges;
     private final FxLoggerStartup startup = new FxLoggerStartup();
+    private FxElmAdapterTest adapterTest;
 
     FxLoggerWindow(Runnable closed) {
         this(closed, null);
@@ -292,7 +293,9 @@ final class FxLoggerWindow {
                 item("Start recording",
                         event -> context.getSession().startRecording()),
                 item("Stop recording",
-                        event -> context.getSession().stopRecording()));
+                        event -> context.getSession().stopRecording()),
+                new SeparatorMenuItem(),
+                item("Read-only adapter test…", event -> showAdapterTest()));
         ToggleGroup theme = new ToggleGroup();
         RadioMenuItem light = themeItem("Light", ThemeMode.LIGHT, theme);
         RadioMenuItem dark = themeItem("Dark", ThemeMode.DARK, theme);
@@ -1295,6 +1298,18 @@ final class FxLoggerWindow {
         });
     }
 
+    private void showAdapterTest() {
+        if (context.getSession().getState() != LoggerSessionState.STOPPED) {
+            FxDialogs.error(stage, "Logger is active", "Disconnect and stop connection attempts before opening the adapter test.");
+            return;
+        }
+        if (adapterTest != null && adapterTest.stage.isShowing()) { adapterTest.stage.toFront(); return; }
+        String output = runtime.getSettings().getLoggerOutputDirPath();
+        adapterTest = new FxElmAdapterTest(stage, output == null ? null : new File(output),
+                () -> !disposed && context.getSession().getState() == LoggerSessionState.STOPPED);
+        adapterTest.show();
+    }
+
     private void loadLoggerDefinition() {
         String configured = runtime.getSettings().getLoggerDefinitionFilePath();
         File selected = FxDialogs.chooseLoggerDefinition(stage,
@@ -1391,6 +1406,7 @@ final class FxLoggerWindow {
         gaugeMotions.clear();
         logLoads.close();
         setupTransfer.close();
+        if (adapterTest != null) adapterTest.close();
         context.getChannels().removeListener(channelListener);
         context.getSession().removeStateListener(stateListener);
         context.getMessages().removeListener(messageListener);

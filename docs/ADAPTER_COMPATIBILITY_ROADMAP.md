@@ -79,12 +79,18 @@ incomplete replies never expose channel data. Multiple responses are rejected
 as ambiguous even when their values match, because hidden headers cannot
 identify the responding module.
 
-This work is **not in 1.1.5 RC1** and is not wired to a desktop or Android
-transport yet. It does not fix the legacy runtime merely by existing. Next:
-integrate prompt synchronization, monotonic deadlines, cancellation and
-error recovery into a transcript-driven connection harness; then replace the
-legacy identification/parser and add responder selection. No adapter was
-opened or vehicle command sent by these checks.
+This work is **not in 1.1.5 RC1**. Development version 1.1.6 adds a separate
+desktop **Logger → Read-only adapter test** using the shared session and a
+nonblocking serial link. It records only advertised standard RPM, coolant and
+speed PIDs to a new RomRaider-format CSV. It does not change normal OpenPort
+logging or repair the legacy ELM runtime merely by existing. Android ELM and
+explicit responder selection are still unimplemented; multiple ECU responses
+stop this test. See [the parked test procedure](ELM_IN_CAR_TEST.md).
+
+Offline checks exercise prompt synchronization, aggregate initialization and
+transaction deadlines, cancellation, partial writes, disconnects, stale input,
+CSV parsing, file protection and window shutdown. No adapter was opened or
+vehicle command sent by these checks. Hardware compatibility remains unverified.
 
 The wire-format reference is the manufacturer's
 [ELM327 datasheet](https://www.elmelectronics.com/wp-content/uploads/2017/01/ELM327DS.pdf),
