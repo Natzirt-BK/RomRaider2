@@ -15,6 +15,8 @@ strict shared command sessions and standard-PID CSV recording. The next gate
 is [parked hardware qualification](ELM_IN_CAR_TEST.md), not more protocol guesses.
 Android ELM, responder selection and enhanced SSM/MUT-II on ELM remain future
 work. Existing OpenPort paths are unchanged by this slice.
+The [1.1.6 test checkpoint](ELM_TEST_CHECKPOINT.md) records passing local and
+hosted checks, package provenance and the remaining hardware acceptance gate.
 
 The first hosted 1.1.6 build exposed a Compose floating-window restore failure:
 full-screen exit returned to `(0, 0)` instead of the visible pre-entry position.
