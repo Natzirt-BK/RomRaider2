@@ -783,8 +783,10 @@ final class FxEditorWindow {
         FxWindowPlacement.show(stage);
         stage.toFront();
         if (SettingsManager.getSettings().getEcuDefinitionFiles().isEmpty()) {
-            Platform.runLater(() -> FxDefinitionManager.show(stage, () ->
-                    setStatus("ECU definitions configured", 100)));
+            Platform.runLater(() -> {
+                if (!closing && stage.isShowing()) FxDefinitionManager.show(stage, () ->
+                        setStatus("ECU definitions configured", 100));
+            });
         }
         inspectRecovery();
     }

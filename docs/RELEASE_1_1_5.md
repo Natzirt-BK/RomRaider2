@@ -15,6 +15,7 @@ This is not a stable release.
   Dyno calculations check RPM/speed timing, units and continuous pull segments.
 - More reliable CSV recording, including unique capture filenames, clean
   stop/restart behavior and visible handling of writer failures.
+- Clean desktop shutdown after the last window finishes closing.
 - Android MUT-II startup improvements and explicit unit labels for imported
   logger channels. Basic Evo logging has been reported working in car.
 

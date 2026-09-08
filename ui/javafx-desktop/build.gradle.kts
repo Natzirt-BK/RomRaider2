@@ -50,6 +50,8 @@ java {
 
 tasks.test {
     useJUnitPlatform()
+    inputs.property("nativeWindowSmoke", providers.environmentVariable("RR2_FX_WINDOW_SMOKE").orElse("0"))
+    inputs.property("loggerStress", providers.environmentVariable("RR2_LOGGER_STRESS").orElse("0"))
     systemProperty("romraider2.displayAwake.disabled", "true")
     systemProperty("romraider2.settings.dir", temporaryDir.resolve("settings").absolutePath)
     systemProperty("romraider2.log.dir", temporaryDir.resolve("logs").absolutePath)

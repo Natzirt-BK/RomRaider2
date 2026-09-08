@@ -90,7 +90,8 @@ public final class PackagedDesktopRepair {
             } finally { pane.close(); stage.close(); RomEditHistory.getInstance().clear(rom); RomChangeService.forget(rom); }
             FxDynoPane dyno = new FxDynoPane(null); stage = show(dyno);
             try {
-                ScrollPane setup = (ScrollPane) dyno.getLeft(); setup.setVvalue(1);
+                // Responsive layouts move setup between the side and bottom.
+                ScrollPane setup = field(dyno, "setupScroll"); setup.setVvalue(1);
                 check(button(setup, "Calculate current run") != null && setup.isFitToWidth(), "Dyno calculation is in scrollable setup");
                 capture(stage, output.resolve("dyno-bottom.png"));
             } finally { stage.close(); }
@@ -110,11 +111,16 @@ public final class PackagedDesktopRepair {
                 pane[0] = new FxLogAnalysisPane(null, dataset); stage[0] = show(pane[0]);
                 TableView<Integer> table = field(pane[0], "values");
                 table.getSortOrder().setAll(table.getColumns().get(2)); table.sort();
+            });
+            awaitAnalysis(pane[0]);
+            fx(() -> {
+                TableView<Integer> table = field(pane[0], "values");
                 table.getSelectionModel().select(1);
                 LogCursorModel cursor = field(pane[0], "cursor");
                 check(table.getItems().equals(List.of(0, 2, 1, 3)) && cursor.getSampleIndex() == 2, "numeric sorting seeks the selected source sample");
                 pane[0].selectRange(LogRange.of(1, 3, 4));
             });
+            awaitAnalysis(pane[0]);
             fx(() -> {
                 TableView<ChannelStatistics> stats = field(pane[0], "statistics");
                 TableView<Integer> table = field(pane[0], "values");
@@ -122,6 +128,18 @@ public final class PackagedDesktopRepair {
                 capture(stage[0], output.resolve("analysis-range.png"));
             });
         } finally { fx(() -> { if (pane[0] != null) pane[0].close(); if (stage[0] != null) stage[0].close(); }); }
+    }
+
+    static void awaitAnalysis(FxLogAnalysisPane pane) throws Exception {
+        java.util.concurrent.Future<?>[] pending = new java.util.concurrent.Future<?>[2];
+        fx(() -> {
+            FxLogTableTask table = field(pane, "tableTask");
+            FxLogStatisticsTask statistics = field(pane, "statisticsTask");
+            pending[0] = table.pending(); pending[1] = statistics.pending();
+        });
+        // Wait off the UI thread, then drain delivery callbacks before assertions.
+        for (var task : pending) if (task != null) task.get(10, java.util.concurrent.TimeUnit.SECONDS);
+        fx(() -> {});
     }
 
     static void presentation(Path output) throws Exception {

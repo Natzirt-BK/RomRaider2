@@ -32,6 +32,9 @@ final class JavaFxDesktopRuntime {
         }
         try {
             stopped.await();
+            // Exit from the lifecycle owner, not from a native close callback or
+            // a modal dialog's nested event loop on the UI thread.
+            Platform.exit();
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
             FxDesktopHost value = host.get();
@@ -44,6 +47,7 @@ final class JavaFxDesktopRuntime {
         private final DesktopApplicationCommands.Handler commandHandler;
         private FxEditorWindow editor;
         private FxLoggerWindow logger;
+        private boolean shutdownScheduled;
 
         FxDesktopHost(CountDownLatch stopped) {
             this.stopped = stopped;
@@ -101,10 +105,16 @@ final class JavaFxDesktopRuntime {
         }
 
         private void stopIfEmpty() {
-            if (editor != null || logger != null) return;
-            DesktopApplicationCommands.unregister(commandHandler);
-            Platform.exit();
-            stopped.countDown();
+            if (editor != null || logger != null || shutdownScheduled) return;
+            shutdownScheduled = true;
+            // onHidden runs inside Window.hide(), before native scene detachment.
+            // Let that event unwind before tearing down the Glass event thread.
+            Platform.runLater(() -> {
+                shutdownScheduled = false;
+                if (editor != null || logger != null) return;
+                DesktopApplicationCommands.unregister(commandHandler);
+                stopped.countDown();
+            });
         }
 
         void closeAll() {
