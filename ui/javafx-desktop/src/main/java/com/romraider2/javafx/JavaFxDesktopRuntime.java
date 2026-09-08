@@ -30,16 +30,23 @@ final class JavaFxDesktopRuntime {
         } catch (IllegalStateException alreadyStarted) {
             Platform.runLater(start);
         }
-        try {
-            stopped.await();
-            // Exit from the lifecycle owner, not from a native close callback or
-            // a modal dialog's nested event loop on the UI thread.
-            Platform.exit();
-        } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
-            FxDesktopHost value = host.get();
-            if (value != null) Platform.runLater(value::closeAll);
+        boolean interrupted = false;
+        while (true) {
+            try {
+                stopped.await();
+                break;
+            } catch (InterruptedException shutdownRequested) {
+                interrupted = true;
+                FxDesktopHost value = host.get();
+                if (value != null) Platform.runLater(value::closeAll);
+                // A guarded close can be cancelled. Keep owning the toolkit
+                // until its windows actually close, even after interruption.
+            }
         }
+        // Exit from the lifecycle owner, not from a native close callback or
+        // a modal dialog's nested event loop on the UI thread.
+        Platform.exit();
+        if (interrupted) Thread.currentThread().interrupt();
     }
 
     private static final class FxDesktopHost {

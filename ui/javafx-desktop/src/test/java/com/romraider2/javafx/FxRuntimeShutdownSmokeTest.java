@@ -23,6 +23,7 @@ class FxRuntimeShutdownSmokeTest {
     @Test void lastWindowCloseFinishesBeforeToolkitShutdown() throws Exception {
         runProbe("early");
         runProbe("dialog");
+        runProbe("interrupt");
     }
 
     private void runProbe(String mode) throws Exception {
@@ -52,6 +53,7 @@ class FxRuntimeShutdownSmokeTest {
                 failure.set(problem); problem.printStackTrace();
             });
             CountDownLatch closeReturned = new CountDownLatch(1);
+            Thread lifecycleOwner = Thread.currentThread();
             Thread closer = new Thread(() -> {
                 for (int attempt = 0; attempt < 100 && closeReturned.getCount() != 0; attempt++) {
                     try {
@@ -66,6 +68,11 @@ class FxRuntimeShutdownSmokeTest {
                                     .filter(window -> window.getTitle().startsWith("RomRaider2"))
                                     .findFirst().orElse(null);
                             if (stage == null) return;
+                            if (args.length > 1 && args[1].equals("interrupt")) {
+                                stage.addEventHandler(WindowEvent.WINDOW_HIDDEN, event -> closeReturned.countDown());
+                                lifecycleOwner.interrupt();
+                                return;
+                            }
                             try {
                                 stage.fireEvent(new WindowEvent(stage, WindowEvent.WINDOW_CLOSE_REQUEST));
                             } catch (Throwable problem) {
@@ -79,6 +86,10 @@ class FxRuntimeShutdownSmokeTest {
             }, "synthetic-window-close");
             closer.setDaemon(true); closer.start();
             JavaFxDesktopRuntime.launch(new String[0]);
+            boolean interrupted = Thread.interrupted();
+            if (interrupted != (args.length > 1 && args[1].equals("interrupt"))) {
+                throw new AssertionError("Lifecycle interruption status was not preserved");
+            }
             if (!closeReturned.await(5, TimeUnit.SECONDS) || failure.get() != null) {
                 throw new AssertionError("Window close did not finish cleanly", failure.get());
             }
