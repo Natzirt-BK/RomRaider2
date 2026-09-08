@@ -1,4 +1,12 @@
-# Active work plan — September 7, 2026
+# Active work plan — September 8, 2026
+
+Latest priority: broaden logger adapter compatibility on desktop and Android.
+See the [adapter compatibility roadmap](ADAPTER_COMPATIBILITY_ROADMAP.md) for
+the source audit, implementation order, and hardware acceptance gates. The
+desktop Logger audit fixes are pushed in `5551efa3`; hosted checks and release
+publication are separate. No new adapter support is claimed by this plan.
+Evo calibration work and the unfinished definition-installer changes remain
+parked. The checkpoints below retain earlier work history.
 
 Current owner priority: park Evo definition/tuning work and qualify/package
 RR2 1.1.5 for desktop and Android. Preserve the unfinished desktop installer
