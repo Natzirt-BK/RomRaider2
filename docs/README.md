@@ -7,7 +7,8 @@
 - [Android setup and testing](ANDROID_PREVIEW_TESTING.md)
 - [Building RomRaider2](Building_RomRaider_VSCode.md)
 - [Versioning](RELEASE_VERSIONING.md)
-- [Development roadmap](POST_1_1_2_WORK_PLAN.md)
+- [Active work plan](ACTIVE_WORK_PLAN.md)
+- [Adapter compatibility roadmap](ADAPTER_COMPATIBILITY_ROADMAP.md)
 
 ## Feature guides
 
@@ -32,3 +33,4 @@ status. Historical records are not a list of available applications.
 - [Gauge source/package verification](GAUGE_PACKAGE_QUALIFICATION.md)
 - [DimeMod cache and callback lifecycle](DIMEMOD_CACHE_LIFECYCLE.md)
 - [Open-source provenance](OPEN_SOURCE_PROVENANCE.md)
+- [5EAT, Atlas and ecuEdit integration review](TCU_ATLAS_ECUEDIT_REVIEW_2026-09-08.md)

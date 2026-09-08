@@ -68,6 +68,29 @@ harness and fixes for the findings above, alongside the adapter-selection
 contract. Android integration should reuse tested protocol code instead of
 copying the legacy parser.
 
+## Offline implementation checkpoint
+
+The follow-on shared-core `Elm327Transcript` implements CR command framing,
+bounded incremental prompt collection and strict headerless Mode 01 decoding.
+Synthetic checks cover every response split point, byte-at-a-time input, echo,
+spacing, search progress, service/PID/length mismatches, negative replies,
+multiple responses, extra prompts and malformed/oversized input. Failed or
+incomplete replies never expose channel data. Multiple responses are rejected
+as ambiguous even when their values match, because hidden headers cannot
+identify the responding module.
+
+This work is **not in 1.1.5 RC1** and is not wired to a desktop or Android
+transport yet. It does not fix the legacy runtime merely by existing. Next:
+integrate prompt synchronization, monotonic deadlines, cancellation and
+error recovery into a transcript-driven connection harness; then replace the
+legacy identification/parser and add responder selection. No adapter was
+opened or vehicle command sent by these checks.
+
+The wire-format reference is the manufacturer's
+[ELM327 datasheet](https://www.elmelectronics.com/wp-content/uploads/2017/01/ELM327DS.pdf),
+particularly command framing and headers/automatic CAN formatting. Identity
+banners remain insufficient evidence of supported commands or protocols.
+
 ## Manufacturer and driver evidence
 
 - [OBDLink developer resources](https://www.obdlink.com/developers/) document
