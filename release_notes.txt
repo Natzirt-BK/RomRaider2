@@ -8,6 +8,12 @@ https://github.com/Natzirt-BK/RomRaider2/releases
 What changed for 1.1.5
 ---------------------
 
+- Desktop channel selection adapts its column count to panel width. Units and
+  compact conversion selectors sit beside names; minus/plus controls resize
+  channel text, checkboxes and touch targets without changing selections.
+- Removed toolkit names from desktop editor/logger titles and settings labels.
+- Failed initial connection attempts remain Connecting; Reconnecting is reserved
+  for retries after an established session. Automatic retry behavior is unchanged.
 - Desktop Logger setup uses a target-module dropdown populated from the loaded
   definition. Existing selections are preserved; changing the definition file
   requires saving and reopening setup to refresh module choices.

@@ -147,3 +147,9 @@
 .tab-pane > .tab-header-area > .tab-header-background { -fx-background-color: -rr-raised; -fx-border-color: transparent transparent -rr-border transparent; }
 .tab-pane > .tab-header-area > .headers-region > .tab { -fx-background-color: transparent; -fx-padding: 6 11 6 11; }
 .tab-pane > .tab-header-area > .headers-region > .tab:selected { -fx-border-color: transparent transparent -rr-accent transparent; -fx-border-width: 0 0 3 0; }
+.logger-channel-check .box {
+    -fx-min-width: 1.6em;
+    -fx-min-height: 1.6em;
+    -fx-pref-width: 1.6em;
+    -fx-pref-height: 1.6em;
+}

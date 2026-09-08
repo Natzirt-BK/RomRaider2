@@ -261,7 +261,7 @@ final class FxLoggerWindow {
         stage.showingProperty().addListener((value, oldState, showing) -> updateDisplayAwake());
         stage.iconifiedProperty().addListener((value, oldState, minimized) -> updateDisplayAwake());
         stage.setTitle(Version.PRODUCT_NAME + " " + Version.VERSION
-                + " | JavaFX Logger");
+                + " | Logger");
         stage.setMinWidth(900);
         stage.setMinHeight(620);
         stage.setOnCloseRequest(event -> {
@@ -328,7 +328,7 @@ final class FxLoggerWindow {
     }
 
     private Node header() {
-        Label studio = new Label("REAL-TIME ECU LOGGER · JAVAFX DESKTOP");
+        Label studio = new Label("REAL-TIME ECU LOGGER");
         studio.getStyleClass().add("studio-kicker");
         VBox brand = new VBox(4, FxTheme.brandLogo(150), studio);
         connect.setDefaultButton(true);

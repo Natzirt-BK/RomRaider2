@@ -232,9 +232,9 @@ public final class QueryManagerImpl implements QueryManager {
                     runLogger(null);
                 } else {
                     if (stop) break;
-                    reconnecting = true;
-                    notifyReconnecting();
-                    messageListener.reportMessage(rb.getString("RECONNECTING"));
+                    if (reconnecting) notifyReconnecting();
+                    else notifyConnecting();
+                    messageListener.reportMessage(rb.getString(reconnecting ? "RECONNECTING" : "CONNECTRETRY"));
                     sleep(retryDelay);
                     retryDelay = nextRetryDelay(retryDelay);
                 }

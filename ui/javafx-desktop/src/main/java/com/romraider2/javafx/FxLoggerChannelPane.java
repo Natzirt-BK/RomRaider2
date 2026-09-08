@@ -12,6 +12,7 @@ import com.romraider.logger.api.LoggerChannelService;
 import com.romraider.logger.api.LoggerChannelUnitOption;
 
 import javafx.geometry.Insets;
+import javafx.geometry.Pos;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
@@ -22,6 +23,10 @@ import javafx.scene.control.Tooltip;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
+import javafx.scene.layout.TilePane;
+import javafx.scene.layout.Region;
+import javafx.scene.text.Text;
+import javafx.scene.text.Font;
 import javafx.util.StringConverter;
 
 /** Channel controls only; filtering never changes the polling selection. */
@@ -49,7 +54,12 @@ final class FxLoggerChannelPane extends VBox {
     private final BooleanSupplier recordingNow;
     private final ComboBox<Category> category = new ComboBox<>();
     private final TextField search = new TextField();
-    private final VBox rows = new VBox(6);
+    private final TilePane rows = new TilePane(10, 6);
+    private final ScrollPane scroll = new ScrollPane(rows);
+    private final Button smaller = new Button("−");
+    private final Button larger = new Button("+");
+    private final Label sizeLabel = new Label();
+    private int sizeStep;
     private final Label count = new Label();
     private final Button clearCategory = new Button("Clear category…");
     private final Button clearAll = new Button("Clear all…");
@@ -85,12 +95,44 @@ final class FxLoggerChannelPane extends VBox {
         count.setWrapText(true);
         count.getStyleClass().add("muted");
         rows.setId("logger-channel-rows");
-        ScrollPane scroll = new ScrollPane(rows);
+        rows.setTileAlignment(Pos.TOP_LEFT);
+        rows.setAlignment(Pos.TOP_LEFT);
         scroll.setFitToWidth(true);
+        scroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        scroll.viewportBoundsProperty().addListener((o, before, after) -> layoutColumns());
+        smaller.setId("logger-channel-smaller");
+        larger.setId("logger-channel-larger");
+        smaller.setAccessibleText("Decrease channel size");
+        larger.setAccessibleText("Increase channel size");
+        smaller.setTooltip(new Tooltip("Smaller channel text and touch targets"));
+        larger.setTooltip(new Tooltip("Larger channel text, checkboxes and touch targets"));
+        smaller.setOnAction(event -> changeSize(-1));
+        larger.setOnAction(event -> changeSize(1));
+        HBox sizing = new HBox(8, heading, new Region(), smaller, sizeLabel, larger);
+        HBox.setHgrow(sizing.getChildren().get(1), Priority.ALWAYS);
+        sizing.setAlignment(Pos.CENTER_LEFT);
         VBox.setVgrow(scroll, Priority.ALWAYS);
-        getChildren().addAll(heading, category, search,
+        getChildren().addAll(sizing, category, search,
                 new HBox(6, clearCategory, clearAll), count, scroll);
         update(service.getChannels());
+    }
+
+    private double channelScale() { return 1 + sizeStep * 0.2; }
+
+    private void changeSize(int delta) {
+        sizeStep = Math.max(-1, Math.min(3, sizeStep + delta));
+        double position = scroll.getVvalue();
+        rebuild();
+        scroll.setVvalue(position);
+    }
+
+    private void layoutColumns() {
+        double width = Math.max(1, scroll.getViewportBounds().getWidth());
+        double minimum = 270 * channelScale();
+        int columns = Math.max(1, (int) ((width + rows.getHgap()) / (minimum + rows.getHgap())));
+        rows.setPrefColumns(columns);
+        // Round down: pixel snapping upward can otherwise make the last column wrap.
+        rows.setPrefTileWidth(Math.max(1, Math.floor((width - (columns - 1) * rows.getHgap()) / columns)));
     }
 
     void update(List<LoggerChannel> channels) {
@@ -121,6 +163,10 @@ final class FxLoggerChannelPane extends VBox {
     }
 
     private void rebuild() {
+        double scale = channelScale();
+        smaller.setDisable(sizeStep == -1);
+        larger.setDisable(sizeStep == 3);
+        sizeLabel.setText(Math.round(scale * 100) + "%");
         Category scope = category.getValue();
         if (scope == null) scope = Category.ALL;
         String query = search.getText() == null ? ""
@@ -141,16 +187,35 @@ final class FxLoggerChannelPane extends VBox {
             selected.setUserData(channel.getParameterId());
             selected.setSelected(channel.isSelected());
             selected.setMaxWidth(Double.MAX_VALUE);
+            selected.setMinWidth(0);
+            selected.setMinHeight(34 * scale);
+            selected.getStyleClass().add("logger-channel-check");
             selected.setWrapText(true);
             selected.setTooltip(new Tooltip(label));
             selected.setOnAction(event -> service.setSelected(
                     channel.getParameterId(), selected.isSelected()));
-            VBox row = new VBox(3, selected);
+            HBox row = new HBox(8 * scale, selected);
+            row.setAlignment(Pos.CENTER_LEFT);
+            row.setMinWidth(0);
+            row.setMaxWidth(Double.MAX_VALUE);
+            row.setStyle("-fx-font-size: " + (13 * scale) + "px;");
+            row.setPadding(new Insets(3 * scale, 4 * scale, 3 * scale, 4 * scale));
+            HBox.setHgrow(selected, Priority.ALWAYS);
             if (channel.getUnitOptions().size() > 1) {
                 ComboBox<LoggerChannelUnitOption> units = new ComboBox<>();
                 units.setUserData(channel.getParameterId());
                 units.setAccessibleText("Units for " + channel.getName());
-                units.setMaxWidth(Double.MAX_VALUE);
+                double unitWidth = channel.getUnitOptions().stream().mapToDouble(option -> {
+                    Text text = new Text(option.getLabel());
+                    text.setFont(Font.font(13 * scale));
+                    return text.getLayoutBounds().getWidth();
+                }).max().orElse(30) + 64 * scale;
+                double preferredUnitWidth = Math.min(170 * scale, Math.max(96 * scale, unitWidth));
+                units.prefWidthProperty().bind(javafx.beans.binding.Bindings.min(preferredUnitWidth,
+                        rows.prefTileWidthProperty().subtract(8 * scale).multiply(0.48)));
+                units.setMinWidth(Region.USE_PREF_SIZE);
+                units.setMaxWidth(Region.USE_PREF_SIZE);
+                units.setMinHeight(34 * scale);
                 units.setConverter(new StringConverter<>() {
                     @Override public String toString(LoggerChannelUnitOption option) {
                         return option == null ? "" : option.getLabel();
@@ -163,7 +228,7 @@ final class FxLoggerChannelPane extends VBox {
                 channel.getUnitOptions().stream().filter(LoggerChannelUnitOption::isSelected)
                         .findFirst().ifPresent(units::setValue);
                 units.setDisable(recording);
-                units.setTooltip(new Tooltip("Stop recording before changing units"));
+                units.setTooltip(new Tooltip(channel.getUnits() + " — stop recording before changing units"));
                 units.valueProperty().addListener((property, oldValue, newValue) -> {
                     if (!recording && !recordingNow.getAsBoolean() && newValue != null) {
                         service.setUnitOption(channel.getParameterId(), newValue.getId());
@@ -171,7 +236,9 @@ final class FxLoggerChannelPane extends VBox {
                 });
                 row.getChildren().add(units);
             } else if (!channel.getUnits().isBlank()) {
-                row.getChildren().add(new Label(channel.getUnits()));
+                Label units = new Label(channel.getUnits());
+                units.setMinWidth(Region.USE_PREF_SIZE);
+                row.getChildren().add(units);
             }
             rows.getChildren().add(row);
         }
@@ -180,5 +247,6 @@ final class FxLoggerChannelPane extends VBox {
         clearCategory.setDisable(scope == Category.ALL || selectedInCategory == 0);
         clearAll.setDisable(snapshot.stream().noneMatch(LoggerChannel::isSelected));
         if (shown == 0) rows.getChildren().add(new Label("No matching channels"));
+        layoutColumns();
     }
 }

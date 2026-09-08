@@ -8,7 +8,7 @@ public final class JavaFxDesktopApplicationProvider
         implements DesktopApplicationProvider {
     @Override
     public String getName() {
-        return "JavaFX Desktop ECU Studio";
+        return "RomRaider2 ECU Studio";
     }
 
     @Override

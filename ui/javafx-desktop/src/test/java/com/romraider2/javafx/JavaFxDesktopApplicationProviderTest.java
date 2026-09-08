@@ -20,7 +20,7 @@ class JavaFxDesktopApplicationProviderTest {
                 new JavaFxDesktopApplicationProvider();
 
         assertTrue(provider.supports(new String[0]));
-        assertEquals("JavaFX Desktop ECU Studio", provider.getName());
+        assertEquals("RomRaider2 ECU Studio", provider.getName());
     }
 
     @Test

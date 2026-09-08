@@ -109,8 +109,8 @@ final class FxSettingsWindow {
         table.addRow(0, new Label("Table font"), font);
         table.addRow(1, new Label("Font size"), fontSize);
         table.addRow(2, new Label("Style"), new HBox(8, bold, italic));
-        table.addRow(3, new Label("JavaFX column width"), width);
-        table.addRow(4, new Label("JavaFX row height"), height);
+        table.addRow(3, new Label("Table column width"), width);
+        table.addRow(4, new Label("Table row height"), height);
         changes.add(() -> {
             settings.setTableFont(new java.awt.Font(font.getValue(),
                     (bold.isSelected() ? java.awt.Font.BOLD : 0) | (italic.isSelected() ? java.awt.Font.ITALIC : 0), fontSize.getValue()));
@@ -129,7 +129,7 @@ final class FxSettingsWindow {
         color(colors, 6, "Value warnings", settings.getWarningColor(), settings::setWarningColor, changes);
 
         GridPane compatibility = form();
-        Label retained = new Label("Retained Swing editor preferences. These are preserved for compatibility; JavaFX uses tabs, interface scale, and its offline preview instead of floating frames or live overlays.");
+        Label retained = new Label("Legacy editor preferences are preserved for compatibility. The current editor uses tabs, interface scale, and offline preview instead of floating frames or live overlays.");
         retained.setWrapText(true);
         compatibility.add(retained, 0, 0, 2, 1);
         compatibility.add(check("Open floating tables at the origin", settings.isAlwaysOpenTableAtZero(), settings::setAlwaysOpenTableAtZero, changes), 1, 1);

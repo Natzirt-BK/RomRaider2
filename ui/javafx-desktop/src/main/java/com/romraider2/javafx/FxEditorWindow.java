@@ -767,7 +767,7 @@ final class FxEditorWindow {
 
     private String editorTitle() {
         return Version.PRODUCT_NAME + " " + Version.VERSION
-                + " | JavaFX ECU Studio" + (snapshot.getActiveRom() == null
+                + (snapshot.getActiveRom() == null
                 ? "" : " — " + compactName(
                         snapshot.getActiveRom().getFileName(), 64));
     }

@@ -19,6 +19,42 @@ import static org.junit.Assert.*;
 
 /** Real initialization orchestration with synthetic connections; no worker is started. */
 public class QueryManagerInitializationTest {
+    @Test(timeout = 5000)
+    public void failedFirstConnectionIsNotReportedAsReconnecting() throws Exception {
+        var settings = com.romraider.util.SettingsManager.getSettings();
+        String transport = settings.getTransportProtocol(), device = settings.getJ2534Device(), port = settings.getLoggerPort();
+        boolean external = settings.isLogExternalsOnly();
+        Module destination = settings.getDestinationTarget();
+        String threadName = Thread.currentThread().getName();
+        try {
+            settings.setTransportProtocol("RR2_SYNTHETIC");
+            settings.setJ2534Device("synthetic-only"); settings.setLoggerPort("");
+            settings.setLogExternalsOnly(false);
+            settings.setDestinationTarget(new Module("ECU", new byte[]{0x10}, "Synthetic", new byte[]{(byte)0xf0}, false));
+            Fixture f = new Fixture();
+            f.connection.onEcu = () -> { throw new IllegalStateException("No synthetic ECU reply"); };
+            f.onMessage = text -> { if (text.contains("automatically")) f.manager.stop(); };
+            List<String> states = new ArrayList<>();
+            f.manager.addListener(new com.romraider.logger.api.LoggerStatusListener() {
+                public void connecting() { states.add("connecting"); }
+                public void reconnecting() { states.add("reconnecting"); }
+                public void readingData() { states.add("reading"); }
+                public void readingDataExternal() { }
+                public void loggingData() { }
+                public void stopped() { states.add("stopped"); }
+            });
+            f.manager.run();
+            assertTrue(states.contains("connecting"));
+            assertFalse(states.contains("reconnecting"));
+            assertTrue(f.messages.stream().anyMatch(text -> text.contains("Connection not established")));
+            assertFalse(f.messages.stream().anyMatch(text -> text.contains("reconnecting automatically")));
+        } finally {
+            settings.setTransportProtocol(transport); settings.setJ2534Device(device); settings.setLoggerPort(port);
+            settings.setLogExternalsOnly(external); settings.setDestinationTarget(destination);
+            Thread.currentThread().setName(threadName);
+        }
+    }
+
     @Test
     public void successfulAttemptClosesCallbacksBeforeConnectionCleanup() throws Exception {
         Fixture f = new Fixture();
@@ -237,6 +273,7 @@ public class QueryManagerInitializationTest {
         DmInit cached;
         int ecuResults, dimeResults;
         Runnable onCreate = () -> { };
+        java.util.function.Consumer<String> onMessage = text -> { };
         Fixture() throws Exception {
             manager = new QueryManagerImpl(value -> { identity = value; ecuResults++; }, new DmInitCallback() {
                 public void callback(DmInit value, boolean force) { cached = value; dimeResults++; }
@@ -244,7 +281,7 @@ public class QueryManagerInitializationTest {
                 public DmInit getDmInit() { return cached; }
             }, new MessageListener() {
                 public void reportStats(String text) { }
-                public void reportMessage(String text) { messages.add(text); }
+                public void reportMessage(String text) { messages.add(text); onMessage.accept(text); }
                 public void reportMessageInTitleBar(String text) { }
                 public void reportError(String text) { }
                 public void reportError(Exception error) { }

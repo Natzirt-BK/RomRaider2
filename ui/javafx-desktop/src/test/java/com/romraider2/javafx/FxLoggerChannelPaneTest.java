@@ -13,11 +13,54 @@ import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.VBox;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.TilePane;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
 @EnabledIfEnvironmentVariable(named = "RR2_FX_WINDOW_SMOKE", matches = "1")
 class FxLoggerChannelPaneTest {
+    @Test void widthAddsColumnsAndTouchSizingPreservesSelections() throws Exception {
+        FxTestRuntime.run(() -> {
+            Harness h = new Harness();
+            h.pane.setPrefSize(320, 600); h.pane.resize(320, 600); h.pane.applyCss(); h.pane.layout();
+            TilePane rows = (TilePane) h.pane.lookup("#logger-channel-rows");
+            assertEquals(1, rows.getPrefColumns());
+            h.pane.setPrefSize(950, 600); h.pane.resize(950, 600); h.pane.layout(); h.pane.layout();
+            assertTrue(rows.getPrefColumns() >= 3, "Wider rail should show more columns");
+            assertTrue(h.units().getPrefWidth() < 160, "Unit picker must not span the rail");
+            assertInstanceOf(HBox.class, h.units().getParent());
+            capture(h, "channels-wide.png");
+            assertTrue(rows.getPrefColumns() >= 3);
+            assertTrue(rows.getChildren().stream().map(node -> Math.round(node.getLayoutX())).distinct().count() >= 3,
+                    "Rendered tiles, not just preferred count, must occupy three columns");
+            double height = h.checks().get(0).getMinHeight();
+            double boxWidth = h.checks().get(0).lookup(".box").getBoundsInParent().getWidth();
+            h.button("logger-channel-larger").fire(); h.pane.applyCss(); h.pane.layout();
+            assertTrue(h.checks().get(0).getMinHeight() > height);
+            assertTrue(h.checks().get(0).lookup(".box").getBoundsInParent().getWidth() > boxWidth);
+            assertTrue(h.selections.isEmpty());
+            assertTrue(h.unitCommands.isEmpty());
+            for (int i = 0; i < 10; i++) h.button("logger-channel-larger").fire();
+            assertTrue(h.button("logger-channel-larger").isDisabled());
+            h.pane.setPrefSize(640, 600); h.pane.resize(640, 600); h.pane.applyCss(); h.pane.layout(); h.pane.layout();
+            capture(h, "channels-touch.png");
+            for (int i = 0; i < 10; i++) h.button("logger-channel-smaller").fire();
+            assertTrue(h.button("logger-channel-smaller").isDisabled());
+        });
+    }
+
+    private static void capture(Harness h, String name) throws Exception {
+        String directory = System.getenv("RR2_CHANNEL_CAPTURE_DIR");
+        if (directory == null) return;
+        var image = h.pane.snapshot(null, null);
+        var bitmap = new java.awt.image.BufferedImage((int) image.getWidth(), (int) image.getHeight(),
+                java.awt.image.BufferedImage.TYPE_INT_ARGB);
+        for (int y = 0; y < bitmap.getHeight(); y++) for (int x = 0; x < bitmap.getWidth(); x++)
+            bitmap.setRGB(x, y, image.getPixelReader().getArgb(x, y));
+        javax.imageio.ImageIO.write(bitmap, "png", new java.io.File(directory, name));
+    }
+
     @Test void categoriesAndSearchNeverChangeSelection() throws Exception {
         FxTestRuntime.run(() -> {
             Harness h = new Harness();
@@ -156,14 +199,15 @@ class FxLoggerChannelPaneTest {
                     new LoggerChannel("temp", "Temperature", "degC", LoggerChannelKind.PARAMETER, true,
                             List.of(new LoggerChannelUnitOption("c", "degC", true),
                                     new LoggerChannelUnitOption("f", "degF", false))),
-                    new LoggerChannel("S-I", "Ignition switch", "", LoggerChannelKind.SWITCH, true),
+                    new LoggerChannel("S-I", "Ignition switch", "On/Off", LoggerChannelKind.SWITCH, true),
                     new LoggerChannel("ext", "Wideband", "AFR", LoggerChannelKind.EXTERNAL, false)));
             pane = new FxLoggerChannelPane(service, (title, message) -> {
                 confirmation = message;
                 duringConfirmation.run();
                 return approve;
             }, () -> backendRecording);
-            new Scene(pane);
+            Scene scene = new Scene(pane);
+            scene.getStylesheets().add(FxLoggerChannelPane.class.getResource("/romraider2-javafx.css").toExternalForm());
             pane.applyCss();
             service.addListener(pane::update);
         }
@@ -173,14 +217,14 @@ class FxLoggerChannelPaneTest {
         TextField search() { return (TextField) pane.lookup("#logger-channel-search"); }
         Button button(String id) { return (Button) pane.lookup("#" + id); }
         List<CheckBox> checks() {
-            VBox rows = (VBox) pane.lookup("#logger-channel-rows");
-            return rows.getChildren().stream().filter(VBox.class::isInstance)
-                    .map(VBox.class::cast).map(row -> (CheckBox) row.getChildren().get(0)).toList();
+            TilePane rows = (TilePane) pane.lookup("#logger-channel-rows");
+            return rows.getChildren().stream().filter(HBox.class::isInstance)
+                    .map(HBox.class::cast).map(row -> (CheckBox) row.getChildren().get(0)).toList();
         }
         @SuppressWarnings("unchecked") ComboBox<LoggerChannelUnitOption> units() {
-            VBox rows = (VBox) pane.lookup("#logger-channel-rows");
+            TilePane rows = (TilePane) pane.lookup("#logger-channel-rows");
             return (ComboBox<LoggerChannelUnitOption>) rows.getChildren().stream()
-                    .filter(VBox.class::isInstance).map(VBox.class::cast)
+                    .filter(HBox.class::isInstance).map(HBox.class::cast)
                     .flatMap(row -> row.getChildren().stream())
                     .filter(ComboBox.class::isInstance).findFirst().orElseThrow();
         }
