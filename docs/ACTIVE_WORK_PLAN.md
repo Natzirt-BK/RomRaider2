@@ -16,6 +16,11 @@ is [parked hardware qualification](ELM_IN_CAR_TEST.md), not more protocol guesse
 Android ELM, responder selection and enhanced SSM/MUT-II on ELM remain future
 work. Existing OpenPort paths are unchanged by this slice.
 
+The first hosted 1.1.6 build exposed a Compose floating-window restore failure:
+full-screen exit returned to `(0, 0)` instead of the visible pre-entry position.
+The follow-up snapshots native floating geometry, with a failing-before,
+passing-after regression. This does not change logger sessions or adapter I/O.
+
 ## Earlier checkpoints
 
 The following entries describe historical work, not the current download status.

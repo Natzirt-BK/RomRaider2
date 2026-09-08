@@ -17,6 +17,9 @@ What changed for 1.1.6 (hardware qualification pending)
   Android ELM connectivity, flashing, live tuning or DTC clearing.
 - Existing OpenPort logging remains unchanged. See docs/ELM_IN_CAR_TEST.md
   for the parked-vehicle qualification procedure and current limitations.
+- The Compose desktop shell restores the visible window's position and size
+  after full-screen gauges, including when window-manager updates lag behind
+  the UI model. A synthetic native-window regression covers stale coordinates.
 
 What changed for 1.1.5
 ---------------------

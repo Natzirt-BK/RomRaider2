@@ -44,6 +44,35 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalComposeUiApi::class, androidx.compose.runtime.tooling.ComposeToolingApi::class)
 @org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable(named = "RR2_COMPOSE_WINDOW_SMOKE", matches = "1")
 class GaugeLoggerWindowTest {
+    @Test fun floatingRestoreUsesVisibleGeometryInsteadOfDelayedModelCoordinates() {
+        val window = edt { ComposeWindow().apply { setBounds(140, 112, 800, 600); isVisible = true } }
+        val state = WindowState(position = androidx.compose.ui.window.WindowPosition(
+            androidx.compose.ui.unit.Dp(0f), androidx.compose.ui.unit.Dp(0f)),
+            size = androidx.compose.ui.unit.DpSize(androidx.compose.ui.unit.Dp(320f), androidx.compose.ui.unit.Dp(240f)))
+        val presentation = GaugeWindowPresentation(state)
+        try {
+            Thread.sleep(200)
+            edt { window.setLocation(140, 112) }
+            val positioned = System.nanoTime() + 3_000_000_000L
+            while (edt { window.x != 140 || window.y != 112 }) {
+                check(System.nanoTime() < positioned) { "Fixture could not position the native window" }
+                Thread.sleep(40)
+            }
+            val expected = edt { window.bounds }
+            edt {
+                presentation.attach(window)
+                presentation.requestFullScreen(true)
+                window.placement = WindowPlacement.Fullscreen
+                presentation.requestFullScreen(false)
+            }
+            val deadline = System.nanoTime() + 4_000_000_000L
+            while (edt { window.placement != WindowPlacement.Floating || window.bounds != expected }) {
+                check(System.nanoTime() < deadline) { "Expected native floating bounds $expected, got ${edt { window.bounds }}" }
+                Thread.sleep(40)
+            }
+        } finally { edt { presentation.close(); window.dispose() } }
+    }
+
     @Test fun fullScreenExitRepairsDelayedFloatingNotification() {
         val window = edt { ComposeWindow().apply { setSize(800, 600); isVisible = true } }
         val state = WindowState(placement = WindowPlacement.Maximized)

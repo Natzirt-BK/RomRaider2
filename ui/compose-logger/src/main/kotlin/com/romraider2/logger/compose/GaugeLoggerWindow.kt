@@ -15,6 +15,9 @@ import androidx.compose.ui.window.FrameWindowScope
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowPlacement
 import androidx.compose.ui.window.WindowState
+import androidx.compose.ui.window.WindowPosition
+import androidx.compose.ui.unit.DpSize
+import androidx.compose.ui.unit.dp
 import com.romraider.ui.AwtDisplayAwakeBinding
 import com.romraider.ui.DesktopDisplayAwake
 import javax.swing.SwingUtilities
@@ -44,10 +47,19 @@ internal class GaugeWindowPresentation(private val state: WindowState) {
         if (enabled) {
             // Native maximize/restore notifications can lag behind a user tap.
             // Save the visible window's placement, not its preceding model state.
-            previousPlacement = nativeWindow?.takeIf { it.isShowing }?.placement
-                ?: state.placement
-            previousPosition = state.position
-            previousSize = state.size
+            val visible = nativeWindow?.takeIf { it.isShowing }
+            previousPlacement = visible?.placement ?: state.placement
+            // Initial WM centering/moves and resize callbacks can also precede
+            // the Compose model. Capture the visible floating geometry as one
+            // snapshot, so full-screen exit cannot restore stale (0, 0) bounds.
+            if (visible != null && previousPlacement == WindowPlacement.Floating) {
+                val bounds = visible.bounds
+                previousPosition = WindowPosition(bounds.x.dp, bounds.y.dp)
+                previousSize = DpSize(bounds.width.dp, bounds.height.dp)
+            } else {
+                previousPosition = state.position
+                previousSize = state.size
+            }
             state.placement = WindowPlacement.Fullscreen
         } else {
             // Compose's Maximized setter does not itself clear native full screen.
