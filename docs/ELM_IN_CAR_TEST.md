@@ -94,3 +94,19 @@ Wire behavior follows the manufacturer's
 Serial calls use the pinned
 [jSerialComm 2.11.4 API](https://fazecast.github.io/jSerialComm/javadoc/com/fazecast/jSerialComm/SerialPort.html).
 The legacy ELM logger is not used by this test mode.
+
+## Repeatable offline serial check (Linux)
+
+After compiling the desktop test classes, run:
+
+```sh
+python3 packaging/test-elm-serial-pty.py "$JAVA_HOME/bin/java" \
+  'ui/javafx-desktop/build/classes/java/test:ui/javafx-desktop/build/classes/java/main:platform/shared-core/build/classes/java/main:lib/common/jSerialComm-2.11.4.jar'
+```
+
+The wrapper creates and owns a pseudo-terminal. The native probe only accepts
+`/dev/pts/<number>`, not a hardware serial path. Six sessions exercise actual
+jSerialComm reads/writes, fragmented replies, close/reopen, malformed data,
+timeout, cancellation and a fresh connection after failure. A command allowlist
+and a 30-second process limit bound the fixture. It does not emulate the vehicle
+bus, voltage, firmware timing or adapter electrical behavior.

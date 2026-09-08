@@ -38,9 +38,23 @@ class FxElmAdapterTestSmokeTest {
                 dialog[0].refresh(); assertTrue(task[0].isSuccessful(), task[0].status());
                 assertTrue(dialog[0].values.getText().contains("Engine Speed")); assertTrue(dialog[0].stop.isDisabled());
                 assertFalse(dialog[0].start.isDisabled());
+                String capture = System.getenv("RR2_ELM_CAPTURE");
+                if (capture != null && !capture.isBlank()) {
+                    dialog[0].stage.setTitle("Synthetic adapter test — no vehicle connected");
+                    dialog[0].stage.getScene().getRoot().applyCss(); dialog[0].stage.getScene().getRoot().layout();
+                    var image = dialog[0].stage.getScene().getRoot().snapshot(null, null);
+                    var bitmap = new java.awt.image.BufferedImage((int) image.getWidth(), (int) image.getHeight(), java.awt.image.BufferedImage.TYPE_INT_ARGB);
+                    for (int y = 0; y < bitmap.getHeight(); y++) for (int x = 0; x < bitmap.getWidth(); x++)
+                        bitmap.setRGB(x, y, image.getPixelReader().getArgb(x, y));
+                    javax.imageio.ImageIO.write(bitmap, "png", Path.of(capture).toFile());
+                }
                 dialog[0].stage.setWidth(480); dialog[0].stage.setHeight(650);
                 dialog[0].stage.getScene().getRoot().applyCss(); dialog[0].stage.getScene().getRoot().layout();
                 assertTrue(dialog[0].start.getWidth() > 0); assertTrue(dialog[0].stage.isShowing());
+                var duration = dialog[0].stage.getScene().getRoot().lookupAll(".label").stream()
+                        .filter(node -> node instanceof javafx.scene.control.Label label && label.getText().equals("Duration (s)"))
+                        .findFirst().orElseThrow();
+                assertEquals("Duration (s)", ((javafx.scene.text.Text) duration.lookup(".text")).getText());
             });
         } finally { FxTestRuntime.run(() -> { if (dialog[0] != null) dialog[0].close(); if (owner[0] != null) owner[0].close(); }); }
     }

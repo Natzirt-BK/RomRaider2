@@ -81,8 +81,9 @@ final class FxElmAdapterTest {
         form.addRow(0, new Label("Serial port"), port);
         form.addRow(1, new Label("Adapter baud"), baud);
         form.addRow(2, new Label("OBD-II protocol"), protocol);
-        form.addRow(3, new Label("Record seconds"), seconds);
+        form.addRow(3, new Label("Duration (s)"), seconds);
         form.addRow(4, new Label("New CSV file"), output, browse);
+        form.getChildren().stream().filter(node -> node instanceof Label).forEach(node -> ((Label) node).setMinWidth(Region.USE_PREF_SIZE));
         GridPane.setHgrow(port, Priority.ALWAYS); GridPane.setHgrow(output, Priority.ALWAYS);
         protocol.setMaxWidth(Double.MAX_VALUE);
         confirmed.setWrapText(true);
