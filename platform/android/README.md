@@ -1,24 +1,11 @@
 # RomRaider2 for Android
 
-The Android client provides offline ROM editing, log review and foreground-only,
-read-only OpenPort logging. It contains no ECU writing or flashing path.
+The Android client provides offline ROM editing, log review and read-only
+OpenPort logging. It contains no ECU writing or flashing path.
 
-This page describes version 1.1.2. See the
-[main download page](../../README.md#downloads) for published packages and migration
-guidance; later source checkpoints are not automatically new APK releases.
-
-Version 1.1.3 source adds calculated channels, reviewed portable logger-setup
-transfer and [service-owned background recording](../../docs/ANDROID_BACKGROUND_RECORDING.md).
-The foreground-only and calculated-channel limitations below describe public
-1.1.2, not that newer source. Background USB behavior still needs supervised
-physical-device qualification.
-Retained exports in 1.1.3 also provide
-[reviewed incomplete-tail recovery](../../docs/ANDROID_RECORDING_RECOVERY.md),
-without modifying original recordings.
-The same source adds five vibrant/retro gauge styles (21 mobile themes total),
-[full-screen mounted mode with display keep-awake](../../docs/ANDROID_MOUNTED_DISPLAY.md),
-and [bounded, cancellable large-CSV summary review](../../docs/ANDROID_CSV_REVIEW.md).
-These additions do not change the public 1.1.2 feature list below.
+This page describes development version 1.1.5. See the
+[main download page](../../README.md#downloads) for published packages.
+Source changes are not automatically new APK releases.
 
 ## Features
 
@@ -27,8 +14,13 @@ These additions do not change the public 1.1.2 feature list below.
 - Search numeric calibration tables, inspect scaled values, edit a selected cell,
   and save a separate review copy. Bounded hexadecimal editing is also available.
 - Import traditional RomRaider wide-column or RR2 long-form CSV logs.
+- MUT-II text imports require `XXRR2-MUT-IIXX` on the first line, optionally
+  prefixed with `;` or `#`. Update and reimport older text definitions, including
+  restored setups. This is a copyable marker, not a security signature; XML
+  imports are unchanged.
 - Import logger definitions, profiles and the read-only `type=mut2` subset of
-  OpenPort `logcfg.txt`, including supported arithmetic RPN scaling.
+  OpenPort `logcfg.txt`, including supported arithmetic RPN scaling and optional
+  `paramunits` labels. Labels flow to gauges and CSV without changing values.
 - Preserve imported definitions and selected channels across Activity/process
   restarts. Select channels on the device without requiring a separate profile.
 - Run explicitly labeled simulated data for offline setup and visual review.
@@ -36,22 +28,31 @@ These additions do not change the public 1.1.2 feature list below.
   adapter. Only supported definition-backed read requests are sent.
 - Record to separate app-private files, flush completed cycles, recover recordings
   after restart and export the standard RomRaider CSV format.
-- Choose from 16 gauge themes, including nine new instrument faces and two
-  premium night-cluster styles. Switch between
+- Evaluate supported calculated logger channels and their dependencies.
+- Continue active logging through a
+  [foreground service](../../docs/ANDROID_BACKGROUND_RECORDING.md), with explicit
+  stop controls. Physical background-USB qualification remains open.
+- Review [recoverable recordings](../../docs/ANDROID_RECORDING_RECOVERY.md)
+  and [large CSV summaries](../../docs/ANDROID_CSV_REVIEW.md) without modifying originals.
+- Choose from 25 gauge styles with independent channel/style assignments and
+  fitted one-to-six-gauge layouts. Switch between
   LOGGER and GAUGES without replacing the active session or recording.
   See [gauge designs and data states](../../docs/GAUGE_DESIGN.md).
+- Enter [full-screen mounted mode](../../docs/ANDROID_MOUNTED_DISPLAY.md) to keep
+  the display awake; tap to reveal the timed exit menu. The setup tab alone
+  does not keep the display awake.
 - Read bundled software-license and brand notices through About / licenses.
 
 ## Boundaries and qualification
 
-Basic Forester logging was reported working during the owner's in-car test.
-Sustained sessions, larger channel sets, exact EVO/MUT-II qualification and broader
-physical-device testing remain separate acceptance checks. Synthetic tests and
-successful builds do not establish vehicle reliability.
+Basic Forester and Evo logging have been reported working. An Evo recording
+also showed uninterrupted samples for approximately 4 minutes 40 seconds.
+This does not qualify every channel: the separate definition audit found
+mislabeling and unresolved scaling. Sustained/background sessions, larger
+channel sets and broader physical-device testing remain separate checks.
+Synthetic tests and successful builds do not establish vehicle reliability.
 
-Logging stops when the app leaves the foreground. Gauges-only view switching is
-not background recording. Configure channels, units and layout while parked.
-Calculated logger-parameter dependencies are not yet evaluated. MUT-II standalone
+Configure channels, units and layout while parked. MUT-II standalone
 priority values are not scheduled: selected PIDs are polled once per full cycle.
 
 Android does not correct ROM checksums. Definition-backed and hexadecimal edits

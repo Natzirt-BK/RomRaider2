@@ -52,22 +52,22 @@ jobs:
           packaging/java21/build-macos-app-image.sh "build/macos-${{ matrix.package_arch }}"
           ditto -c -k --sequesterRsrc --keepParent \
             "build/macos-${{ matrix.package_arch }}/RomRaider2.app" \
-            "build/RomRaider2_1.1.4_macOS_${{ matrix.package_arch }}.zip"
+            "build/RomRaider2_1.1.5_macOS_${{ matrix.package_arch }}.zip"
           (
             cd build
             shasum -a 256 \
-              "RomRaider2_1.1.4_macOS_${{ matrix.package_arch }}.zip" \
-              >"RomRaider2_1.1.4_macOS_${{ matrix.package_arch }}.zip.sha256"
+              "RomRaider2_1.1.5_macOS_${{ matrix.package_arch }}.zip" \
+              >"RomRaider2_1.1.5_macOS_${{ matrix.package_arch }}.zip.sha256"
           )
       - name: Check whitespace
         run: git diff --check
       - name: Upload unsigned macOS package
         uses: actions/upload-artifact@v4
         with:
-          name: RomRaider2-1.1.4-macOS-${{ matrix.package_arch }}-unsigned
+          name: RomRaider2-1.1.5-macOS-${{ matrix.package_arch }}-unsigned
           path: |
-            build/RomRaider2_1.1.4_macOS_${{ matrix.package_arch }}.zip
-            build/RomRaider2_1.1.4_macOS_${{ matrix.package_arch }}.zip.sha256
+            build/RomRaider2_1.1.5_macOS_${{ matrix.package_arch }}.zip
+            build/RomRaider2_1.1.5_macOS_${{ matrix.package_arch }}.zip.sha256
           if-no-files-found: error
 
   android-debug:
@@ -122,27 +122,27 @@ jobs:
               platform/android/app/build/outputs/apk/openportDiagnostic/app-openportDiagnostic.apk
           mkdir -p build/platform-packages
           cp platform/android/app/build/outputs/apk/debug/app-debug.apk \
-            build/platform-packages/RomRaider2_1.1.4_Android-debug.apk
+            build/platform-packages/RomRaider2_1.1.5_Android-debug.apk
           cp platform/android/app/build/outputs/apk/openportDiagnostic/app-openportDiagnostic.apk \
-            build/platform-packages/RomRaider2_1.1.4_Android-side-by-side-test.apk
+            build/platform-packages/RomRaider2_1.1.5_Android-side-by-side-test.apk
           (
             cd build/platform-packages
-            sha256sum RomRaider2_1.1.4_Android-debug.apk \
-              >RomRaider2_1.1.4_Android-debug.apk.sha256
-            sha256sum RomRaider2_1.1.4_Android-side-by-side-test.apk \
-              >RomRaider2_1.1.4_Android-side-by-side-test.apk.sha256
+            sha256sum RomRaider2_1.1.5_Android-debug.apk \
+              >RomRaider2_1.1.5_Android-debug.apk.sha256
+            sha256sum RomRaider2_1.1.5_Android-side-by-side-test.apk \
+              >RomRaider2_1.1.5_Android-side-by-side-test.apk.sha256
           )
       - name: Check whitespace
         run: git diff --check
       - name: Upload Android debug package
         uses: actions/upload-artifact@v4
         with:
-          name: RomRaider2-1.1.4-Android-debug
+          name: RomRaider2-1.1.5-Android-debug
           path: |
-            build/platform-packages/RomRaider2_1.1.4_Android-debug.apk
-            build/platform-packages/RomRaider2_1.1.4_Android-debug.apk.sha256
-            build/platform-packages/RomRaider2_1.1.4_Android-side-by-side-test.apk
-            build/platform-packages/RomRaider2_1.1.4_Android-side-by-side-test.apk.sha256
+            build/platform-packages/RomRaider2_1.1.5_Android-debug.apk
+            build/platform-packages/RomRaider2_1.1.5_Android-debug.apk.sha256
+            build/platform-packages/RomRaider2_1.1.5_Android-side-by-side-test.apk
+            build/platform-packages/RomRaider2_1.1.5_Android-side-by-side-test.apk.sha256
           if-no-files-found: error
 
       - name: Remove temporary Android signing key
@@ -175,18 +175,18 @@ jobs:
           packaging/java21/build-linux-app-image.sh build/java21
           packaging/steamos/build-steamos-bundle.sh
           cd build/steamos
-          zip -qr ../RomRaider2_SteamOS_1.1.4_x64.zip \
-            RomRaider2_SteamOS_1.1.4_x64
+          zip -qr ../RomRaider2_SteamOS_1.1.5_x64.zip \
+            RomRaider2_SteamOS_1.1.5_x64
           cd ..
-          sha256sum RomRaider2_SteamOS_1.1.4_x64.zip \
-            >RomRaider2_SteamOS_1.1.4_x64.zip.sha256
+          sha256sum RomRaider2_SteamOS_1.1.5_x64.zip \
+            >RomRaider2_SteamOS_1.1.5_x64.zip.sha256
       - name: Check whitespace
         run: git diff --check
       - name: Upload SteamOS Desktop Mode package
         uses: actions/upload-artifact@v4
         with:
-          name: RomRaider2-1.1.4-SteamOS-x64
+          name: RomRaider2-1.1.5-SteamOS-x64
           path: |
-            build/RomRaider2_SteamOS_1.1.4_x64.zip
-            build/RomRaider2_SteamOS_1.1.4_x64.zip.sha256
+            build/RomRaider2_SteamOS_1.1.5_x64.zip
+            build/RomRaider2_SteamOS_1.1.5_x64.zip.sha256
           if-no-files-found: error

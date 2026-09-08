@@ -68,6 +68,22 @@ adapter support is not included; use OpenPort 2.0 for connected logging.
 
 ## EVO VIII/IX MUT-II with OpenPort 2.0
 
+On September 7 the owner reported successful Evo logging with the startup fix.
+This confirms that reported connection/session, not all channel conversions or
+sustained/background operation. The offered CSV was reviewed: 494 rows over
+279.525 seconds with no obvious recording gaps. The separate definition audit
+found a misleading rear-O2 label and unresolved scaling; do not treat successful
+transport or explicit unit labels as validation of every channel.
+
+Android 1.1.5 adds optional `paramunits` to each MUT-II TXT parameter, for example
+`paramunits=rpm`, `paramunits=V`, `paramunits=°C` or `paramunits=%`. Unit labels
+flow into selection, gauges, recordings and normal wide RomRaider CSV headers;
+they never modify the scaling expression. Labels are bounded to 24 characters
+and reject control characters/CSV delimiters. Omitted units retain raw/scaled.
+Reimport the updated definition and reselect units/channels; old recordings are
+unchanged. This is an RR2 TXT extension, not qualified for OpenPort standalone
+firmware. Older APKs reject the new field. Unresolved units must not be guessed.
+
 The **1.1.4 test build** adds slow five-baud initialization before the first
 engine request. It grounds diagnostic pin 1 during the MUT-II session and
 releases it on Stop or failed startup; no flash voltage or ECU memory write is
@@ -82,8 +98,18 @@ when safe. See [the investigation](EVO_MUT2_CONNECTION_DIAGNOSIS.md).
    adapter is insufficient. Grant Android USB permission and use **Prepare
    OpenPort** to check adapter access; this does not start ECU logging.
 2. Select **Protocol: MUT2**, then **Open logger definition**. Import the
-   existing `type=mut2` OpenPort text configuration, or a logger XML containing
+   `type=mut2` OpenPort text configuration, or a logger XML containing
    a `MUT2` protocol. A ROM editor definition is not a logger definition.
+   Starting with the next 1.1.4 development build, text definitions must have
+   `XXRR2-MUT-IIXX` on their first line. The commented forms
+   `; XXRR2-MUT-IIXX` and `# XXRR2-MUT-IIXX` are also accepted; use the semicolon
+   form to retain OpenPort configuration syntax. Case must match exactly. A
+   leading UTF-8 BOM and surrounding spaces are allowed, but preceding blank
+   lines or other comments are not. Missing markers also block saved-definition
+   restoration: add the header to the source file and import it again. XML and
+   SSM definitions are unchanged. This copyable marker is simple validation,
+   not authentication or proof of ECU compatibility. The previously supplied
+   local 1.1.4 startup-test APK does not contain this later validation change.
 3. Use **Choose channels**. Start with RPM and battery voltage for the parked
    test; add channels after checking those values. All selected channels are
    recorded; fullscreen mode shows 1–6 independently configured gauges.
@@ -120,7 +146,7 @@ No arbitrary pin-voltage, fault-clear, reset, flashing, or ECU memory-write
 operation is exposed. The 1.1.4 MUT-II startup uses only the fixed diagnostic
 pin 1 ground/release described above. Unsupported logcfg options are rejected,
 not executed. The importer
-supports `paramname`, one-byte `paramid`, arithmetic `scalingrpn` (`x`, numeric
+supports `paramname`, optional `paramunits` (1.1.5+), one-byte `paramid`, arithmetic `scalingrpn` (`x`, numeric
 constants, `+ - * /`) and validated `priority`. Priority is informational here:
 all selected PIDs are polled each cycle. Unspecified units are labeled `raw` or
 `scaled`; the source channel name is preserved, and temperature curves or

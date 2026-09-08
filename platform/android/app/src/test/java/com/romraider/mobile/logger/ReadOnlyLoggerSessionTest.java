@@ -13,7 +13,7 @@ import static org.junit.Assert.*;
 
 /** Real session loop with a deterministic transport; no Android stubs or ECU. */
 public class ReadOnlyLoggerSessionTest {
-    private static final String CONFIG = "type=mut2\nparamname=RPM\nparamid=0x21\nscalingrpn=x,31.25,*\n"
+    private static final String CONFIG = "XXRR2-MUT-IIXX\ntype=mut2\nparamname=RPM\nparamid=0x21\nscalingrpn=x,31.25,*\n"
             + "paramname=Battery\nparamid=0x14\nscalingrpn=x,0.0733,*\n";
 
     @Test public void mut2RecordsConvertedCycleAndClosesOnce() throws Exception {
@@ -36,6 +36,19 @@ public class ReadOnlyLoggerSessionTest {
         assertEquals(0, h.transport.identifies);
         assertTrue(h.transport.pids.isEmpty());
         assertEquals(1, h.stopped);
+    }
+
+    @Test public void explicitTextUnitsReachRecordingAndRomRaiderCsv() throws Exception {
+        String labeled = CONFIG.replace("paramid=0x21", "paramunits=rpm\nparamid=0x21")
+                .replace("paramid=0x14", "paramunits=V\nparamid=0x14");
+        Harness h = new Harness("MUT2", new PortableLogSession(), "MUT2", labeled);
+        h.session.run();
+        assertEquals("rpm", h.log.snapshot().get(0).getUnits());
+        assertEquals("V", h.log.snapshot().get(1).getUnits());
+        StringWriter csv = new StringWriter();
+        h.log.writeRomRaiderCsv(csv);
+        assertEquals("Time (msec),RPM (rpm),Battery (V)\n0,2500,13.194\n", csv.toString());
+        assertEquals(2, com.romraider.portable.PortableLogCsvReader.read(new StringReader(csv.toString())).size());
     }
 
     @Test public void ssmStillUsesItsAddressBatchCodec() throws Exception {
@@ -203,14 +216,17 @@ public class ReadOnlyLoggerSessionTest {
             this(profileProtocol, log, "MUT2");
         }
         Harness(String profileProtocol, PortableLogSession log, String definitionProtocol) throws IOException {
+            this(profileProtocol, log, definitionProtocol, CONFIG);
+        }
+        Harness(String profileProtocol, PortableLogSession log, String definitionProtocol, String config) throws IOException {
             this.log = log;
             PortableLoggerDefinition imported = PortableMut2LogConfigReader.read(
-                    new ByteArrayInputStream(CONFIG.getBytes(StandardCharsets.UTF_8)));
+                    new ByteArrayInputStream(config.getBytes(StandardCharsets.UTF_8)));
             PortableLoggerDefinition definition = new PortableLoggerDefinition("test",
                     definitionProtocol, imported.parameters());
             PortableLoggerProfile profile = new PortableLoggerProfile(profileProtocol,
-                    List.of(new PortableLoggerProfile.Selection("RPM", "scaled"),
-                            new PortableLoggerProfile.Selection("Battery", "scaled")), List.of());
+                    List.of(new PortableLoggerProfile.Selection("RPM", imported.parameters().get(0).getConversions().get(0).getUnits()),
+                            new PortableLoggerProfile.Selection("Battery", imported.parameters().get(1).getConversions().get(0).getUnits())), List.of());
             session = new ReadOnlyLoggerSession(transport, definition, profile, log, this);
         }
         public void onIdentified(String ecuId, int ready, int unavailable) {

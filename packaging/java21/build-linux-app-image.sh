@@ -27,7 +27,7 @@ done
     echo "Build RomRaider2 first; jar not found: $application_jar" >&2
     exit 1
 }
-[[ -f "$javafx_root/romraider2-javafx-desktop-1.1.4.jar" ]] || {
+[[ -f "$javafx_root/romraider2-javafx-desktop-1.1.5.jar" ]] || {
     echo "Stage the JavaFX desktop workspace before packaging." >&2
     exit 1
 }
@@ -112,7 +112,7 @@ detected_modules=$(JAVA_HOME="$jdk_root" \
     --input "$input" \
     --main-jar RomRaider2.jar \
     --main-class com.romraider.ECUExec \
-    --app-version 1.1.4 \
+    --app-version 1.1.5 \
     --vendor NatZirt \
     --description "RomRaider2 ECU Studio" \
     --icon "$repo_root/packaging/branding/linux/hicolor/128x128/apps/romraider2.png" \

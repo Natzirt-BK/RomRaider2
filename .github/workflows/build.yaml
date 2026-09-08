@@ -43,7 +43,7 @@ jobs:
           env RR2_COMPOSE_WINDOW_SMOKE=1 SKIKO_RENDER_API=SOFTWARE bash packaging/run-desktop-window-tests.sh gradle --no-daemon :platform:shared-core:check :ui:compose-logger:test
           env RR2_FX_WINDOW_SMOKE=1 bash packaging/run-desktop-window-tests.sh gradle --no-daemon :ui:javafx-desktop:test :ui:javafx-desktop:stageJavaFxLinux
           packaging/java21/audit-runtime-modules.sh build/linux/lib/RomRaider2.jar
-          packaging/java21/build-linux-app-image.sh build/release-1.1.4
+          packaging/java21/build-linux-app-image.sh build/release-1.1.5
           packaging/java21/build-linux-release.sh
       - name: Preserve failed native-window diagnostics
         if: failure()
@@ -59,10 +59,10 @@ jobs:
       - name: Upload Linux x64 package
         uses: actions/upload-artifact@v4
         with:
-          name: RomRaider2-1.1.4-Linux-x64
+          name: RomRaider2-1.1.5-Linux-x64
           path: |
-            build/releases/RomRaider2_ECU_Studio_1.1.4_Linux_x64.zip
-            build/releases/RomRaider2_ECU_Studio_1.1.4_Linux_x64.zip.sha256
+            build/releases/RomRaider2_ECU_Studio_1.1.5_Linux_x64.zip
+            build/releases/RomRaider2_ECU_Studio_1.1.5_Linux_x64.zip.sha256
           if-no-files-found: error
 
   windows-x64-package:
@@ -123,8 +123,8 @@ jobs:
       - name: Upload Windows x64 package
         uses: actions/upload-artifact@v4
         with:
-          name: RomRaider2-1.1.4-Windows-x64
+          name: RomRaider2-1.1.5-Windows-x64
           path: |
-            build/releases-windows/RomRaider2_ECU_Studio_1.1.4_Windows_x64.zip
-            build/releases-windows/RomRaider2_ECU_Studio_1.1.4_Windows_x64.zip.sha256
+            build/releases-windows/RomRaider2_ECU_Studio_1.1.5_Windows_x64.zip
+            build/releases-windows/RomRaider2_ECU_Studio_1.1.5_Windows_x64.zip.sha256
           if-no-files-found: error

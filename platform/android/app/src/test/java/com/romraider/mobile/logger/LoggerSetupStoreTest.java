@@ -105,7 +105,7 @@ public class LoggerSetupStoreTest {
         }
     }
     @Test public void mut2DefinitionAndRawUnitsRoundTrip() throws Exception {
-        byte[] config = "type=mut2\nparamname=RPM\nparamid=0x21\n".getBytes(StandardCharsets.UTF_8);
+        byte[] config = "; XXRR2-MUT-IIXX\ntype=mut2\nparamname=RPM\nparamid=0x21\n".getBytes(StandardCharsets.UTF_8);
         LoggerSetupStore.save(directory, new LoggerSetupStore.Setup(PortableLoggerProtocol.MUT2,
                 "logcfg.txt", config, "Custom channels", new PortableLoggerProfile("MUT2",
                 List.of(new PortableLoggerProfile.Selection("0x21", "raw")), List.of())));

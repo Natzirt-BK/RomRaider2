@@ -1,13 +1,26 @@
-RomRaider2 ECU Studio 1.1.4
+RomRaider2 ECU Studio 1.1.5
 ================================
 
 Development source for the next patch. Public downloads remain 1.1.3 until a
 separately verified release is published. For published packages:
 https://github.com/Natzirt-BK/RomRaider2/releases
 
+What changed for 1.1.5
+---------------------
+
+- MUT-II TXT definitions can specify paramunits per channel. Explicit units
+  reach channel selection, gauges, recordings and RomRaider CSV headers.
+  Files without this field retain raw/scaled units. Labels do not change values.
+- Owner reports successful Evo logging with the preceding startup fix.
+  Individual channel accuracy and sustained-session qualification remain open.
+
 What changed for 1.1.4
 ---------------------
 
+- MUT-II text definitions require XXRR2-MUT-IIXX on the first line (a semicolon
+  or hash comment prefix is accepted). Existing files need the header added
+  and must be reimported. This is simple validation, not tamper protection;
+  XML definitions are unchanged.
 - Android MUT-II now performs a transaction-matched five-baud engine handshake
   before PID polling, with diagnostic pin 1 ground/release and failure cleanup.
   Offline tests do not establish parked Evo hardware acceptance.

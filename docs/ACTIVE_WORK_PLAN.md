@@ -1,11 +1,24 @@
-# Active work plan — September 6, 2026
+# Active work plan — September 7, 2026
+
+Current owner priority: park Evo definition/tuning work and qualify/package
+RR2 1.1.5 for desktop and Android. Preserve the unfinished desktop installer
+changes separately; they are not part of this release candidate. Publication
+and platform/device qualification must be reported separately from local builds.
 
 Owner priority: finish the gauge work first and show actual application renders,
 then continue the remaining automated work. Physical in-car tests are deferred
 until the owner is available; never initiate hardware polling to fill that gap.
 
 Latest owner override: repair the Android Evo MUT-II connection timeout. The
-1.1.4 development build adds OpenPort five-baud engine initialization, matched
+owner reported successful Evo logging on September 7 with the startup fix.
+Individual channel accuracy and sustained/background tests remain separate.
+The offered CSV was reviewed: 494 rows over 279.525 seconds, with no obvious
+recording gaps. It also exposed a mislabeled channel and unresolved scaling;
+the separate Evo v5 catalog corrects only the false rear-O2 voltage label.
+Development 1.1.5 adds explicit TXT unit labels, not sensor validation.
+The following paragraph retains the earlier implementation checkpoint.
+
+The 1.1.4 development build adds OpenPort five-baud engine initialization, matched
 startup replies and diagnostic-pin cleanup. Android unit tests, shared-core
 checks, lint and both APK builds pass; actual Evo acceptance remains pending.
 See [startup evidence and test limits](EVO_MUT2_CONNECTION_DIAGNOSIS.md).

@@ -45,10 +45,40 @@ public final class PortableMut2Check {
         reject(() -> ReadOnlyMut2Protocol.probeIdentity(new byte[] {79}));
         check(ReadOnlyMut2Protocol.probeIdentity(new byte[] {(byte) 180}).equals("MUT2_GENERIC"), "Generic, not calibration identity");
 
-        String config = "type=mut2\nparamname=RPM\nparamid=0x21\nscalingrpn=x,31.25,*\n"
+        String body = "type=mut2\nparamname=RPM\nparamid=0x21\nscalingrpn=x,31.25,*\n"
                 + "paramname=Battery\nparamid=0x14\nscalingrpn=x,0.0733,*\npriority=2\n";
+        String config = "XXRR2-MUT-IIXX\n" + body;
+        for (String header : List.of("XXRR2-MUT-IIXX", "; XXRR2-MUT-IIXX", "# XXRR2-MUT-IIXX",
+                "\uFEFFXXRR2-MUT-IIXX", "  XXRR2-MUT-IIXX  ")) {
+            check(read(header + "\n" + body).size() == 2, "Accepted header form");
+            check(read((header + "\n" + body).replace("\n", "\r\n")).size() == 2, "CRLF header");
+        }
+        for (String invalid : List.of(body, "", "XXRR2-MUT-IIXX", "\n" + config,
+                "; other comment\n" + config, "xxrr2-mut-iixx\n" + body,
+                "XXRR2-MUT-IIXX-extra\n" + body, "; prefix XXRR2-MUT-IIXX\n" + body,
+                body + "; XXRR2-MUT-IIXX\n", "XXRR2-MUT-IIXX type=mut2\n" + body,
+                "XXRR2-\uFEFFMUT-IIXX\n" + body)) {
+            reject(() -> read(invalid));
+        }
+        try {
+            read(body);
+            throw new AssertionError("Missing marker accepted");
+        } catch (IOException expected) {
+            check(expected.getMessage().contains("XXRR2-MUT-IIXX")
+                    && expected.getMessage().contains("first line"), "Actionable marker error");
+        }
         PortableLoggerDefinition definition = read(config);
         check(definition.size() == 2, "Config catalog");
+        for (String unit : List.of("rpm", "V", "°C", "%", "ms", "km/h", "raw", "scaled")) {
+            PortableLoggerDefinition labeled = read(config + "paramunits=" + unit + "\n");
+            check(labeled.parameters().get(1).getConversions().get(0).getUnits().equals(unit), "Explicit units retained");
+        }
+        check(definition.parameters().get(0).getConversions().get(0).getUnits().equals("scaled"), "Legacy units unchanged");
+        for (String bad : List.of("", "x".repeat(25), "V,extra", "V\"", "=formula", "V\tbad", "V\u0000bad")) {
+            reject(() -> read(config + "paramunits=" + bad + "\n"));
+        }
+        reject(() -> read(config + "paramunits=V\nparamunits=rpm\n"));
+        reject(() -> read("XXRR2-MUT-IIXX\ntype=mut2\nparamunits=V\nparamname=A\nparamid=1\n"));
         List<PortableLoggerProfile.Selection> choices = List.of(
                 new PortableLoggerProfile.Selection("RPM", "scaled"),
                 new PortableLoggerProfile.Selection("Battery", "scaled"));
@@ -72,11 +102,11 @@ public final class PortableMut2Check {
                 "scalingrpn=x,unknown", "paramid=0x100", "priority=0", "paramname=RPM\nparamid=0x21"}) {
             reject(() -> read(config + bad + "\n"));
         }
-        reject(() -> read("paramname=RPM\nparamid=0x21"));
-        reject(() -> read("type=mut2\nparamname=RPM\nparamid=0x100"));
-        reject(() -> read("type=mut2\nparamname=RPM\nparamid=0x21\nscalingrpn=x,+"));
+        reject(() -> read("XXRR2-MUT-IIXX\nparamname=RPM\nparamid=0x21"));
+        reject(() -> read("XXRR2-MUT-IIXX\ntype=mut2\nparamname=RPM\nparamid=0x100"));
+        reject(() -> read("XXRR2-MUT-IIXX\ntype=mut2\nparamname=RPM\nparamid=0x21\nscalingrpn=x,+"));
         reject(() -> read(" ".repeat(PortableMut2LogConfigReader.MAX_CONFIG_CHARS + 1)));
-        PortableLoggerDefinition negative = read("type=mut2\nparamname=Temperature\nparamid=18\nscalingrpn=x,-2.7,*,597.7,+\n");
+        PortableLoggerDefinition negative = read("XXRR2-MUT-IIXX\ntype=mut2\nparamname=Temperature\nparamid=18\nscalingrpn=x,-2.7,*,597.7,+\n");
         check(Math.abs(new PortableParameterConverter(negative.parameters().get(0).getConversions().get(0))
                 .convert(new byte[] {100}) - 327.7) < 0.000001, "Negative RPN constant");
 

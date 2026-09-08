@@ -35,7 +35,7 @@ import static org.junit.Assert.*;
 public class ReadOnlyRecordingTest {
     @Rule public TemporaryFolder temporary = new TemporaryFolder();
     private static final int END = -1;
-    private static final String CONFIG = "type=mut2\nparamname=RPM\nparamid=0x21\nscalingrpn=x,31.25,*\n"
+    private static final String CONFIG = "XXRR2-MUT-IIXX\ntype=mut2\nparamname=RPM\nparamid=0x21\nscalingrpn=x,31.25,*\n"
             + "paramname=Battery\nparamid=0x14\nscalingrpn=x,0.0733,*\n";
 
     @Test public void constructionAndRepeatedSnapshotsNeverAcquireOrStart() throws Exception {

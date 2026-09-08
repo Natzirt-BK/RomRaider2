@@ -27,8 +27,8 @@ IDs and signing identity; historical `.preview` ID segments are installation
 identifiers, not display labels.
 
 `packaging/verify-version.sh` checks shared version components, build consumers,
-release-note headings and artifact names. Development is now 1.1.4 / Android
-110408, checked against the published baseline 1.1.3 / 110407. The published
+release-note headings and artifact names. Development is now 1.1.5 / Android
+110409, checked against the published baseline 1.1.3 / 110407. The published
 1.1.3 tag retains its original checks and remains independently buildable.
 `packaging/test-version-check.sh` tests rejection of inconsistent metadata.
 

@@ -15,11 +15,13 @@ import java.util.Locale;
 import java.util.Map;
 
 /** Imports only the read-only MUT2 parameter subset of an OpenPort logcfg.txt.
+ * Requires the case-sensitive marker on the first line; this is not authentication.
  * Hardware commands, conditions, external sensors and unknown keys fail closed.
  * Priority is validated and retained as documentation; polling is one full cycle.
  */
 public final class PortableMut2LogConfigReader {
     public static final int MAX_CONFIG_CHARS = 256 * 1024;
+    public static final String REQUIRED_HEADER = "XXRR2-MUT-IIXX";
 
     private PortableMut2LogConfigReader() { }
 
@@ -35,12 +37,25 @@ public final class PortableMut2LogConfigReader {
             }
             text.append(buffer, 0, count);
         }
+        String source = text.toString();
+        if (source.startsWith("\uFEFF")) source = source.substring(1);
+        String[] lines = source.split("\r?\n", -1);
+        String header = lines[0].trim();
+        if (header.startsWith(";") || header.startsWith("#")) {
+            header = header.substring(1).trim();
+        }
+        if (!REQUIRED_HEADER.equals(header)) {
+            throw new IOException("MUT-II text definition requires " + REQUIRED_HEADER
+                    + " on the first line (optionally prefixed with ; or #). "
+                    + "Update the file and import it again.");
+        }
         List<PortableLoggerParameter> parameters = new ArrayList<>();
         Map<String, String> fields = new LinkedHashMap<>();
         boolean typeSeen = false;
-        int lineNumber = 0;
+        int lineNumber = 1;
         try {
-            for (String raw : text.toString().replace("\uFEFF", "").split("\r?\n")) {
+            for (int index = 1; index < lines.length; index++) {
+                String raw = lines[index];
                 lineNumber++;
                 String line = raw.split("[;#]", 2)[0].trim();
                 if (line.isEmpty()) continue;
@@ -61,7 +76,7 @@ public final class PortableMut2LogConfigReader {
                     fields.clear();
                     if (parameters.size() >= 256) throw new IllegalArgumentException("Too many parameters");
                 } else if (!key.equals("paramid") && !key.equals("scalingrpn")
-                        && !key.equals("priority")) {
+                        && !key.equals("priority") && !key.equals("paramunits")) {
                     throw new IllegalArgumentException("Unsupported logcfg option: " + key);
                 } else if (!fields.containsKey("paramname")) {
                     throw new IllegalArgumentException("Parameter name is required first");
@@ -96,7 +111,10 @@ public final class PortableMut2LogConfigReader {
                 throw new IllegalArgumentException("Scaling produces an invalid value for " + name);
             }
         }
-        String units = expression.equals("x") ? "raw" : "scaled";
+        String units = fields.getOrDefault("paramunits", expression.equals("x") ? "raw" : "scaled");
+        if (!units.matches("[\\p{L}°%][\\p{L}\\p{N}°%/²³ ._-]{0,23}")) {
+            throw new IllegalArgumentException("Invalid paramunits: use a short unit label such as rpm, V, °C or %");
+        }
         return new PortableLoggerParameter(name, name,
                 "Imported OpenPort PID; priority " + priority
                         + " (Android polls all selected channels each cycle). Units are as named in the configuration.",

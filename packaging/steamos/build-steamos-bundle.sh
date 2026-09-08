@@ -4,7 +4,7 @@ set -euo pipefail
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
 application_image=${ROMRAIDER2_APP_IMAGE:-$repo_root/build/java21/RomRaider2}
 output_root=${1:-$repo_root/build/steamos}
-bundle_name=RomRaider2_SteamOS_1.1.4_x64
+bundle_name=RomRaider2_SteamOS_1.1.5_x64
 
 [[ -x "$application_image/bin/RomRaider2" ]] || {
     echo "Build the Linux Java 21 application image first: $application_image" >&2
@@ -33,7 +33,7 @@ chmod +x "$bundle/Launch RomRaider2.sh" \
 
 [[ -f "$bundle/RomRaider2/lib/runtime/release" ]]
 grep -q '^JAVA_VERSION="21\.' "$bundle/RomRaider2/lib/runtime/release"
-[[ -f "$bundle/RomRaider2/lib/app/romraider2-javafx-desktop-1.1.4.jar" ]] || {
+[[ -f "$bundle/RomRaider2/lib/app/romraider2-javafx-desktop-1.1.5.jar" ]] || {
     echo "The SteamOS bundle requires the current JavaFX desktop workspace." >&2
     exit 1
 }
