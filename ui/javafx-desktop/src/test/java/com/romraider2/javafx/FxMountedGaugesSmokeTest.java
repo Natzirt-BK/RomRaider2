@@ -60,12 +60,18 @@ class FxMountedGaugesSmokeTest {
                 int historySize = context.getLiveData().getRecentSamples().get("gauge-fixture").size();
                 Stage stage = FxEditorControlsSmokeTest.field(window[0], "stage");
                 stage.getScene().getRoot().applyCss(); stage.getScene().getRoot().layout();
-                javafx.scene.control.TitledPane customization = (javafx.scene.control.TitledPane)
-                        stage.getScene().lookup("#dashboard-tile-customization");
-                assertFalse(customization.isExpanded());
+                assertNull(stage.getScene().lookup("#dashboard-tile-customization"), "Tile settings belong to each tile, not a second panel");
+                var customize = stage.getScene().getRoot().lookupAll(".menu-button").stream()
+                        .filter(javafx.scene.control.MenuButton.class::isInstance)
+                        .map(javafx.scene.control.MenuButton.class::cast)
+                        .filter(button -> "Customize".equals(button.getText())).findFirst().orElseThrow();
+                assertTrue(customize.getItems().stream().anyMatch(item -> "Display type".equals(item.getText())));
+                assertTrue(customize.getItems().stream().anyMatch(item -> "Tile size".equals(item.getText())));
                 captureDashboard(stage);
                 ((javafx.scene.control.Button) stage.getScene().lookup("#dashboard-open-gauge-display")).fire();
                 assertTrue((Boolean) FxEditorControlsSmokeTest.field(window[0], "gaugesOnly"));
+                stage.getScene().getRoot().applyCss(); stage.getScene().getRoot().layout();
+                assertNotNull(stage.getScene().lookup("#gauge-slot-0-limits"));
                 window[0].setGaugesOnly(false);
                 javafx.scene.control.TabPane tabs = FxEditorControlsSmokeTest.field(window[0], "views");
                 assertEquals("Dashboard", tabs.getSelectionModel().getSelectedItem().getText());

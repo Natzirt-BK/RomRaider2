@@ -1,13 +1,13 @@
 # Android CSV review
 
-Use **OPEN CSV LOG** from the idle LOGGER workspace. File metadata and UTF-8 CSV
-parsing run on a separate worker. **Log Review** sits at the bottom of the Logger
-page. There is no persistent Cancel CSV Import button; leaving the workspace or
+In the local September 9 update, use **OPEN CSV LOG** from the separate Review
+workspace while logging is stopped. File metadata and UTF-8 CSV parsing run on a
+separate worker. There is no persistent Cancel CSV Import button; leaving the workspace or
 opening another file cancels pending work internally. A successful import opens
 a separate scrollable **imported, not live** summary window:
 total values, channel count, latest file-order sample, finite/missing counts and
 finite-only minimum/maximum. A recycling list exposes all channels without
-Next/Previous paging. **Back to Logger** dismisses the window while retaining
+Next/Previous paging. **Back to Review** dismisses the window while retaining
 the imported summary; **View Imported Log** reopens it. **Close Log File**, in
 the window or the Log Review section, cancels pending imports and unloads the
 summary without deleting or rewriting the source CSV. An unavailable last

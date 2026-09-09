@@ -81,7 +81,7 @@ final class FxLoggerChannelPane extends VBox {
         category.setId("logger-channel-category");
         category.setAccessibleText("Channel category");
         category.getItems().setAll(Category.values());
-        category.setValue(Category.ALL);
+        category.setValue(Category.PARAMETERS);
         category.setMaxWidth(Double.MAX_VALUE);
         category.valueProperty().addListener((value, oldValue, newValue) -> rebuild());
         search.setId("logger-channel-search");
@@ -195,6 +195,9 @@ final class FxLoggerChannelPane extends VBox {
             selected.setOnAction(event -> service.setSelected(
                     channel.getParameterId(), selected.isSelected()));
             HBox row = new HBox(8 * scale, selected);
+            row.getStyleClass().addAll("logger-channel-row", "logger-channel-"
+                    + channel.getKind().name().toLowerCase(Locale.ROOT));
+            row.pseudoClassStateChanged(javafx.css.PseudoClass.getPseudoClass("selected"), channel.isSelected());
             row.setAlignment(Pos.CENTER_LEFT);
             row.setMinWidth(0);
             row.setMaxWidth(Double.MAX_VALUE);

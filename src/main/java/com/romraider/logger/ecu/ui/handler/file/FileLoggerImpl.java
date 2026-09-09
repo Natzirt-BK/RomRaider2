@@ -46,6 +46,7 @@ public final class FileLoggerImpl implements FileLogger {
     private final SimpleDateFormat timestampFormat = new SimpleDateFormat("HH:mm:ss.SSS");
     private final EcuRelatedMessageListener messageListener;
     private final java.util.function.Supplier<Date> clock;
+    private final RecordingDuration recordingDuration;
     private boolean started;
     private OutputStream os;
     private File activeFile;
@@ -58,9 +59,15 @@ public final class FileLoggerImpl implements FileLogger {
     }
 
     FileLoggerImpl(EcuRelatedMessageListener messageListener, java.util.function.Supplier<Date> clock) {
+        this(messageListener, clock, System::nanoTime);
+    }
+
+    FileLoggerImpl(EcuRelatedMessageListener messageListener, java.util.function.Supplier<Date> clock,
+            java.util.function.LongSupplier nanoClock) {
         checkNotNull(messageListener);
         this.messageListener = messageListener;
         this.clock = java.util.Objects.requireNonNull(clock);
+        this.recordingDuration = new RecordingDuration(nanoClock);
     }
 
     @Override
@@ -88,6 +95,7 @@ public final class FileLoggerImpl implements FileLogger {
                 throw new FileLoggerException(e);
             }
             
+            recordingDuration.start();
             started = true;
             startTimestamp = 0;
             timestampInitialized = false;
@@ -96,6 +104,7 @@ public final class FileLoggerImpl implements FileLogger {
 
     @Override
     public synchronized void stop() {
+        recordingDuration.stop();
         File completed = activeFile;
         OutputStream closing = os;
         os = null; started = false; activeFile = null;
@@ -113,6 +122,11 @@ public final class FileLoggerImpl implements FileLogger {
     @Override
     public synchronized boolean isStarted() {
         return started;
+    }
+
+    @Override
+    public long getRecordingElapsedMillis() {
+        return recordingDuration.elapsedMillis();
     }
 
     @Override

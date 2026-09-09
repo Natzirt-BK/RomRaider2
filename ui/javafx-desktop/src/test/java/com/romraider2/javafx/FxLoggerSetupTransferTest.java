@@ -25,6 +25,205 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 class FxLoggerSetupTransferTest {
+    @Test void captureOptionsApplyAndRollbackTogetherWithoutConnecting() throws Exception {
+        try (Fixture fixture = new Fixture()) {
+            var s = fixture.settings;
+            s.setFileLoggingControllerSwitchId("S1"); fixture.runtime.reloadConfiguration();
+            var next = new LoggerCaptureOptions(true, true, true, s.isUsNumberFormat(), "idle-test");
+            fixture.capture(next, () -> {});
+            assertEquals(next, LoggerCaptureOptions.from(s));
+            assertEquals(LoggerSessionState.STOPPED, fixture.runtime.getWorkspaceContext().getSession().getState());
+            var failed = new LoggerCaptureOptions(false, false, false, !s.isUsNumberFormat(), "other");
+            var locale = Locale.getDefault();
+            assertThrows(IllegalStateException.class, () -> fixture.capture(failed, () -> { throw new IllegalStateException("Save failed"); }));
+            assertEquals(next, LoggerCaptureOptions.from(s));
+            assertEquals(locale, Locale.getDefault());
+        }
+    }
+
+    @Test void unsupportedAndActiveCaptureChangesAreRejected() throws Exception {
+        try (Fixture fixture = new Fixture()) {
+            var before = LoggerCaptureOptions.from(fixture.settings);
+            assertThrows(RuntimeException.class, () -> fixture.capture(new LoggerCaptureOptions(false, true,
+                    false, before.usNumbers(), ""), () -> fail("Missing switch must not save")));
+            assertEquals(before, LoggerCaptureOptions.from(fixture.settings));
+            Object controller = field(fixture.runtime, "controller");
+            Field worker = controller.getClass().getDeclaredField("workerThread"); worker.setAccessible(true);
+            Object previous = worker.get(controller);
+            try {
+                worker.set(controller, Thread.currentThread());
+                assertThrows(IllegalStateException.class, () -> fixture.capture(new LoggerCaptureOptions(!before.fastPolling(),
+                        false, false, before.usNumbers(), ""), () -> fail("Active capture changes must not save")));
+            } finally { worker.set(controller, previous); }
+            assertEquals(before, LoggerCaptureOptions.from(fixture.settings));
+            fixture.settings.setDestinationTarget(new com.romraider.logger.ecu.definition.Module("tcu", new byte[] { 0x18 },
+                    "Transmission", new byte[] { (byte) 0xf0 }, false));
+            assertThrows(RuntimeException.class, () -> fixture.capture(new LoggerCaptureOptions(true, false,
+                    false, before.usNumbers(), ""), () -> fail("Unsupported Fast Polling must not save")));
+        }
+    }
+
+    @Test void logNamesCannotEscapeOutputDirectory() {
+        for (String name : List.of("../other", "bad\\name", "bad:name", "bad\nname", "..", "name."))
+            assertThrows(IllegalArgumentException.class, () -> new LoggerCaptureOptions(false, false, false, true, name));
+        assertEquals("idle-test", new LoggerCaptureOptions(false, false, false, true, " idle-test ").logName());
+    }
+    @Test void xmlProfileLoadAppliesOrderedSelectionsAndUnitsWithoutConnectingOrEditingSource() throws Exception {
+        try (Fixture fixture = new Fixture()) {
+            fixture.apply(ordered("P1", "V"));
+            Path source = folder.resolve("normal-profile.xml");
+            String xml = "<profile protocol='SSM'><parameters><parameter id='P2' units='mV' livedata='selected'/></parameters>"
+                    + "<switches><switch id='S1' units='On/Off' graph='selected'/></switches></profile>";
+            Files.writeString(source, xml);
+            FxTestRuntime.run(() -> fixture.transfer.loadProfile(source.toFile())); await(fixture.transfer);
+            assertEquals(List.of("P2", "S1"), fixture.selected());
+            assertEquals("mV", fixture.runtime.captureChannelSetup().selectedChannels().getFirst().getUnits());
+            assertEquals(xml, Files.readString(source));
+            assertEquals(LoggerSessionState.STOPPED, fixture.runtime.getWorkspaceContext().getSession().getState());
+            assertEquals(1, fixture.reviews.get());
+        }
+    }
+
+    @Test void xmlProfileCancelMismatchMalformedAndStaleReviewLeaveSelectionUntouched() throws Exception {
+        try (Fixture fixture = new Fixture()) {
+            fixture.apply(ordered("P1", "V"));
+            Path source = folder.resolve("profile.xml");
+            for (String xml : List.of("<profile protocol='MUT2'><parameter id='P2' livedata='selected'/></profile>",
+                    "<logger/>", "<profile>", "<profile protocol='SSM'><parameter id='P2' units='invalid' livedata='selected'/></profile>")) {
+                Files.writeString(source, xml);
+                FxTestRuntime.run(() -> fixture.transfer.loadProfile(source.toFile())); await(fixture.transfer);
+                assertEquals(List.of("P1"), fixture.selected());
+            }
+            Files.writeString(source, "<profile protocol='SSM'><parameter id='P2' units='V' livedata='selected'/></profile>");
+            fixture.accept.set(false);
+            FxTestRuntime.run(() -> fixture.transfer.loadProfile(source.toFile())); await(fixture.transfer);
+            assertEquals(List.of("P1"), fixture.selected());
+            fixture.accept.set(true);
+            fixture.onReview.set(() -> fixture.runtime.reloadConfiguration());
+            FxTestRuntime.run(() -> fixture.transfer.loadProfile(source.toFile())); await(fixture.transfer);
+            assertEquals(List.of("P1"), fixture.selected());
+        }
+    }
+
+    @Test void xmlProfileReportsUnavailableSelectionsBeforeApplyingAvailableOnes() throws Exception {
+        try (Fixture fixture = new Fixture()) {
+            Path source = folder.resolve("profile.xml");
+            Files.writeString(source, "<profile protocol='SSM'><parameter id='P2' units='V' livedata='selected'/>"
+                    + "<parameter id='DM_PENDING' units='%' livedata='selected'/></profile>");
+            AtomicReference<String> review = new AtomicReference<>();
+            try (var transfer = new FxLoggerSetupTransfer(null, fixture.runtime, fixture.status::set,
+                    (title, text) -> { review.set(text); return true; })) {
+                FxTestRuntime.run(() -> transfer.loadProfile(source.toFile())); await(transfer);
+                assertTrue(review.get().contains("DM_PENDING"));
+                assertTrue(review.get().contains("will not be loaded"));
+                assertEquals(List.of("P2"), fixture.selected());
+            }
+        }
+    }
+
+    @Test void blockedImportAndProfileLoadSurfaceErrorsBeforeOpeningPicker() throws Exception {
+        try (Fixture fixture = new Fixture()) {
+            AtomicReference<String> error = new AtomicReference<>();
+            try (var transfer = new FxLoggerSetupTransfer(null, fixture.runtime, fixture.status::set,
+                    (title, text) -> fail("No review while connected"), error::set)) {
+                Object controller = field(fixture.runtime, "controller");
+                Field worker = controller.getClass().getDeclaredField("workerThread"); worker.setAccessible(true);
+                Object previous = worker.get(controller);
+                try {
+                    worker.set(controller, Thread.currentThread()); // No transport is opened.
+                    FxTestRuntime.run(transfer::showImport);
+                    assertTrue(error.get().contains("Disconnect"));
+                    error.set(null);
+                    FxTestRuntime.run(transfer::showProfileLoad);
+                    assertTrue(error.get().contains("Disconnect"));
+                } finally { worker.set(controller, previous); }
+            }
+        }
+    }
+
+    @Test void setupButtonsFitDefaultWindowInBothThemes() throws Exception {
+        try (Fixture fixture = new Fixture()) {
+            FxTestRuntime.run(() -> {
+                FxLoggerSetup.show(null, fixture.runtime, () -> {});
+                var stage = (javafx.stage.Stage) javafx.stage.Window.getWindows().stream()
+                        .filter(window -> window instanceof javafx.stage.Stage candidate
+                                && "Logger Setup".equals(candidate.getTitle())).findFirst().orElseThrow();
+                try {
+                    var root = stage.getScene().getRoot();
+                    for (boolean dark : List.of(false, true)) {
+                        root.getStyleClass().remove("theme-dark");
+                        if (dark) root.getStyleClass().add("theme-dark");
+                        root.applyCss(); root.layout();
+                        var buttons = root.lookupAll(".button").stream()
+                                .filter(javafx.scene.control.Button.class::isInstance)
+                                .map(javafx.scene.control.Button.class::cast)
+                                .filter(button -> List.of("Browse…", "Disconnect").contains(button.getText())).toList();
+                        assertEquals(3, buttons.size());
+                        var outputLabel = root.lookupAll(".label").stream()
+                                .filter(javafx.scene.control.Label.class::isInstance)
+                                .map(javafx.scene.control.Label.class::cast)
+                                .filter(label -> "Log output directory".equals(label.getText())).findFirst().orElseThrow();
+                        assertTrue(outputLabel.getWidth() + 1 >= outputLabel.prefWidth(-1));
+                        for (var button : buttons) {
+                            assertTrue(button.getWidth() + 1 >= button.prefWidth(-1), button.getText() + " label clipped");
+                            var bounds = button.localToScene(button.getBoundsInLocal());
+                            assertTrue(bounds.getMinX() >= 0);
+                            assertTrue(bounds.getMaxX() <= stage.getScene().getWidth());
+                            assertTrue(bounds.getMaxY() <= stage.getScene().getHeight());
+                            var viewport = root.lookup(".scroll-pane .viewport");
+                            var visible = viewport.localToScene(viewport.getBoundsInLocal());
+                            assertTrue(bounds.getMinY() >= visible.getMinY());
+                            assertTrue(bounds.getMaxY() <= visible.getMaxY(), button.getText() + " is clipped by the scroll viewport");
+                        }
+                        String directory = System.getenv("RR2_SETUP_CAPTURE_DIR");
+                        if (directory != null) {
+                            var image = root.snapshot(null, null);
+                            var bitmap = new java.awt.image.BufferedImage((int) image.getWidth(), (int) image.getHeight(),
+                                    java.awt.image.BufferedImage.TYPE_INT_ARGB);
+                            for (int y = 0; y < bitmap.getHeight(); y++) for (int x = 0; x < bitmap.getWidth(); x++)
+                                bitmap.setRGB(x, y, image.getPixelReader().getArgb(x, y));
+                            javax.imageio.ImageIO.write(bitmap, "png", new File(directory, dark ? "setup-dark.png" : "setup-light.png"));
+                        }
+                    }
+                    var tabs = (javafx.scene.control.TabPane) root.lookup(".tab-pane");
+                    tabs.getSelectionModel().select(1); root.applyCss(); root.layout();
+                    for (String id : List.of("logger-fast-polling", "logger-switch-recording", "logger-absolute-time", "logger-us-numbers", "logger-log-name")) {
+                        var control = root.lookup("#" + id); assertNotNull(control, id);
+                        var bounds = control.localToScene(control.getBoundsInLocal());
+                        assertTrue(bounds.getMinX() >= 0 && bounds.getMaxX() <= stage.getScene().getWidth(), id);
+                    }
+                    String captureDirectory = System.getenv("RR2_SETUP_CAPTURE_DIR");
+                    if (captureDirectory != null) {
+                        var image = root.snapshot(null, null);
+                        var bitmap = new java.awt.image.BufferedImage((int) image.getWidth(), (int) image.getHeight(), java.awt.image.BufferedImage.TYPE_INT_ARGB);
+                        for (int y = 0; y < bitmap.getHeight(); y++) for (int x = 0; x < bitmap.getWidth(); x++)
+                            bitmap.setRGB(x, y, image.getPixelReader().getArgb(x, y));
+                        javax.imageio.ImageIO.write(bitmap, "png", new File(captureDirectory, "setup-recording.png"));
+                    }
+                } finally { stage.close(); }
+            });
+        }
+    }
+
+    @Test void disconnectButtonExplainsCancellationWithoutChangingStartupPreference() throws Exception {
+        FxTestRuntime.run(() -> {
+            AtomicInteger calls = new AtomicInteger();
+            var button = FxLoggerSetup.disconnectButton(calls::incrementAndGet);
+            assertEquals("Disconnect", button.getText());
+            assertEquals(javafx.scene.layout.Region.USE_PREF_SIZE, button.getMinWidth());
+            var tooltip = button.getTooltip();
+            assertNotNull(tooltip);
+            assertTrue(tooltip.isWrapText());
+            assertEquals(360, tooltip.getMaxWidth());
+            assertTrue(tooltip.getText().contains("connection or reconnection attempts"));
+            assertTrue(tooltip.getText().contains("Does not change Connect automatically at startup"));
+            assertEquals(tooltip.getText(), button.getAccessibleHelp());
+            assertEquals(0, calls.get());
+            button.fire();
+            assertEquals(1, calls.get());
+        });
+    }
+
     @Test void setupRejectsInvalidDestinationsAndRestoresFailedSave() throws Exception {
         try (Fixture fixture = new Fixture()) {
             fixture.apply(ordered("P2", "mV"));
@@ -572,6 +771,9 @@ class FxLoggerSetupTransferTest {
 
     private final class Fixture implements AutoCloseable {
         final Settings settings = SettingsManager.getSettings();
+        final LoggerCaptureOptions oldCapture = LoggerCaptureOptions.from(settings);
+        final String oldLocale = settings.getLocale();
+        final Locale oldProcessLocale = Locale.getDefault();
         final String oldDefinition = settings.getLoggerDefinitionFilePath(), oldProfile = settings.getLoggerProfileFilePath(), oldProtocol = settings.getLoggerProtocol();
         final String oldTransport = settings.getTransportProtocol(), oldTarget = settings.getTargetModule();
         final String oldControlSwitch = settings.getFileLoggingControllerSwitchId();
@@ -609,6 +811,11 @@ class FxLoggerSetupTransferTest {
         void apply(Map<String, String> selections) throws Exception {
             FxTestRuntime.run(() -> assertTrue(runtime.applyChannelSetup(runtime.captureChannelSetup(), selections)));
         }
+        void capture(LoggerCaptureOptions options, Runnable persist) {
+            runtime.applySetup(settings.getLoggerDefinitionFilePath(), settings.getLoggerOutputDirPath(), settings.getLoggerPort(),
+                    settings.getLoggerProtocol(), settings.getTransportProtocol(), settings.getTargetModule(),
+                    settings.getAutoConnectOnStartup(), options, persist);
+        }
         List<String> selected() { return runtime.captureChannelSetup().selectedChannels().stream().map(LoggerChannel::getParameterId).toList(); }
         List<String> recordedOrder() throws Exception {
             Object handler = field(runtime, "fileHandler"); Map<LoggerData, Integer> data = field(handler, "loggerDatas");
@@ -634,6 +841,8 @@ class FxLoggerSetupTransferTest {
                 settings.setLogExternalsOnly(oldExternalOnly);
                 settings.setLoggerConnectionProperties(oldConnectionProperties);
                 settings.setDestinationTarget(oldDestination);
+                settings.setFastPoll(oldCapture.fastPolling()); settings.setFileLoggingAbsoluteTimestamp(oldCapture.absoluteTimestamp());
+                settings.setLogfileNameText(oldCapture.logName()); settings.setLocale(oldLocale); Locale.setDefault(oldProcessLocale);
                 SettingsManager.setTesting(oldTesting); setStatic(SettingsManager.class, "settingsDir", oldDirectory);
                 if (oldPlugins == null) System.clearProperty("romraider2.plugins.dir"); else System.setProperty("romraider2.plugins.dir", oldPlugins);
             }

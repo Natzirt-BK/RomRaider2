@@ -175,10 +175,10 @@ final class FxFuelAnalysisPane extends BorderPane implements AutoCloseable {
             }
         });
 
-        addColumn("Bin from (" + xUnits() + ")", bin -> number(bin.getLower()));
-        addColumn("Bin to (exclusive)", bin -> number(bin.getUpper()));
+        addColumn("From (" + xUnits() + ")", bin -> number(bin.getLower()));
+        addColumn("Below (" + xUnits() + ")", bin -> number(bin.getUpper()));
         addColumn("Samples", bin -> Integer.toString(bin.getCount()));
-        addColumn("Mean (" + yUnits() + ")", bin -> number(bin.getMean()));
+        addColumn("Mean\n(" + yUnits() + ")", bin -> number(bin.getMean()));
         addColumn("Minimum", bin -> number(bin.getMinimum()));
         addColumn("Maximum", bin -> number(bin.getMaximum()));
         results.getColumns().forEach(column -> { column.setMinWidth(75); column.setPrefWidth(105); });

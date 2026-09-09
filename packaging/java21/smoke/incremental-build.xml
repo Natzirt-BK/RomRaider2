@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project name="compile-regression" default="verify" basedir="../../..">
+    <import file="../../../build.xml" />
+    <property name="javac.release" value="21" />
+    <property name="debug" value="true" />
+    <property name="javac.verbose" value="false" />
+    <property name="deprecation" value="false" />
+    <path id="smoke.classpath" />
+    <target name="verify">
+        <mkdir dir="build" />
+        <tempfile property="smoke.root" destdir="build" prefix="compile-regression-" />
+        <mkdir dir="${smoke.root}/src" />
+        <echo file="${smoke.root}/src/BuildVersion.java">public class BuildVersion { public static final String VALUE = "old"; }</echo>
+        <echo file="${smoke.root}/src/Consumer.java">public class Consumer { public static void main(String[] args) { System.out.print(BuildVersion.VALUE); } }</echo>
+        <echo file="${smoke.root}/src/Removed.java">public class Removed {}</echo>
+        <macro_compile os="linux" srcdir="${smoke.root}/src" destdir="${smoke.root}/classes" classpathref="smoke.classpath" />
+        <java classname="Consumer" classpath="${smoke.root}/classes" fork="true" failonerror="true" outputproperty="smoke.old" />
+        <fail message="Initial fixture compilation failed"><condition><not><equals arg1="${smoke.old}" arg2="old" /></not></condition></fail>
+        <!-- Consumer stays untouched, just as ECUExec does on a version bump. -->
+        <echo file="${smoke.root}/src/BuildVersion.java">public class BuildVersion { public static final String VALUE = "new"; }</echo>
+        <delete file="${smoke.root}/src/Removed.java" />
+        <echo file="${smoke.root}/classes/retained-resource.txt">keep</echo>
+        <macro_compile os="linux" srcdir="${smoke.root}/src" destdir="${smoke.root}/classes" classpathref="smoke.classpath" />
+        <java classname="Consumer" classpath="${smoke.root}/classes" fork="true" failonerror="true" outputproperty="smoke.new" />
+        <fail message="The unchanged consumer retained a stale inlined constant"><condition><not><equals arg1="${smoke.new}" arg2="new" /></not></condition></fail>
+        <fail message="Removed source left stale bytecode"><condition><available file="${smoke.root}/classes/Removed.class" /></condition></fail>
+        <fail message="Compilation removed a non-class resource"><condition><not><available file="${smoke.root}/classes/retained-resource.txt" /></not></condition></fail>
+        <echo>INCREMENTAL_BUILD_CONSISTENCY_PASS</echo>
+    </target>
+</project>

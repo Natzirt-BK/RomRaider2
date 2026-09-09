@@ -103,7 +103,10 @@ final class FxLoggerWindow {
     private final Map<String, Long> receivedAt = new LinkedHashMap<>();
     private final Map<String, com.romraider.portable.gauge.GaugeMotion> gaugeMotions = new java.util.concurrent.ConcurrentHashMap<>();
     private final javafx.animation.Timeline gaugeClock = new javafx.animation.Timeline(
-            new javafx.animation.KeyFrame(javafx.util.Duration.seconds(1), event -> refreshViews()));
+            new javafx.animation.KeyFrame(javafx.util.Duration.seconds(1), event -> {
+                refreshRecordingElapsed();
+                refreshViews();
+            }));
     private Node normalTop, normalBottom;
     private boolean gaugesOnly;
     private boolean mountedFullScreen, previousFullScreen;
@@ -127,6 +130,10 @@ final class FxLoggerWindow {
     private final Button connect = new Button("Connect");
     private final Button disconnect = new Button("Disconnect");
     private final Button record = new Button("Start recording");
+    private final Label recordingElapsed = new Label("00:00:00");
+    private final Button mountedStartRecording = new Button("Start recording");
+    private final Button mountedStopRecording = new Button("Stop recording");
+    private final Label mountedRecordingElapsed = new Label("00:00:00");
     private final ToggleButton channels = new ToggleButton("Channels");
     private final Map<String, LiveDataSample> samples = new LinkedHashMap<>();
     private final LoggerGaugeAlertTracker gaugeAlerts = new LoggerGaugeAlertTracker();
@@ -283,6 +290,7 @@ final class FxLoggerWindow {
                 item("Open CSV log…", event -> openLog()),
                 new SeparatorMenuItem(),
                 item("Logger Setup…", event -> showSetup()),
+                item("Load Profile…", event -> setupTransfer.showProfileLoad()),
                 item("Import channel setup…", event -> setupTransfer.showImport()),
                 item("Export channel setup…", event -> setupTransfer.showExport()),
                 item("Close", event -> close()));
@@ -349,6 +357,10 @@ final class FxLoggerWindow {
         setup.setOnAction(event -> showSetup());
         Button loadDefinition = new Button("Load Definition");
         loadDefinition.setOnAction(event -> loadLoggerDefinition());
+        Button loadProfile = new Button("Load Profile");
+        loadProfile.setId("logger-load-profile");
+        loadProfile.setTooltip(new Tooltip("Load channel selections and units from a logger XML profile. Disconnect first; selections remain editable afterward."));
+        loadProfile.setOnAction(event -> setupTransfer.showProfileLoad());
         channels.setSelected(context.getPreferences().isChannelRailVisible());
         channels.setOnAction(event -> setChannelsVisible(channels.isSelected()));
         Region fill = new Region();
@@ -363,8 +375,22 @@ final class FxLoggerWindow {
         brand.managedProperty().bind(brand.visibleProperty());
         brandSeparator.visibleProperty().bind(brand.visibleProperty());
         brandSeparator.managedProperty().bind(brand.visibleProperty());
-        HBox header = new HBox(9, brand, brandSeparator, connect, disconnect,
-                record, loadDefinition, setup, channels, fill, connection);
+        recordingElapsed.setId("logger-recording-elapsed");
+        recordingElapsed.setAccessibleText("Recording elapsed time");
+        recordingElapsed.setTooltip(new Tooltip("Elapsed time for this recording. Stops when recording ends and resets for the next recording; not the CSV sample span."));
+        recordingElapsed.getStyleClass().add("header-context-title");
+        recordingElapsed.setMinWidth(Region.USE_PREF_SIZE);
+        record.setMinWidth(Region.USE_PREF_SIZE);
+        HBox recordingControls = new HBox(7, record, recordingElapsed);
+        recordingControls.setAlignment(Pos.CENTER_LEFT);
+        FlowPane actions = new FlowPane(9, 6, connect, disconnect, recordingControls, loadDefinition, loadProfile, setup);
+        actions.setId("logger-header-actions");
+        actions.setMinWidth(0);
+        HBox.setHgrow(actions, Priority.ALWAYS);
+        for (var node : actions.getChildren()) {
+            if (node instanceof Region control) control.setMinWidth(Region.USE_PREF_SIZE);
+        }
+        HBox header = new HBox(9, brand, brandSeparator, actions, fill, connection);
         header.setAlignment(Pos.CENTER_LEFT);
         header.getStyleClass().add("brand-header");
         return header;
@@ -379,7 +405,9 @@ final class FxLoggerWindow {
         hint.visibleProperty().bind(
                 root.widthProperty().greaterThanOrEqualTo(1050));
         hint.managedProperty().bind(hint.visibleProperty());
-        HBox bar = new HBox(8, title, channelsMetric, fill, hint);
+        channels.setMinWidth(Region.USE_PREF_SIZE);
+        channels.setTooltip(new Tooltip("Show or hide the channel list. Your selected channels keep logging when the list is hidden."));
+        HBox bar = new HBox(8, channels, title, channelsMetric, fill, hint);
         bar.setAlignment(Pos.CENTER_LEFT);
         bar.getStyleClass().add("command-deck");
         return bar;
@@ -422,48 +450,23 @@ final class FxLoggerWindow {
     }
 
     private Node dashboardWorkspace(Node cards) {
-        Button gaugeTheme = new Button("Default gauge style…");
-        gaugeTheme.setOnAction(event -> chooseGaugeStyle(null));
         Button mounted = new Button("Open gauge display");
         mounted.setId("dashboard-open-gauge-display");
         mounted.setMinHeight(38);
         mounted.getStyleClass().add("dashboard-primary");
         mounted.setOnAction(event -> setGaugesOnly(true));
         dashboardSelection.getStyleClass().add("muted");
-        HBox selection = new HBox(8, styled("SELECTED TILE", "section-kicker"), dashboardSelection);
-        HBox roles = new HBox(6,
-                roleButton(LoggerDashboardTileRole.GAUGE),
-                roleButton(LoggerDashboardTileRole.VALUE),
-                roleButton(LoggerDashboardTileRole.TREND),
-                roleButton(LoggerDashboardTileRole.ALARM));
-        HBox sizes = new HBox(6,
-                sizeButton("Standard", LoggerDashboardTileSize.STANDARD),
-                sizeButton("Large", LoggerDashboardTileSize.LARGE),
-                sizeButton("Custom", LoggerDashboardTileSize.WIDE));
-        selection.setAlignment(Pos.CENTER_LEFT);
-        roles.setAlignment(Pos.CENTER_LEFT);
-        sizes.setAlignment(Pos.CENTER_LEFT);
         Label title = styled("Dashboard", "title");
-        Label subtitle = styled("Your live instruments. Choose a style, customize a tile, or open the dedicated gauge display.", "muted");
+        Label subtitle = styled("Live gauges, values, trends and alerts. Customize each tile here; use Gauge Display to set up a full-screen layout.", "muted");
         subtitle.setWrapText(true);
         VBox intro = new VBox(4, title, subtitle);
         HBox.setHgrow(intro, Priority.ALWAYS);
-        FlowPane actions = new FlowPane(8, 6, gaugeTheme, mounted);
+        FlowPane actions = new FlowPane(8, 6, mounted);
         actions.setAlignment(Pos.CENTER_RIGHT);
-        VBox header = new VBox(10, intro, actions);
+        HBox header = new HBox(12, intro, actions);
+        header.setAlignment(Pos.CENTER_LEFT);
         header.getStyleClass().add("dashboard-header");
-        VBox roleGroup = new VBox(5, styled("DISPLAY TYPE", "section-kicker"), roles);
-        VBox sizeGroup = new VBox(5, styled("TILE SIZE", "section-kicker"), sizes);
-        FlowPane choices = new FlowPane(22, 10, roleGroup, sizeGroup);
-        Label guidance = styled("Click a dashboard tile to select it. Use its Customize menu for style, limits, color, or a detached window.", "muted");
-        guidance.setWrapText(true);
-        VBox editor = new VBox(10, selection, choices, guidance);
-        editor.setPadding(new Insets(10));
-        javafx.scene.control.TitledPane customization = new javafx.scene.control.TitledPane("Customize selected tile", editor);
-        customization.setId("dashboard-tile-customization");
-        customization.setExpanded(false);
-        customization.setAnimated(false);
-        VBox controls = new VBox(8, header, customization);
+        VBox controls = new VBox(8, header);
         controls.setPadding(new Insets(12, 14, 6, 14));
         BorderPane pane = new BorderPane(cards);
         pane.setId("desktop-dashboard");
@@ -678,10 +681,26 @@ final class FxLoggerWindow {
         customize.getItems().addAll(item("Gauge style…", event -> styleChoice.fire()),
                 item("Limits and alerts…", event -> settings.fire()),
                 item("Accent color…", event -> color.fire()), detachItem);
+        Menu displayType = new Menu("Display type");
+        for (LoggerDashboardTileRole role : LoggerDashboardTileRole.values()) {
+            RadioMenuItem choice = new RadioMenuItem(role.getDisplayName());
+            choice.setSelected(tile.getRole() == role);
+            choice.setOnAction(event -> { selectedDashboardParameter = sample.getParameterId(); updateSelectedTile(role, null); });
+            displayType.getItems().add(choice);
+        }
+        Menu tileSize = new Menu("Tile size");
+        for (LoggerDashboardTileSize size : LoggerDashboardTileSize.values()) {
+            RadioMenuItem choice = new RadioMenuItem(switch (size) { case STANDARD -> "Standard"; case LARGE -> "Large"; case WIDE -> "Custom"; });
+            choice.setSelected(tile.getSize() == size);
+            choice.setOnAction(event -> { selectedDashboardParameter = sample.getParameterId(); updateSelectedTile(null, size); });
+            tileSize.getItems().add(choice);
+        }
+        customize.getItems().addAll(new SeparatorMenuItem(), displayType, tileSize);
         FlowPane footer = new FlowPane(8, 4, units, resize, customize);
         footer.setVisible(!gaugesOnly); footer.setManaged(!gaugesOnly);
         footer.setAlignment(Pos.CENTER_LEFT);
         VBox card = new VBox(7, name, body, footer);
+        VBox.setVgrow(body, Priority.ALWAYS);
         card.setPadding(new Insets(13));
         card.getStyleClass().add(gaugesOnly ? "logger-gauge-seamless" : "logger-card");
         if (!gaugesOnly && sample.getParameterId().equals(selectedDashboardParameter)) {
@@ -843,10 +862,21 @@ final class FxLoggerWindow {
         mountedViewport.setStyle(mountedStyle);
         Button exitFull = new Button("Exit full screen"); exitFull.setMinHeight(48);
         exitFull.setOnAction(event -> setMountedFullScreen(false));
-        Button stop = new Button("Stop recording"); stop.setMinHeight(48);
-        stop.setOnAction(event -> { if (context.getSession().getState() == LoggerSessionState.RECORDING)
-            context.getSession().stopRecording(); });
-        mountedMenu = new HBox(12, exitFull, stop, mountedAwakeStatus); mountedMenu.setStyle(mountedStyle);
+        mountedStartRecording.setId("gauges-start-recording");
+        mountedStopRecording.setId("gauges-stop-recording");
+        mountedStartRecording.setMinHeight(48); mountedStopRecording.setMinHeight(48);
+        mountedStartRecording.setMinWidth(Region.USE_PREF_SIZE); mountedStopRecording.setMinWidth(Region.USE_PREF_SIZE);
+        mountedStartRecording.setOnAction(event -> {
+            context.getSession().startRecording(); updateMountedRecordingControls(); showMountedMenu();
+        });
+        mountedStopRecording.setOnAction(event -> {
+            context.getSession().stopRecording(); updateMountedRecordingControls(); showMountedMenu();
+        });
+        mountedRecordingElapsed.setAccessibleText("Recording elapsed time");
+        mountedRecordingElapsed.setMinWidth(Region.USE_PREF_SIZE);
+        mountedMenu = new HBox(12, exitFull, mountedStartRecording, mountedStopRecording,
+                mountedRecordingElapsed, mountedAwakeStatus); mountedMenu.setStyle(mountedStyle);
+        updateMountedRecordingControls();
         mountedMenu.setAlignment(Pos.CENTER_LEFT);
         mountedMenu.setPadding(new Insets(8)); mountedMenu.setMaxHeight(64);
         StackPane.setAlignment(mountedMenu, Pos.TOP_CENTER);
@@ -893,7 +923,7 @@ final class FxLoggerWindow {
     private void refreshMountedSetup() {
         if (!gaugesOnly || mountedFullScreen) return;
         var display = context.getPreferences().getGaugeDisplay();
-        Button back = new Button("Exit gauges"); back.setOnAction(event -> setGaugesOnly(false));
+        Button back = new Button("Back to Dashboard"); back.setOnAction(event -> setGaugesOnly(false));
         Button full = new Button("Full screen"); full.setOnAction(event -> setMountedFullScreen(true));
         Button copy = new Button("Use Logger Channels");
         copy.setOnAction(event -> setGaugeDisplay(context.getPreferences().getGaugeDisplay().useLoggerChannels(channelSnapshot)));
@@ -912,9 +942,14 @@ final class FxLoggerWindow {
             channel.setOnAction(event -> chooseMountedChannel(slot));
             Button face = new Button("Style"); face.setDisable(id.isEmpty());
             face.setOnAction(event -> chooseGaugeStyle(id));
-            slots.getChildren().add(new HBox(4, channel, face));
+            Button limits = new Button("Limits & alerts");
+            limits.setId("gauge-slot-" + slot + "-limits");
+            limits.setDisable(channelSnapshot.stream().noneMatch(value -> value.getParameterId().equals(id)
+                    && !value.getConversionIdentity().isEmpty()));
+            limits.setOnAction(event -> configureGauge(id));
+            slots.getChildren().add(new VBox(4, channel, new HBox(4, face, limits)));
         }
-        Label help = new Label("Display choices do not change logging. Add a channel to Logger to receive it. Configure while parked.");
+        Label help = new Label("Set up channels, styles, scales and alerts here. Full screen shows only the gauges; tap it for recording controls and Exit. Display assignments do not select channels for logging. Configure while parked.");
         help.setWrapText(true);
         mountedSetup = new VBox(8, commands, slots, help); mountedSetup.setPadding(new Insets(8));
         root.setTop(mountedSetup);
@@ -927,7 +962,8 @@ final class FxLoggerWindow {
     private void chooseMountedChannel(int slot) {
         if (mountedFullScreen || !gaugesOnly) return;
         Dialog<Void> picker = new Dialog<>(); picker.initOwner(stage); picker.setTitle("Gauge " + (slot + 1) + " channel");
-        picker.getDialogPane().getButtonTypes().add(ButtonType.CANCEL);
+        ButtonType assign = new ButtonType("Assign channel", javafx.scene.control.ButtonBar.ButtonData.OK_DONE);
+        picker.getDialogPane().getButtonTypes().addAll(assign, ButtonType.CANCEL);
         TextField search = new TextField(); search.setPromptText("Search channels");
         ListView<LoggerChannel> choices = new ListView<>(); choices.setPrefSize(440, 300);
         choices.setCellFactory(list -> new ListCell<>() {
@@ -941,15 +977,19 @@ final class FxLoggerWindow {
                 .filter(channel -> (channel.getName() + " " + channel.getParameterId()).toLowerCase(java.util.Locale.ROOT)
                         .contains(search.getText().trim().toLowerCase(java.util.Locale.ROOT))).toList()));
         search.textProperty().addListener((value, oldText, newText) -> filter.run()); filter.run();
-        Button use = new Button("Assign channel"); use.disableProperty().bind(choices.getSelectionModel().selectedItemProperty().isNull());
-        use.setOnAction(event -> {
-            String id = choices.getSelectionModel().getSelectedItem().getParameterId(); picker.close();
+        Button use = (Button) picker.getDialogPane().lookupButton(assign);
+        use.setId("gauges-assign-channel");
+        use.disableProperty().bind(choices.getSelectionModel().selectedItemProperty().isNull());
+        use.addEventFilter(javafx.event.ActionEvent.ACTION, event -> {
+            LoggerChannel selected = choices.getSelectionModel().getSelectedItem();
+            if (selected == null || disposed || !gaugesOnly || mountedFullScreen) { event.consume(); return; }
+            String id = selected.getParameterId();
             setGaugeDisplay(context.getPreferences().getGaugeDisplay().withChannel(slot, id));
         });
         Button clear = new Button("Clear slot"); clear.setOnAction(event -> {
             picker.close(); setGaugeDisplay(context.getPreferences().getGaugeDisplay().withChannel(slot, ""));
         });
-        picker.getDialogPane().setContent(new VBox(8, search, choices, new HBox(8, use, clear)));
+        picker.getDialogPane().setContent(new VBox(8, search, choices, clear));
         mountedChannelPicker = picker; picker.setOnHidden(event -> mountedChannelPicker = null); picker.show();
     }
 
@@ -976,6 +1016,7 @@ final class FxLoggerWindow {
     }
     private void showMountedMenu() {
         if (!mountedFullScreen) return;
+        updateMountedRecordingControls();
         mountedMenu.setVisible(true); mountedMenu.toFront(); mountedMenuTimeout.playFromStart();
     }
 
@@ -1279,10 +1320,31 @@ final class FxLoggerWindow {
         record.setDisable(!canRecord);
         record.setText(next == LoggerSessionState.RECORDING
                 ? "Stop recording" : "Start recording");
+        refreshRecordingElapsed();
+    }
+
+    private void updateMountedRecordingControls() {
+        LoggerSessionState state = context.getSession().getState();
+        boolean pending = context.getSession().isCommandPending();
+        mountedStartRecording.setDisable(pending || (state != LoggerSessionState.LIVE_ECU && state != LoggerSessionState.LIVE_EXTERNAL));
+        mountedStopRecording.setDisable(pending || state != LoggerSessionState.RECORDING);
+    }
+
+    private void refreshRecordingElapsed() {
+        if (disposed) return;
+        recordingElapsed.setText(formatRecordingElapsed(runtime.getRecordingElapsedMillis()));
+        mountedRecordingElapsed.setText(recordingElapsed.getText());
+        updateMountedRecordingControls();
+    }
+
+    static String formatRecordingElapsed(long milliseconds) {
+        long seconds = Math.max(0, milliseconds) / 1000;
+        return String.format(java.util.Locale.ROOT, "%02d:%02d:%02d", seconds / 3600, seconds / 60 % 60, seconds % 60);
     }
 
     private void setChannelsVisible(boolean visible) {
         channels.setSelected(visible);
+        channels.setText(visible ? "Hide Channels" : "Show Channels");
         context.getPreferences().setChannelRailVisible(visible);
         if (visible && !workspace.getItems().contains(channelRail)) {
             workspace.getItems().add(0, channelRail);

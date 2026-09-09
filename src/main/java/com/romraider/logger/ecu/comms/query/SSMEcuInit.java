@@ -24,8 +24,8 @@ import static com.romraider.util.ParamChecker.checkNotNullOrEmpty;
 import static java.lang.System.arraycopy;
 
 public final class SSMEcuInit implements EcuInit {
-    private byte[] ecuInitBytes;
-    private String ecuId;
+    private final byte[] ecuInitBytes;
+    private final String ecuId;
 
     /**
      * Create a SSM ECU init class for the module and determine the ECU ID from
@@ -34,9 +34,11 @@ public final class SSMEcuInit implements EcuInit {
      */
     public SSMEcuInit(byte[] ecuInitBytes) {
         checkNotNullOrEmpty(ecuInitBytes, "ecuInitBytes");
-        this.ecuInitBytes = ecuInitBytes;
+        if (ecuInitBytes.length < 8)
+            throw new IllegalArgumentException("SSM initialization reply is too short to contain an ECU ID");
+        this.ecuInitBytes = ecuInitBytes.clone();
         byte[] ecuIdBytes = new byte[5];
-        arraycopy(ecuInitBytes, 3, ecuIdBytes, 0, 5);
+        arraycopy(this.ecuInitBytes, 3, ecuIdBytes, 0, 5);
         ecuId = asHex(ecuIdBytes);
     }
 
@@ -50,7 +52,7 @@ public final class SSMEcuInit implements EcuInit {
     public SSMEcuInit(byte[] ecuInitBytes, String ecuIdString) {
         checkNotNullOrEmpty(ecuInitBytes, "ecuInitBytes");
         checkNotNullOrEmpty(ecuIdString, "ecuIdString");
-        this.ecuInitBytes = ecuInitBytes;
+        this.ecuInitBytes = ecuInitBytes.clone();
         this.ecuId = ecuIdString;
     }
 
@@ -61,7 +63,7 @@ public final class SSMEcuInit implements EcuInit {
 
     @Override
     public byte[] getEcuInitBytes() {
-        return ecuInitBytes;
+        return ecuInitBytes.clone();
     }
 
 }

@@ -108,6 +108,7 @@ public final class LoggerDesktopRuntime implements EcuRelatedMessageListener,
     private volatile EcuInit ecuInit;
     private volatile DmInit dmInit;
     private volatile boolean closed;
+    private boolean fileLoggingSwitchAvailable;
     private LoggerDefinitionSource definitionSource;
     private Map<String, Map<Transport, Collection<Module>>> setupProtocols = Collections.emptyMap();
 
@@ -292,6 +293,46 @@ public final class LoggerDesktopRuntime implements EcuRelatedMessageListener,
             if (exact == null || matches != 1) throw new IllegalArgumentException("Setup units are missing or ambiguous: " + entry.getKey());
             requested.put(entry.getKey(), exact);
         }
+        return applyProfileConversions(requested);
+    }
+
+    public record ProfilePreview(List<String> available, List<String> unavailable) {
+        public ProfilePreview { available = List.copyOf(available); unavailable = List.copyOf(unavailable); }
+    }
+
+    /** Standard XML profiles may include native external sensors; portable setup envelopes may not. */
+    public synchronized ProfilePreview previewLoggerProfile(LoggerSetupSnapshot snapshot, UserProfile profile) {
+        requireCurrentChannelSetup(snapshot);
+        Map<String, EcuDataConvertor> requested = profileConversions(profile);
+        return new ProfilePreview(new ArrayList<>(requested.keySet()), profile.getSelectedIds().stream()
+                .filter(id -> !requested.containsKey(id)).toList());
+    }
+
+    public synchronized boolean applyLoggerProfile(LoggerSetupSnapshot snapshot, UserProfile profile) {
+        requireCurrentChannelSetup(snapshot);
+        return applyProfileConversions(profileConversions(profile));
+    }
+
+    private Map<String, EcuDataConvertor> profileConversions(UserProfile profile) {
+        if (profile == null) throw new IllegalArgumentException("Logger profile is required");
+        if (!isNullOrEmpty(profile.getProtocol()) && !profile.getProtocol().equalsIgnoreCase(loadedProtocol))
+            throw new IllegalArgumentException("Profile protocol does not match the loaded logger definition");
+        if (profile.getSelectedIds().size() > 256) throw new IllegalArgumentException("Profile must contain at most 256 selected channels");
+        Map<String, EcuDataConvertor> requested = new LinkedHashMap<>();
+        for (String id : profile.getSelectedIds()) {
+            LoggerData data = dataById.get(id);
+            if (data == null) continue; // The review explicitly lists unavailable selections.
+            if (!profile.contains(data)) throw new IllegalArgumentException("Profile channel category does not match: " + id);
+            EcuDataConvertor conversion = profile.getSelectedConvertor(data);
+            if (conversion == null) throw new IllegalArgumentException("Profile channel units are unavailable: " + id);
+            requested.put(id, conversion);
+        }
+        if (!profile.getSelectedIds().isEmpty() && requested.isEmpty())
+            throw new IllegalArgumentException("None of the selected profile channels are available. Identify the ECU and load the matching definition first.");
+        return requested;
+    }
+
+    private boolean applyProfileConversions(Map<String, EcuDataConvertor> requested) {
         List<String> before = new ArrayList<>(selectedIds);
         Map<String, EcuDataConvertor> previousUnits = new LinkedHashMap<>();
         for (String id : requested.keySet()) previousUnits.put(id, dataById.get(id).getSelectedConvertor());
@@ -468,6 +509,17 @@ public final class LoggerDesktopRuntime implements EcuRelatedMessageListener,
     /** Validate before mutation, and restore both runtime and settings on apply/save failure. */
     public synchronized void applySetup(String definition, String output, String port,
             String protocol, String transport, String target, boolean automatic, Runnable persist) {
+        applySetup(definition, output, port, protocol, transport, target, automatic, null, persist);
+    }
+
+    public synchronized void applySetup(String definition, String output, String port,
+            String protocol, String transport, String target, boolean automatic,
+            LoggerCaptureOptions capture, Runnable persist) {
+        LoggerCaptureOptions previousCapture = LoggerCaptureOptions.from(settings);
+        String previousLocale = settings.getLocale();
+        java.util.Locale processLocale = java.util.Locale.getDefault();
+        String previousLanguage = System.getProperty("user.language"), previousCountry = System.getProperty("user.country");
+        if (capture != null && !capture.equals(previousCapture)) requireConfigurationEditable();
         String[] next = {clean(definition), clean(output), clean(port), clean(protocol), clean(transport), clean(target)};
         String[] previous = {settings.getLoggerDefinitionFilePath(), settings.getLoggerOutputDirPath(),
                 settings.getLoggerPort(), settings.getLoggerProtocol(), settings.getTransportProtocol(), settings.getTargetModule()};
@@ -490,6 +542,14 @@ public final class LoggerDesktopRuntime implements EcuRelatedMessageListener,
             if (!preferenceOnly) {
                 if (!next[0].isEmpty()) settings.setLastDefinitionDir(new File(next[0]).getParentFile());
                 reloadConfiguration();
+            }
+            if (capture != null) {
+                if (capture.fastPolling() && (settings.getDestinationTarget() == null
+                        || !settings.getDestinationTarget().getFastPoll()))
+                    throw new ConfigurationException("Fast Polling is not supported by the selected definition/module.");
+                if (capture.switchRecording() && !fileLoggingSwitchAvailable)
+                    throw new ConfigurationException("The recording-control switch is not available in this logger definition.");
+                capture.apply(settings);
             }
             persist.run();
         } catch (RuntimeException failure) {
@@ -516,9 +576,20 @@ public final class LoggerDesktopRuntime implements EcuRelatedMessageListener,
                     publishChannels();
                 } catch (RuntimeException rollback) { setupRecoveryRequired = true; failure.addSuppressed(rollback); }
             }
+            previousCapture.apply(settings);
+            settings.setLocale(previousLocale);
+            java.util.Locale.setDefault(processLocale);
+            restoreSystemProperty("user.language", previousLanguage);
+            restoreSystemProperty("user.country", previousCountry);
             throw failure;
         }
     }
+
+    private static void restoreSystemProperty(String name, String value) {
+        if (value == null) System.clearProperty(name); else System.setProperty(name, value);
+    }
+
+    public synchronized boolean isFileLoggingSwitchAvailable() { return fileLoggingSwitchAvailable; }
 
     private static String clean(String value) { return value == null ? "" : value.trim(); }
 
@@ -541,6 +612,10 @@ public final class LoggerDesktopRuntime implements EcuRelatedMessageListener,
 
     public EcuInit getEcuInit() {
         return ecuInit;
+    }
+
+    public long getRecordingElapsedMillis() {
+        return fileHandler.getRecordingElapsedMillis();
     }
 
     private synchronized void handleEcuInit(EcuInit next) {
@@ -634,6 +709,7 @@ public final class LoggerDesktopRuntime implements EcuRelatedMessageListener,
         List<EcuParameter> parameters = new ArrayList<EcuParameter>();
         List<EcuSwitch> switches = new ArrayList<EcuSwitch>();
         List<EcuSwitch> diagnosticCodes = new ArrayList<EcuSwitch>();
+        fileLoggingSwitchAvailable = false;
         String definitionPath = settings.getLoggerDefinitionFilePath();
         if (isNullOrEmpty(definitionPath)) {
             definitionLoadFailed = hadDefinition;
@@ -723,6 +799,7 @@ public final class LoggerDesktopRuntime implements EcuRelatedMessageListener,
     }
 
     private void installFileLoggingSwitch(EcuSwitch ecuSwitch) {
+        fileLoggingSwitchAvailable = ecuSwitch != null;
         if (ecuSwitch == null) {
             controller.setFileLoggerSwitchMonitor(null);
             settings.setFileLoggingControllerSwitchActive(false);
@@ -915,12 +992,8 @@ public final class LoggerDesktopRuntime implements EcuRelatedMessageListener,
     private boolean backupCurrentProfile() {
         // Rollback faults and failed definitions must not replace a usable recovery profile.
         if (setupRecoveryRequired || definitionLoadFailed) return false;
-        Path target = LoggerProfileStorage.backupPath(
-                SettingsManager.getSettingsDirectory());
         try {
-            Path parent = target.getParent();
-            if (parent != null) Files.createDirectories(parent);
-            com.romraider.logger.ecu.profile.UserProfileWriter.save(currentProfile(), target);
+            LoggerProfileStorage.saveBackup(currentProfile(), SettingsManager.getSettingsDirectory());
             if (LOGGER.isDebugEnabled()) {
                 LOGGER.debug("Backup profile saved");
             }

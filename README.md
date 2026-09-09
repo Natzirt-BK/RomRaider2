@@ -10,21 +10,14 @@ Lancer Evolution. Built on RomRaider and DimeMod, with desktop and Android inter
 RomRaider2 is in development. **Builds are release candidates; a stable
 release is not available yet.**
 
-Version **1.1.8** includes a separate desktop
-[read-only ELM/OBDLink adapter test](docs/ELM_IN_CAR_TEST.md) awaiting vehicle
-qualification.
-
-Android adds [automatic DimeMod channel discovery](docs/ANDROID_CHANNEL_CATALOG.md),
-ECU-specific channel selection and a [compact Logger layout](docs/ANDROID_LOGGER_LAYOUT.md).
-[XML profile saving](docs/ANDROID_LOGGER_PROFILES.md) and a separate scrollable
-[CSV summary viewer](docs/ANDROID_CSV_REVIEW.md) simplify setup and log review.
-SSM connection setup includes the DimeMod negotiation handshake; channel polling
-remains read-only. Further vehicle qualification is pending.
+Version **1.1.9** improves the Android logging workflow and desktop logger controls.
+Release package qualification is in progress; the preceding candidate remains
+available until its replacement is verified.
 
 ## Downloads
 
 [Download the current candidate](https://github.com/Natzirt-BK/RomRaider2/releases)
-· [1.1.8 release notes](docs/RELEASE_1_1_8.md)
+· [1.1.9 release notes](docs/RELEASE_1_1_9.md)
 
 | Platform | Package |
 | --- | --- |
@@ -55,12 +48,13 @@ sequence. See [versioning](docs/RELEASE_VERSIONING.md).
 Platform features differ. Read the [Android guide](docs/ANDROID_PREVIEW_TESTING.md)
 before connecting an OpenPort 2.0 through a USB host/OTG adapter.
 
-### New in 1.1.8
+### New in 1.1.9
 
-Android Logger puts the current session first, with expandable setup sections,
-ECU-specific channel selection and automatic DimeMod discovery. Profiles save as
-standard XML, and CSV summaries open in a separate scrollable viewer. Desktop
-adds a separate standard-OBD adapter test and improves fullscreen window restoration.
+Android adds a workspace menu, separate bottom START/STOP buttons, clearer button
+feedback, a dedicated Review screen and a save prompt after recording. Desktop
+logger controls add linked setup selectors, XML profile loading, recording
+preferences and elapsed time, alongside fullscreen recording controls and
+definition/profile reliability fixes.
 
 The [25 gauge styles](docs/GAUGE_DESIGN.md), independent 1–6-gauge layouts,
 [background recording](docs/ANDROID_BACKGROUND_RECORDING.md) and

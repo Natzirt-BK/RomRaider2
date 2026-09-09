@@ -7,6 +7,9 @@
     -rr-border: #d2dbe1;
     -rr-text: #202830;
     -rr-muted: #65717d;
+    -rr-channel-parameter: #087e9a;
+    -rr-channel-switch: #a55e08;
+    -rr-channel-external: #7851b2;
     -fx-base: #edf2f5;
     -fx-background: #f4f7f9;
     -fx-control-inner-background: #ffffff;
@@ -29,6 +32,9 @@
     -rr-border: #34404c;
     -rr-text: #e4e8ed;
     -rr-muted: #a9b1ba;
+    -rr-channel-parameter: #55cce2;
+    -rr-channel-switch: #f2b45e;
+    -rr-channel-external: #bf9af2;
     -fx-base: #202934;
     -fx-background: #10151b;
     -fx-control-inner-background: #18212a;
@@ -147,6 +153,17 @@
 .tab-pane > .tab-header-area > .tab-header-background { -fx-background-color: -rr-raised; -fx-border-color: transparent transparent -rr-border transparent; }
 .tab-pane > .tab-header-area > .headers-region > .tab { -fx-background-color: transparent; -fx-padding: 6 11 6 11; }
 .tab-pane > .tab-header-area > .headers-region > .tab:selected { -fx-border-color: transparent transparent -rr-accent transparent; -fx-border-width: 0 0 3 0; }
+.logger-channel-row {
+    -rr-channel-color: -rr-accent;
+    -fx-border-color: transparent transparent transparent -rr-channel-color;
+    -fx-border-width: 0 0 0 3;
+    -fx-background-radius: 4;
+}
+.logger-channel-parameter { -rr-channel-color: -rr-channel-parameter; }
+.logger-channel-switch { -rr-channel-color: -rr-channel-switch; }
+.logger-channel-external { -rr-channel-color: -rr-channel-external; }
+.logger-channel-row:selected { -fx-background-color: -rr-raised; }
+.logger-channel-row .logger-channel-check:selected .mark { -fx-background-color: -rr-channel-color; }
 .logger-channel-check .box {
     -fx-min-width: 1.6em;
     -fx-min-height: 1.6em;

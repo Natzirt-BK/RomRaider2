@@ -41,4 +41,6 @@ if [[ $rr2_window_manager_ready != 1 ]]; then
     sed -n '1,80p' "$rr2_window_test_dir/wm.log" >&2
     exit 1
 fi
-"$@"
+# Native helpers (for example KDE's file picker) must use this private display,
+# not an inherited Wayland session belonging to the person running the tests.
+env -u WAYLAND_DISPLAY QT_QPA_PLATFORM=xcb GDK_BACKEND=x11 RR2_PRIVATE_WINDOW_TEST=1 "$@"

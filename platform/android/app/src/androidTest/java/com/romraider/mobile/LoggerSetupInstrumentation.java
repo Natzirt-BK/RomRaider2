@@ -60,6 +60,7 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
             else if (phase.equals("mounted-fullscreen")) verifyMountedFullScreen();
             else if (phase.equals("mounted-layouts")) verifyMountedLayouts();
             else if (phase.equals("seamless-gauges")) verifySeamlessGauges();
+            else if (phase.equals("gauge-rendering")) verifyGaugeRenderingCache();
             else if (phase.equals("live-gauges")) verifyReadOnlySessionViewSwitch();
             else if (phase.equals("calculated-gauges")) verifyCalculatedGauges();
             else if (phase.equals("channel-transfer")) verifyChannelTransfer();
@@ -554,6 +555,11 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
         ReadOnlyLoggingService service = (ReadOnlyLoggingService) field("recordingService");
         runOnMainSync(service::stop);
         waitForServiceIdle(service);
+        runOnMainSync(() -> {
+            service.acknowledgeSavePrompt(service.recording().completedLog());
+            android.app.AlertDialog prompt = (android.app.AlertDialog) fieldUnchecked("completedLogDialog");
+            if (prompt != null) prompt.dismiss();
+        });
         invoke("refreshRecording", new Class<?>[0]);
     }
 
@@ -858,6 +864,44 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
         System.out.println("PASS: immersive gauges hide bars, stay awake when stopped, release awake in background, and exit through Back/LOGGER.");
     }
 
+    private void verifyGaugeRenderingCache() throws Exception {
+        java.lang.reflect.Field readingField = MobileGaugeView.class.getDeclaredField("faceReading");
+        java.lang.reflect.Field surfaceField = MobileGaugeView.class.getDeclaredField("nativeSurface");
+        readingField.setAccessible(true); surfaceField.setAccessible(true);
+        runOnMainSync(() -> {
+            android.graphics.Bitmap bitmap = android.graphics.Bitmap.createBitmap(320, 250,
+                    android.graphics.Bitmap.Config.ARGB_8888);
+            try {
+                MobileGaugeView view = new MobileGaugeView(activity);
+                view.setTheme(MobileGaugeTheme.STI_NIGHT);
+                view.layout(0, 0, 320, 250);
+                view.setValue("P8", "Engine Speed", "3210", "rpm", 3210, 1000, 5000);
+                view.setDataState("LIVE");
+                Object surface = surfaceField.get(view);
+                java.lang.reflect.Field canvasField = surface.getClass().getDeclaredField("canvas");
+                canvasField.setAccessible(true);
+                com.romraider.portable.gauge.GaugeFaceRenderer.Reading reading =
+                        (com.romraider.portable.gauge.GaugeFaceRenderer.Reading) readingField.get(view);
+                check(reading.value == 3210 && reading.state.equals("LIVE"), "Cached gauge reading is stale");
+                for (int frame = 0; frame < 5; frame++) {
+                    view.draw(new android.graphics.Canvas(bitmap));
+                    check(readingField.get(view) == reading && surfaceField.get(view) == surface,
+                            "Gauge replaced its data/surface for an unchanged frame");
+                    check(canvasField.get(surface) == null, "Gauge retained the drawing Canvas after a frame");
+                }
+                view.markUnavailable("NO DATA");
+                reading = (com.romraider.portable.gauge.GaugeFaceRenderer.Reading) readingField.get(view);
+                check(!reading.available() && reading.state.equals("NO DATA"), "Cached reading retained stale live data");
+                view.setValue("P8", "Engine Speed", "900", "rpm", 900, 800, 5000);
+                view.setDataState("LIVE");
+                reading = (com.romraider.portable.gauge.GaugeFaceRenderer.Reading) readingField.get(view);
+                check(reading.available() && reading.value == 900 && reading.display.equals("900")
+                        && reading.state.equals("LIVE"), "Cached reading did not recover");
+            } catch (ReflectiveOperationException failure) { throw new AssertionError(failure); }
+            finally { bitmap.recycle(); }
+        });
+    }
+
     private void verifySeamlessGauges() {
         runOnMainSync(() -> {
             for (MobileGaugeTheme theme : MobileGaugeTheme.values()) {
@@ -975,7 +1019,7 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
         check(((android.view.View) field("liveReadingsCard")).getVisibility() == android.view.View.GONE, "Idle screen exposes live readings");
         android.view.ViewGroup content = (android.view.ViewGroup) field("content");
         runOnMainSync(() -> {
-            check(viewContainsText(content.getChildAt(content.getChildCount() - 1), "LOG REVIEW"), "Log Review is not last");
+            check(!viewContainsText(content, "LOG REVIEW"), "Review still appears inside Logger");
             toggles.get("Vehicle").performClick();
             check(sections.get("Vehicle").isShown(), "Vehicle controls did not expand");
             toggles.get("Profile & channels").performClick();
@@ -989,6 +1033,18 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
         rotateMountedDisplay(android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
         captureMountedScreenshot(new File(renders, "idle-portrait.png"));
         android.widget.Button startStop = (android.widget.Button) field("liveLoggerButton");
+        android.widget.Button stopButton = (android.widget.Button) field("stopLoggerButton");
+        runOnMainSync(() -> {
+            check(startStop.getText().toString().equals("START") && stopButton.getText().toString().equals("STOP"), "Separate START/STOP labels missing");
+            check(startStop.isEnabled() && !stopButton.isEnabled(), "Idle button states incorrect");
+            check(startStop.getBackground() instanceof android.graphics.drawable.RippleDrawable, "Button lost pressed feedback");
+            check(startStop.getStateListAnimator() == null, "Theme animator overrides custom button feedback");
+            check(startStop.getElevation() > 0 && stopButton.getAlpha() < .5f, "Raised/disabled feedback missing");
+            startStop.setPressed(true);
+            check(startStop.getTranslationY() > 0 && startStop.getElevation() == 0, "Pressed button did not depress");
+            startStop.setPressed(false);
+            check(startStop.getTranslationY() == 0 && startStop.getElevation() > 0, "Released button did not recover");
+        });
         android.graphics.Rect buttonBounds = new android.graphics.Rect();
         runOnMainSync(() -> check(startStop.getGlobalVisibleRect(buttonBounds) && buttonBounds.height() == startStop.getHeight(),
                 "Start button is not fully visible on the initial portrait screen"));
@@ -1008,6 +1064,7 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
         startTestRecording();
         try {
             check(((android.widget.TextView) field("loggerSessionTitle")).getText().toString().equals("Recording"), "Recording status missing");
+            check(!startStop.isEnabled() && stopButton.isEnabled(), "Recording button states incorrect");
             check(((android.view.View) field("liveReadingsCard")).isShown(), "Live readings are hidden during capture");
             for (android.view.View body : sections.values()) check(body.getVisibility() == android.view.View.GONE, "Starting did not collapse setup");
             runOnMainSync(() -> toggles.get("Vehicle").performClick());
@@ -1026,11 +1083,29 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
             invoke("showGaugesOnly", new Class<?>[0]);
             invoke("leaveGaugesOnly", new Class<?>[0]);
             check(testRecordingActive() && field("loggerProfile") == profile, "Gauge navigation changed the session");
-            runOnMainSync(startStop::performClick);
+            runOnMainSync(stopButton::performClick);
             waitForServiceIdle((ReadOnlyLoggingService) field("recordingService"));
             invoke("refreshRecording", new Class<?>[0]);
-            check(!testRecordingActive() && startStop.isEnabled(), "Top Stop button failed or Start did not recover");
+            check(!testRecordingActive() && startStop.isEnabled() && !stopButton.isEnabled(), "Stop failed or button states did not recover");
+            android.app.AlertDialog savePrompt = (android.app.AlertDialog) field("completedLogDialog");
+            check(savePrompt != null && savePrompt.isShowing(), "Completed recording did not prompt for saving");
+            runOnMainSync(() -> savePrompt.getButton(android.app.AlertDialog.BUTTON_NEGATIVE).performClick());
+            invoke("refreshRecording", new Class<?>[0]);
+            check(field("completedLogDialog") == null, "Save prompt repeated after Later");
+            check(((com.romraider.portable.PortableLogSession) field("liveLog")).size() > 0, "Later discarded the recording");
             check(((android.widget.TextView) field("loggerSessionTitle")).getText().toString().equals("Not connected"), "Stopped screen claims a connection");
+            ReadOnlyLoggingService retainedService = (ReadOnlyLoggingService) field("recordingService");
+            com.romraider.portable.PortableLogSession retainedLog = (com.romraider.portable.PortableLogSession) field("liveLog");
+            runOnMainSync(() -> retainedService.prepareExport(retainedLog));
+            verifyActivityRecreation();
+            long rebindDeadline = SystemClock.uptimeMillis() + 5000;
+            while (field("recordingService") == null && SystemClock.uptimeMillis() < rebindDeadline) SystemClock.sleep(30);
+            ReadOnlyLoggingService replacementService = (ReadOnlyLoggingService) field("recordingService");
+            check(replacementService != null, "Recreation did not rebind the service");
+            runOnMainSync(() -> {
+                check(replacementService.takeExport() == retainedLog, "Recreation lost or replaced the selected export");
+                check(replacementService.recordingAwaitingSavePrompt() == null, "Acknowledged prompt returned after recreation");
+            });
         } finally { if (testRecordingActive()) stopTestRecording(); }
         System.out.println("PASS: compact Logger layout, accordion behavior, idle/recording/stop status, visible errors, portrait/landscape and session continuity.");
     }
@@ -1039,6 +1114,7 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
         android.view.View title = (android.view.View) field("loggerSessionTitle");
         android.view.View detail = (android.view.View) field("loggerSessionDetail");
         android.view.View button = (android.view.View) field("liveLoggerButton");
+        android.view.View stop = (android.view.View) field("stopLoggerButton");
         boolean[] ready = {false};
         long deadline = SystemClock.uptimeMillis() + 5000;
         do {
@@ -1047,12 +1123,10 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
                 android.graphics.Rect titleBounds = new android.graphics.Rect();
                 android.graphics.Rect detailBounds = new android.graphics.Rect();
                 android.graphics.Rect buttonBounds = new android.graphics.Rect();
-                ready[0] = title.getGlobalVisibleRect(titleBounds) && titleBounds.width() > 0
-                        && titleBounds.height() == title.getHeight()
-                        && detail.getGlobalVisibleRect(detailBounds) && detailBounds.width() > 0
-                        && detailBounds.height() == detail.getHeight()
-                        && button.getGlobalVisibleRect(buttonBounds) && buttonBounds.height() == button.getHeight()
-                        && (wide ? titleBounds.right < buttonBounds.left : titleBounds.bottom <= buttonBounds.top);
+                android.graphics.Rect stopBounds = new android.graphics.Rect();
+                ready[0] = button.getGlobalVisibleRect(buttonBounds) && buttonBounds.height() == button.getHeight()
+                        && stop.getGlobalVisibleRect(stopBounds) && stopBounds.height() == stop.getHeight()
+                        && buttonBounds.bottom <= stopBounds.top;
             });
             if (!ready[0]) SystemClock.sleep(50);
         } while (!ready[0] && SystemClock.uptimeMillis() < deadline);
@@ -1124,7 +1198,8 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
                 canvas.drawText("ROMRAIDER2 / THE GAUGE COLLECTION", 32, 51, text);
                 text.setTypeface(android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL));
                 text.setTextSize(18); text.setColor(0xFFA6B3C0);
-                canvas.drawText(MobileGaugeTheme.values().length + " mobile styles • Actual Android rendering • Simulated values • 1.1.3 development source", 32, 85, text);
+                canvas.drawText(MobileGaugeTheme.values().length + " mobile styles • Actual Android rendering • Simulated values • "
+                        + BuildConfig.VERSION_NAME + " source", 32, 85, text);
                 float density = getTargetContext().getResources().getDisplayMetrics().density;
                 int index = 0;
                 for (MobileGaugeTheme theme : MobileGaugeTheme.values()) {
@@ -1689,6 +1764,7 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
     }
 
     private void verifyCsvImport() throws Exception {
+        invoke("showReview", new Class<?>[0]);
         File folder = getTargetContext().getFilesDir();
         File large = new File(folder, "automation-large-import.csv");
         File second = new File(folder, "automation-second-import.csv");
@@ -1712,7 +1788,7 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
                     "Close Log File is missing for an imported log");
             android.view.ViewGroup main = (android.view.ViewGroup) field("content");
             runOnMainSync(() -> check(viewContainsText(main.getChildAt(main.getChildCount() - 1), "LOG REVIEW"),
-                    "Log Review is not at the bottom"));
+                    "Dedicated Review workspace is missing"));
             runOnMainSync(() -> check(!viewContainsText(main, "CANCEL CSV IMPORT"), "Cancel CSV Import still clutters the page"));
             Files.write(invalid.toPath(), new byte[] {'T', 'i', 'm', 'e', ',', 'A', '\n', '0', ',', (byte) 0xff, '\n'});
             invoke("loadLogSummary", new Class<?>[] {Uri.class}, Uri.fromFile(invalid));
@@ -1736,7 +1812,7 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
             check(list.getLastVisiblePosition() == 13 && field("importedLogSummary") == summary,
                     "Could not scroll to the final channel without reimporting");
             check(!dialogContains("NEXT CHANNELS") && !dialogContains("PREVIOUS CHANNELS"), "Paging controls remain");
-            clickDialogText("BACK TO LOGGER");
+            clickDialogText("BACK TO REVIEW");
             check(field("importedLogDialog") == null && field("importedLogSummary") == summary, "Back discarded imported file");
             invoke("showLogSummary", new Class<?>[0]);
             check(field("importedLogDialog") != null, "Retained file cannot reopen");
@@ -1767,6 +1843,7 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
             // Keep start/cancel in one UI turn so even a fast parser cannot apply
             // its completion between the two actions.
             runOnMainSync(() -> {
+                invokeUnchecked("showReview", new Class<?>[0]);
                 invokeUnchecked("loadLogSummary", new Class<?>[] {Uri.class}, Uri.fromFile(large));
                 invokeUnchecked("cancelLogImport", new Class<?>[] {String.class}, "CSV import cancelled; previous summary retained.");
             });
@@ -1775,9 +1852,9 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
             invoke("showEditor", new Class<?>[0]);
             invoke("loadLogSummary", new Class<?>[] {Uri.class}, Uri.fromFile(large));
             check(!(Boolean) field("loggerVisible") && !(Boolean) field("logImportLoading"), "CSV import hijacked the editor");
-            invoke("showLogger", new Class<?>[0]);
+            invoke("showReview", new Class<?>[0]);
             check(field("importedLogSummary") == summary && field("importedLogDialog") == null,
-                    "Returning to LOGGER lost the file or unexpectedly reopened its window");
+                    "Returning to Review lost the file or unexpectedly reopened its window");
             invoke("showLogSummary", new Class<?>[0]);
             clickDialogText("CLOSE LOG FILE");
             check(field("importedLogSummary") == null && field("importedLogDialog") == null

@@ -15,6 +15,43 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
 @EnabledIfEnvironmentVariable(named = "RR2_FX_WINDOW_SMOKE", matches = "1")
 class FxLoggerDisplaySmokeTest {
+    @Test void elapsedFormattingSupportsLongCapturesWithoutWrappingAtOneDay() {
+        assertEquals("00:00:00", FxLoggerWindow.formatRecordingElapsed(0));
+        assertEquals("00:01:05", FxLoggerWindow.formatRecordingElapsed(65_999));
+        assertEquals("01:00:00", FxLoggerWindow.formatRecordingElapsed(3_600_000));
+        assertEquals("25:00:00", FxLoggerWindow.formatRecordingElapsed(90_000_000));
+        assertEquals("00:00:00", FxLoggerWindow.formatRecordingElapsed(-1));
+    }
+    @Test void loadProfileSitsBesideDefinitionAndSetupWithoutClippingAtSmallWidths() throws Exception {
+        FxTestRuntime.run(() -> {
+            FxLoggerWindow window = new FxLoggerWindow(() -> {});
+            Stage stage = FxEditorControlsSmokeTest.field(window, "stage");
+            try {
+                FxWindowPlacement.show(stage); // No startup or vehicle connection.
+                var actions = (javafx.scene.layout.FlowPane) stage.getScene().lookup("#logger-header-actions");
+                var elapsed = (javafx.scene.control.Label) stage.getScene().lookup("#logger-recording-elapsed");
+                assertEquals("00:00:00", elapsed.getText());
+                assertNotNull(elapsed.getTooltip());
+                var labels = actions.getChildren().stream().filter(Button.class::isInstance).map(Button.class::cast)
+                        .map(Button::getText).toList();
+                int definition = labels.indexOf("Load Definition");
+                assertEquals("Load Profile", labels.get(definition + 1));
+                assertEquals("Logger Setup", labels.get(definition + 2));
+                for (int width : new int[] {900, 1024, 1380}) {
+                    stage.setWidth(width);
+                    var root = stage.getScene().getRoot(); root.applyCss(); root.layout();
+                    for (var node : actions.getChildren()) {
+                        if (!(node instanceof javafx.scene.layout.Region control)) continue;
+                        assertTrue(control.getWidth() + 1 >= control.prefWidth(-1), "Clipped control at " + width);
+                        var bounds = control.localToScene(control.getBoundsInLocal());
+                        assertTrue(bounds.getMaxX() <= stage.getScene().getWidth(), "Control outside window");
+                        assertTrue(bounds.getMaxY() <= actions.localToScene(actions.getBoundsInLocal()).getMaxY() + 1);
+                    }
+                }
+            } finally { window.close(); }
+        });
+    }
+
     @Test void dataStatisticsAndResetUseRealBusWithoutConnecting() throws Exception {
         FxLoggerWindow[] window = new FxLoggerWindow[1];
         try {

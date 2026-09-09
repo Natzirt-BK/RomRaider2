@@ -29,4 +29,6 @@ public interface FileLogger {
     void writeLine(String line, long timestamp);
 
     boolean isStarted();
+
+    default long getRecordingElapsedMillis() { return 0; }
 }

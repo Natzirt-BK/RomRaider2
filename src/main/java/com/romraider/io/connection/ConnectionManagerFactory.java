@@ -44,12 +44,19 @@ public final class ConnectionManagerFactory {
             final ConnectionProperties connectionProperties) {
 
         final Settings settings = SettingsManager.getSettings();
+        return getManager(portName, connectionProperties, settings.getJ2534Device(),
+                settings.getTransportProtocol(), settings.getElm327Enabled());
+    }
+
+    /** Explicit selection for operations whose setup was captured before worker submission. */
+    public static ConnectionManager getManager(String portName, ConnectionProperties connectionProperties,
+            String j2534Device, String transportProtocol, boolean elm327) {
         ConnectionManager manager = null;
 
         // Try a serial connection
-        if (isNullOrEmpty(settings.getJ2534Device())) {
+        if (isNullOrEmpty(j2534Device)) {
 
-            if(SettingsManager.getSettings().getElm327Enabled()) {
+            if(elm327) {
                 LOGGER.info("Trying to connect to ELM327...");
                 manager = new ElmConnectionManager(portName, connectionProperties);
             }
@@ -61,9 +68,9 @@ public final class ConnectionManagerFactory {
         else {
             // Try a J2534 connection
             manager = J2534TransportFactory.getManager(
-                    settings.getTransportProtocol().toUpperCase(),
+                    transportProtocol.toUpperCase(java.util.Locale.ROOT),
                     connectionProperties,
-                    settings.getJ2534Device());
+                    j2534Device);
         }
         if (ENABLE_TIMER) return proxy(manager, TimerWrapper.class);
         return manager;

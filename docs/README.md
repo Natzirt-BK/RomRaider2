@@ -2,8 +2,8 @@
 
 ## Start here
 
-- [Current release candidate](RELEASE_1_1_8.md)
-- [1.1.8 package qualification](RELEASE_1_1_8_QUALIFICATION.md)
+- [1.1.9 release preparation](RELEASE_1_1_9.md)
+- [1.1.9 package qualification](RELEASE_1_1_9_QUALIFICATION.md)
 - [Android setup and testing](ANDROID_PREVIEW_TESTING.md)
 - [Building RomRaider2](Building_RomRaider_VSCode.md)
 - [Versioning](RELEASE_VERSIONING.md)
@@ -34,5 +34,8 @@ status. Historical records are not a list of available applications.
 - [Window placement audit](WINDOW_PLACEMENT_AUDIT.md)
 - [Gauge source/package verification](GAUGE_PACKAGE_QUALIFICATION.md)
 - [DimeMod cache and callback lifecycle](DIMEMOD_CACHE_LIFECYCLE.md)
+- [Desktop diagnostic-read reliability](DESKTOP_DIAGNOSTIC_READS.md)
+- [Background diagnostic reads and saved results](DESKTOP_ASYNC_DIAGNOSTICS.md)
+- [Android workflow qualification](ANDROID_WORKFLOW_CHECKPOINT_2026-09-09.md)
 - [Open-source provenance](OPEN_SOURCE_PROVENANCE.md)
 - [5EAT, Atlas and ecuEdit integration review](TCU_ATLAS_ECUEDIT_REVIEW_2026-09-08.md)

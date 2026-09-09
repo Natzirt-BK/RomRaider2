@@ -32,13 +32,27 @@ import java.text.MessageFormat;
 
 import com.romraider.logger.ecu.EcuLogger;
 import com.romraider.swing.menubar.action.AbstractAction;
+import com.romraider.logger.ecu.DesktopDiagnosticTask;
+import com.romraider.logger.ecu.comms.readcodes.DiagnosticReadRequest;
+import com.romraider.logger.ecu.ui.swing.tools.DiagnosticProgressDialog;
+import com.romraider.logger.ecu.ui.swing.tools.ReadCodesResultsPanel;
+import java.util.ArrayList;
+import java.util.concurrent.atomic.AtomicReference;
+import javax.swing.JCheckBox;
+import javax.swing.SwingUtilities;
 
 public final class ReadEcuCodesAction extends AbstractAction {
+    private boolean working;
     public ReadEcuCodesAction(EcuLogger logger) {
         super(logger);
     }
 
     public final void actionPerformed(ActionEvent actionEvent) {
+        if (!SwingUtilities.isEventDispatchThread()) {
+            SwingUtilities.invokeLater(() -> actionPerformed(actionEvent));
+            return;
+        }
+        if (working || logger.isDiagnosticBusy() || !logger.isDiagnosticOwnerOpen()) return;
         if (logger.getDtcodesEmpty()) {
             showMessageDialog(logger,
                     rb.getString("RECADEFERROR"),
@@ -50,55 +64,68 @@ public final class ReadEcuCodesAction extends AbstractAction {
                     rb.getString("RECANOINITTITLE"), ERROR_MESSAGE);
         }
         else {
-            final boolean logging = logger.isLogging();
-            if (showConfirmation() == OK_OPTION) {
-                if (logging) logger.stopLogging();
-                readEcu();
-                if (logging) logger.startLogging();
+            working = true;
+            setEnabled(false);
+            DiagnosticProgressDialog progress = null;
+            AtomicReference<DesktopDiagnosticTask<?>> task = new AtomicReference<>();
+            try {
+                DiagnosticReadRequest request = logger.prepareDiagnosticRead();
+                boolean logging = logger.isLogging();
+                JCheckBox resume = new JCheckBox("Resume logging after a successful read", logging);
+                resume.setEnabled(logging);
+                int confirmed = showConfirmDialog(logger, new Object[] {
+                        "Read trouble codes from " + request.target() + "?",
+                        "Logging pauses for this read. Cancelling or a failed read will not restart it.", resume},
+                        "Read Trouble Codes", YES_NO_OPTION, WARNING_MESSAGE);
+                request.requireCurrent();
+                if (confirmed != OK_OPTION) { finish(); return; }
+                boolean resumeAfterSuccess = resume.isSelected();
+                progress = new DiagnosticProgressDialog(logger, request.target(), () -> {
+                    if (task.get() != null) task.get().cancel();
+                });
+                DiagnosticProgressDialog dialog = progress;
+                task.set(logger.beginDiagnosticRead(request, result -> {
+                    dialog.dispose();
+                    finish();
+                    if (!logger.isDiagnosticOwnerOpen() || result.stale()) return;
+                    if (result.cancelled()) {
+                        logger.reportMessage("Diagnostic read cancelled. Logging was not restarted.");
+                        return;
+                    }
+                    if (!result.succeeded()) {
+                        logger.reportError("Unable to read trouble codes. Logging was not restarted.",
+                                new Exception("Diagnostic read failed", result.failure()));
+                        return;
+                    }
+                    try {
+                        request.requireCurrent();
+                        showResult(result.result());
+                        request.requireCurrent();
+                        if (resumeAfterSuccess && logger.isDiagnosticOwnerOpen() && !logger.isLogging()) logger.startLogging();
+                    } catch (IllegalStateException stale) {
+                        // A result dialog pumps events; never restart a changed/closed owner.
+                    }
+                }));
+                dialog.setVisible(true);
+            } catch (Exception failure) {
+                if (task.get() != null) task.get().cancel();
+                if (progress != null) progress.dispose();
+                finish();
+                if (logger.isDiagnosticOwnerOpen()) logger.reportError("Unable to start the diagnostic read.", failure);
             }
         }
     }
 
-    private final int showConfirmation() {
-        return showConfirmDialog(
-                logger, 
-                MessageFormat.format(
-                        rb.getString("RECACONFIRM"), logger.getTarget()), 
-                MessageFormat.format(
-                        rb.getString("RECACONFIRMTITLE"), logger.getTarget()), 
-                YES_NO_OPTION, WARNING_MESSAGE);
+    private void finish() {
+        working = false;
+        if (logger.isDiagnosticOwnerOpen()) setEnabled(true);
     }
 
-    private final void readEcu() {
-        final int result = doRead();
-        if (result == -1) {
-            showMessageDialog(
-                    logger, 
-                    rb.getString("RECANOCODES"),
-                    rb.getString("RECANOCODESTILTE"),
-                    INFORMATION_MESSAGE);
-        }
-        else if (result == 0) {
-            showMessageDialog(
-                    logger, 
-                    MessageFormat.format(
-                            rb.getString("RECAREADERROR"), logger.getTarget()), 
-                    MessageFormat.format(
-                            rb.getString("RECAREADERRORTITLE"), logger.getTarget()),
-                    ERROR_MESSAGE);
-        }
-    }
-
-    private int doRead() {
-        try {
-            return logger.readEcuCodes();
-        } catch (Exception e) {
-            logger.reportError(
-                    MessageFormat.format(
-                            rb.getString("RECAREPORTERROR"),
-                            logger.getTarget()),
-                    e);
-            return 0;
-        }
+    private void showResult(DiagnosticReadRequest.Result result) {
+        if (result.isEmpty()) showMessageDialog(logger,
+                "No active or memorized codes found in the available entries for this logger definition.",
+                "Read Complete", INFORMATION_MESSAGE);
+        else ReadCodesResultsPanel.displayResultsPane(logger, new ArrayList<>(result.codes()),
+                result.currentDimeCodes(), result.memorizedDimeCodes());
     }
 }

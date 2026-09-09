@@ -10,6 +10,15 @@ import static org.junit.Assert.fail;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.io.IOException;
+import java.io.RandomAccessFile;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import org.junit.Rule;
 import org.junit.Test;
@@ -18,6 +27,229 @@ import org.junit.rules.TemporaryFolder;
 public class LoggerDefinitionInstallerTest {
     @Rule
     public TemporaryFolder temporaryFolder = new TemporaryFolder();
+
+    @Test public void preparationDoesNotReplaceTheManagedDefinitionOrBackup() throws Exception {
+        Path root = temporaryFolder.getRoot().toPath();
+        Path settings = root.resolve("settings");
+        LoggerDefinitionInstaller installer = new LoggerDefinitionInstaller();
+        installer.install(writeDefinition(root.resolve("original.xml"), "original"), settings);
+        LoggerDefinitionInstaller.Installation current = installer.install(
+                writeDefinition(root.resolve("current.xml"), "current"), settings);
+        byte[] before = Files.readAllBytes(current.installedFile());
+        byte[] backup = Files.readAllBytes(current.backupFile());
+        LoggerDefinitionInstaller.PreparedDefinition prepared = installer.prepare(
+                writeDefinition(root.resolve("candidate.xml"), "candidate"));
+        assertEquals("candidate", prepared.version());
+        org.junit.Assert.assertArrayEquals(before, Files.readAllBytes(current.installedFile()));
+        org.junit.Assert.assertArrayEquals(backup, Files.readAllBytes(current.backupFile()));
+        current.rollback(); // Preparing a candidate must not supersede the existing rollback owner.
+        assertEquals("original", LoggerDefinitionInstaller.validate(current.installedFile()));
+    }
+
+    @Test public void preparedBytesStayFrozenWhenSourceAndReturnedSnapshotChange() throws Exception {
+        Path root = temporaryFolder.getRoot().toPath();
+        Path source = writeDefinition(root.resolve("source.xml"), "prepared");
+        LoggerDefinitionInstaller.PreparedDefinition prepared = new LoggerDefinitionInstaller().prepare(source);
+        assertEquals(source.toRealPath(), prepared.sourcePath());
+        java.util.Arrays.fill(prepared.snapshot(), (byte) 0);
+        Files.delete(source);
+        LoggerDefinitionInstaller.Installation installed = prepared.install(root.resolve("settings"));
+        assertEquals("prepared", LoggerDefinitionInstaller.validate(installed.installedFile()));
+        assertEquals("prepared", installed.version());
+    }
+
+    @Test public void preparedInstallSnapshotsTheDestinationAtCommitNotPreparation() throws Exception {
+        Path root = temporaryFolder.getRoot().toPath();
+        Path settings = root.resolve("settings");
+        LoggerDefinitionInstaller installer = new LoggerDefinitionInstaller();
+        installer.install(writeDefinition(root.resolve("original.xml"), "original"), settings);
+        LoggerDefinitionInstaller.PreparedDefinition prepared = installer.prepare(
+                writeDefinition(root.resolve("candidate.xml"), "candidate"));
+        installer.install(writeDefinition(root.resolve("intervening.xml"), "intervening"), settings);
+        LoggerDefinitionInstaller.Installation committed = prepared.install(settings);
+        assertEquals("candidate", LoggerDefinitionInstaller.validate(committed.installedFile()));
+        committed.rollback();
+        assertEquals("intervening", LoggerDefinitionInstaller.validate(committed.installedFile()));
+    }
+
+    @Test public void preparedSnapshotCanBeParsedWithoutChangingLoggerSettings() throws Exception {
+        Path root = temporaryFolder.getRoot().toPath();
+        LoggerDefinitionInstaller.PreparedDefinition prepared = new LoggerDefinitionInstaller().prepare(
+                writeDefinition(root.resolve("candidate.xml"), "candidate"));
+        com.romraider.Settings settings = com.romraider.util.SettingsManager.getSettings();
+        String protocol = settings.getLoggerProtocol();
+        String transport = settings.getTransportProtocol();
+        EcuDataLoaderImpl loader = new EcuDataLoaderImpl();
+        loader.loadConfigForDesktop(prepared.sourcePath().toString(), prepared.snapshot(), "SSM", "S1", null);
+        assertEquals("candidate", loader.getDefVersion());
+        assertEquals(protocol, settings.getLoggerProtocol());
+        assertEquals(transport, settings.getTransportProtocol());
+    }
+
+    @Test public void rejectedPreparedProtocolLeavesSettingsAndInstalledFileUntouched() throws Exception {
+        Path root = temporaryFolder.getRoot().toPath();
+        LoggerDefinitionInstaller installer = new LoggerDefinitionInstaller();
+        LoggerDefinitionInstaller.Installation current = installer.install(
+                writeDefinition(root.resolve("current.xml"), "current"), root.resolve("settings"));
+        LoggerDefinitionInstaller.PreparedDefinition candidate = installer.prepare(
+                writeDefinition(root.resolve("candidate.xml"), "candidate"));
+        com.romraider.Settings settings = com.romraider.util.SettingsManager.getSettings();
+        String protocol = settings.getLoggerProtocol();
+        String transport = settings.getTransportProtocol();
+        String definitionPath = settings.getLoggerDefinitionFilePath();
+        try {
+            new EcuDataLoaderImpl().loadConfigForDesktop(candidate.sourcePath().toString(),
+                    candidate.snapshot(), "MISSING-PROTOCOL", "S1", null);
+            fail("An unsupported protocol must not fall back to a different one");
+        } catch (com.romraider.logger.ecu.exception.ConfigurationException expected) {
+            assertNotNull(expected.getMessage());
+        }
+        assertEquals(protocol, settings.getLoggerProtocol());
+        assertEquals(transport, settings.getTransportProtocol());
+        assertEquals(definitionPath, settings.getLoggerDefinitionFilePath());
+        assertEquals("current", LoggerDefinitionInstaller.validate(current.installedFile()));
+        current.rollback();
+        assertFalse(Files.exists(current.installedFile()));
+    }
+
+    @Test public void rollbackRejectsSymlinkReplacementWithoutTouchingItsTarget() throws Exception {
+        Path root = temporaryFolder.getRoot().toPath();
+        LoggerDefinitionInstaller.Installation installed = new LoggerDefinitionInstaller().install(
+                writeDefinition(root.resolve("source.xml"), "original"), root.resolve("settings"));
+        Path outside = writeDefinition(root.resolve("outside.xml"), "outside");
+        Files.delete(installed.installedFile());
+        try {
+            Files.createSymbolicLink(installed.installedFile(), outside);
+        } catch (IOException | UnsupportedOperationException | SecurityException unavailable) {
+            org.junit.Assume.assumeNoException(unavailable);
+        }
+        rejectRollback(installed);
+        assertTrue(Files.isSymbolicLink(installed.installedFile()));
+        assertEquals("outside", LoggerDefinitionInstaller.validate(outside));
+    }
+
+    @Test public void obsoleteRollbackCannotReplaceOrDeleteANewerInstallation() throws Exception {
+        Path root = temporaryFolder.getRoot().toPath();
+        for (boolean initial : new boolean[] {false, true}) {
+            for (boolean identical : new boolean[] {false, true}) {
+                Path settings = root.resolve("owners-" + initial + "-" + identical);
+                LoggerDefinitionInstaller installer = new LoggerDefinitionInstaller();
+                if (initial) installer.install(writeDefinition(root.resolve("initial.xml"), "initial"), settings);
+                LoggerDefinitionInstaller.Installation older = installer.install(
+                        writeDefinition(root.resolve("older.xml"), "older"), settings);
+                LoggerDefinitionInstaller.Installation newer = new LoggerDefinitionInstaller().install(
+                        writeDefinition(root.resolve("newer.xml"), identical ? "older" : "newer"), settings);
+                String expected = Files.readString(newer.installedFile(), UTF_8);
+                rejectRollback(older);
+                assertEquals(expected, Files.readString(newer.installedFile(), UTF_8));
+                newer.rollback();
+                assertEquals("older", LoggerDefinitionInstaller.validate(newer.installedFile()));
+                rejectRollback(older); // Restoring equal bytes must not revive an obsolete owner.
+                assertEquals("older", LoggerDefinitionInstaller.validate(newer.installedFile()));
+            }
+        }
+    }
+
+    @Test public void rollbackUsesItsOwnSnapshotNotTheSharedBackup() throws Exception {
+        Path root = temporaryFolder.getRoot().toPath();
+        LoggerDefinitionInstaller installer = new LoggerDefinitionInstaller();
+        installer.install(writeDefinition(root.resolve("original.xml"), "original"), root.resolve("settings"));
+        LoggerDefinitionInstaller.Installation replacement = installer.install(
+                writeDefinition(root.resolve("replacement.xml"), "replacement"), root.resolve("settings"));
+        writeDefinition(replacement.backupFile(), "unrelated");
+        replacement.rollback();
+        assertEquals("original", LoggerDefinitionInstaller.validate(replacement.installedFile()));
+    }
+
+    @Test public void rollbackDoesNotOverwriteAnExternalEdit() throws Exception {
+        Path root = temporaryFolder.getRoot().toPath();
+        LoggerDefinitionInstaller.Installation installed = new LoggerDefinitionInstaller().install(
+                writeDefinition(root.resolve("original.xml"), "original"), root.resolve("settings"));
+        writeDefinition(installed.installedFile(), "external");
+        rejectRollback(installed);
+        assertEquals("external", LoggerDefinitionInstaller.validate(installed.installedFile()));
+    }
+
+    @Test public void completedRollbackCannotDeleteALaterInstallation() throws Exception {
+        Path root = temporaryFolder.getRoot().toPath();
+        LoggerDefinitionInstaller installer = new LoggerDefinitionInstaller();
+        Path source = writeDefinition(root.resolve("source.xml"), "first");
+        LoggerDefinitionInstaller.Installation first = installer.install(source, root.resolve("settings"));
+        first.rollback();
+        LoggerDefinitionInstaller.Installation second = installer.install(source, root.resolve("settings"));
+        first.rollback();
+        assertEquals("first", LoggerDefinitionInstaller.validate(second.installedFile()));
+    }
+
+    private static void rejectRollback(LoggerDefinitionInstaller.Installation installation) throws Exception {
+        try {
+            installation.rollback();
+            fail("Rollback must reject a definition it no longer owns");
+        } catch (IOException expected) {
+            assertNotNull(expected.getMessage());
+        }
+    }
+
+    @Test public void concurrentInstallersKeepOnlyTheLatestRollbackOwner() throws Exception {
+        Path root = temporaryFolder.getRoot().toPath();
+        Path firstSource = writeDefinition(root.resolve("concurrent-first.xml"), "first");
+        Path secondSource = writeDefinition(root.resolve("concurrent-second.xml"), "second");
+        CyclicBarrier start = new CyclicBarrier(2);
+        ExecutorService workers = Executors.newFixedThreadPool(2);
+        try {
+            Future<LoggerDefinitionInstaller.Installation> first = workers.submit(() -> {
+                start.await(10, TimeUnit.SECONDS);
+                return new LoggerDefinitionInstaller().install(firstSource, root.resolve("settings"));
+            });
+            Future<LoggerDefinitionInstaller.Installation> second = workers.submit(() -> {
+                start.await(10, TimeUnit.SECONDS);
+                return new LoggerDefinitionInstaller().install(secondSource, root.resolve("settings"));
+            });
+            LoggerDefinitionInstaller.Installation a = first.get(10, TimeUnit.SECONDS);
+            LoggerDefinitionInstaller.Installation b = second.get(10, TimeUnit.SECONDS);
+            boolean firstWon = "first".equals(LoggerDefinitionInstaller.validate(a.installedFile()));
+            LoggerDefinitionInstaller.Installation latest = firstWon ? a : b;
+            LoggerDefinitionInstaller.Installation older = firstWon ? b : a;
+            rejectRollback(older);
+            assertEquals(latest.version(), LoggerDefinitionInstaller.validate(latest.installedFile()));
+            latest.rollback();
+            assertEquals(older.version(), LoggerDefinitionInstaller.validate(latest.installedFile()));
+        } finally {
+            workers.shutdownNow();
+            assertTrue(workers.awaitTermination(10, TimeUnit.SECONDS));
+        }
+    }
+
+    @Test public void identicalExternalReplacementIsRejectedWhenFileIdentityIsAvailable() throws Exception {
+        Path root = temporaryFolder.getRoot().toPath();
+        Path source = writeDefinition(root.resolve("source.xml"), "same");
+        LoggerDefinitionInstaller.Installation installed = new LoggerDefinitionInstaller().install(source, root.resolve("settings"));
+        Object key = Files.readAttributes(installed.installedFile(), BasicFileAttributes.class).fileKey();
+        org.junit.Assume.assumeNotNull(key);
+        Path replacement = root.resolve("external.xml");
+        Files.copy(installed.installedFile(), replacement);
+        Files.move(replacement, installed.installedFile(), StandardCopyOption.REPLACE_EXISTING);
+        rejectRollback(installed);
+        assertEquals("same", LoggerDefinitionInstaller.validate(installed.installedFile()));
+    }
+
+    @Test public void oversizedManagedSnapshotIsRejectedBeforeReplacement() throws Exception {
+        Path root = temporaryFolder.getRoot().toPath();
+        Path source = writeDefinition(root.resolve("source.xml"), "original");
+        LoggerDefinitionInstaller installer = new LoggerDefinitionInstaller();
+        LoggerDefinitionInstaller.Installation installed = installer.install(source, root.resolve("settings"));
+        long tooLarge = LoggerDefinitionInstaller.MAX_DEFINITION_BYTES + 1;
+        try (RandomAccessFile file = new RandomAccessFile(installed.installedFile().toFile(), "rw")) {
+            file.setLength(tooLarge);
+        }
+        try {
+            installer.install(source, root.resolve("settings"));
+            fail("Oversized managed recovery snapshot was accepted");
+        } catch (IOException expected) {
+            assertEquals(tooLarge, Files.size(installed.installedFile()));
+            assertFalse(Files.exists(installed.installedFile().resolveSibling("logger.previous.xml")));
+        }
+    }
 
     @Test
     public void validatesInstallsAndBacksUpManagedDefinition()

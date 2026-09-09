@@ -69,6 +69,33 @@ public class LoggerControllerImplTest {
         assertFalse(controller.isStarted());
     }
 
+    @Test public void statusAndStartStayResponsiveWhileStopWaitsForNativeWork() throws Exception {
+        CountDownLatch entered = new CountDownLatch(1), release = new CountDownLatch(1), stopping = new CountDownLatch(1);
+        AtomicInteger runs = new AtomicInteger();
+        QueryManager manager = new RestartableQueryManager() {
+            @Override public void run() {
+                runs.incrementAndGet(); entered.countDown();
+                while (release.getCount() > 0) {
+                    try { release.await(3, TimeUnit.SECONDS); } catch (InterruptedException ignored) { }
+                }
+            }
+            @Override public void stop() { stopping.countDown(); }
+        };
+        LoggerControllerImpl controller = new LoggerControllerImpl(manager);
+        Thread stopper = new Thread(controller::stop);
+        try {
+            controller.start(); assertTrue(entered.await(2, TimeUnit.SECONDS));
+            stopper.start(); assertTrue(stopping.await(2, TimeUnit.SECONDS));
+            CountDownLatch responsive = new CountDownLatch(1);
+            Thread status = new Thread(() -> { controller.isStarted(); controller.start(); responsive.countDown(); });
+            status.setDaemon(true); status.start();
+            assertTrue(responsive.await(1, TimeUnit.SECONDS));
+            assertEquals(1, runs.get());
+        } finally { release.countDown(); stopper.join(2000); controller.stop(); }
+        assertFalse(stopper.isAlive());
+        assertFalse(controller.isStarted());
+    }
+
     private static final class ExitingQueryManager implements QueryManager {
         private final AtomicInteger runCount = new AtomicInteger();
 
@@ -100,7 +127,7 @@ public class LoggerControllerImplTest {
                 FileLoggerControllerSwitchMonitor monitor) { }
     }
 
-    private static final class RestartableQueryManager implements QueryManager {
+    private static class RestartableQueryManager implements QueryManager {
         private final AtomicInteger runCount = new AtomicInteger();
         private final AtomicInteger stopCount = new AtomicInteger();
         private volatile CountDownLatch stopSignal = new CountDownLatch(1);

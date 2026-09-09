@@ -1,6 +1,6 @@
 # Logger adapter compatibility
 
-September 8, 2026. Implementation roadmap, not a supported-device list.
+Updated September 9, 2026. Implementation roadmap, not a supported-device list.
 
 ## Objective
 
@@ -96,6 +96,12 @@ The wire-format reference is the manufacturer's
 [ELM327 datasheet](https://www.elmelectronics.com/wp-content/uploads/2017/01/ELM327DS.pdf),
 particularly command framing and headers/automatic CAN formatting. Identity
 banners remain insufficient evidence of supported commands or protocols.
+
+The local Android [Bluetooth connection foundation](ANDROID_BLUETOOTH_LINK.md)
+now bridges a supplied RFCOMM socket to the shared ELM session with bounded I/O
+and cancellation tests. It is not exposed in Logger setup and adds no Bluetooth
+permission request. Device selection, permission UX and service integration
+remain ahead of hardware qualification; it does not add enhanced SSM/MUT-II.
 
 ## Manufacturer and driver evidence
 

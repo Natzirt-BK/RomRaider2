@@ -1,8 +1,8 @@
 # Desktop logger profile integrity
 
-Fixed in **1.1.3 development source** while preparing desktop portable-setup
-transfer. Public downloads remain 1.1.2. These are repairs to existing XML profile
-persistence, not completed desktop `.rr2logger` import/export controls.
+This record covers XML profile serialization and persistence repairs. See the
+[active plan](ACTIVE_WORK_PLAN.md) for current release status and the
+[portable setup guide](PORTABLE_LOGGER_SETUP.md) for desktop exchange controls.
 
 ## Findings and repairs
 
@@ -42,6 +42,15 @@ temporary output is cleaned up. Uppercase `.XML` filenames are recognized
 without appending another suffix. Non-XML, directory and symbolic-link targets
 are rejected. Parent directories must already exist; the runtime still creates
 its package-owned profile directory before requesting a backup.
+
+The local post-1.1.8 follow-up also moves the retained Swing logger's automatic
+backup into the active settings directory's `profiles/profile_backup.xml`, using
+the same storage helper as the modern desktop logger. Both create that parent
+directory before saving. Swing recovery prefers the managed backup and falls back
+to an existing legacy `~/.RomRaider/profile_backup.xml` only when no managed
+backup exists. Reading does not migrate, overwrite or delete the old file.
+Packaged Linux tests reproduced and then eliminated a shutdown backup failure
+when a custom settings directory was used with a fresh home directory.
 
 This is per-file replacement, not a transaction across profile and global
 settings. It does not promise a directory-fsync durability guarantee, external

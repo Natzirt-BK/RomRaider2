@@ -9,9 +9,9 @@ version=$(property version.buildnumber)
 [[ "$version" = "$(property version.major).$(property version.minor).$(property version.patch)" ]] || fail 'Desktop version components disagree.'
 android_code=$(property version.android.code)
 [[ "$android_code" =~ ^[1-9][0-9]{0,8}$ ]] || fail 'Invalid Android versionCode.'
-(( android_code > 110407 )) || fail 'Development Android versionCode must exceed public 1.1.3 (110407).'
+(( android_code > 110412 )) || fail 'Android versionCode must exceed the 1.1.8 baseline (110412).'
 IFS=. read -r major minor patch <<< "$version"
-(( major > 1 || (major == 1 && minor > 1) || (major == 1 && minor == 1 && patch > 3) )) || fail 'Development version must exceed public 1.1.3.'
+(( major > 1 || (major == 1 && minor > 1) || (major == 1 && minor == 1 && patch > 8) )) || fail 'Version must exceed the 1.1.8 baseline.'
 [[ "$(head -n 1 "$repo_root/release_notes.txt")" = "RomRaider2 ECU Studio $version" ]] || fail 'Release-notes heading disagrees.'
 
 for path in platform/shared-core/build.gradle.kts ui/javafx-desktop/build.gradle.kts \

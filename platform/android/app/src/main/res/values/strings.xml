@@ -7,8 +7,22 @@
         <item quantity="other">%d bytes</item>
     </plurals>
     <string name="rom_unchanged">unchanged</string>
-    <string name="logger_live_start">START LOGGER</string>
-    <string name="logger_live_stop">STOP LIVE LOGGER</string>
+    <string name="logger_live_start">START</string>
+    <string name="logger_live_stop">STOP</string>
+    <string name="logger_live_stopping">STOPPING…</string>
+    <string name="log_value_unavailable">Unavailable</string>
+    <string name="log_min_max">%1$s / %2$s</string>
+    <string name="log_channel_summary">%1$s [%2$s]\nLatest: %3$s %4$s at %5$d ms\nValid samples: %6$d · unavailable: %7$d\nMin / max: %8$s</string>
+    <string name="gauge_status_empty">%1$s\nChoose display channels below.</string>
+    <string name="gauge_status_fullscreen">%1$s\n%2$d of %3$d</string>
+    <plurals name="gauge_status_count">
+        <item quantity="one">%1$s • %2$d gauge</item>
+        <item quantity="other">%1$s • %2$d gauges</item>
+    </plurals>
+    <plurals name="logger_recorded_seconds">
+        <item quantity="one">%d second recorded</item>
+        <item quantity="other">%d seconds recorded</item>
+    </plurals>
     <string name="logger_live_opening">LOGGER\nConnecting %1$s and discovering channels…</string>
     <string name="logger_simulated_gauge_demo">SIMULATED GAUGE DEMO  /  no ECU data</string>
     <string name="logger_gauge_demo_show">SHOW GAUGE DEMO</string>

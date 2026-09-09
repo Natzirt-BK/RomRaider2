@@ -139,6 +139,10 @@ public final class FileUpdateHandlerImpl implements FileUpdateHandler, Convertor
         writeHeaders();
     }
 
+    public long getRecordingElapsedMillis() {
+        return fileLogger.getRecordingElapsedMillis();
+    }
+
     @Override
     public synchronized void start() {
         if (!fileLogger.isStarted()) {

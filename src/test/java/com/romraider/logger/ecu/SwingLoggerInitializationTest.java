@@ -20,6 +20,36 @@ import static org.junit.Assert.*;
 
 /** Production callback owner with controlled EDT delivery; no JFrame, controller or device. */
 public class SwingLoggerInitializationTest {
+    @Test(timeout = 5000)
+    public void fileCommitSerializesInitializationWithoutHoldingLockAcrossUiStages() throws Exception {
+        Fixture f = initialized();
+        SwingLoggerInitialization.Reload reload = f.owner.beginReload(f.owner.snapshot());
+        CountDownLatch attempting = new CountDownLatch(1);
+        CountDownLatch published = new CountDownLatch(1);
+        java.util.concurrent.ExecutorService worker = java.util.concurrent.Executors.newSingleThreadExecutor();
+        try {
+            SwingUtilities.invokeAndWait(() -> {
+                try {
+                    assertTrue(reload.commit(() -> true, () -> {
+                        worker.submit(() -> {
+                            attempting.countDown();
+                            f.owner.ecuCallback().callback(ecu("2222222222"));
+                            published.countDown();
+                        });
+                        assertTrue(attempting.await(1, TimeUnit.SECONDS));
+                        assertFalse(published.await(100, TimeUnit.MILLISECONDS));
+                        assertTrue(reload.isCurrent());
+                    }));
+                } catch (Exception failure) { throw new AssertionError(failure); }
+            });
+            assertTrue(published.await(1, TimeUnit.SECONDS));
+            SwingUtilities.invokeAndWait(() -> assertFalse(reload.run(() -> fail("Stale UI stage"))));
+        } finally {
+            worker.shutdownNow();
+            assertTrue(worker.awaitTermination(1, TimeUnit.SECONDS));
+        }
+    }
+
     @Test(timeout = 10000)
     public void nestedReloadCancelsRemainingStagesForNewIdentityMetadataOwnerOrReload() throws Exception {
         for (int operation = 0; operation < 4; operation++) {

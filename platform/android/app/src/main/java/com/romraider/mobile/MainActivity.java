@@ -86,7 +86,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 
-/** Early portable client: offline editing and log review, with no ECU writes. */
+/** Android editing, log review and service-owned read-only channel capture. */
 public final class MainActivity extends Activity {
     private static final int OPEN_ROM = 10;
     private static final int SAVE_ROM = 11;
@@ -118,6 +118,12 @@ public final class MainActivity extends Activity {
     private Button loggerTab;
     private Button editorTab;
     private Button gaugesTab;
+    private Button reviewTab;
+    private TextView workspaceTitle;
+    private boolean reviewVisible;
+    private LinearLayout loggerActions;
+    private Button stopLoggerButton;
+    private AlertDialog completedLogDialog;
     private ScrollView workspaceScroll;
     private LinearLayout workspacePage;
     private LinearLayout workspaceTabs;
@@ -182,7 +188,6 @@ public final class MainActivity extends Activity {
     private final Map<String, LinearLayout> loggerSetupSections = new LinkedHashMap<>();
     private final Map<String, Button> loggerSetupToggles = new LinkedHashMap<>();
     private String expandedLoggerSection = "";
-    private boolean loggerStopStyle;
     private String loggerSetupProblem = "";
     private GridLayout loggerGaugeGrid;
     private TextView loggerGaugeEmpty;
@@ -335,6 +340,7 @@ public final class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        if (completedLogDialog != null) { completedLogDialog.dismiss(); completedLogDialog = null; }
         uiHandler.removeCallbacks(hideMountedMenu);
         if (loggerGaugeStyleDialog != null) { loggerGaugeStyleDialog.dismiss(); loggerGaugeStyleDialog = null; }
         if (mountedLayoutDialog != null) { mountedLayoutDialog.dismiss(); mountedLayoutDialog = null; }
@@ -429,18 +435,31 @@ public final class MainActivity extends Activity {
         workspaceTabs = tabs;
         tabs.setOrientation(LinearLayout.HORIZONTAL);
         tabs.setPadding(0, 0, 0, dp(12));
+        tabs.setGravity(Gravity.CENTER_VERTICAL);
         loggerTab = button("LOGGER");
         editorTab = button("EDITOR");
         gaugesTab = button("GAUGES");
+        reviewTab = button("REVIEW");
         loggerTab.setOnClickListener(view -> {
             if (gaugesVisible) leaveGaugesOnly();
             else if (!loggerVisible) showLogger();
         });
         editorTab.setOnClickListener(view -> showEditor());
         gaugesTab.setOnClickListener(view -> showGaugesOnly());
-        tabs.addView(loggerTab, weighted());
-        tabs.addView(gaugesTab, weighted());
-        tabs.addView(editorTab, weighted());
+        reviewTab.setOnClickListener(view -> showReview());
+        Button menu = button("☰");
+        menu.setContentDescription("Choose workspace: Logger, Gauges, Review or Editor");
+        menu.setOnClickListener(view -> {
+            android.widget.PopupMenu popup = new android.widget.PopupMenu(this, menu);
+            for (Button destination : new Button[] { loggerTab, gaugesTab, reviewTab, editorTab })
+                popup.getMenu().add(destination.getText()).setOnMenuItemClickListener(item -> { destination.performClick(); return true; });
+            popup.getMenu().add("About / licenses").setOnMenuItemClickListener(item -> { showAbout(); return true; });
+            popup.show();
+        });
+        tabs.addView(menu, new LinearLayout.LayoutParams(dp(52), dp(48)));
+        workspaceTitle = text("Logger", 20, INK);
+        workspaceTitle.setPadding(dp(12), 0, 0, 0);
+        tabs.addView(workspaceTitle, weighted());
         page.addView(tabs, matchWrap());
 
         ScrollView scroll = new ScrollView(this);
@@ -454,6 +473,9 @@ public final class MainActivity extends Activity {
         host.addView(gaugesPage);
         page.addView(host, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        loggerActions = column();
+        loggerActions.setPadding(0, dp(8), 0, 0);
+        page.addView(loggerActions, matchWrap());
         TextView footer = text("ECU writing unavailable · About / licenses",
                 11, MUTED);
         workspaceFooter = footer;
@@ -464,7 +486,18 @@ public final class MainActivity extends Activity {
         footer.setContentDescription("About RomRaider2 and software licenses");
         footer.setOnClickListener(view -> showAbout());
         page.addView(footer, matchWrap());
+        page.addOnLayoutChangeListener((view, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
+            if (right - left != oldRight - oldLeft || bottom - top != oldBottom - oldTop)
+                view.post(this::updateWorkspaceChrome);
+        });
         setContentView(page);
+    }
+
+    private void updateWorkspaceChrome() {
+        if (workspacePage == null || workspaceBrand == null || workspaceFooter == null) return;
+        boolean compact = workspacePage.getWidth() > workspacePage.getHeight();
+        workspaceBrand.setVisibility(gaugesVisible || compact ? View.GONE : View.VISIBLE);
+        workspaceFooter.setVisibility(gaugesVisible || compact ? View.GONE : View.VISIBLE);
     }
 
     private void showAbout() {
@@ -499,6 +532,7 @@ public final class MainActivity extends Activity {
         cancelLogImport(null);
         if (gaugesVisible) leaveGaugesOnly();
         loggerVisible = true;
+        reviewVisible = false;
         loggerSetupView = null;
         usbStatusView = null;
         liveLoggerView = null;
@@ -509,7 +543,6 @@ public final class MainActivity extends Activity {
         loggerSetupSections.clear();
         loggerSetupToggles.clear();
         expandedLoggerSection = "";
-        loggerStopStyle = false;
         loggerGaugeGrid = null;
         loggerGaugeEmpty = null;
         loggerGaugeDemoButton = null;
@@ -530,43 +563,21 @@ public final class MainActivity extends Activity {
         LinearLayout sessionBody = column();
         session.addView(sessionBody, matchWrap());
         sessionBody.addView(loggerSessionTitle, matchWrap(dp(8)));
+        loggerActions.removeAllViews();
+        loggerActions.setVisibility(View.VISIBLE);
         liveLoggerButton = button(getString(R.string.logger_live_start));
         liveLoggerButton.setTextSize(15);
         liveLoggerButton.setMinHeight(dp(52));
         styleButton(liveLoggerButton, POSITIVE, POSITIVE);
-        liveLoggerButton.setOnClickListener(view -> toggleLiveLogger());
-        sessionBody.addView(liveLoggerButton, matchWrap(dp(8)));
+        liveLoggerButton.setOnClickListener(view -> { if (!isLiveActive()) toggleLiveLogger(); });
+        loggerActions.addView(liveLoggerButton, matchWrap(dp(6)));
+        stopLoggerButton = button(getString(R.string.logger_live_stop));
+        styleButton(stopLoggerButton, Color.rgb(115, 38, 46), Color.rgb(230, 94, 108));
+        stopLoggerButton.setMinHeight(dp(52));
+        stopLoggerButton.setOnClickListener(view -> stopLiveLogger("Finishing the recording…"));
+        loggerActions.addView(stopLoggerButton, matchWrap());
         loggerSessionDetail = text("", 13, MUTED);
         sessionBody.addView(loggerSessionDetail, matchWrap());
-        final TextView sessionTitle = loggerSessionTitle, sessionDetail = loggerSessionDetail;
-        final Button sessionButton = liveLoggerButton;
-        final boolean[] wideSession = {false};
-        sessionBody.addOnLayoutChangeListener((view, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> view.post(() -> {
-            boolean wide = view.getWidth() >= dp(520);
-            if (wide == wideSession[0]) return;
-            wideSession[0] = wide;
-            // Run outside layout traversal so reparented children get a fresh measure/layout pass.
-            // Reuse the existing views without rebuilding the screen or touching the recording.
-            for (View child : new View[]{sessionTitle, sessionButton, sessionDetail}) {
-                if (child.getParent() instanceof ViewGroup) ((ViewGroup) child.getParent()).removeView(child);
-            }
-            sessionBody.removeAllViews();
-            sessionBody.setOrientation(wide ? LinearLayout.HORIZONTAL : LinearLayout.VERTICAL);
-            if (wide) {
-                LinearLayout info = column();
-                info.addView(sessionTitle, matchWrap(dp(6)));
-                info.addView(sessionDetail, matchWrap());
-                sessionBody.addView(info, new LinearLayout.LayoutParams(0, -2, 1));
-                LinearLayout.LayoutParams action = new LinearLayout.LayoutParams(dp(190), -2);
-                action.leftMargin = dp(16);
-                action.gravity = Gravity.CENTER_VERTICAL;
-                sessionBody.addView(sessionButton, action);
-            } else {
-                sessionBody.addView(sessionTitle, matchWrap(dp(8)));
-                sessionBody.addView(sessionButton, matchWrap(dp(8)));
-                sessionBody.addView(sessionDetail, matchWrap());
-            }
-        }));
         content.addView(session, cardParams(dp(10)));
 
         liveReadingsCard = sectionCard("LIVE READINGS", "");
@@ -647,10 +658,22 @@ public final class MainActivity extends Activity {
         profileOptions.addView(loggerSetupView, matchWrap());
         addLoggerSetupSection(setupCard, "Profile & channels", profileOptions);
         content.addView(setupCard, cardParams(dp(10)));
+        displayedRecordingState = null;
+        refreshRecording();
+        workspaceScroll.scrollTo(0, 0);
+    }
 
+    private void showReview() {
+        if (isLiveActive()) { notice("Stop logging before opening Review. Logger and Gauges remain available."); return; }
+        cancelLogImport(null);
+        if (gaugesVisible) leaveGaugesOnly();
+        loggerVisible = false; reviewVisible = true;
+        loggerActions.setVisibility(View.GONE);
+        selectTab(reviewTab, loggerTab);
+        content.removeAllViews();
         LinearLayout reviewCard = sectionCard("LOG REVIEW",
                 "Saved logs and recording exports.");
-        Button saveLive = button("SAVE LIVE CSV");
+        Button saveLive = button("SAVE LAST RECORDING");
         saveLive.setOnClickListener(view -> saveLiveLog());
         Button archive = button("RECOVER / EXPORT RECORDINGS");
         archive.setOnClickListener(view -> chooseArchivedLog());
@@ -667,8 +690,6 @@ public final class MainActivity extends Activity {
         reviewCard.addView(logImportStatusView, matchWrap());
         content.addView(reviewCard, cardParams(dp(10)));
         refreshLogImportStatus();
-        displayedRecordingState = null;
-        refreshRecording();
         workspaceScroll.scrollTo(0, 0);
     }
 
@@ -744,7 +765,8 @@ public final class MainActivity extends Activity {
                     : state.phase() == ReadOnlyRecording.Phase.CONNECTING ? "Connecting to ECU…" : "Preparing session…";
             detail = state.phase() == ReadOnlyRecording.Phase.RECORDING
                     ? "ECU " + state.ecuId() + " · " + state.ready() + " channels · " + state.samples()
-                        + " values\n" + state.timestampMillis() / 1000 + " seconds recorded"
+                        + " values\n" + getResources().getQuantityString(R.plurals.logger_recorded_seconds,
+                                (int) Math.min(Integer.MAX_VALUE, state.timestampMillis() / 1000), state.timestampMillis() / 1000)
                     : state.message();
         } else if (state != null) {
             String previous = state.samples() > 0 ? "Last recording: " + state.samples() + " values.\n" : "";
@@ -765,15 +787,12 @@ public final class MainActivity extends Activity {
         if (!title.contentEquals(loggerSessionTitle.getText())) loggerSessionTitle.setText(title);
         if (!detail.contentEquals(loggerSessionDetail.getText())) loggerSessionDetail.setText(detail);
         if (liveLoggerButton != null) {
-            String label = stopping ? "STOPPING…" : getString(busy ? R.string.logger_live_stop : R.string.logger_live_start);
-            if (!label.contentEquals(liveLoggerButton.getText())) liveLoggerButton.setText(label);
-            if (loggerStopStyle != busy) {
-                loggerStopStyle = busy;
-                styleButton(liveLoggerButton, busy ? Color.rgb(115, 38, 46) : POSITIVE,
-                        busy ? Color.rgb(230, 94, 108) : POSITIVE);
-            }
-            liveLoggerButton.setEnabled(recordingService != null && !stopping
-                    && (busy || !loggerImports.isLoading() && !setupTransferLoading));
+            liveLoggerButton.setEnabled(recordingService != null && !busy
+                    && !loggerImports.isLoading() && !setupTransferLoading);
+        }
+        if (stopLoggerButton != null) {
+            stopLoggerButton.setText(stopping ? R.string.logger_live_stopping : R.string.logger_live_stop);
+            stopLoggerButton.setEnabled(busy && !stopping);
         }
         if (liveReadingsCard != null) liveReadingsCard.setVisibility(busy && state != null
                 && state.phase() == ReadOnlyRecording.Phase.RECORDING ? View.VISIBLE : View.GONE);
@@ -1005,6 +1024,8 @@ public final class MainActivity extends Activity {
         if (gaugesVisible) leaveGaugesOnly();
         stopLiveLogger(null);
         loggerVisible = false;
+        reviewVisible = false;
+        loggerActions.setVisibility(View.GONE);
         loggerSetupView = null;
         usbStatusView = null;
         liveLoggerView = null;
@@ -1117,7 +1138,7 @@ public final class MainActivity extends Activity {
 
     private void openLog() {
         if (!canReviewLog()) {
-            notice("Stop logging and return to LOGGER before importing a CSV.");
+            notice("Stop logging and open Review before importing a CSV.");
             return;
         }
         cancelLogImport(null);
@@ -1149,6 +1170,11 @@ public final class MainActivity extends Activity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == SAVE_LIVE_LOG && (resultCode != RESULT_OK || data == null || data.getData() == null)) {
+            MobileCompletedLogs.INSTANCE.takeExport();
+            notice("The recording is still available in Review → Recover / Export Recordings.");
+            return;
+        }
         if (requestCode == SAVE_LOGGER_PROFILE && (resultCode != RESULT_OK || data == null || data.getData() == null)) {
             profileExportBytes = null;
             return;
@@ -1214,8 +1240,10 @@ public final class MainActivity extends Activity {
             loadLoggerProfile(uri, displayName(uri));
         } else if (requestCode == OPEN_ECU_DEFINITION) {
             loadEcuDefinition(uri, displayName(uri));
-        } else if (requestCode == SAVE_LIVE_LOG && liveLog != null) {
-            saveLogAsync(uri, liveLog, "Saved the read-only live log.");
+        } else if (requestCode == SAVE_LIVE_LOG) {
+            PortableLogSession selected = MobileCompletedLogs.INSTANCE.takeExport();
+            if (selected == null) notice("The export session is no longer attached. Your recording remains in Review → Recover / Export Recordings.");
+            else saveLogAsync(uri, selected, "Saved the read-only live log.");
         } else if (requestCode == SAVE_ARCHIVED_LOG && archiveToExport != null) {
             File source = archiveToExport;
             archiveToExport = null;
@@ -2058,7 +2086,7 @@ public final class MainActivity extends Activity {
     }
 
     private boolean canReviewLog() {
-        return !isDestroyed() && loggerVisible && !gaugesVisible && !isLiveActive();
+        return !isDestroyed() && reviewVisible && !gaugesVisible && !isLiveActive();
     }
 
     private void cancelLogImport(String message) {
@@ -2088,7 +2116,7 @@ public final class MainActivity extends Activity {
     }
 
     private void loadLogSummary(Uri uri) {
-        if (!canReviewLog()) { notice("Stop logging and return to LOGGER before importing a CSV."); return; }
+        if (!canReviewLog()) { notice("Stop logging and open Review before importing a CSV."); return; }
         cancelLogImport(null);
         int generation = logImportGeneration;
         android.os.CancellationSignal signal = new android.os.CancellationSignal();
@@ -2166,17 +2194,18 @@ public final class MainActivity extends Activity {
                 TextView row = recycled instanceof TextView ? (TextView) recycled : statusText("");
                 PortableLogCsvReader.ChannelSummary channel = channels.get(position);
                 PortableLogSample latest = channel.latest();
-                row.setText(latest.getChannelName() + " [" + latest.getChannelId() + "]\n"
-                        + "Latest: " + (Double.isFinite(latest.getValue()) ? Double.toString(latest.getValue()) : "Unavailable")
-                        + " " + latest.getUnits() + " at " + latest.getTimestampMillis() + " ms\n"
-                        + "Valid samples: " + channel.finite() + " · unavailable: " + channel.missing()
-                        + "\nMin / max: " + (channel.finite() == 0 ? "Unavailable" : channel.minimum() + " / " + channel.maximum()));
+                String unavailable = getString(R.string.log_value_unavailable);
+                row.setText(getString(R.string.log_channel_summary, latest.getChannelName(), latest.getChannelId(),
+                        Double.isFinite(latest.getValue()) ? Double.toString(latest.getValue()) : unavailable,
+                        latest.getUnits(), latest.getTimestampMillis(), channel.finite(), channel.missing(),
+                        channel.finite() == 0 ? unavailable : getString(R.string.log_min_max,
+                                Double.toString(channel.minimum()), Double.toString(channel.maximum()))));
                 row.setPadding(dp(8), dp(8), dp(8), dp(8));
                 return row;
             }
         });
         body.addView(list, new LinearLayout.LayoutParams(-1, 0, 1));
-        Button back = button("BACK TO LOGGER");
+        Button back = button("BACK TO REVIEW");
         back.setOnClickListener(view -> dialog.dismiss());
         Button close = button("CLOSE LOG FILE");
         close.setOnClickListener(view -> closeImportedLog());
@@ -2289,6 +2318,8 @@ public final class MainActivity extends Activity {
     private void refreshRecording() {
         refreshSessionHeader();
         if (recordingService == null || activityDestroyed) return;
+        promptCompletedLog();
+        if (!recordingService.busy()) liveLog = MobileCompletedLogs.INSTANCE.latest();
         ReadOnlyRecording current = recordingService.recording();
         if (current == null) return;
         ReadOnlyRecording.Snapshot state = current.snapshot();
@@ -2352,12 +2383,15 @@ public final class MainActivity extends Activity {
                                 : state.message();
             if (!message.contentEquals(liveLoggerView.getText())) liveLoggerView.setText(message);
         }
-        if (!busy) liveLog = current.completedLog();
+        if (!busy) liveLog = MobileCompletedLogs.INSTANCE.latest();
         displayedRecordingBusy = busy;
         refreshGaugeAvailability();
     }
 
     private void saveLiveLog() {
+        if (recordingService != null && !recordingService.busy())
+            recordingService.acknowledgeSavePrompt(MobileCompletedLogs.INSTANCE.latest());
+        if (completedLogDialog != null) completedLogDialog.dismiss();
         refreshRecording();
         if (isLiveActive()) {
             notice("Stop the live logger and wait for the current read before saving.");
@@ -2368,11 +2402,39 @@ public final class MainActivity extends Activity {
             notice("There is no live log to save yet.");
             return;
         }
+        exportLiveLog(session);
+    }
+
+    private void exportLiveLog(PortableLogSession session) {
+        if (recordingService == null || recordingService.busy()) return;
+        recordingService.prepareExport(session);
         Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         intent.setType("text/csv");
-        intent.putExtra(Intent.EXTRA_TITLE, "RomRaider2-android-live.csv");
-        startActivityForResult(intent, SAVE_LIVE_LOG);
+        intent.putExtra(Intent.EXTRA_TITLE, "RomRaider2-" + new java.text.SimpleDateFormat("yyyyMMdd-HHmmss", Locale.ROOT).format(new java.util.Date()) + ".csv");
+        try { startActivityForResult(intent, SAVE_LIVE_LOG); }
+        catch (android.content.ActivityNotFoundException | SecurityException unavailable) {
+            MobileCompletedLogs.INSTANCE.takeExport();
+            notice("Could not open the save picker. Your recording remains in Review → Recover / Export Recordings.");
+        }
+    }
+
+    private void promptCompletedLog() {
+        if (!activityResumed || isFinishing() || activityDestroyed || completedLogDialog != null
+                || recordingService == null) return;
+        final ReadOnlyLoggingService service = recordingService;
+        final PortableLogSession completed = service.recordingAwaitingSavePrompt();
+        if (completed == null) return;
+        completedLogDialog = new AlertDialog.Builder(this).setTitle("Save recording")
+                .setMessage("Recording has stopped. Save a CSV copy now? The internal recovery copy is kept even if you choose Later or cancel saving.")
+                .setPositiveButton("Save CSV", (dialog, which) -> {
+                    service.acknowledgeSavePrompt(completed); exportLiveLog(completed);
+                })
+                .setNegativeButton("Later", (dialog, which) -> service.acknowledgeSavePrompt(completed))
+                .create();
+        completedLogDialog.setOnCancelListener(dialog -> service.acknowledgeSavePrompt(completed));
+        completedLogDialog.setOnDismissListener(dialog -> completedLogDialog = null);
+        completedLogDialog.show();
     }
 
     private static String liveValueSummary(String ecuId, long timestamp,
@@ -2882,7 +2944,9 @@ public final class MainActivity extends Activity {
     }
 
     private void selectTab(Button selected, Button other) {
-        for (Button tab : new Button[] { loggerTab, gaugesTab, editorTab }) {
+        if (workspaceTitle != null) workspaceTitle.setText(selected == loggerTab ? "Logger"
+                : selected == gaugesTab ? "Gauges" : selected == reviewTab ? "Review" : "Editor");
+        for (Button tab : new Button[] { loggerTab, gaugesTab, reviewTab, editorTab }) {
             if (tab == null) continue;
             tab.setTextColor(tab == selected ? Color.WHITE : MUTED);
             tab.setBackground(rounded(tab == selected ? ACCENT : PANEL,
@@ -2934,6 +2998,7 @@ public final class MainActivity extends Activity {
         mountedGaugeViewport.addView(gaugesScroll, new FrameLayout.LayoutParams(-1, -1));
         gaugesPage.addView(mountedGaugeViewport, new LinearLayout.LayoutParams(-1, 0, 1f));
         gaugesVisible = true;
+        loggerActions.setVisibility(View.GONE);
         refreshAssignedGauges();
         refreshGaugeSlotOptions();
         layoutGaugeColumns();
@@ -2949,11 +3014,13 @@ public final class MainActivity extends Activity {
         if (!gaugesVisible) return;
         setMountedFullScreen(false);
         gaugesVisible = false;
+        loggerActions.setVisibility(View.VISIBLE);
         layoutGaugeColumns();
         gaugesPage.setVisibility(View.GONE);
         workspaceScroll.setVisibility(View.VISIBLE);
         workspaceBrand.setVisibility(View.VISIBLE);
         workspaceFooter.setVisibility(View.VISIBLE);
+        updateWorkspaceChrome();
         selectTab(loggerTab, gaugesTab);
     }
 
@@ -3131,10 +3198,12 @@ public final class MainActivity extends Activity {
                 state = "NO RECENT ECU DATA";
             else if (phase != ReadOnlyRecording.Phase.RECORDING) state = "CONNECTING";
         }
-        if (gaugesStatus != null) gaugesStatus.setText(state + (loggerGaugeViews.isEmpty()
-                ? "\nChoose display channels below."
-                : mountedFullScreen ? "\n" + Math.min(mountedGaugeCount, loggerGaugeViews.size()) + " of " + loggerGaugeViews.size()
-                : "  •  " + loggerGaugeViews.size() + " gauges"));
+        if (gaugesStatus != null) gaugesStatus.setText(loggerGaugeViews.isEmpty()
+                ? getString(R.string.gauge_status_empty, state)
+                : mountedFullScreen ? getString(R.string.gauge_status_fullscreen, state,
+                        Math.min(mountedGaugeCount, loggerGaugeViews.size()), loggerGaugeViews.size())
+                : getResources().getQuantityString(R.plurals.gauge_status_count, loggerGaugeViews.size(),
+                        state, loggerGaugeViews.size()));
         long now = SystemClock.elapsedRealtime();
         for (Map.Entry<String, MobileGaugeView> entry : loggerGaugeViews.entrySet()) {
             if (gaugeDemo) entry.getValue().setDataState("SIMULATED");
@@ -3181,7 +3250,7 @@ public final class MainActivity extends Activity {
     }
 
     private Button button(String value) {
-        Button button = new Button(this);
+        Button button = new MobileActionButton(this);
         button.setText(value);
         button.setTextSize(12);
         button.setTextColor(INK);

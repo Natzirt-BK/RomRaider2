@@ -87,6 +87,27 @@ public final class ReadOnlyLoggingService extends Service {
             || pending || foreground || closingLease || !lease.released); }
     String failure() { return failure; }
 
+    PortableLogSession recordingAwaitingSavePrompt() {
+        requireMainThread();
+        return busy() ? null : MobileCompletedLogs.INSTANCE.awaitingPrompt();
+    }
+
+    void acknowledgeSavePrompt(PortableLogSession completed) {
+        requireMainThread();
+        MobileCompletedLogs.INSTANCE.acknowledge(completed);
+    }
+
+    void prepareExport(PortableLogSession completed) {
+        requireMainThread();
+        if (busy()) throw new IllegalStateException("Wait for the recording to finish.");
+        MobileCompletedLogs.INSTANCE.prepareExport(completed);
+    }
+
+    PortableLogSession takeExport() {
+        requireMainThread();
+        return MobileCompletedLogs.INSTANCE.takeExport();
+    }
+
     /** True transfers transport ownership even if subsequent foreground promotion fails. */
     boolean start(OpenPortUsbTransport transport, UsbDevice selected,
             PortableLoggerDefinition definition, PortableLoggerProfile profile) {
@@ -216,6 +237,7 @@ public final class ReadOnlyLoggingService extends Service {
                     return;
                 }
                 closingLease = false;
+                MobileCompletedLogs.INSTANCE.remember(recording.completedLog());
                 finishForeground();
                 stopSelf();
                 return;

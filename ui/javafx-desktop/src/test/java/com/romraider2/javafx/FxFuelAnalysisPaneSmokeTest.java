@@ -18,6 +18,35 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
 @EnabledIfEnvironmentVariable(named = "RR2_FX_WINDOW_SMOKE", matches = "1")
 class FxFuelAnalysisPaneSmokeTest {
+    @Test void compactBinHeadersKeepUnitsAndExclusiveUpperBoundVisible() throws Exception {
+        for (FxFuelAnalysisPane.Mode mode : FxFuelAnalysisPane.Mode.values()) {
+            FxTestRuntime.run(() -> {
+                try (FxFuelAnalysisPane pane = new FxFuelAnalysisPane(mode, () -> {})) {
+                    Stage stage = new Stage();
+                    try {
+                        Scene scene = new Scene(pane, 650, 440);
+                        FxTheme.apply(stage, scene); stage.setScene(scene); FxWindowPlacement.show(stage);
+                        pane.applyCss(); pane.layout();
+                        TableView<?> table = field(pane, "results");
+                        String units = mode == FxFuelAnalysisPane.Mode.MAF ? "V" : "ms";
+                        assertEquals("From (" + units + ")", table.getColumns().get(0).getText());
+                        assertEquals("Below (" + units + ")", table.getColumns().get(1).getText());
+                        assertTrue(table.getColumns().get(3).getText().contains(mode == FxFuelAnalysisPane.Mode.MAF ? "%" : "cc/event"));
+                        int checked = 0;
+                        for (var node : table.lookupAll(".column-header .label")) {
+                            if (!(node instanceof Label label) || label.getText().isEmpty()) continue;
+                            var rendered = (javafx.scene.text.Text) label.lookup(".text");
+                            assertNotNull(rendered);
+                            assertEquals(label.getText(), rendered.getText(), "Clipped header: " + label.getText());
+                            checked++;
+                        }
+                        assertEquals(6, checked);
+                    } finally { stage.close(); }
+                }
+            });
+        }
+    }
+
     private LogDataset data(String name) throws Exception {
         return new RomRaiderCsvLogParser().parse(name, new StringReader(
                 "Time (msec),MAF (V),Learning (%),Correction (%),Pulse (ms),Load (g/rev),State\n"

@@ -37,6 +37,12 @@ public final class LoggerConnectionFactory {
         return instantiateConnection(protocolName, manager);
     }
 
+    public static LoggerConnection getConnection(String protocolName, String portName,
+            ConnectionProperties properties, String j2534Device, String transportProtocol, boolean elm327) {
+        return instantiateConnection(protocolName,
+                getManager(portName, properties, j2534Device, transportProtocol, elm327));
+    }
+
     private static LoggerConnection instantiateConnection(
             final String protocolName,
             final ConnectionManager manager) {

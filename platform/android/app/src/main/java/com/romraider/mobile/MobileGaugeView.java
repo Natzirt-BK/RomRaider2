@@ -11,7 +11,7 @@ import android.view.View;
 import java.util.Locale;
 import com.romraider.portable.gauge.GaugeFaceRenderer;
 
-/** Glanceable hybrid number/needle gauge for the Android logger preview. */
+/** Glanceable hybrid number/needle gauge for the Android logger. */
 final class MobileGaugeView extends View {
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final RectF arc = new RectF();
@@ -27,11 +27,14 @@ final class MobileGaugeView extends View {
     private MobileGaugeScale scale = new MobileGaugeScale(0, 1);
     private MobileGaugeTheme theme = MobileGaugeTheme.RR2_CLASSIC;
     private String dataState = "";
+    private GaugeFaceRenderer.Reading faceReading = createFaceReading();
+    private final NativeSurface nativeSurface = new NativeSurface();
     private boolean fitToViewport;
     private final com.romraider.portable.gauge.GaugeMotion motion = new com.romraider.portable.gauge.GaugeMotion();
 
     void setDataState(String state) {
         dataState = state == null ? "" : state;
+        faceReading = createFaceReading();
         setContentDescription(name + ", " + (Double.isFinite(value)
                 ? displayValue + " " + units : "no valid data") + ", " + dataState);
         invalidate();
@@ -42,6 +45,7 @@ final class MobileGaugeView extends View {
         value = Double.NaN;
         displayValue = "—";
         dataState = state;
+        faceReading = createFaceReading();
         setContentDescription(name + ", " + state + ", no current value");
         invalidate();
     }
@@ -74,11 +78,18 @@ final class MobileGaugeView extends View {
         measuredMinimum = minimum;
         measuredMaximum = maximum;
         scale = MobileGaugeScale.forChannel(id, name, units, minimum, maximum);
+        faceReading = createFaceReading();
         setContentDescription(name + ", " + (Double.isFinite(value)
                 ? displayValue + " " + units : "no valid data")
                 + ", measured minimum " + compact(minimum)
                 + " and maximum " + compact(maximum));
         invalidate();
+    }
+
+    private GaugeFaceRenderer.Reading createFaceReading() {
+        return new GaugeFaceRenderer.Reading(name, displayValue, units, value,
+                scale.minimum, scale.maximum, measuredMaximum, dataState,
+                scale.reference ? "REFERENCE SCALE" : "RECENT SCALE", false);
     }
 
     @Override
@@ -100,14 +111,18 @@ final class MobileGaugeView extends View {
             float factor = Math.min(width / 320f, height / 250f);
             canvas.translate((width - 320 * factor) / 2, (height - 250 * factor) / 2);
             canvas.scale(factor, factor);
-            GaugeFaceRenderer.draw(new NativeSurface(canvas), theme.instrumentStyle(),
-                    new GaugeFaceRenderer.Reading(name, displayValue, units, value,
-                            scale.minimum, scale.maximum, measuredMaximum, dataState,
-                            scale.reference ? "REFERENCE SCALE" : "RECENT SCALE", false)
-                            .withIndicator(android.animation.ValueAnimator.areAnimatorsEnabled()
-                                    ? motion.valueAt(System.nanoTime()) : value),
-                    fitToViewport ? GaugeFaceRenderer.Presentation.SEAMLESS : GaugeFaceRenderer.Presentation.CARD);
-            canvas.restore();
+            GaugeFaceRenderer.Reading reading = faceReading;
+            double indicator = android.animation.ValueAnimator.areAnimatorsEnabled()
+                    ? motion.valueAt(System.nanoTime()) : value;
+            if (Double.compare(indicator, reading.indicatorValue) != 0) reading = reading.withIndicator(indicator);
+            nativeSurface.canvas = canvas;
+            try {
+                GaugeFaceRenderer.draw(nativeSurface, theme.instrumentStyle(), reading,
+                        fitToViewport ? GaugeFaceRenderer.Presentation.SEAMLESS : GaugeFaceRenderer.Presentation.CARD);
+            } finally {
+                nativeSurface.canvas = null;
+                canvas.restore();
+            }
             if (theme.instrumentStyle().usesNeedleMotion()
                     && android.animation.ValueAnimator.areAnimatorsEnabled() && motion.isAnimating(System.nanoTime()))
                 postInvalidateOnAnimation();
@@ -255,8 +270,8 @@ final class MobileGaugeView extends View {
     }
 
     private final class NativeSurface implements GaugeFaceRenderer.Surface {
-        private final Canvas canvas;
-        NativeSurface(Canvas canvas) { this.canvas = canvas; }
+        private Canvas canvas;
+        private final android.graphics.Path vectorPath = new android.graphics.Path();
         private void ink(int color) {
             paint.clearShadowLayer(); paint.setColor(color); paint.setStyle(Paint.Style.FILL);
         }
@@ -278,7 +293,8 @@ final class MobileGaugeView extends View {
             paint.setShader(null);
         }
         public void path(double[] commands, int color) {
-            android.graphics.Path path = new android.graphics.Path();
+            android.graphics.Path path = vectorPath;
+            path.rewind();
             for (int i = 0; i < commands.length;) {
                 switch ((int) commands[i++]) {
                     case 0: path.moveTo((float)commands[i++], (float)commands[i++]); break;

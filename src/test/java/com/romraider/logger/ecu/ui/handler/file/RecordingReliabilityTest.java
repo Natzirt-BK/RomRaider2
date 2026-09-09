@@ -14,6 +14,45 @@ import org.junit.rules.TemporaryFolder;
 
 public class RecordingReliabilityTest {
     @Rule public TemporaryFolder temporary = new TemporaryFolder();
+    @Test public void elapsedTimerFollowsCaptureLifecycleNotSamplesOrWallClock() throws Exception {
+        var settings = SettingsManager.getSettings();
+        String oldDirectory = settings.getLoggerOutputDirPath(), oldName = settings.getLogfileNameText();
+        var nanos = new java.util.concurrent.atomic.AtomicLong(1_000_000_000L);
+        var wall = new java.util.concurrent.atomic.AtomicLong(100_000);
+        FileLoggerImpl logger = new FileLoggerImpl(messages(), () -> new Date(wall.get()), nanos::get);
+        try {
+            settings.setLoggerOutputDirPath(temporary.getRoot().getAbsolutePath()); settings.setLogfileNameText("timer");
+            assertEquals(0, logger.getRecordingElapsedMillis());
+            logger.start(); nanos.addAndGet(65_000_000_000L); wall.set(-100_000);
+            assertEquals(65_000, logger.getRecordingElapsedMillis());
+            logger.start(); // Duplicate start must not reset the clock.
+            assertEquals(65_000, logger.getRecordingElapsedMillis());
+            logger.writeHeaders(",Value"); logger.writeLine(",1", 9_000_000);
+            assertEquals(65_000, logger.getRecordingElapsedMillis());
+            logger.stop(); nanos.addAndGet(60_000_000_000L);
+            assertEquals(65_000, logger.getRecordingElapsedMillis());
+            logger.stop(); assertEquals(65_000, logger.getRecordingElapsedMillis());
+            logger.start(); assertEquals(0, logger.getRecordingElapsedMillis());
+            nanos.addAndGet(2_000_000_000L); logger.stop();
+            assertEquals(2_000, logger.getRecordingElapsedMillis());
+            settings.setLoggerOutputDirPath(temporary.getRoot().toPath().resolve("missing").toString());
+            try { logger.start(); fail("Expected failed open"); } catch (com.romraider.logger.ecu.exception.FileLoggerException expected) { }
+            nanos.addAndGet(3_000_000_000L);
+            assertEquals(2_000, logger.getRecordingElapsedMillis());
+        } finally {
+            logger.stop(); settings.setLoggerOutputDirPath(oldDirectory); settings.setLogfileNameText(oldName);
+        }
+    }
+
+    @Test public void monotonicCounterHandlesSignedWrapAndRepeatedStops() {
+        var nanos = new java.util.concurrent.atomic.AtomicLong(Long.MAX_VALUE - 1_000_000_000L);
+        var timer = new RecordingDuration(nanos::get);
+        timer.start(); nanos.addAndGet(2_000_000_000L);
+        assertEquals(2_000, timer.elapsedMillis());
+        timer.stop(); nanos.addAndGet(1_000_000_000L); timer.stop();
+        assertEquals(2_000, timer.elapsedMillis());
+    }
+
     @Test public void repeatedCapturesNeverOverwriteAndKeepEveryCompleteRow() throws Exception {
         var settings = SettingsManager.getSettings();
         String oldDirectory = settings.getLoggerOutputDirPath(), oldName = settings.getLogfileNameText();

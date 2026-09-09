@@ -15,6 +15,82 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
 @EnabledIfEnvironmentVariable(named = "RR2_FX_WINDOW_SMOKE", matches = "1")
 class FxGaugeDisplaySetupSmokeTest {
+    @Test void fullscreenRecordingButtonsFollowActualStateAndPendingCommands() throws Exception {
+        FxLoggerWindow[] window = new FxLoggerWindow[1];
+        try {
+            FxTestRuntime.run(() -> {
+                window[0] = new FxLoggerWindow(() -> {});
+                ((Stage) field(window[0], "stage")).show();
+                window[0].setGaugesOnly(true);
+                Button start = field(window[0], "mountedStartRecording"), stop = field(window[0], "mountedStopRecording");
+                var update = FxLoggerWindow.class.getDeclaredMethod("updateMountedRecordingControls"); update.setAccessible(true);
+                var bus = context(window[0]).getLiveData();
+                var session = context(window[0]).getSession();
+                bus.stopped(); update.invoke(window[0]);
+                assertTrue(start.isDisabled()); assertTrue(stop.isDisabled());
+                bus.readingData(); update.invoke(window[0]);
+                assertFalse(start.isDisabled()); assertTrue(stop.isDisabled());
+                assertNotNull(start.getOnAction()); assertNotNull(stop.getOnAction());
+                java.util.concurrent.atomic.AtomicBoolean pending = field(session, "commandPending");
+                try {
+                    pending.set(true); update.invoke(window[0]);
+                    assertTrue(start.isDisabled()); assertTrue(stop.isDisabled());
+                } finally { pending.set(false); }
+                bus.loggingData(); update.invoke(window[0]);
+                assertTrue(start.isDisabled()); assertFalse(stop.isDisabled());
+                bus.readingData(); update.invoke(window[0]);
+                assertFalse(start.isDisabled()); assertTrue(stop.isDisabled());
+                bus.stopped(); update.invoke(window[0]);
+                assertTrue(start.isDisabled()); assertTrue(stop.isDisabled());
+            });
+        } finally {
+            FxTestRuntime.run(() -> {
+                if (window[0] != null) { context(window[0]).getLiveData().stopped(); window[0].close(); }
+            });
+        }
+    }
+
+    @Test void assignChannelUsesDialogFooterBesideCancelAndDoesNotChangeLoggingSelection() throws Exception {
+        FxLoggerWindow[] window = new FxLoggerWindow[1];
+        try {
+            FxTestRuntime.run(() -> {
+                window[0] = new FxLoggerWindow(() -> {});
+                ((Stage) field(window[0], "stage")).show();
+                context(window[0]).getChannels().replaceChannels(java.util.List.of(
+                        new LoggerChannel("fixture-rpm", "Engine Speed", "rpm", LoggerChannelKind.PARAMETER, true)));
+            });
+            FxTestRuntime.run(() -> {
+                window[0].setGaugesOnly(true);
+                var open = FxLoggerWindow.class.getDeclaredMethod("chooseMountedChannel", int.class); open.setAccessible(true);
+                open.invoke(window[0], 0);
+                javafx.scene.control.Dialog<?> picker = field(window[0], "mountedChannelPicker");
+                var pane = picker.getDialogPane(); pane.applyCss(); pane.layout();
+                Button assign = (Button) pane.lookup("#gauges-assign-channel");
+                var cancel = pane.lookupButton(javafx.scene.control.ButtonType.CANCEL);
+                assertTrue(assign.isDisabled());
+                assertSame(assign.getParent(), cancel.getParent(), "Assign and Cancel must share the dialog button bar");
+                javafx.scene.control.ListView<?> list = (javafx.scene.control.ListView<?>) pane.getContent().lookup(".list-view");
+                list.getSelectionModel().selectFirst();
+                assertFalse(assign.isDisabled());
+                var assignBounds = assign.localToScene(assign.getBoundsInLocal());
+                var listBounds = list.localToScene(list.getBoundsInLocal());
+                assertTrue(assignBounds.getMinY() >= listBounds.getMaxY());
+                assertEquals(assignBounds.getMinY(), cancel.localToScene(cancel.getBoundsInLocal()).getMinY(), 1);
+                assign.fire();
+                assertFalse(picker.isShowing());
+                assertEquals("fixture-rpm", context(window[0]).getPreferences().getGaugeDisplay().getSlots().getFirst());
+                assertEquals(1, context(window[0]).getChannels().getChannels().stream().filter(LoggerChannel::isSelected).count());
+            });
+        } finally {
+            FxTestRuntime.run(() -> {
+                if (window[0] != null) {
+                    context(window[0]).getPreferences().setGaugeDisplay(new LoggerGaugeDisplay());
+                    context(window[0]).getLiveData().stopped(); window[0].close();
+                }
+            });
+        }
+    }
+
     @Test void handheldSetupShowsTheCompleteChannelButtonLabel() throws Exception {
         FxLoggerWindow[] window = new FxLoggerWindow[1];
         String name = "Manifold Relative Pressure - Corrected Measurement";

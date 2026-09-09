@@ -49,6 +49,7 @@ run_phase gauge-setup
 run_phase mounted-fullscreen
 run_phase mounted-layouts
 run_phase seamless-gauges
+run_phase gauge-rendering
 run_phase live-gauges
 run_phase clear
 run_phase verify-empty

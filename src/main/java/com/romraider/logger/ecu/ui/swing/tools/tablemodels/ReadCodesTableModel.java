@@ -70,7 +70,7 @@ public final class ReadCodesTableModel extends DefaultTableModel {
     }
     
     public final Class<? extends Object> getColumnClass(int column) {
-        return getValueAt(0, column).getClass();
+        return column == 0 ? String.class : column == 1 || column == 2 ? Boolean.class : Object.class;
     }
 
     public final boolean isCellEditable(int row, int column) {
@@ -78,6 +78,7 @@ public final class ReadCodesTableModel extends DefaultTableModel {
     }
     
     public final void setDtcList(ArrayList<EcuQuery> dtcSet) {
-        this.dtcSet = dtcSet;
+        this.dtcSet = dtcSet == null ? null : new ArrayList<>(dtcSet);
+        fireTableDataChanged();
     }
 }

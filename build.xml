@@ -421,7 +421,14 @@
         <attribute name="destdir" />
         <attribute name="classpathref" />
         <sequential>
-            <mkdir dir="${classes.dir}" />
+            <mkdir dir="@{destdir}" />
+            <!-- javac's timestamp check cannot detect inlined constants in
+                 otherwise unchanged consumers (including generated Version).
+                 Rebuild bytecode and discard removed source classes, retaining
+                 non-class resources and all other build outputs. -->
+            <delete>
+                <fileset dir="@{destdir}" includes="**/*.class" />
+            </delete>
             <javac
                 failonerror="true"
                 srcdir="@{srcdir}"

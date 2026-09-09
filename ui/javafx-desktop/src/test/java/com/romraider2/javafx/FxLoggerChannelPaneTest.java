@@ -23,6 +23,7 @@ class FxLoggerChannelPaneTest {
     @Test void widthAddsColumnsAndTouchSizingPreservesSelections() throws Exception {
         FxTestRuntime.run(() -> {
             Harness h = new Harness();
+            h.category().setValue(FxLoggerChannelPane.Category.ALL);
             h.pane.setPrefSize(320, 600); h.pane.resize(320, 600); h.pane.applyCss(); h.pane.layout();
             TilePane rows = (TilePane) h.pane.lookup("#logger-channel-rows");
             assertEquals(1, rows.getPrefColumns());
@@ -64,7 +65,8 @@ class FxLoggerChannelPaneTest {
     @Test void categoriesAndSearchNeverChangeSelection() throws Exception {
         FxTestRuntime.run(() -> {
             Harness h = new Harness();
-            assertEquals(4, h.checks().size());
+            assertEquals(FxLoggerChannelPane.Category.PARAMETERS, h.category().getValue());
+            assertEquals(2, h.checks().size());
             for (FxLoggerChannelPane.Category category : FxLoggerChannelPane.Category.values()) {
                 h.category().setValue(category);
                 int expected = category == FxLoggerChannelPane.Category.ALL ? 4
@@ -87,6 +89,7 @@ class FxLoggerChannelPaneTest {
             try {
                 Locale.setDefault(Locale.forLanguageTag("tr-TR"));
                 Harness h = new Harness();
+                h.category().setValue(FxLoggerChannelPane.Category.ALL);
                 h.search().setText("S-I");
                 assertEquals(1, h.checks().size());
                 h.search().setText("degC");
@@ -172,6 +175,24 @@ class FxLoggerChannelPaneTest {
             h.backendRecording = true;
             units.setValue(units.getItems().get(1));
             assertTrue(h.unitCommands.isEmpty());
+        });
+    }
+
+    @Test void channelKindsHaveDistinctAccentsInLightAndDarkThemes() throws Exception {
+        FxTestRuntime.run(() -> {
+            Harness h = new Harness();
+            h.category().setValue(FxLoggerChannelPane.Category.ALL);
+            for (boolean dark : List.of(false, true)) {
+                if (dark) h.pane.getStyleClass().add("theme-dark");
+                h.pane.applyCss(); h.pane.layout();
+                var rows = (TilePane) h.pane.lookup("#logger-channel-rows");
+                var colors = rows.getChildren().stream().map(HBox.class::cast)
+                        .map(row -> row.getBorder().getStrokes().getFirst().getLeftStroke()).toList();
+                assertEquals(colors.get(0), colors.get(1));
+                assertEquals(3, colors.stream().distinct().count());
+                assertTrue(h.selections.isEmpty());
+                capture(h, dark ? "channels-accents-dark.png" : "channels-accents-light.png");
+            }
         });
     }
 

@@ -24,7 +24,6 @@ import static com.romraider.util.ParamChecker.checkNotNull;
 
 import java.text.MessageFormat;
 import java.util.*;
-import java.util.function.Supplier;
 
 import com.romraider.logger.ecu.comms.query.dimemod.DmInit;
 import com.romraider.logger.ecu.definition.Module;
@@ -33,9 +32,7 @@ import org.apache.log4j.Logger;
 import com.romraider.Settings;
 import com.romraider.logger.ecu.EcuLogger;
 import com.romraider.logger.ecu.comms.io.connection.LoggerConnection;
-import com.romraider.logger.ecu.comms.manager.PollingStateImpl;
 import com.romraider.logger.ecu.comms.query.EcuQuery;
-import com.romraider.logger.ecu.comms.query.EcuQueryImpl;
 import com.romraider.logger.ecu.definition.EcuSwitch;
 import com.romraider.logger.ecu.ui.MessageListener;
 import com.romraider.logger.ecu.ui.swing.tools.ReadCodesResultsPanel;
@@ -58,76 +55,36 @@ public final class ReadCodesManagerImpl implements ReadCodesManager {
         checkNotNull(logger, dtcodes);
         this.logger = logger;
         this.messageListener = logger;
-        this.dtcodes = dtcodes;
+        this.dtcodes = new ArrayList<>(dtcodes);
         this.ecuInitLength = ecuInitLength;
     }
 
     @Override
     public final int readCodes() {
-        final ArrayList<EcuQuery> queries = new ArrayList<EcuQuery>();
-        String lastCode = dtcodes.get(dtcodes.size() - 1).getId();
-        if (ecuInitLength < 56) {
-            lastCode = "D256";
-        }
-        else if (ecuInitLength < 104) {
-            lastCode = "D488";
-        }
-        if (LOGGER.isDebugEnabled())
-            LOGGER.debug(
-                "DT codes ECU init length: " + ecuInitLength +
-                ", Last code: " + lastCode);
-
-        for (int i = 0; !dtcodes.get(i).getId().equals(lastCode); i++) {
-            queries.add(new EcuQueryImpl(dtcodes.get(i)));
-            if (LOGGER.isDebugEnabled())
-                LOGGER.debug("Adding query for DTC: " + dtcodes.get(i).getName());
-        }
-
         final Settings settings = SettingsManager.getSettings();
-        final String target = settings.getDestinationTarget().getName().toUpperCase();
+        final Module module = settings.getDestinationTarget();
+        final String target = module.getName().toUpperCase(Locale.ROOT);
         try {
+            final DtcReadPlan plan = DtcReadPlan.prepare(dtcodes, ecuInitLength);
+            final DmRuntimeReadRequest dmRequest = logger.captureDmRuntimeRead();
+            dmRequest.requireCurrent();
+            if (Thread.currentThread().isInterrupted()) throw new InterruptedException("DTC read cancelled");
             final LoggerConnection connection = getConnection(
                     settings.getLoggerProtocol(),
                     settings.getLoggerPort(),
                     settings.getLoggerConnectionProperties());
             try {
+                // Identify before using any cached dynamic address. A cache miss
+                // stays a standard-code read, never a discovery request.
+                final DmInit dmRuntime = dmRequest.read(connection, module);
                 messageListener.reportMessage(MessageFormat.format(
                         rb.getString("READCODES"), target));
-                final Collection<EcuQuery> querySet = new ArrayList<EcuQuery>();
-                for (int i = 0; i < queries.size(); i += 150) {
-                    for (int j = i; (j < i + 150) && (j < queries.size()); j++) {
-                        querySet.add(queries.get(j));
-                    }
-                    connection.sendAddressReads(
-                            querySet,
-                            settings.getDestinationTarget(),
-                            new PollingStateImpl());
-                    querySet.clear();
-                }
-                messageListener.reportMessage(MessageFormat.format(
-                        rb.getString("COMPLETE"), target));
+                final ArrayList<EcuQuery> dtcSet = plan.read(connection, module, dmRequest::requireCurrent);
 
-                double result = 0;
-                final ArrayList<EcuQuery> dtcSet = new ArrayList<EcuQuery>();
-                for (EcuQuery query : queries) {
-                    result = query.getResponse();
-                    if (!(result == -1 || result == 0)) {
-                        int tmp = 0;
-                        int mem = 0;
-                        if (result == 1 || result == 3) tmp = 1;
-                        if (result == 2 || result == 3) mem = 1;
-                        if (LOGGER.isDebugEnabled())
-                            LOGGER.debug("DTC: " +
-                                query.getLoggerData().getName() +
-                                " tmp:" + tmp + " mem:" + mem);
-                        dtcSet.add(query);
-                    }
-                }
-
-                final DmInit dmRuntime = readDmRuntime(logger::getDmInit,
-                        connection, settings.getDestinationTarget());
+                dmRequest.requireCurrent();
                 final int[] dmCodes = dmRuntime == null ? new int[0] : dmRuntime.getRuntimeCurrentErrors();
                 final int[] dmMemCodes = dmRuntime == null ? new int[0] : dmRuntime.getRuntimeMemErrors();
+                messageListener.reportMessage(MessageFormat.format(rb.getString("COMPLETE"), target));
 
                 if (dtcSet.isEmpty() && (dmCodes.length == 0 || dmCodes[0] == 0)
                         && (dmMemCodes.length == 0 || dmMemCodes[0] == 0)) {
@@ -160,10 +117,4 @@ public final class ReadCodesManagerImpl implements ReadCodesManager {
         }
     }
 
-    /** Capture owner metadata once; never route a cache miss through discovery. */
-    static DmInit readDmRuntime(Supplier<DmInit> cache, LoggerConnection connection,
-            Module module) throws InterruptedException {
-        final DmInit cached = cache.get();
-        return cached == null ? null : connection.readDmRuntime(cached, module);
-    }
 }

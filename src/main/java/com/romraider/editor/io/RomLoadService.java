@@ -36,7 +36,7 @@ public final class RomLoadService {
     private static final ResourceBundle RB = new ResourceUtil().getBundle(
             "com.romraider.editor.ecu.ECUEditor");
 
-    private final List<File> configuredDefinitions;
+    private final Settings settings;
 
     public RomLoadService() {
         this(SettingsManager.getSettings());
@@ -45,7 +45,7 @@ public final class RomLoadService {
     public RomLoadService(Settings settings) {
         if (settings == null) throw new IllegalArgumentException(
                 "Settings are required");
-        this.configuredDefinitions = settings.getEcuDefinitionFiles();
+        this.settings = settings;
     }
 
     public RomLoadResult load(File image, RomLoadInteraction interaction)
@@ -53,6 +53,9 @@ public final class RomLoadService {
         if (image == null || interaction == null) {
             throw new IllegalArgumentException("Image and interaction are required");
         }
+        // The Definitions Manager can replace the list after this service is
+        // constructed. Freeze the current list for this load, not for its lifetime.
+        List<File> configuredDefinitions = new java.util.ArrayList<>(settings.getEcuDefinitionFiles());
 
         interaction.update(text("STATUSPARSING", "Parsing ECU definitions ..."),
                 0);

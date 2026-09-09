@@ -33,8 +33,8 @@ public final class DmReadCodesTableModel extends DefaultTableModel {
     private Set<String> dtcMemSet;
 
     public DmReadCodesTableModel(Set<String> dtcSet, Set<String> dtcMemSet) {
-        this.dtcSet = dtcSet;
-        this.dtcMemSet = dtcMemSet;
+        this.dtcSet = new HashSet<>(dtcSet);
+        this.dtcMemSet = new HashSet<>(dtcMemSet);
         Set<String> dtcAllSet = new TreeSet<>(dtcSet);
         dtcAllSet.addAll(dtcMemSet);
         this.dtcAllList = new ArrayList<>(dtcAllSet);
@@ -77,11 +77,7 @@ public final class DmReadCodesTableModel extends DefaultTableModel {
     }
     
     public final Class<? extends Object> getColumnClass(int column) {
-        if (dtcAllList != null && dtcAllList.size() > 0) {
-            return getValueAt(0, column).getClass();
-        } else {
-            return null;
-        }
+        return column == 0 ? String.class : column == 1 || column == 2 ? Boolean.class : Object.class;
     }
 
     public final boolean isCellEditable(int row, int column) {

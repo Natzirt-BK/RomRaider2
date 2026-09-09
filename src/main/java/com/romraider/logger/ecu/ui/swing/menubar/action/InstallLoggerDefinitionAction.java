@@ -37,13 +37,11 @@ import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
 
 import com.romraider.logger.ecu.EcuLogger;
-import com.romraider.logger.ecu.definition.EcuDataLoader;
-import com.romraider.logger.ecu.definition.EcuDataLoaderImpl;
-import com.romraider.logger.ecu.definition.LoggerDefinitionInstaller;
+import com.romraider.logger.ecu.DesktopDefinitionInstall;
+import com.romraider.logger.ecu.DesktopDefinitionInstall.Candidate;
 import com.romraider.logger.ecu.definition.LoggerDefinitionInstaller.Installation;
 import com.romraider.swing.IntegratedOptionDialog;
 import com.romraider.swing.menubar.action.AbstractAction;
-import com.romraider.util.SettingsManager;
 
 public final class InstallLoggerDefinitionAction extends AbstractAction {
     private boolean working;
@@ -54,17 +52,33 @@ public final class InstallLoggerDefinitionAction extends AbstractAction {
 
     public void actionPerformed(ActionEvent actionEvent) {
         if (working) return;
+        working = true;
         // Let the Help menu close and repaint before file-system discovery
         // starts inside the platform file chooser.
-        SwingUtilities.invokeLater(this::chooseDefinition);
+        SwingUtilities.invokeLater(() -> {
+            boolean started = false;
+            try {
+                started = chooseDefinition();
+            } catch (Exception exception) {
+                fail(exception);
+            } finally {
+                if (!started) finish();
+            }
+        });
     }
 
-    private void chooseDefinition() {
-        if (working) return;
+    private boolean chooseDefinition() {
+        DesktopDefinitionInstall request = logger.beginDefinitionInstall();
+        if (request == null) {
+            if (logger.isDefinitionInstallOwnerOpen())
+                logger.reportMessage("Disconnect the Logger before installing definitions.");
+            return false;
+        }
         File current = getFile(
                 logger.getSettings().getLoggerDefinitionFilePath());
         JFileChooser chooser = getDefinitionFileChooser(current);
-        if (chooser.showOpenDialog(logger) != APPROVE_OPTION) return;
+        if (chooser.showOpenDialog(logger) != APPROVE_OPTION) return false;
+        if (!request.isCurrent()) { obsolete(); return false; }
 
         File source = chooser.getSelectedFile();
         Object[] options = {rb.getString("LDAINSTALL"),
@@ -74,95 +88,65 @@ public final class InstallLoggerDefinitionAction extends AbstractAction {
                         source.getAbsolutePath()),
                 rb.getString("LDAINSTALLTITLE"), WARNING_MESSAGE,
                 options, options[0]);
-        if (answer != 0) return;
-
-        String previousPath = logger.getSettings()
-                .getLoggerDefinitionFilePath();
-        String previousProtocol = logger.getSettings().getLoggerProtocol();
-        String previousTransport = logger.getSettings().getTransportProtocol();
-        working = true;
+        if (answer != 0) return false;
+        if (!request.isCurrent()) { obsolete(); return false; }
         setEnabled(false);
         logger.setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
-        logger.reportMessage("Installing and validating Logger definitions…");
+        logger.reportMessage("Validating Logger definitions…");
 
-        new SwingWorker<PreparedDefinition, Void>() {
-            private Installation installation;
-
+        new SwingWorker<Candidate, Void>() {
             @Override
-            protected PreparedDefinition doInBackground() throws Exception {
-                installation = new LoggerDefinitionInstaller().install(
-                        source.toPath(), SettingsManager.getSettingsDirectory());
-                String installedPath = installation.installedFile()
-                        .toAbsolutePath().toString();
-                EcuDataLoader loaded = new EcuDataLoaderImpl();
-                loaded.loadConfigFromXml(installedPath,
-                        logger.getSettings().getLoggerProtocol(),
-                        logger.getSettings().getFileLoggingControllerSwitchId(),
-                        null);
-                return new PreparedDefinition(installation, installedPath,
-                        loaded);
+            protected Candidate doInBackground() throws Exception {
+                return request.prepare(source.toPath());
             }
 
             @Override
             protected void done() {
                 try {
-                    activate(get());
+                    if (!request.isCurrent()) { obsolete(); return; }
+                    Candidate candidate = get();
+                    Installation installation = request.commit(candidate);
+                    if (installation == null) { obsolete(); return; }
+                    // Installation is now durable. A later catalog/UI failure must
+                    // not roll back files or settings adopted by another action.
+                    if (logger.activateDefinitionInstall(request, candidate)) {
+                        showSuccess(installation);
+                    } else if (request.canActivate(candidate)) {
+                        logger.reportMessage("Definition installed; channel loading did not complete. Reload the Logger definitions.");
+                    }
                 } catch (InterruptedException exception) {
                     Thread.currentThread().interrupt();
-                    fail(exception, installation, previousPath,
-                            previousProtocol, previousTransport);
+                    fail(exception);
                 } catch (ExecutionException exception) {
                     Throwable cause = exception.getCause();
                     Exception failure = cause instanceof Exception
                             ? (Exception) cause : exception;
-                    fail(failure, installation, previousPath,
-                            previousProtocol, previousTransport);
+                    fail(failure);
                 } catch (Exception exception) {
-                    fail(exception, installation, previousPath,
-                            previousProtocol, previousTransport);
+                    fail(exception);
                 } finally {
-                    working = false;
-                    setEnabled(true);
-                    logger.setCursor(Cursor.getDefaultCursor());
+                    finish();
                 }
             }
         }.execute();
+        return true;
     }
 
-    private void activate(PreparedDefinition prepared) throws Exception {
-        String installedPath = prepared.installedPath;
-        logger.getSettings().setLoggerDefinitionFilePath(installedPath);
-        SettingsManager.save(logger.getSettings());
-        logger.loadLoggerParams(prepared.loaded);
+    private void showSuccess(Installation installation) {
+        if (!logger.isDefinitionInstallOwnerOpen()) return;
         logger.reportMessage(MessageFormat.format(
                 rb.getString("LDASUCCESS"),
-                prepared.installation.installedFile().getFileName()));
+                installation.installedFile().getFileName()));
         Object[] complete = {rb.getString("LDAOK")};
         IntegratedOptionDialog.show(logger,
                 MessageFormat.format(rb.getString("LDASUCCESSDIALOG"),
-                        prepared.installation.version(), installedPath),
+                        installation.version(), installation.installedFile().toString()),
                 rb.getString("LDASUCCESSTITLE"), INFORMATION_MESSAGE,
                 complete, complete[0]);
     }
 
-    private void fail(Exception exception, Installation installation,
-            String previousPath, String previousProtocol,
-            String previousTransport) {
-        logger.getSettings().setLoggerDefinitionFilePath(previousPath);
-        logger.getSettings().setLoggerProtocol(previousProtocol);
-        logger.getSettings().setTransportProtocol(previousTransport);
-        if (installation != null) {
-            try {
-                installation.rollback();
-            } catch (Exception rollbackFailure) {
-                exception.addSuppressed(rollbackFailure);
-            }
-        }
-        try {
-            SettingsManager.save(logger.getSettings());
-        } catch (Exception rollbackFailure) {
-            exception.addSuppressed(rollbackFailure);
-        }
+    private void fail(Exception exception) {
+        if (!logger.isDefinitionInstallOwnerOpen()) return;
         logger.reportError(rb.getString("LDAERROR"), exception);
         Object[] close = {rb.getString("LDAOK")};
         IntegratedOptionDialog.show(logger,
@@ -172,17 +156,16 @@ public final class InstallLoggerDefinitionAction extends AbstractAction {
                 close, close[0]);
     }
 
-    private static final class PreparedDefinition {
-        private final Installation installation;
-        private final String installedPath;
-        private final EcuDataLoader loaded;
+    private void obsolete() {
+        if (logger.isDefinitionInstallOwnerOpen())
+            logger.reportMessage("Definition installation cancelled because the Logger setup changed. Select the definition again.");
+    }
 
-        private PreparedDefinition(Installation installation,
-                String installedPath, EcuDataLoader loaded) {
-            this.installation = installation;
-            this.installedPath = installedPath;
-            this.loaded = loaded;
-        }
+    private void finish() {
+        working = false;
+        if (!logger.isDefinitionInstallOwnerOpen()) return;
+        setEnabled(true);
+        logger.setCursor(Cursor.getDefaultCursor());
     }
 
     private static String safeMessage(Exception exception) {

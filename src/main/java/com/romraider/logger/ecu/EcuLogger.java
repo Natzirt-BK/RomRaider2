@@ -50,8 +50,6 @@ import com.romraider.logger.ecu.ui.spi.LoggerWorkspaceLoader;
 import com.romraider.logger.ecu.ui.swing.menubar.action.InstallLoggerDefinitionAction;
 import static com.romraider.Version.PRODUCT_NAME;
 import static com.romraider.Version.VERSION;
-import static com.romraider.logger.ecu.profile.UserProfileLoader.BACKUP_PROFILE;
-import static com.romraider.logger.ecu.ui.swing.menubar.util.FileHelper.saveProfileToFile;
 import static com.romraider.util.ParamChecker.checkNotNull;
 import static com.romraider.util.ParamChecker.isNullOrEmpty;
 import static com.romraider.util.ThreadUtil.runAsDaemon;
@@ -147,6 +145,9 @@ import com.romraider.logger.ecu.comms.learning.LearningTableValuesFactory;
 import com.romraider.logger.ecu.comms.query.EcuInit;
 import com.romraider.logger.ecu.comms.readcodes.ReadCodesManager;
 import com.romraider.logger.ecu.comms.readcodes.ReadCodesManagerImpl;
+import com.romraider.logger.ecu.comms.readcodes.DiagnosticConnectionSelection;
+import com.romraider.logger.ecu.comms.readcodes.DiagnosticReadRequest;
+import com.romraider.logger.ecu.comms.readcodes.DmRuntimeReadRequest;
 import com.romraider.logger.ecu.comms.reset.ResetManager;
 import com.romraider.logger.ecu.comms.reset.ResetManagerImpl;
 import com.romraider.logger.ecu.definition.EcuDataLoader;
@@ -313,7 +314,6 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
     private SerialPortRefresher refresher;
     private JWindow startStatus;
     private final JLabel startText = new JLabel(rb.getString("INITIALIZELOGGER"));
-    private final String HOME = System.getProperty("user.home");
     private StatusIndicator statusIndicator;
     private LoggerSessionService sessionService;
     private List<EcuSwitch> dtcodes = new ArrayList<EcuSwitch>();
@@ -330,6 +330,8 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
     };
 
     private static volatile EcuLogger instance;
+    private final Object diagnosticLock = new Object();
+    private volatile DesktopDiagnosticTask<DiagnosticReadRequest.Result> diagnosticTask;
 
     public static EcuLogger getEcuLoggerWithoutCreation() {
     	return instance;
@@ -583,8 +585,39 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
     private boolean loadLoggerParams(EcuDataLoader preloadedDefinition,
             SwingLoggerInitialization.Snapshot state) {
         SwingLoggerInitialization.Reload reload = initialization.beginReload(state);
+        return loadLoggerParams(preloadedDefinition, reload);
+    }
+
+    public boolean isDefinitionInstallOwnerOpen() {
+        return initialization.isOpen();
+    }
+
+    public DesktopDefinitionInstall beginDefinitionInstall() {
+        if (!javax.swing.SwingUtilities.isEventDispatchThread())
+            throw new IllegalStateException("Definition installation requires the EDT");
+        if (!initialization.isOpen() || isLogging() || isDiagnosticBusy()) return null;
+        SwingLoggerInitialization.Reload reload = initialization.beginReload(initialization.snapshot());
+        if (reload == null) return null;
+        return new DesktopDefinitionInstall(reload,
+                this::getSettings, SettingsManager::getSettingsDirectory,
+                () -> !isLogging() && !isDiagnosticBusy(), () -> SettingsManager.save(getSettings()));
+    }
+
+    public boolean activateDefinitionInstall(DesktopDefinitionInstall request,
+            DesktopDefinitionInstall.Candidate candidate) {
+        return initialization.ownsReload(request.reload) && request.canActivate(candidate)
+                && loadLoggerParams(candidate.loaded, request.reload, () -> request.canActivate(candidate));
+    }
+
+    private boolean loadLoggerParams(EcuDataLoader preloadedDefinition,
+            SwingLoggerInitialization.Reload reload) {
+        return loadLoggerParams(preloadedDefinition, reload, () -> true);
+    }
+
+    private boolean loadLoggerParams(EcuDataLoader preloadedDefinition,
+            SwingLoggerInitialization.Reload reload, java.util.function.BooleanSupplier configurationCurrent) {
         boolean[] definitionLoaded = {false};
-        return reload != null && reload.run(
+        return reload != null && reload.runWhile(configurationCurrent,
                 () -> definitionLoaded[0] = loadLoggerConfig(preloadedDefinition, reload),
                 () -> { if (definitionLoaded[0] || !externalChannelsLoaded) loadFromExternalDataSources(reload); },
                 this::refreshChannelCatalog,
@@ -903,7 +936,10 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
         if (!initialization.isCurrent(state)) return false;
         try {
             UserProfileLoader profileLoader = new UserProfileLoaderImpl();
-            String path = isNullOrEmpty(profileFilePath) ? (HOME + BACKUP_PROFILE) : profileFilePath;
+            String path = isNullOrEmpty(profileFilePath)
+                    ? com.romraider.logger.runtime.LoggerProfileStorage.recoveryPath(
+                            SettingsManager.getSettingsDirectory(), java.nio.file.Path.of(System.getProperty("user.home"))).toString()
+                    : profileFilePath;
             UserProfile profile = profileLoader.loadProfile(path);
             if(applyUserProfile(profile, state)) {
                 final File profileFile = new File(path);
@@ -2017,7 +2053,7 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
 
     /** Keeps vehicle selection in the workflow where it affects connection. */
     public void showConnectionSetup() {
-        if (isLogging()) {
+        if (isLogging() || isDiagnosticBusy()) {
             showMessageDialog(this,
                     "Disconnect the Logger before changing vehicle or module.",
                     "Logger Connection Setup", WARNING_MESSAGE);
@@ -2135,11 +2171,55 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
     }
 
     public void startLogging() {
-        controller.start();
+        synchronized (diagnosticLock) {
+            if (diagnosticTask != null || !initialization.isOpen()) return;
+            initialization.invalidateReload();
+            controller.start();
+        }
     }
 
     public void stopLogging() {
+        DesktopDiagnosticTask<?> task = diagnosticTask;
+        if (task != null) { task.cancel(); return; }
         controller.stop();
+    }
+
+    public boolean isDiagnosticBusy() { return diagnosticTask != null; }
+    public boolean isDiagnosticOwnerOpen() { return initialization.isOpen(); }
+
+    public DiagnosticReadRequest prepareDiagnosticRead() {
+        if (!SwingUtilities.isEventDispatchThread()) throw new IllegalStateException("Capture diagnostics on the EDT");
+        SwingLoggerInitialization.Snapshot state = initialization.snapshot();
+        if (state.ecu == null || !initialization.isCurrent(state)) throw new IllegalStateException("Identify the ECU before reading codes");
+        var selection = new DiagnosticConnectionSelection(getSettings());
+        return new DiagnosticReadRequest(new ArrayList<>(dtcodes),
+                state.ecu.getEcuInitBytes().length, captureDmRuntimeRead(state), getSettings().getDestinationTarget(), selection::open);
+    }
+
+    public DesktopDiagnosticTask<DiagnosticReadRequest.Result> beginDiagnosticRead(
+            DiagnosticReadRequest request,
+            java.util.function.Consumer<DesktopDiagnosticTask.Completion<DiagnosticReadRequest.Result>> completed) {
+        if (!SwingUtilities.isEventDispatchThread()) throw new IllegalStateException("Start diagnostics on the EDT");
+        synchronized (diagnosticLock) {
+            if (diagnosticTask != null) throw new IllegalStateException("A diagnostic read is already active");
+            if (!initialization.isOpen()) throw new IllegalStateException("The logger is closed");
+            request.requireCurrent();
+            var task = new DesktopDiagnosticTask<DiagnosticReadRequest.Result>(() -> {
+                controller.stop();
+                if (controller.isStarted()) throw new IllegalStateException("The logger is still stopping; no diagnostic connection was opened");
+                return request.read();
+            }, () -> {
+                try { request.requireCurrent(); return true; }
+                catch (IllegalStateException stale) { return false; }
+            }, result -> {
+                synchronized (diagnosticLock) { diagnosticTask = null; }
+                completed.accept(result);
+            });
+            diagnosticTask = task;
+            try { task.start(); }
+            catch (RuntimeException | Error failure) { diagnosticTask = null; throw failure; }
+            return task;
+        }
     }
 
     public LoggerSessionService getSessionService() {
@@ -2185,6 +2265,29 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
                         dtcodes,
                         getEcuInit().getEcuInitBytes().length);
         return readCodesManager.readCodes();
+    }
+
+    public DmRuntimeReadRequest captureDmRuntimeRead() {
+        return captureDmRuntimeRead(initialization.snapshot());
+    }
+
+    private DmRuntimeReadRequest captureDmRuntimeRead(SwingLoggerInitialization.Snapshot state) {
+        Settings settings = getSettings();
+        Object catalog = initialization.catalogIdentity();
+        java.util.List<Object> setup = diagnosticSetup(settings);
+        return new DmRuntimeReadRequest(state.ecu, state.dime,
+                () -> initialization.isCurrent(state) && settings == getSettings()
+                        && catalog == initialization.catalogIdentity()
+                        && setup.equals(diagnosticSetup(settings)));
+    }
+
+    private static java.util.List<Object> diagnosticSetup(Settings settings) {
+        var module = settings.getDestinationTarget();
+        return java.util.Arrays.asList(settings.getLoggerProtocol(), settings.getTransportProtocol(),
+                settings.getTargetModule(), settings.getLoggerPort(), settings.getJ2534Device(),
+                settings.getLoggerDefinitionFilePath(), settings.getLoggerProfileFilePath(), settings.getAutoConnectOnStartup(),
+                java.util.Arrays.toString(module.getAddress()), java.util.Arrays.toString(module.getTester()),
+                DiagnosticConnectionSelection.fingerprint(settings));
     }
 
     public final int ecuGlobalAdjustment() {
@@ -2354,7 +2457,8 @@ public final class EcuLogger extends AbstractFrame implements EcuRelatedMessageL
             return;
         }
         try {
-            saveProfileToFile(getCurrentProfile(), new File(HOME + BACKUP_PROFILE));
+            com.romraider.logger.runtime.LoggerProfileStorage.saveBackup(
+                    getCurrentProfile(), SettingsManager.getSettingsDirectory());
             if (LOGGER.isDebugEnabled())
                 LOGGER.debug("Backup profile saved");
         } catch (Exception e) {

@@ -372,10 +372,10 @@ The remaining cache is **ECU-ID keyed, not fully ECU/session bound**:
   obtains its cache from `getDmInit()`: a non-null entry takes the runtime-read
   path, whereas a null entry takes the legacy write-based discovery path.
   `needToInit()` is not consulted by this implementation.
-- The Swing read-codes path obtains a connection and reads a snapshot using the
-  logger's cached DimeMod metadata without fresh ECU identification in that
-  method. Its runtime-only boundary above prevents discovery writes, but
-  verifying identity before cached-address reads remains open.
+- The local Swing read-codes follow-up below now checks a fresh ECU ID and
+  initialization payload before cached-address reads. This addresses observed
+  identity mismatch, but does not authenticate firmware or rebind the normal
+  reconnect cache.
 
 These findings come from the current call sites, not physical disconnect or
 reflash tests. A matching ECU ID alone does not establish that previously
@@ -383,20 +383,84 @@ discovered dynamic addresses still belong to the connected firmware.
 
 ## Next contract work
 
-The retained `InstallLoggerDefinitionAction` needs an independent worker boundary:
-its background task reads the live protocol/switch settings after the chooser,
-and completion saves the installed path before requesting a fresh catalog token.
-Thus the catalog's token cannot prove that the prepared loader still belongs to
-the initiating owner/configuration. The failure path also restores saved settings
-without first checking whether another action has changed them.
+The retained `InstallLoggerDefinitionAction` previously read live protocol/switch
+settings in its worker and saved the installed path before requesting a fresh
+catalog token. Its failure path also restored saved settings without checking
+whether another action had changed them.
 
-`LoggerDefinitionInstaller.Installation.rollback()` currently uses the shared
-`logger.previous.xml` and does not verify ownership of the current managed file.
-A later installation can replace both that backup and the destination before an
-earlier worker rolls back. The next repair must capture preparation inputs, reject
-obsolete activation before settings writes, and make rollback specific to its own
-installation without overwriting a newer result. These are source-level findings,
-not a tested concurrency fix; use temporary-file regressions before implementation.
+The local installer follow-up separates validation from installation: a prepared
+definition owns a frozen byte snapshot, which can be parsed before replacing the
+managed file. Installation captures the previous file at commit time. Rollback
+uses that operation's snapshot instead of the shared `logger.previous.xml`, checks
+per-JVM ownership, and rejects changed file contents or file identity when the
+filesystem supplies one. A newer rollback does not revive an obsolete owner.
+These checks do not provide cross-process locking or crash recovery.
+
+The local UI follow-up now uses `DesktopDefinitionInstall` to capture protocol,
+switch, ECU snapshot, settings owner/directory and relevant setup fields before
+the chooser. The same catalog token guards confirmation, worker completion and
+channel refresh. Preparation runs off the EDT and parses frozen bytes without
+changing settings. Closure, initialization/catalog replacement and connection
+startup invalidate the request; starting then stopping does not revive it.
+
+The file/settings commit runs on the EDT under the initialization-owner monitor,
+without dialogs or catalog callbacks. Initialization callbacks cannot intervene
+between its ownership check and commit. Save failure rolls back that installation
+and restores its prior path; validation failure never restores settings. After a
+successful commit, UI/catalog refresh runs outside the monitor and checks ownership
+and setup between stages. A stale refresh does not undo the committed installation.
+This is an in-process Swing workflow boundary, not a transaction across independent
+applications or a crash-safe settings writer. Native chooser/confirmation/shutdown
+acceptance on physical systems and Windows/macOS remains pending. Linux
+diagnostic-image checks are recorded in the [reliability checkpoint](DESKTOP_RELIABILITY_CHECKPOINT_2026-09-08.md).
+These changes are separate from published 1.1.8 packages.
+
+Local verification on September 8, 2026: `ant unittest` passed on Linux with
+JDK 21 under Xvfb and a temporary user-settings directory. All 19 installer
+tests passed, including concurrent and identical-content installations, changed
+files, symlink replacement, backup independence, frozen preparation bytes and
+unsupported-protocol rejection without settings changes. The optional BMW XDF
+corpus test was skipped because its fixtures were not configured. No vehicle
+files or adapters were used. Worker follow-up regression results are recorded below.
+
+The worker follow-up passed the complete Ant suite: 675 tests reported, 672
+passed and three optional tests skipped (configured native J2534 library, log
+corpus and BMW XDF corpus). This includes 11 `DesktopDefinitionInstallTest`
+cases, 24 `SwingLoggerInitializationTest` cases and the 19 installer tests above.
+The owner tests also verify serialization against initialization callbacks during
+commit and cancellation of later UI stages after setup changes. All 24
+`FxLoggerSetupTransferTest` regressions passed against the rebuilt desktop test
+JAR under Xvfb. The chooser itself and a packaged installation were not exercised
+by these tests; these results do not qualify hardware or vehicle behavior.
+
+## Diagnostic identity follow-up
+
+`DmRuntimeReadRequest` captures paired ECU identification and DimeMod metadata
+from the Swing initialization snapshot, together with a current-owner/setup
+check. If metadata is present, it identifies the selected module on the diagnostic
+connection before any dynamic address read. Both ECU ID and complete captured
+initialization bytes must match. Missing, duplicate, changed or cancelled replies
+cannot authorize the read. A cache miss still skips DimeMod, without discovery.
+Runtime refresh uses a separate metadata snapshot and rejects empty results or
+an owner/setup change before returning; it never publishes into the owner's cache.
+The standard-code loop also rechecks the owner before displaying its result.
+
+The SSM initialization object now owns its input bytes and returns copies,
+preventing later array edits from changing an already captured identity. Short
+replies that cannot contain the five-byte ECU ID are rejected explicitly.
+
+Eleven synthetic diagnostic tests cover request ordering, changed ID or payload,
+missing/duplicate/late replies, owner invalidation at each stage, cancellation,
+unsupported refresh, missing results and frozen inputs. Their connection fixture
+fails any discovery, reset or write call. These changes do not modify the normal
+logger's discovery handshake or clear cached channels on reconnect.
+
+The author's [current discovery implementation](https://github.com/DimeSPb/RomRaider/blob/master/src/main/java/com/romraider/logger/ecu/comms/io/connection/SSMLoggerConnection.java)
+was rechecked: metadata discovery negotiates through writes, while a cached
+metadata object takes the runtime-address read path. No independent firmware
+identity check is supplied by that path. The remaining work must establish
+metadata provenance and session binding without treating an ID match as firmware
+proof or turning cache invalidation into implicit extra discovery writes.
 
 Do not simply clear the cache on every reconnect: under the existing dispatcher
 that would increase write-based discovery attempts. Define how cached data is
@@ -407,9 +471,8 @@ discovery negotiation. Android still needs a verified read-only discovery source
 or a separately authorized, accurately labelled flow.
 
 Published-channel wire spans are now checked by the linked metadata follow-up.
-RAM-tune/uninterpreted address spans, cache/session identity,
-installer-worker lifetime and negotiation
-cleanup remain open. See the
+RAM-tune/uninterpreted address spans, cache/session identity, packaged installer
+acceptance and negotiation cleanup remain open. See the
 [metadata and discovery audit](DIMEMOD_CHANNEL_AUDIT.md) for completed bounds
 checks and their limits. No production ECU-writing or live-tuning capability is
 qualified by this lifecycle repair.

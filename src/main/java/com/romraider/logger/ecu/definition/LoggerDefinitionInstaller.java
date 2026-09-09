@@ -5,10 +5,17 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.ref.WeakReference;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.LinkOption;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.regex.Pattern;
 
 import javax.xml.XMLConstants;
@@ -27,37 +34,112 @@ public final class LoggerDefinitionInstaller {
     private static final String MANAGED_DIRECTORY = "definitions/logger";
     private static final String INSTALLED_FILE = "logger.xml";
     private static final String BACKUP_FILE = "logger.previous.xml";
+    // Serialize managed-file commits/rollback across installer instances in this JVM.
+    private static final Object INSTALL_LOCK = new Object();
+    private static final Map<Path, WeakReference<Installation>> ACTIVE_INSTALLATIONS =
+            new HashMap<Path, WeakReference<Installation>>();
     private static final Pattern LEGACY_DTD_IDENTIFIER = Pattern.compile(
             "(?s)(<!ATTLIST\\s+[^>]*?\\s)(?:IDREFS?|ID)"
             + "(\\s+(?:#REQUIRED|#IMPLIED|#FIXED))");
 
     public Installation install(Path source, Path settingsDirectory)
             throws Exception {
+        return prepare(source).install(settingsDirectory);
+    }
+
+    /** Validate a frozen copy without replacing a managed definition or its backup. */
+    public PreparedDefinition prepare(Path source) throws Exception {
         Path realSource = requireSource(source);
+        Path staged = Files.createTempFile("rr2-logger-validation-", ".xml");
+        try {
+            Files.write(staged, readSnapshot(realSource));
+            normalizeLegacyInternalDtd(staged);
+            String version = validate(staged);
+            return new PreparedDefinition(realSource, version, readSnapshot(staged));
+        } finally {
+            Files.deleteIfExists(staged);
+        }
+    }
+
+    public static final class PreparedDefinition {
+        private final Path sourcePath;
+        private final String version;
+        private final byte[] snapshot;
+
+        private PreparedDefinition(Path sourcePath, String version, byte[] snapshot) {
+            this.sourcePath = sourcePath;
+            this.version = version;
+            this.snapshot = snapshot;
+        }
+
+        public Path sourcePath() { return sourcePath; }
+        public String version() { return version; }
+        public byte[] snapshot() { return snapshot.clone(); }
+
+        /** Install exactly the validated bytes, without reopening the chosen source. */
+        public Installation install(Path settingsDirectory) throws IOException {
+            return installSnapshot(this, settingsDirectory);
+        }
+    }
+
+    private static Installation installSnapshot(PreparedDefinition prepared, Path settingsDirectory)
+            throws IOException {
         Path destinationDirectory = settingsDirectory.toAbsolutePath()
                 .normalize().resolve(MANAGED_DIRECTORY);
         Files.createDirectories(destinationDirectory);
+        destinationDirectory = destinationDirectory.toRealPath();
 
         Path staged = Files.createTempFile(destinationDirectory,
                 "logger-install-", ".xml");
         try {
-            Files.copy(realSource, staged, StandardCopyOption.REPLACE_EXISTING);
-            normalizeLegacyInternalDtd(staged);
-            String version = validate(staged);
-            installDtd(destinationDirectory);
-
-            Path destination = destinationDirectory.resolve(INSTALLED_FILE);
-            Path backup = destinationDirectory.resolve(BACKUP_FILE);
-            boolean backupCreated = false;
-            if (Files.isRegularFile(destination)) {
-                Files.copy(destination, backup,
-                        StandardCopyOption.REPLACE_EXISTING,
-                        StandardCopyOption.COPY_ATTRIBUTES);
-                backupCreated = true;
+            Files.write(staged, prepared.snapshot);
+            byte[] installedDigest = digest(prepared.snapshot);
+            Object installedKey = Files.readAttributes(staged,
+                    BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS).fileKey();
+            synchronized (INSTALL_LOCK) {
+                Path destination = destinationDirectory.resolve(INSTALLED_FILE);
+                Path backup = destinationDirectory.resolve(BACKUP_FILE);
+                byte[] previous = Files.exists(destination, LinkOption.NOFOLLOW_LINKS)
+                        ? readSnapshot(destination) : null;
+                installDtd(destinationDirectory);
+                if (previous != null) writeSnapshot(backup, previous);
+                moveReplacing(staged, destination);
+                Installation result = new Installation(destination, prepared.version,
+                        previous == null ? null : backup, previous, installedDigest,
+                        installedKey);
+                ACTIVE_INSTALLATIONS.entrySet().removeIf(entry -> entry.getValue().get() == null);
+                ACTIVE_INSTALLATIONS.put(destination, new WeakReference<Installation>(result));
+                return result;
             }
+        } finally {
+            Files.deleteIfExists(staged);
+        }
+    }
+
+    private static byte[] readSnapshot(Path file) throws IOException {
+        if (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS))
+            throw new IOException("Managed Logger definition is not a regular file.");
+        try (InputStream input = Files.newInputStream(file)) {
+            byte[] bytes = input.readNBytes((int) MAX_DEFINITION_BYTES + 1);
+            if (bytes.length > MAX_DEFINITION_BYTES)
+                throw new IOException("Managed Logger definition exceeds the size limit.");
+            return bytes;
+        }
+    }
+
+    private static byte[] digest(byte[] bytes) {
+        try {
+            return MessageDigest.getInstance("SHA-256").digest(bytes);
+        } catch (NoSuchAlgorithmException impossible) {
+            throw new IllegalStateException("SHA-256 is unavailable", impossible);
+        }
+    }
+
+    private static void writeSnapshot(Path destination, byte[] bytes) throws IOException {
+        Path staged = Files.createTempFile(destination.getParent(), "logger-rollback-", ".xml");
+        try {
+            Files.write(staged, bytes);
             moveReplacing(staged, destination);
-            return new Installation(destination, version,
-                    backupCreated ? backup : null);
         } finally {
             Files.deleteIfExists(staged);
         }
@@ -164,11 +246,19 @@ public final class LoggerDefinitionInstaller {
         private final Path installedFile;
         private final String version;
         private final Path backupFile;
+        private final byte[] previousDefinition;
+        private final byte[] installedDigest;
+        private final Object installedKey;
+        private boolean rolledBack;
 
-        Installation(Path installedFile, String version, Path backupFile) {
+        private Installation(Path installedFile, String version, Path backupFile,
+                byte[] previousDefinition, byte[] installedDigest, Object installedKey) {
             this.installedFile = installedFile;
             this.version = version;
             this.backupFile = backupFile;
+            this.previousDefinition = previousDefinition;
+            this.installedDigest = installedDigest;
+            this.installedKey = installedKey;
         }
 
         public Path installedFile() {
@@ -183,21 +273,22 @@ public final class LoggerDefinitionInstaller {
             return backupFile;
         }
 
-        /** Restores the definition state that existed before this installation. */
+        /** Restores this installation's snapshot only while it still owns the managed file. */
         public void rollback() throws IOException {
-            if (backupFile == null) {
-                Files.deleteIfExists(installedFile);
-                return;
-            }
-            Path staged = Files.createTempFile(installedFile.getParent(),
-                    "logger-rollback-", ".xml");
-            try {
-                Files.copy(backupFile, staged,
-                        StandardCopyOption.REPLACE_EXISTING,
-                        StandardCopyOption.COPY_ATTRIBUTES);
-                moveReplacing(staged, installedFile);
-            } finally {
-                Files.deleteIfExists(staged);
+            synchronized (INSTALL_LOCK) {
+                if (rolledBack) return;
+                WeakReference<Installation> current = ACTIVE_INSTALLATIONS.get(installedFile);
+                if (current == null || current.get() != this)
+                    throw new IOException("Logger definition installation was superseded; rollback was not applied.");
+                BasicFileAttributes attributes = Files.readAttributes(installedFile,
+                        BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
+                if ((installedKey != null && !installedKey.equals(attributes.fileKey()))
+                        || !MessageDigest.isEqual(installedDigest, digest(readSnapshot(installedFile))))
+                    throw new IOException("Managed Logger definition changed; rollback was not applied.");
+                if (previousDefinition == null) Files.delete(installedFile);
+                else writeSnapshot(installedFile, previousDefinition);
+                rolledBack = true;
+                ACTIVE_INSTALLATIONS.remove(installedFile);
             }
         }
     }

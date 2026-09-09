@@ -103,17 +103,22 @@ public final class LoggerControllerImpl implements LoggerController {
     }
 
     @Override
-    public synchronized void stop() {
-        Thread activeWorker = workerThread;
+    public void stop() {
+        final Thread activeWorker;
+        synchronized (this) {
+            activeWorker = workerThread;
+            if (activeWorker != null && activeWorker.isAlive()) {
+                queryManager.stop();
+                activeWorker.interrupt();
+            }
+        }
         if (activeWorker != null && activeWorker.isAlive()) {
-            queryManager.stop();
             try {
                 if (LOGGER.isDebugEnabled())
                     LOGGER.debug(String.format(
                         "%s - Stopping QueryManager: %s",
                         this.getClass().getSimpleName(),
                         activeWorker.getName()));
-                activeWorker.interrupt();
                 if (LOGGER.isDebugEnabled())
                     LOGGER.debug(String.format(
                         "%s - Waiting for QueryManager %s to terminate",
@@ -134,8 +139,10 @@ public final class LoggerControllerImpl implements LoggerController {
                         activeWorker.getState()));
             }
         }
-        if (activeWorker == null || !activeWorker.isAlive()) {
-            workerThread = null;
+        synchronized (this) {
+            if (workerThread == activeWorker && (activeWorker == null || !activeWorker.isAlive())) {
+                workerThread = null;
+            }
         }
     }
 }

@@ -41,6 +41,21 @@ public class EditorDocumentReloadTest {
                 new RomLoadService(settings), new RomFileService());
     }
 
+    @Test public void definitionListReplacementIsSeenByAnExistingLoader() throws Exception {
+        Settings settings = new Settings();
+        RomLoadService loader = new RomLoadService(settings);
+        File source = temporary.newFile("late-definition.bin");
+        Files.write(source.toPath(), DISK);
+        File definition = temporary.newFile("late-definition.xml");
+        Files.writeString(definition.toPath(), "<roms><rom><romid><xmlid>TEST</xmlid>"
+                + "<internalidaddress>0</internalidaddress><internalidstring>TEST</internalidstring>"
+                + "<filesize>5</filesize></romid></rom></roms>");
+        settings.setEcuDefinitionFiles(new java.util.Vector<>(java.util.List.of(definition)));
+        assertTrue(loader.load(source, INTERACTION).isLoaded());
+        settings.setEcuDefinitionFiles(new java.util.Vector<>());
+        assertFalse(loader.load(source, INTERACTION).isLoaded());
+    }
+
     private Rom openSynthetic(EditorDocumentController controller) throws Exception {
         File source = temporary.newFile("synthetic.bin");
         Files.write(source.toPath(), DISK);

@@ -1,8 +1,27 @@
-RomRaider2 ECU Studio 1.1.8
+RomRaider2 ECU Studio 1.1.9
 ================================
 
 Release candidate. For available packages and qualification details:
 https://github.com/Natzirt-BK/RomRaider2/releases
+
+What changed for 1.1.9
+---------------------
+
+- Android has a workspace menu for Logger, Gauges, Review and Editor, separate
+  bottom START/STOP controls, clearer button feedback and compact landscape layout.
+- Stopping a nonempty recording prompts to save a CSV. Cancel or Later retains
+  the recording; export selection survives screen and stopped-service recreation.
+- Gauge rendering reuses drawing objects and unchanged reading snapshots.
+- Desktop Logger adds linked setup selectors, XML Load Profile, elapsed recording
+  time and recording options including filename prefix and supported Fast Polling.
+- Desktop fullscreen gauges add separate Start/Stop controls and elapsed time.
+  Dashboard customization and channel controls are reorganized.
+- Fixed duplicate definition prompts, profile backup handling, definition-install
+  rollback and stale diagnostic reads. Diagnostic reads run off the UI thread.
+
+Android adapter support remains OpenPort 2.0 USB. Bluetooth, KKL USB, production
+flashing and live tuning are not added by this release. Physical acceptance of
+the updated controls and package-specific hardware behavior remains ongoing.
 
 What changed for 1.1.8
 ---------------------

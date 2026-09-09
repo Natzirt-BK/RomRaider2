@@ -81,6 +81,9 @@ final class SwingLoggerInitialization {
     synchronized Snapshot snapshot() { return current; }
     synchronized boolean isOpen() { return !closed; }
     synchronized boolean isCurrent(Snapshot snapshot) { return !closed && current == snapshot; }
+    synchronized boolean ownsReload(Reload reload) { return reload != null && currentReload == reload && reload.isCurrent(); }
+    synchronized void invalidateReload() { currentReload = null; }
+    synchronized Object catalogIdentity() { return currentReload; }
 
     /** Captures both initialization inputs and supersedes an earlier catalog reload. */
     synchronized Reload beginReload(Snapshot snapshot) {
@@ -106,15 +109,32 @@ final class SwingLoggerInitialization {
             }
         }
 
+        /** Only for short file/settings commits; callbacks must not enter UI event loops. */
+        boolean commit(BooleanSupplier configurationCurrent, Commit update) throws Exception {
+            requireEdt();
+            synchronized (SwingLoggerInitialization.this) {
+                if (!isCurrent() || !configurationCurrent.getAsBoolean()) return false;
+                update.run();
+                return true;
+            }
+        }
+
         /** Stages can pump nested event loops. Never hold the owner lock across them. */
         boolean run(Runnable... stages) {
+            return runWhile(() -> true, stages);
+        }
+
+        boolean runWhile(BooleanSupplier configurationCurrent, Runnable... stages) {
             for (Runnable stage : stages) {
-                if (!isCurrent()) return false;
+                if (!isCurrent() || !configurationCurrent.getAsBoolean()) return false;
                 stage.run();
             }
-            return isCurrent();
+            return isCurrent() && configurationCurrent.getAsBoolean();
         }
     }
+
+    @FunctionalInterface
+    interface Commit { void run() throws Exception; }
 
     /**
      * A confirmation can pump a nested Swing event loop. Recheck ownership after

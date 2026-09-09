@@ -21,6 +21,7 @@ final class FxLoggerSetupTransfer implements AutoCloseable {
     private final LoggerDesktopRuntime runtime;
     private final BiPredicate<String, String> review;
     private final Consumer<String> status;
+    private final Consumer<String> showError;
     private final ExecutorService worker = Executors.newSingleThreadExecutor(r -> {
         Thread thread = new Thread(r, "rr2-logger-setup-transfer"); thread.setDaemon(true); return thread;
     });
@@ -29,11 +30,75 @@ final class FxLoggerSetupTransfer implements AutoCloseable {
     private volatile boolean closed;
 
     FxLoggerSetupTransfer(Window owner, LoggerDesktopRuntime runtime, Consumer<String> status) {
-        this(owner, runtime, status, (title, text) -> FxDialogs.confirmScrollable(owner, title, text, "Continue"));
+        this(owner, runtime, status, (title, text) -> FxDialogs.confirmScrollable(owner, title, text, "Continue"),
+                message -> FxDialogs.error(owner, "Logger setup", message));
     }
     FxLoggerSetupTransfer(Window owner, LoggerDesktopRuntime runtime, Consumer<String> status,
             BiPredicate<String, String> review) {
+        this(owner, runtime, status, review, message -> {});
+    }
+    FxLoggerSetupTransfer(Window owner, LoggerDesktopRuntime runtime, Consumer<String> status,
+            BiPredicate<String, String> review, Consumer<String> showError) {
         this.owner = owner; this.runtime = runtime; this.status = status; this.review = review;
+        this.showError = showError;
+    }
+
+    void showProfileLoad() {
+        if (closed) return;
+        cancelWork();
+        try {
+            runtime.captureChannelSetup();
+            FileChooser picker = new FileChooser();
+            picker.setTitle("Load Logger Profile");
+            picker.getExtensionFilters().add(new FileChooser.ExtensionFilter("Logger profiles", "*.xml", "*.XML"));
+            File selected = picker.showOpenDialog(owner);
+            if (selected != null) loadProfile(selected);
+        } catch (RuntimeException failure) { failure(failure); }
+    }
+
+    void loadProfile(File file) {
+        if (closed || file == null) return;
+        cancelWork(); long ticket = generation;
+        final LoggerSetupSnapshot snapshot;
+        try { snapshot = runtime.captureChannelSetup(); }
+        catch (RuntimeException failure) { failure(failure); return; }
+        status.accept("Reading logger profile; current selection is unchanged…");
+        pending = worker.submit(() -> {
+            try {
+                byte[] bytes = com.romraider.io.BinaryFileIO.read(file, 4L * 1024 * 1024);
+                var handler = new com.romraider.logger.ecu.profile.xml.UserProfileHandler();
+                com.romraider.util.SaxParserFactory.getSaxParser().parse(new ByteArrayInputStream(bytes), handler);
+                var profile = handler.getUserProfile();
+                Platform.runLater(() -> {
+                    if (!current(ticket)) return;
+                    try {
+                        var preview = runtime.previewLoggerProfile(snapshot, profile);
+                        String detail = "Profile: " + file.getName() + "\nAvailable selected channels: " + preview.available().size()
+                                + "\n" + String.join(", ", preview.available())
+                                + (preview.unavailable().isEmpty() ? "" : "\n\nUnavailable selections (will not be loaded): "
+                                        + String.join(", ", preview.unavailable())
+                                        + "\nECU identification or DimeMod discovery may make additional channels available; load the profile again afterward.")
+                                + "\n\nReplace current channel selections? You can add or remove channels afterward. "
+                                + "The source XML is unchanged. The logger stays disconnected; gauge layout is unchanged.";
+                        if (!review.test("Load Logger Profile", detail)) {
+                            status.accept("Profile load cancelled; current selection unchanged."); return;
+                        }
+                        if (!current(ticket)) return;
+                        runtime.requireCurrentChannelSetup(snapshot);
+                        pending = worker.submit(() -> {
+                            if (!current(ticket) || Thread.currentThread().isInterrupted()) return;
+                            try {
+                                boolean saved = runtime.applyLoggerProfile(snapshot, profile);
+                                Platform.runLater(() -> { if (current(ticket)) status.accept(saved
+                                        ? "Logger profile loaded: " + preview.available().size() + " channels selected; "
+                                                + preview.unavailable().size() + " unavailable. Logger remains disconnected."
+                                        : "Profile loaded for this session, but its recovery copy could not be saved."); });
+                            } catch (RuntimeException failure) { publishFailure(ticket, failure); }
+                        });
+                    } catch (RuntimeException failure) { failure(failure); }
+                });
+            } catch (Exception failure) { publishFailure(ticket, failure); }
+        });
     }
 
     void showImport() {
@@ -181,7 +246,11 @@ final class FxLoggerSetupTransfer implements AutoCloseable {
     private void publishFailure(long ticket, Exception failure) {
         Platform.runLater(() -> { if (current(ticket)) failure(failure); });
     }
-    private void failure(Exception failure) { status.accept("Channel setup transfer failed: " + FxDialogs.rootMessage(failure)); }
+    private void failure(Exception failure) {
+        String message = FxDialogs.rootMessage(failure);
+        status.accept("Logger setup action failed: " + message);
+        showError.accept(message);
+    }
     private boolean current(long ticket) { return !closed && ticket == generation; }
     private void cancelWork() { generation++; if (pending != null) pending.cancel(true); }
     @Override public void close() { closed = true; cancelWork(); worker.shutdownNow(); }
