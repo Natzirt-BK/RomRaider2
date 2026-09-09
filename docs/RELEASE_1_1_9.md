@@ -49,6 +49,9 @@ match the ROM. Configure logging and gauges while parked.
 
 ## Verification
 
-Package qualification is in progress. See the
+Built from `ed422f4faa64926bddf8fd306c533c993d4e6976`. Hosted builds and Android
+regression checks passed. Downloaded packages passed integrity, version and
+signing checks; Linux/SteamOS launch and signed Android upgrade checks passed.
+See the
 [qualification record](https://github.com/Natzirt-BK/RomRaider2/blob/master/docs/RELEASE_1_1_9_QUALIFICATION.md)
 for completed checks and remaining physical-device acceptance.
