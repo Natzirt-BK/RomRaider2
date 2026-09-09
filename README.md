@@ -14,6 +14,10 @@ Development source is **1.1.6**, with a separate desktop
 [read-only ELM/OBDLink adapter test](docs/ELM_IN_CAR_TEST.md) awaiting vehicle
 qualification. It is not included in the current download.
 
+Android development also adds [automatic DimeMod channel discovery](docs/ANDROID_CHANNEL_CATALOG.md)
+and clearer channel selection. SSM connection setup includes the DimeMod
+negotiation handshake; channel polling remains read-only. Vehicle testing is pending.
+
 ## Downloads
 
 [Download 1.1.5 RC1](https://github.com/Natzirt-BK/RomRaider2/releases/tag/romraider2-1.1.5)

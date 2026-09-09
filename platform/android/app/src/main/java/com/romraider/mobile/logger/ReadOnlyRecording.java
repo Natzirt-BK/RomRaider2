@@ -7,6 +7,7 @@ import com.romraider.portable.logger.PortableLoggerValue;
 import com.romraider.portable.logger.ReadOnlyLoggerTransport;
 import com.romraider.portable.logger.definition.PortableLoggerDefinition;
 import com.romraider.portable.logger.definition.PortableLoggerProfile;
+import com.romraider.portable.logger.dimemod.DimeModDiscovery;
 
 import java.io.Closeable;
 import java.util.List;
@@ -115,6 +116,9 @@ public final class ReadOnlyRecording implements AutoCloseable {
             0, 0, List.of(), 0, "Not started.");
     private ReadOnlyLoggerSession session;
     private PortableLogSession completedLog;
+    private final DimeModDiscovery.Mode discoveryMode;
+    private volatile PortableLoggerDefinition discoveredCatalog;
+    private volatile String discoveryStatus = "";
 
     public ReadOnlyRecording(ResourceFactory factory, PortableLoggerDefinition definition,
             PortableLoggerProfile profile) {
@@ -124,21 +128,32 @@ public final class ReadOnlyRecording implements AutoCloseable {
     /** Android hosts should supply SystemClock::elapsedRealtimeNanos to include deep sleep. */
     public ReadOnlyRecording(ResourceFactory factory, PortableLoggerDefinition definition,
             PortableLoggerProfile profile, LongSupplier nanoTime) {
+        this(factory, definition, profile, nanoTime, DimeModDiscovery.Mode.OFF);
+    }
+
+    public ReadOnlyRecording(ResourceFactory factory, PortableLoggerDefinition definition,
+            PortableLoggerProfile profile, LongSupplier nanoTime, DimeModDiscovery.Mode mode) {
         this(factory, definition, profile, command -> {
             Thread worker = new Thread(command, "rr2-read-only-recording");
             worker.setDaemon(true);
             worker.start();
-        }, nanoTime);
+        }, nanoTime, mode);
     }
 
     // Deterministic scheduling/clock injection; production hosts use the owned worker above.
     ReadOnlyRecording(ResourceFactory factory, PortableLoggerDefinition definition,
             PortableLoggerProfile profile, Executor executor, LongSupplier nanoTime) {
+        this(factory, definition, profile, executor, nanoTime, DimeModDiscovery.Mode.OFF);
+    }
+
+    ReadOnlyRecording(ResourceFactory factory, PortableLoggerDefinition definition,
+            PortableLoggerProfile profile, Executor executor, LongSupplier nanoTime, DimeModDiscovery.Mode mode) {
         this.factory = Objects.requireNonNull(factory, "factory");
         this.definition = Objects.requireNonNull(definition, "definition");
         this.profile = Objects.requireNonNull(profile, "profile");
         this.executor = Objects.requireNonNull(executor, "executor");
         this.nanoTime = Objects.requireNonNull(nanoTime, "nanoTime");
+        this.discoveryMode = Objects.requireNonNull(mode, "mode");
         PortableLoggerProtocol protocol = PortableLoggerProtocol.fromId(definition.getProtocol());
         if (!profile.getProtocol().isEmpty()
                 && PortableLoggerProtocol.fromId(profile.getProtocol()) != protocol) {
@@ -163,6 +178,20 @@ public final class ReadOnlyRecording implements AutoCloseable {
 
     public Snapshot snapshot() { return snapshot; }
     public PortableLoggerProtocol protocol() { return PortableLoggerProtocol.fromId(definition.getProtocol()); }
+
+    /** Last-session catalog hint only; never authorizes reuse of ECU addresses. */
+    public String identifiedEcuFor(PortableLoggerDefinition candidate) {
+        return candidate == definition ? snapshot().ecuId() : "";
+    }
+
+    public PortableLoggerDefinition catalogFor(PortableLoggerDefinition candidate) {
+        PortableLoggerDefinition catalog = discoveredCatalog;
+        return candidate == definition && catalog != null ? catalog : candidate;
+    }
+
+    public String discoveryStatusFor(PortableLoggerDefinition candidate) {
+        return candidate == definition ? discoveryStatus : "";
+    }
 
     /** Reset display peaks to current values without changing CSV or reading freshness. */
     public void resetPeaks() {
@@ -211,6 +240,15 @@ public final class ReadOnlyRecording implements AutoCloseable {
             resources = Objects.requireNonNull(factory.open(() -> stopRequested), "resources");
             ReadOnlyLoggerSession prepared = new ReadOnlyLoggerSession(resources.transport,
                     definition, profile, resources.log, new ReadOnlyLoggerSession.Listener() {
+                @Override public void onCatalog(String ecuId, PortableLoggerDefinition catalog, String status) {
+                    synchronized (lock) {
+                        if (stopRequested) return;
+                        discoveredCatalog = catalog;
+                        discoveryStatus = status;
+                        snapshot = new Snapshot(Phase.CONNECTING, ecuId, 0, 0,
+                                0, 0, List.of(), 0, status);
+                    }
+                }
                 @Override public void onIdentified(String ecuId, int ready, int unavailable) {
                     synchronized (lock) {
                         if (stopRequested) return;
@@ -234,11 +272,12 @@ public final class ReadOnlyRecording implements AutoCloseable {
                     message[0] = reason;
                     synchronized (lock) { changePhase(Phase.STOPPING, "Releasing the adapter..."); }
                 }
-            });
+            }, discoveryMode);
             synchronized (lock) {
                 session = prepared;
                 if (stopRequested) prepared.stop();
-                else changePhase(Phase.CONNECTING, "Identifying the ECU read-only...");
+                else changePhase(Phase.CONNECTING, discoveryMode == DimeModDiscovery.Mode.OFF
+                        ? "Identifying the ECU read-only..." : "Connecting and discovering DimeMod channels...");
             }
             sessionOwnsFinish = true;
             prepared.run();

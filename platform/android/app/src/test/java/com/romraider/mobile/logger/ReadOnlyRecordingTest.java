@@ -404,8 +404,13 @@ public class ReadOnlyRecordingTest {
                 new PortableLoggerProfile.Selection("RPM", "scaled")), List.of());
         ReadOnlyRecording recording = new ReadOnlyRecording(cancelled ->
                 new ReadOnlyRecording.Resources(transport, log, () -> releases.incrementAndGet()), definition, profile);
+        assertEquals("", recording.identifiedEcuFor(definition));
         recording.start(); await(recording);
         assertEquals("SYNTHETIC_SSM", recording.snapshot().ecuId());
+        assertEquals("SYNTHETIC_SSM", recording.identifiedEcuFor(definition));
+        assertEquals("", recording.identifiedEcuFor(null));
+        assertEquals("", recording.identifiedEcuFor(
+                new PortableLoggerDefinition("test", "SSM", definition.parameters())));
         assertEquals(2, recording.snapshot().samples());
         assertEquals(1, releases.get());
         StringWriter output = new StringWriter(); recording.completedLog().writeRomRaiderCsv(output);

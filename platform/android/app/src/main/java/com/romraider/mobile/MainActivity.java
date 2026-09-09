@@ -641,13 +641,18 @@ public final class MainActivity extends Activity {
         usbCard.addView(usbStatusView, matchWrap());
         content.addView(usbCard, cardParams(dp(10)));
 
-        LinearLayout liveCard = sectionCard("READ-ONLY LIVE LOGGER",
+        LinearLayout liveCard = sectionCard("LIVE LOGGER",
                 "Identify the ECU, resolve profile addresses, display values, "
-                        + "and record CSV. Compatibility depends on the vehicle, "
+                        + "and record CSV. SSM setup automatically checks for DimeMod using its discovery handshake; subsequent channel polling is read-only. Compatibility depends on the vehicle, "
                         + "protocol, definition, selected channels, and adapter.");
         liveLoggerButton = button(getString(R.string.logger_live_start));
         styleButton(liveLoggerButton, POSITIVE, POSITIVE);
         liveLoggerButton.setOnClickListener(view -> toggleLiveLogger());
+        if (loggerProtocol == PortableLoggerProtocol.SSM) {
+            Button discover = button("CONNECT & FIND CHANNELS");
+            discover.setOnClickListener(view -> toggleLiveLogger(true));
+            liveCard.addView(discover, matchWrap(dp(9)));
+        }
         Button saveLive = button("SAVE LIVE CSV");
         saveLive.setOnClickListener(view -> saveLiveLog());
         liveCard.addView(actionRow(liveLoggerButton, saveLive),
@@ -655,7 +660,7 @@ public final class MainActivity extends Activity {
         Button archive = button("RECOVER / EXPORT RECORDINGS");
         archive.setOnClickListener(view -> chooseArchivedLog());
         liveCard.addView(archive, matchWrap(dp(9)));
-        liveLoggerView = statusText("READ-ONLY LOGGER\nPrepare the OpenPort and "
+        liveLoggerView = statusText("LIVE LOGGER\nPrepare the OpenPort and "
                 + "load a matching definition and profile. Live logging reads the "
                 + "vehicle; offline preview uses simulated values.");
         liveCard.addView(liveLoggerView, matchWrap());
@@ -686,10 +691,14 @@ public final class MainActivity extends Activity {
     }
 
     private String loggerSetupSummary() {
-        PortableLoggerDefinition definition = loggerDefinition;
+        PortableLoggerDefinition definition = loggerCatalog();
         PortableLoggerProfile profile = loggerProfile;
         StringBuilder result = new StringBuilder("Protocol: ").append(loggerProtocol)
                 .append('\n').append(loggerSetupState);
+        if (recordingService != null && recordingService.recording() != null) {
+            String status = recordingService.recording().discoveryStatusFor(loggerDefinition);
+            if (!status.isEmpty()) result.append('\n').append(status);
+        }
         if (loggerImports.isLoading()) result.append("\nImport still in progress; wait before starting logging.");
         if (loggerProtocol == PortableLoggerProtocol.MUT2) {
             result.append("\nMUT2_GENERIC confirms a response, not a calibration ID. "
@@ -1502,16 +1511,42 @@ public final class MainActivity extends Activity {
         });
     }
 
+    private PortableLoggerDefinition loggerCatalog() {
+        ReadOnlyRecording recording = recordingService == null ? null : recordingService.recording();
+        return recording == null ? loggerDefinition : recording.catalogFor(loggerDefinition);
+    }
+
     private void chooseLoggerChannels() {
+        if (!loggerSetupEditable() || loggerImportPending()) return;
+        ReadOnlyRecording recording = recordingService == null ? null : recordingService.recording();
+        PortableLoggerDefinition catalogDefinition = loggerDefinition;
+        String ecuId = recording == null ? "" : recording.identifiedEcuFor(loggerDefinition);
+        if (ecuId.isEmpty()) {
+            chooseLoggerChannels(null);
+        } else {
+            new AlertDialog.Builder(this).setTitle("Channel catalog")
+                    .setItems(new String[]{"Mapped for last ECU: " + ecuId, "All engine channels"},
+                            (dialog, which) -> {
+                                if (loggerDefinition == catalogDefinition) {
+                                    chooseLoggerChannels(which == 0 ? ecuId : null);
+                                }
+                            })
+                    .setNegativeButton("Cancel", null).show();
+        }
+    }
+
+    private void chooseLoggerChannels(String ecuId) {
         if (!loggerSetupEditable()) return;
         if (loggerImportPending()) return;
-        PortableLoggerDefinition definition = loggerDefinition;
+        PortableLoggerDefinition baseDefinition = loggerDefinition;
+        PortableLoggerDefinition definition = loggerCatalog();
         PortableLoggerProfile originalProfile = loggerProfile;
         if (definition == null) {
             notice("Load a logger definition first.");
             return;
         }
-        List<PortableLoggerParameter> parameters = definition.parameters();
+        List<PortableLoggerParameter> parameters =
+                com.romraider.mobile.logger.LoggerChannelCatalog.channels(definition, loggerProfile, ecuId);
         String[] names = new String[parameters.size()];
         boolean[] checked = new boolean[names.length];
         Map<String, String> previousUnits = new HashMap<>();
@@ -1519,15 +1554,16 @@ public final class MainActivity extends Activity {
             previousUnits.put(selection.getId(), selection.getUnits());
         }
         for (int index = 0; index < names.length; index++) {
-            names[index] = parameters.get(index).getName();
+            names[index] = com.romraider.mobile.logger.LoggerChannelCatalog.label(parameters.get(index));
             checked[index] = previousUnits.containsKey(parameters.get(index).getId());
         }
-        new AlertDialog.Builder(this).setTitle("Channels (fewer = faster cycles)")
+        new AlertDialog.Builder(this).setTitle(ecuId == null
+                        ? "Engine channels (all ECUs)" : "Mapped for last ECU: " + ecuId)
                 .setMultiChoiceItems(names, checked, (dialog, which, selected) -> checked[which] = selected)
                 .setNegativeButton("Cancel", null)
                 .setNeutralButton("Clear all", (dialog, which) -> {
                     if (!loggerSetupEditable()) return;
-                    if (loggerImports.isLoading() || loggerDefinition != definition
+                    if (loggerImports.isLoading() || loggerDefinition != baseDefinition
                             || loggerProfile != originalProfile) return;
                     loggerSetupRevision++;
                     stopLoggerPreview(null);
@@ -1539,20 +1575,13 @@ public final class MainActivity extends Activity {
                 })
                 .setPositiveButton("Use channels", (dialog, which) -> {
                     if (!loggerSetupEditable()) return;
-                    if (loggerImports.isLoading() || loggerDefinition != definition
+                    if (loggerImports.isLoading() || loggerDefinition != baseDefinition
                             || loggerProfile != originalProfile) return;
                     loggerSetupRevision++;
                     stopLoggerPreview(null);
                     stopLiveLogger(null);
-                    List<PortableLoggerProfile.Selection> selections = new ArrayList<>();
-                    for (int index = 0; index < checked.length; index++) {
-                        PortableLoggerParameter parameter = parameters.get(index);
-                        if (checked[index] && !parameter.getConversions().isEmpty()) selections.add(
-                                new PortableLoggerProfile.Selection(parameter.getId(),
-                                        previousUnits.getOrDefault(parameter.getId(),
-                                                parameter.getConversions().get(0).getUnits())));
-                    }
-                    loggerProfile = new PortableLoggerProfile(loggerProtocol.name(), selections, Collections.emptyList());
+                    loggerProfile = com.romraider.mobile.logger.LoggerChannelCatalog.select(
+                            loggerProtocol.name(), originalProfile, parameters, checked);
                     loggerProfileName = "Custom channels";
                     scheduleLoggerSetupSave();
                     refreshLoggerSetupStatus();
@@ -2025,6 +2054,10 @@ public final class MainActivity extends Activity {
     }
 
     private void toggleLiveLogger() {
+        toggleLiveLogger(false);
+    }
+
+    private void toggleLiveLogger(boolean discoveryOnly) {
         if (recordingService == null || !activityResumed) {
             notice("Wait for the recording service while this screen is visible.");
             return;
@@ -2037,6 +2070,9 @@ public final class MainActivity extends Activity {
         OpenPortUsbTransport transport = openPort;
         PortableLoggerDefinition definition = loggerDefinition;
         PortableLoggerProfile profile = loggerProfile;
+        if (discoveryOnly && profile == null) {
+            profile = new PortableLoggerProfile(loggerProtocol.name(), Collections.emptyList(), Collections.emptyList());
+        }
         if (transport == null) { notice("Prepare an OpenPort 2.0 first."); return; }
         if (definition == null || profile == null) {
             notice("Open a logger definition and profile first."); return;
@@ -2053,7 +2089,7 @@ public final class MainActivity extends Activity {
         stopLoggerPreview(null);
         try {
             UsbDevice selected = findOpenPort((UsbManager) getSystemService(USB_SERVICE));
-            if (!recordingService.start(transport, selected, definition, profile)) {
+            if (!recordingService.start(transport, selected, definition, profile, discoveryOnly)) {
                 notice("Adapter permission or recording state changed. Prepare the OpenPort again.");
                 return;
             }
@@ -2061,7 +2097,7 @@ public final class MainActivity extends Activity {
                 usbGeneration++;
                 openPort = null; // Exclusive ownership transferred; Activity must never close it.
             }
-            usbState = "OpenPort is owned by the read-only recording service.";
+            usbState = "OpenPort is owned by the logger service.";
             cancelLogImport(null);
             clearLoggerGauges();
             displayedRecording = null;
@@ -2118,6 +2154,8 @@ public final class MainActivity extends Activity {
                             state.receivedAtNanos() / 1_000_000L);
                 }
             }
+            if (displayedRecordingState == null || !state.ecuId().equals(displayedRecordingState.ecuId())
+                    || state.phase() != displayedRecordingState.phase()) refreshLoggerSetupStatus();
             displayedRecordingState = state;
         }
         liveEcuIdentified = busy && state.phase() == ReadOnlyRecording.Phase.RECORDING;
@@ -2306,7 +2344,8 @@ public final class MainActivity extends Activity {
     }
 
     private String gaugeChannelName(String id) {
-        PortableLoggerParameter parameter = loggerDefinition == null ? null : loggerDefinition.parameter(id);
+        PortableLoggerDefinition catalog = loggerCatalog();
+        PortableLoggerParameter parameter = catalog == null ? null : catalog.parameter(id);
         return parameter == null ? id : parameter.getName();
     }
 
@@ -2334,7 +2373,7 @@ public final class MainActivity extends Activity {
         List<String> ids = new ArrayList<>();
         List<String> labels = new ArrayList<>();
         ids.add(""); labels.add("Empty slot");
-        for (PortableLoggerParameter parameter : loggerDefinition.parameters()) {
+        for (PortableLoggerParameter parameter : loggerCatalog().parameters()) {
             if (parameter.getId().length() > 240) continue;
             ids.add(parameter.getId());
             labels.add(parameter.getName() + " [" + parameter.getId() + "]");

@@ -16,10 +16,13 @@ import com.romraider.portable.logger.definition.PortableSelectedParameter;
 
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
+import com.romraider.portable.logger.dimemod.DimeModDiscovery;
+import com.romraider.portable.logger.dimemod.PortableDimeModMetadata;
 
 /** One single-use read-only session; its host determines the Android execution lifecycle. */
 public final class ReadOnlyLoggerSession {
     public interface Listener {
+        default void onCatalog(String ecuId, PortableLoggerDefinition catalog, String status) { }
         void onIdentified(String ecuId, int readyParameters,
                 int unavailableParameters);
         void onValues(String ecuId, long timestampMillis,
@@ -35,6 +38,7 @@ public final class ReadOnlyLoggerSession {
     private final AtomicBoolean running = new AtomicBoolean();
     private final AtomicBoolean started = new AtomicBoolean();
     private volatile boolean stopRequested;
+    private final DimeModDiscovery.Mode discoveryMode;
 
     public ReadOnlyLoggerSession(ReadOnlyLoggerTransport transport,
             PortableLoggerDefinition definition, PortableLoggerProfile profile,
@@ -45,6 +49,12 @@ public final class ReadOnlyLoggerSession {
     public ReadOnlyLoggerSession(ReadOnlyLoggerTransport transport,
             PortableLoggerDefinition definition, PortableLoggerProfile profile,
             PortableLogSession log, Listener listener) {
+        this(transport, definition, profile, log, listener, DimeModDiscovery.Mode.OFF);
+    }
+
+    public ReadOnlyLoggerSession(ReadOnlyLoggerTransport transport,
+            PortableLoggerDefinition definition, PortableLoggerProfile profile,
+            PortableLogSession log, Listener listener, DimeModDiscovery.Mode discoveryMode) {
         if (transport == null || definition == null || profile == null
                 || log == null || listener == null) {
             throw new IllegalArgumentException(
@@ -55,6 +65,7 @@ public final class ReadOnlyLoggerSession {
         this.profile = profile;
         this.log = log;
         this.listener = listener;
+        this.discoveryMode = java.util.Objects.requireNonNull(discoveryMode);
     }
 
     /** Blocks on the calling worker thread until stopped or a read fails. */
@@ -72,9 +83,31 @@ public final class ReadOnlyLoggerSession {
                 throw new IllegalArgumentException("Logger profile protocol does not match the definition");
             }
             String ecuId = transport.identifyEcu(protocol, () -> stopRequested);
+            if (stopRequested) return;
+            PortableLoggerDefinition catalog = definition;
+            String catalogStatus = "ECU " + ecuId + " identified.";
+            if (discoveryMode != DimeModDiscovery.Mode.OFF) {
+                if (protocol != PortableLoggerProtocol.SSM || !(transport instanceof DimeModDiscovery.Transport)) {
+                    throw new IllegalStateException("DimeMod discovery requires an SSM-capable transport");
+                }
+                PortableDimeModMetadata metadata = ((DimeModDiscovery.Transport) transport)
+                        .discoverDimeMod(() -> stopRequested);
+                if (stopRequested) return;
+                if (metadata != null) {
+                    catalog = DimeModDiscovery.merge(definition, ecuId, metadata);
+                    catalogStatus = "DimeMod " + metadata.version() + ": " + metadata.parameters().size()
+                            + " channels discovered. Choose channels before your next recording.";
+                } else catalogStatus = "ECU " + ecuId + " identified; DimeMod not detected.";
+            }
+            listener.onCatalog(ecuId, catalog, catalogStatus);
+            if (stopRequested) return;
+            if (discoveryMode == DimeModDiscovery.Mode.DISCOVER_ONLY) {
+                stopMessage = catalogStatus;
+                return;
+            }
             PortableLoggerSelection selection =
                     PortableLoggerSelectionService.resolve(
-                            definition, profile, ecuId, 1);
+                            catalog, profile, ecuId, 1);
             if (selection.ready().isEmpty()) {
                 throw new IllegalStateException(
                         "The profile has no parameters for ECU " + ecuId + ".");
@@ -101,7 +134,7 @@ public final class ReadOnlyLoggerSession {
                 listener.onValues(ecuId, timestamp, values, log.size());
             }
         } catch (Exception ex) {
-            if (!stopRequested) stopMessage = ex.getMessage() == null
+            if (!stopRequested || ex instanceof DimeModDiscovery.UncertainStateException) stopMessage = ex.getMessage() == null
                     ? "Read-only logger stopped after a connection error."
                     : ex.getMessage();
         } finally {

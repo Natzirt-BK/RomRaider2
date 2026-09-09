@@ -29,7 +29,7 @@ import java.util.List;
 
 /** Owns one Android USB host session with an OpenPort 2.0 adapter. */
 public final class OpenPortUsbTransport implements Closeable,
-        ReadOnlyLoggerTransport {
+        ReadOnlyLoggerTransport, com.romraider.portable.logger.dimemod.DimeModDiscovery.Transport {
     private static final int CONTROL_TIMEOUT_MS = 2000;
     private static final int VEHICLE_TIMEOUT_MS = 2500;
     private static final int READ_SLICE_MS = 250;
@@ -46,6 +46,8 @@ public final class OpenPortUsbTransport implements Closeable,
     private PortableLoggerProtocol activeProtocol;
     private java.util.function.BooleanSupplier cancelled = () -> false;
     private boolean closed;
+    private boolean dimeDiscovery;
+    private boolean ssmIdentified;
     private final OpenPortMut2Startup mut2Startup = new OpenPortMut2Startup();
 
     /** Small I/O boundary so the actual transport can be tested without Android USB. */
@@ -199,6 +201,7 @@ public final class OpenPortUsbTransport implements Closeable,
     public synchronized String identifyEcu(PortableLoggerProtocol protocol,
             java.util.function.BooleanSupplier cancelled) throws IOException {
         this.cancelled = cancelled;
+        ssmIdentified = false;
         openReadOnlyKLine(protocol);
         try {
             if (protocol == PortableLoggerProtocol.MUT2) {
@@ -206,7 +209,9 @@ public final class OpenPortUsbTransport implements Closeable,
                         ReadOnlyMut2Protocol.request(ReadOnlyMut2Protocol.PROBE_PID)));
             }
             byte[] response = transceiveSsm(ReadOnlySsmProtocol.ecuInitRequest());
-            return ReadOnlySsmProtocol.ecuId(response);
+            String id = ReadOnlySsmProtocol.ecuId(response);
+            ssmIdentified = true;
+            return id;
         } catch (IllegalArgumentException ex) {
             throw new IOException("The ECU identification response was invalid.", ex);
         }
@@ -231,6 +236,32 @@ public final class OpenPortUsbTransport implements Closeable,
         }
     }
 
+    @Override
+    public synchronized com.romraider.portable.logger.dimemod.PortableDimeModMetadata discoverDimeMod(
+            java.util.function.BooleanSupplier stopped) throws IOException {
+        if (!kLineOpen || activeProtocol != PortableLoggerProtocol.SSM || !ssmIdentified) {
+            throw new IOException("DimeMod discovery requires an identified SSM connection");
+        }
+        java.util.function.BooleanSupplier previous = cancelled;
+        cancelled = stopped;
+        dimeDiscovery = true;
+        try {
+            return com.romraider.portable.logger.dimemod.DimeModDiscovery.discover(
+                    new com.romraider.portable.logger.dimemod.DimeModDiscovery.Link() {
+                        public byte[] exchange(byte[] request, boolean cleanup) throws IOException {
+                            java.util.function.BooleanSupplier saved = cancelled;
+                            if (cleanup) cancelled = () -> false;
+                            try { return transceiveSsm(request); }
+                            finally { cancelled = saved; }
+                        }
+                        public long millis() { return io.elapsedRealtime(); }
+                    }, stopped);
+        } finally {
+            dimeDiscovery = false;
+            cancelled = previous;
+        }
+    }
+
     public synchronized void closeReadOnlyKLine() {
         if (closed) return;
         IOException pinFailure = null;
@@ -243,6 +274,7 @@ public final class OpenPortUsbTransport implements Closeable,
         } finally {
             kLineOpen = false;
             activeProtocol = null;
+            ssmIdentified = false;
             kLineDecoder.reset();
         }
         if (pinFailure != null) throw new IllegalStateException(
@@ -337,7 +369,8 @@ public final class OpenPortUsbTransport implements Closeable,
             }
             if (!frames.isEmpty()) return frames.get(0);
         }
-        throw new IOException("The ECU did not answer the read-only " + activeProtocol + " request.");
+        throw new IOException(dimeDiscovery ? "The ECU did not answer the DimeMod discovery request."
+                : "The ECU did not answer the read-only " + activeProtocol + " request.");
     }
 
     private void drainInput() {

@@ -76,7 +76,7 @@ public final class ReadOnlyLoggingService extends Service {
     public void onCreate() {
         super.onCreate();
         getSystemService(NotificationManager.class).createNotificationChannel(new NotificationChannel(
-                CHANNEL, "Read-only vehicle recording", NotificationManager.IMPORTANCE_LOW));
+                CHANNEL, "Vehicle logging", NotificationManager.IMPORTANCE_LOW));
         registerReceiver(detached, new IntentFilter(UsbManager.ACTION_USB_DEVICE_DETACHED), RECEIVER_NOT_EXPORTED);
     }
 
@@ -90,7 +90,13 @@ public final class ReadOnlyLoggingService extends Service {
     /** True transfers transport ownership even if subsequent foreground promotion fails. */
     boolean start(OpenPortUsbTransport transport, UsbDevice selected,
             PortableLoggerDefinition definition, PortableLoggerProfile profile) {
+        return start(transport, selected, definition, profile, false);
+    }
+
+    boolean start(OpenPortUsbTransport transport, UsbDevice selected,
+            PortableLoggerDefinition definition, PortableLoggerProfile profile, boolean discoveryOnly) {
         requireMainThread();
+        if (discoveryOnly && !"SSM".equalsIgnoreCase(definition.getProtocol())) return false;
         UsbManager manager = getSystemService(UsbManager.class);
         if (destroyed || busy() || transport == null || !transport.matches(selected)
                 || manager == null || !manager.hasPermission(selected)
@@ -98,22 +104,35 @@ public final class ReadOnlyLoggingService extends Service {
         Lease transferred = new Lease(transport);
         File folder = new File(getFilesDir(), "recordings");
         ReadOnlyRecording.ResourceFactory factory = cancelled -> {
+            if (discoveryOnly) return new ReadOnlyRecording.Resources(transport, new PortableLogSession(), transferred);
             if (!folder.isDirectory() && !folder.mkdirs()) throw new IOException("Recording folder is unavailable");
             PortableLogSession log = PortableLogSession.streaming(File.createTempFile(
                     "live-" + System.currentTimeMillis() + "-", ".csv.part", folder), 10_000);
             return new ReadOnlyRecording.Resources(transport, log, transferred);
         };
-        return accept(factory, transferred, selected, definition, profile);
+        com.romraider.portable.logger.dimemod.DimeModDiscovery.Mode mode =
+                "SSM".equalsIgnoreCase(definition.getProtocol())
+                ? discoveryOnly ? com.romraider.portable.logger.dimemod.DimeModDiscovery.Mode.DISCOVER_ONLY
+                    : com.romraider.portable.logger.dimemod.DimeModDiscovery.Mode.DISCOVER_AND_LOG
+                : com.romraider.portable.logger.dimemod.DimeModDiscovery.Mode.OFF;
+        return accept(factory, transferred, selected, definition, profile, mode);
     }
 
     // Also exercised by isolated automation through reflection, with a fake resource factory.
     // No intent, binder command or exported API accepts a factory or bypasses the USB checks above.
     private boolean accept(ReadOnlyRecording.ResourceFactory factory, Lease transferred, UsbDevice selected,
             PortableLoggerDefinition definition, PortableLoggerProfile profile) {
+        return accept(factory, transferred, selected, definition, profile,
+                com.romraider.portable.logger.dimemod.DimeModDiscovery.Mode.OFF);
+    }
+
+    private boolean accept(ReadOnlyRecording.ResourceFactory factory, Lease transferred, UsbDevice selected,
+            PortableLoggerDefinition definition, PortableLoggerProfile profile,
+            com.romraider.portable.logger.dimemod.DimeModDiscovery.Mode mode) {
         requireMainThread();
         if (destroyed || busy()) return false;
         handler.removeCallbacks(monitor);
-        ReadOnlyRecording next = new ReadOnlyRecording(factory, definition, profile, SystemClock::elapsedRealtimeNanos);
+        ReadOnlyRecording next = new ReadOnlyRecording(factory, definition, profile, SystemClock::elapsedRealtimeNanos, mode);
         recording = next;
         lease = transferred;
         device = selected;
@@ -227,14 +246,14 @@ public final class ReadOnlyLoggingService extends Service {
     }
 
     private Notification notification() {
-        String status = "Preparing read-only recording";
+        String status = "Preparing vehicle logger";
         if (recording != null) {
             ReadOnlyRecording.Snapshot state = recording.snapshot();
             status = state.phase() == ReadOnlyRecording.Phase.STOPPING ? "Stopping and saving recording"
                     : state.phase() == ReadOnlyRecording.Phase.RECORDING
                     ? (SystemClock.elapsedRealtimeNanos() - state.receivedAtNanos() > 3_000_000_000L
                         ? "No recent ECU data" : "Read-only recording active")
-                    : "Connecting to ECU read-only";
+                    : "Connecting and discovering channels";
         }
         PendingIntent open = PendingIntent.getActivity(this, 0,
                 new Intent(this, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
@@ -244,7 +263,7 @@ public final class ReadOnlyLoggingService extends Service {
                         .setData(Uri.parse("rr2-recording://stop/" + token)).putExtra(TOKEN, token),
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         return new Notification.Builder(this, CHANNEL).setSmallIcon(android.R.drawable.stat_notify_sync)
-                .setContentTitle("RomRaider2 read-only logger").setContentText(status)
+                .setContentTitle("RomRaider2 logger").setContentText(status)
                 .setContentIntent(open).setOngoing(true).setOnlyAlertOnce(true)
                 .setVisibility(Notification.VISIBILITY_PRIVATE)
                 .addAction(new Notification.Action.Builder(null, "Stop recording", stop).build()).build();

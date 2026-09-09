@@ -27,6 +27,12 @@ initial restore. A short, bounded reconciliation now covers floating geometry
 as well as maximized placement; it releases control after settling and cancels
 on re-entry or close. The regression injects that late callback explicitly.
 
+Android 1.1.6 source now includes automatic SSM DimeMod discovery and an
+ECU-aware, ID-labeled channel picker. The discovery setup uses the upstream
+negotiation writes; subsequent polling stays read-only. See the
+[Android catalog/discovery contract](ANDROID_CHANNEL_CATALOG.md) for test scope
+and the pending parked-vehicle validation. This is not in the public 1.1.5 APK.
+
 ## Earlier checkpoints
 
 The following entries describe historical work, not the current download status.
