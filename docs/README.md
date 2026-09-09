@@ -2,8 +2,8 @@
 
 ## Start here
 
-- [Current release candidate](RELEASE_1_1_5.md)
-- [1.1.5 package qualification](RELEASE_1_1_5_QUALIFICATION.md)
+- [Current release candidate](RELEASE_1_1_8.md)
+- [1.1.8 package qualification](RELEASE_1_1_8_QUALIFICATION.md)
 - [Android setup and testing](ANDROID_PREVIEW_TESTING.md)
 - [Building RomRaider2](Building_RomRaider_VSCode.md)
 - [Versioning](RELEASE_VERSIONING.md)

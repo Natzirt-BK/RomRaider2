@@ -51,3 +51,11 @@ expanded module diagnostics are not included. Production flashing and live
 tuning remain unavailable. Android does not repair ROM checksums. Definitions
 remain separate and must match the ROM ID exactly. Configure logging and gauges
 while parked.
+
+## Verification
+
+Built from `81c62ce674c7ace57488d7e778df37a9adbb3999`. Desktop/platform builds and
+Android regression checks passed. Downloaded packages were checked for integrity,
+versions and signing; Linux and SteamOS launch/close checks passed.
+See the [qualification record](https://github.com/Natzirt-BK/RomRaider2/blob/master/docs/RELEASE_1_1_8_QUALIFICATION.md)
+for checksums, test scope and remaining hardware work.

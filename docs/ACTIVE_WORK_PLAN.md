@@ -2,9 +2,9 @@
 
 Updated September 8, 2026.
 
-The current download is [1.1.5 RC1](RELEASE_1_1_5.md). Development source is
-1.1.8; source changes are not included in that download. See the
-[release qualification record](RELEASE_1_1_5_QUALIFICATION.md) for package checks
+The current candidate is [1.1.8 RC1](RELEASE_1_1_8.md), available for Android,
+Windows, Linux, SteamOS Desktop Mode and macOS. See the
+[release qualification record](RELEASE_1_1_8_QUALIFICATION.md) for package checks
 and outstanding hardware tests.
 
 ## Ready for testing
@@ -29,8 +29,9 @@ and outstanding hardware tests.
 2. Complete [desktop ELM/OBDLink hardware testing](ELM_IN_CAR_TEST.md), including
    adapter identification, supported standard PIDs and cancellation. Android ELM
    support and enhanced SSM/MUT-II over ELM are not yet available.
-3. Build and qualify the next cross-platform candidate. Check same-key Android
-   upgrades, desktop launch/shutdown, Steam Deck control sizing and macOS packages.
+3. Complete physical acceptance of the candidate: same-key Android upgrades,
+   desktop launch/shutdown, Steam Deck control sizing and macOS packages.
+   Address findings in the next numeric patch release.
 4. Continue the [adapter compatibility roadmap](ADAPTER_COMPATIBILITY_ROADMAP.md)
    using verified transport capabilities and identifiable hardware targets.
 5. Review transmission editing and diagnostics integration using the
