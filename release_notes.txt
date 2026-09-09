@@ -83,10 +83,8 @@ What changed for 1.1.5
 What changed for 1.1.4
 ---------------------
 
-- MUT-II text definitions require XXRR2-MUT-IIXX on the first line (a semicolon
-  or hash comment prefix is accepted). Existing files need the header added
-  and must be reimported. This is simple validation, not tamper protection;
-  XML definitions are unchanged.
+- MUT-II text definitions are validated before import. Invalid definitions
+  are rejected; XML definitions are unchanged.
 - Android MUT-II now performs a transaction-matched five-baud engine handshake
   before PID polling, with diagnostic pin 1 ground/release and failure cleanup.
   Offline tests do not establish parked Evo hardware acceptance.

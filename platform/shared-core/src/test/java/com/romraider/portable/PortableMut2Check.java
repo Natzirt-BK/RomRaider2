@@ -64,8 +64,10 @@ public final class PortableMut2Check {
             read(body);
             throw new AssertionError("Missing marker accepted");
         } catch (IOException expected) {
-            check(expected.getMessage().contains("XXRR2-MUT-IIXX")
-                    && expected.getMessage().contains("first line"), "Actionable marker error");
+            check(expected instanceof PortableMut2LogConfigReader.InvalidDefinitionException,
+                    "Typed invalid-definition rejection");
+            check(expected.getMessage().equals("Invalid logger definition.")
+                    && expected.getCause() == null, "Generic rejection without validation details");
         }
         PortableLoggerDefinition definition = read(config);
         check(definition.size() == 2, "Config catalog");

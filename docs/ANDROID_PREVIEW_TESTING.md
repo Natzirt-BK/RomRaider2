@@ -101,16 +101,9 @@ when safe. See [the investigation](EVO_MUT2_CONNECTION_DIAGNOSIS.md).
 2. Select **Protocol: MUT2**, then **Open logger definition**. Import the
    `type=mut2` OpenPort text configuration, or a logger XML containing
    a `MUT2` protocol. A ROM editor definition is not a logger definition.
-   Starting with the next 1.1.4 development build, text definitions must have
-   `XXRR2-MUT-IIXX` on their first line. The commented forms
-   `; XXRR2-MUT-IIXX` and `# XXRR2-MUT-IIXX` are also accepted; use the semicolon
-   form to retain OpenPort configuration syntax. Case must match exactly. A
-   leading UTF-8 BOM and surrounding spaces are allowed, but preceding blank
-   lines or other comments are not. Missing markers also block saved-definition
-   restoration: add the header to the source file and import it again. XML and
-   SSM definitions are unchanged. This copyable marker is simple validation,
-   not authentication or proof of ECU compatibility. The previously supplied
-   local 1.1.4 startup-test APK does not contain this later validation change.
+   Text definitions are validated before import and restored-setup use.
+   Invalid definitions are rejected. Use a compatible logger definition
+   matching the vehicle; acceptance does not establish channel accuracy.
 3. For SSM in 1.1.6 development, first use **Connect & Find Channels** with
    the ignition on. **Choose channels** then shows a searchable vehicle-only
    list, also used by the gauge picker. Unsupported imported selections remain

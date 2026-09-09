@@ -21,7 +21,13 @@ import java.util.Map;
  */
 public final class PortableMut2LogConfigReader {
     public static final int MAX_CONFIG_CHARS = 256 * 1024;
-    public static final String REQUIRED_HEADER = "XXRR2-MUT-IIXX";
+    private static final String REQUIRED_HEADER = "XXRR2-MUT-IIXX";
+
+    /** Public-facing rejection deliberately omits internal validation details. */
+    public static final class InvalidDefinitionException extends IOException {
+        private static final long serialVersionUID = 1L;
+        private InvalidDefinitionException() { super("Invalid logger definition."); }
+    }
 
     private PortableMut2LogConfigReader() { }
 
@@ -45,9 +51,7 @@ public final class PortableMut2LogConfigReader {
             header = header.substring(1).trim();
         }
         if (!REQUIRED_HEADER.equals(header)) {
-            throw new IOException("MUT-II text definition requires " + REQUIRED_HEADER
-                    + " on the first line (optionally prefixed with ; or #). "
-                    + "Update the file and import it again.");
+            throw new InvalidDefinitionException();
         }
         List<PortableLoggerParameter> parameters = new ArrayList<>();
         Map<String, String> fields = new LinkedHashMap<>();

@@ -14,10 +14,8 @@ Source changes are not automatically new APK releases.
 - Search numeric calibration tables, inspect scaled values, edit a selected cell,
   and save a separate review copy. Bounded hexadecimal editing is also available.
 - Import traditional RomRaider wide-column or RR2 long-form CSV logs.
-- MUT-II text imports require `XXRR2-MUT-IIXX` on the first line, optionally
-  prefixed with `;` or `#`. Update and reimport older text definitions, including
-  restored setups. This is a copyable marker, not a security signature; XML
-  imports are unchanged.
+- MUT-II text definitions are validated before import and restored-setup use.
+  Invalid definitions are rejected.
 - Import logger definitions, profiles and the read-only `type=mut2` subset of
   OpenPort `logcfg.txt`, including supported arithmetic RPN scaling and optional
   `paramunits` labels. Labels flow to gauges and CSV without changing values.

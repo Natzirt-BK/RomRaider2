@@ -1601,6 +1601,11 @@ public final class MainActivity extends Activity {
                     loggerSetupProblem = loggerSetupState;
                     scheduleLoggerSetupSave();
                     refreshLoggerSetupStatus();
+                    if (ex instanceof PortableMut2LogConfigReader.InvalidDefinitionException && !isFinishing()) {
+                        new AlertDialog.Builder(this).setTitle("Invalid logger definition")
+                                .setMessage("Invalid logger definition.")
+                                .setPositiveButton("OK", null).show();
+                    }
                 });
             }
         });
