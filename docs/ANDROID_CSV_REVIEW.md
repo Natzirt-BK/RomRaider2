@@ -1,10 +1,16 @@
-# Bounded Android CSV review — 1.1.3 development source
+# Android CSV review
 
 Use **OPEN CSV LOG** from the idle LOGGER workspace. File metadata and UTF-8 CSV
-parsing run on a separate worker. The app reports loading status and offers
-cancellation. A successful import shows an **imported, not live** summary:
+parsing run on a separate worker. **Log Review** sits at the bottom of the Logger
+page. There is no persistent Cancel CSV Import button; leaving the workspace or
+opening another file cancels pending work internally. A successful import opens
+a separate scrollable **imported, not live** summary window:
 total values, channel count, latest file-order sample, finite/missing counts and
-finite-only minimum/maximum. Twelve channels appear per page. An unavailable last
+finite-only minimum/maximum. A recycling list exposes all channels without
+Next/Previous paging. **Back to Logger** dismisses the window while retaining
+the imported summary; **View Imported Log** reopens it. **Close Log File**, in
+the window or the Log Review section, cancels pending imports and unloads the
+summary without deleting or rewriting the source CSV. An unavailable last
 sample remains unavailable; it is not replaced with an older finite value.
 This summary is not a timeline, chart or full sample table and never feeds live gauges.
 
@@ -39,8 +45,9 @@ this reader does not rewrite source files or change recording/export format.
 value input, without constructing the entire source string. Fifty checks cover
 summary arithmetic, exact timestamp limits, CSV grammar, bounded early rejection,
 read-ahead, cancellation, provider failure and ownership of borrowed Readers.
-Android's `csv-import` phase exercises a 260,002-value file, summary pagination,
+Android's `csv-import` phase exercises a 260,002-value file, a separate scrolling window,
+close/reopen behavior, source preservation when unloading,
 malformed UTF-8 retention, cancellation, bounded superseding work, workspace
 switches, recreation and refusal during a synthetic live recording. Physical phone
-document-provider acceptance remains pending. This is development source, not a
-change to the published 1.1.2 downloads.
+document-provider acceptance remains pending. These UI changes target 1.1.7;
+building a local APK does not publish a GitHub release.

@@ -98,6 +98,7 @@ public final class MainActivity extends Activity {
     private static final int SAVE_ARCHIVED_LOG = 18;
     private static final int OPEN_PORTABLE_SETUP = 19;
     private static final int SAVE_PORTABLE_SETUP = 20;
+    private static final int SAVE_LOGGER_PROFILE = 21;
     private static final String ACTION_USB_PERMISSION =
             "com.romraider.mobile.USB_PERMISSION";
     private static final int BACKGROUND = Color.rgb(15, 21, 27);
@@ -200,6 +201,7 @@ public final class MainActivity extends Activity {
     private int setupTransferGeneration;
     private boolean setupTransferLoading;
     private byte[] setupExportBytes;
+    private byte[] profileExportBytes;
     private byte[] loggerDefinitionBytes = new byte[0];
     private ReadOnlyLoggingService recordingService;
     private boolean serviceBound;
@@ -243,11 +245,12 @@ public final class MainActivity extends Activity {
     private boolean logImportLoading;
     private String logImportStatus = "No CSV imported. Imported data never becomes live gauge data.";
     private TextView logImportStatusView;
-    private Button cancelLogImportButton;
+    private Button closeImportedLogButton;
     private PortableLogCsvReader.Summary importedLogSummary;
     private String importedLogName = "";
-    private int importedLogPage;
-    private View importedLogCard;
+    private Button reviewImportedLogButton;
+    private android.app.Dialog importedLogDialog;
+    private android.widget.ListView importedLogList;
     private boolean loggerVisible;
     private volatile String usbState = "OpenPort not prepared.";
     private volatile PortableLoggerDefinition loggerDefinition;
@@ -338,6 +341,7 @@ public final class MainActivity extends Activity {
         discardArchiveRecovery();
         setupTransferGeneration++;
         setupExportBytes = null;
+        profileExportBytes = null;
         uiHandler.removeCallbacks(recordingTick);
         if (serviceBound) { unbindService(recordingConnection); serviceBound = false; }
         recordingService = null;
@@ -484,7 +488,6 @@ public final class MainActivity extends Activity {
 
     private void showLogger() {
         cancelLogImport(null);
-        importedLogCard = null;
         if (gaugesVisible) leaveGaugesOnly();
         loggerVisible = true;
         loggerSetupView = null;
@@ -510,19 +513,6 @@ public final class MainActivity extends Activity {
 
         // Gauge setup belongs exclusively to the Gauges tab, not the logger's channel setup.
         gaugeSetupCard = loggerDashboardCard();
-
-        LinearLayout reviewCard = sectionCard("LOG REVIEW",
-                "Open a RomRaider or RomRaider2 CSV and review the latest "
-                        + "value for each channel.");
-        Button open = button("OPEN CSV LOG");
-        open.setOnClickListener(view -> openLog());
-        cancelLogImportButton = button("CANCEL CSV IMPORT");
-        cancelLogImportButton.setOnClickListener(view -> cancelLogImport("CSV import cancelled; previous summary retained."));
-        reviewCard.addView(actionRow(open, cancelLogImportButton), matchWrap());
-        logImportStatusView = statusText(logImportStatus);
-        reviewCard.addView(logImportStatusView, matchWrap());
-        refreshLogImportStatus();
-        content.addView(reviewCard, cardParams(dp(10)));
 
         LinearLayout setupCard = sectionCard("LOGGER SETUP",
                 "Select the vehicle protocol, then load logger XML or a MUT2 "
@@ -556,15 +546,22 @@ public final class MainActivity extends Activity {
         definition.setOnClickListener(view -> openLoggerDefinition());
         Button profile = button("OPEN LOGGER PROFILE");
         profile.setOnClickListener(view -> openLoggerProfile());
-        setupCard.addView(actionRow(definition, profile), matchWrap(dp(9)));
+        Button saveProfile = button("SAVE LOGGER PROFILE");
+        saveProfile.setOnClickListener(view -> prepareLoggerProfileExport());
+        setupCard.addView(definition, matchWrap(dp(9)));
+        setupCard.addView(actionRow(profile, saveProfile), matchWrap(dp(9)));
         Button channels = button("CHOOSE CHANNELS");
         channels.setOnClickListener(view -> chooseLoggerChannels());
         setupCard.addView(channels, matchWrap(dp(9)));
-        Button importSetup = button("IMPORT CHANNEL SETUP");
-        importSetup.setOnClickListener(view -> openPortableLoggerSetup());
-        Button exportSetup = button("EXPORT CHANNEL SETUP");
-        exportSetup.setOnClickListener(view -> preparePortableLoggerSetupExport());
-        setupCard.addView(actionRow(importSetup, exportSetup), matchWrap(dp(9)));
+        Button transfer = button("MORE PROFILE OPTIONS");
+        transfer.setOnClickListener(view -> new AlertDialog.Builder(this)
+                .setTitle("RR2 profile transfer (.rr2logger)")
+                .setItems(new String[]{"Import RR2 transfer file", "Export RR2 transfer file"},
+                        (dialog, which) -> {
+                            if (which == 0) openPortableLoggerSetup();
+                            else preparePortableLoggerSetupExport();
+                        }).setNegativeButton("Cancel", null).show());
+        setupCard.addView(transfer, matchWrap(dp(9)));
         loggerSetupView = statusText(loggerSetupSummary());
         setupCard.addView(loggerSetupView, matchWrap());
         content.addView(setupCard, cardParams(dp(10)));
@@ -606,9 +603,23 @@ public final class MainActivity extends Activity {
                 + "vehicle. Gauge Demo is separate and uses simulated values.");
         liveCard.addView(liveLoggerView, matchWrap());
         content.addView(liveCard, cardParams(dp(12)));
+
+        LinearLayout reviewCard = sectionCard("LOG REVIEW",
+                "Open a saved CSV in a separate, scrollable channel-summary window.");
+        Button open = button("OPEN CSV LOG");
+        open.setOnClickListener(view -> openLog());
+        reviewImportedLogButton = button("VIEW IMPORTED LOG");
+        reviewImportedLogButton.setOnClickListener(view -> showLogSummary());
+        reviewCard.addView(actionRow(open, reviewImportedLogButton), matchWrap());
+        closeImportedLogButton = button("CLOSE LOG FILE");
+        closeImportedLogButton.setOnClickListener(view -> closeImportedLog());
+        reviewCard.addView(closeImportedLogButton, matchWrap());
+        logImportStatusView = statusText(logImportStatus);
+        reviewCard.addView(logImportStatusView, matchWrap());
+        content.addView(reviewCard, cardParams(dp(10)));
+        refreshLogImportStatus();
         displayedRecordingState = null;
         refreshRecording();
-        showLogSummary();
     }
 
     private void showUsbDevices() {
@@ -978,6 +989,10 @@ public final class MainActivity extends Activity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == SAVE_LOGGER_PROFILE && (resultCode != RESULT_OK || data == null || data.getData() == null)) {
+            profileExportBytes = null;
+            return;
+        }
         if (requestCode == SAVE_PORTABLE_SETUP && (resultCode != RESULT_OK || data == null || data.getData() == null)) {
             setupExportBytes = null;
             return;
@@ -1033,6 +1048,8 @@ public final class MainActivity extends Activity {
             loadPortableLoggerSetup(uri);
         } else if (requestCode == SAVE_PORTABLE_SETUP) {
             savePortableLoggerSetup(uri);
+        } else if (requestCode == SAVE_LOGGER_PROFILE) {
+            saveLoggerProfile(uri);
         } else if (requestCode == OPEN_LOGGER_PROFILE) {
             loadLoggerProfile(uri, displayName(uri));
         } else if (requestCode == OPEN_ECU_DEFINITION) {
@@ -1640,6 +1657,48 @@ public final class MainActivity extends Activity {
                 && !isLiveActive();
     }
 
+    private void prepareLoggerProfileExport() {
+        if (!loggerSetupEditable() || loggerImportPending()) return;
+        if (profileExportBytes != null) { notice("Finish the pending profile save first."); return; }
+        try {
+            // Snapshot before opening the destination; subsequent selection changes do not alter this save.
+            byte[] bytes = com.romraider.portable.logger.definition.PortableLoggerProfileWriter.encode(loggerProfile, loggerDefinition);
+            if (loggerProfile != null && !loggerProfile.unsupported().isEmpty()) {
+                new AlertDialog.Builder(this).setTitle("Save current logger selections")
+                        .setMessage("External input selections will be retained, but their desktop-specific units and display settings were not imported. Save a new profile rather than replacing your original.")
+                        .setNegativeButton("Cancel", null)
+                        .setPositiveButton("Save new profile", (dialog, which) -> chooseProfileDestination(bytes)).show();
+            } else chooseProfileDestination(bytes);
+        } catch (IOException failure) { notice("Profile could not be saved: " + transferFailure(failure)); }
+    }
+
+    private void chooseProfileDestination(byte[] bytes) {
+        if (!loggerSetupEditable() || loggerImportPending() || profileExportBytes != null) return;
+        profileExportBytes = bytes;
+        Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("application/xml");
+        intent.putExtra(Intent.EXTRA_TITLE, "RomRaider2-logger-profile.xml");
+        startActivityForResult(intent, SAVE_LOGGER_PROFILE);
+    }
+
+    private void saveLoggerProfile(Uri uri) {
+        final byte[] bytes = profileExportBytes;
+        profileExportBytes = null;
+        if (bytes == null) { notice("The profile snapshot expired. Choose Save Logger Profile again."); return; }
+        workerExecutor.execute(() -> {
+            try (java.io.OutputStream output = getContentResolver().openOutputStream(uri, "wt")) {
+                if (output == null) throw new IOException("Destination is unavailable");
+                output.write(bytes);
+                output.flush();
+            } catch (Exception failure) {
+                runOnUiThread(() -> { if (!isDestroyed()) notice("Profile save failed; the destination may be incomplete. Choose a new file and retry."); });
+                return;
+            }
+            runOnUiThread(() -> { if (!isDestroyed()) notice("Logger profile saved as XML."); });
+        });
+    }
+
     private void preparePortableLoggerSetupExport() {
         if (!setupTransferAllowed()) return;
         final int generation = ++setupTransferGeneration;
@@ -1836,6 +1895,7 @@ public final class MainActivity extends Activity {
     }
 
     private void cancelLogImport(String message) {
+        closeLogReview();
         logImportGeneration++;
         if (logImportTask != null) logImportTask.cancel(true);
         logImportTask = null;
@@ -1853,7 +1913,11 @@ public final class MainActivity extends Activity {
 
     private void refreshLogImportStatus() {
         if (logImportStatusView != null) logImportStatusView.setText(logImportStatus);
-        if (cancelLogImportButton != null) cancelLogImportButton.setEnabled(logImportLoading);
+        if (closeImportedLogButton != null) closeImportedLogButton.setVisibility(importedLogSummary == null ? View.GONE : View.VISIBLE);
+        if (reviewImportedLogButton != null) {
+            reviewImportedLogButton.setVisibility(importedLogSummary == null ? View.GONE : View.VISIBLE);
+            reviewImportedLogButton.setEnabled(!logImportLoading);
+        }
     }
 
     private void loadLogSummary(Uri uri) {
@@ -1890,8 +1954,8 @@ public final class MainActivity extends Activity {
                         }
                         importedLogSummary = opened;
                         importedLogName = name;
-                        importedLogPage = 0;
-                        logImportStatus = "Complete file validated. This is an imported-log summary, not live data.";
+                        logImportStatus = importedLogName + " · " + opened.channels().size()
+                                + " channels. Imported file, not live data.";
                         refreshLogImportStatus();
                         showLogSummary();
                     });
@@ -1913,37 +1977,65 @@ public final class MainActivity extends Activity {
     }
 
     private void showLogSummary() {
-        if (!loggerVisible || gaugesVisible || importedLogSummary == null) return;
-        if (importedLogCard != null && importedLogCard.getParent() == content) content.removeView(importedLogCard);
-        List<PortableLogCsvReader.ChannelSummary> channels = importedLogSummary.channels();
-        int pages = Math.max(1, (channels.size() + 11) / 12);
-        importedLogPage = Math.max(0, Math.min(importedLogPage, pages - 1));
-        int start = importedLogPage * 12, end = Math.min(channels.size(), start + 12);
-        StringBuilder summary = new StringBuilder("IMPORTED FILE — NOT LIVE\n")
-                .append("Channels ").append(channels.isEmpty() ? 0 : start + 1).append('–').append(end)
-                .append(" of ").append(channels.size()).append("\n\n");
-        for (int index = start; index < end; index++) {
-            PortableLogCsvReader.ChannelSummary channel = channels.get(index);
-            PortableLogSample latest = channel.latest();
-            summary.append(latest.getChannelName()).append(" [").append(latest.getChannelId()).append("]\n")
-                    .append("Latest: ").append(Double.isFinite(latest.getValue()) ? Double.toString(latest.getValue()) : "Unavailable")
-                    .append(' ').append(latest.getUnits()).append(" at ").append(latest.getTimestampMillis()).append(" ms\n")
-                    .append("Finite: ").append(channel.finite()).append("  /  unavailable: ").append(channel.missing())
-                    .append("\nMin / max: ").append(channel.finite() == 0 ? "Unavailable"
-                            : channel.minimum() + " / " + channel.maximum()).append("\n\n");
-        }
-        LinearLayout card = sectionCard("IMPORTED LOG SUMMARY", importedLogName + "  /  "
-                + importedLogSummary.values() + " values  /  " + channels.size() + " channels");
-        card.addView(statusText(summary.toString().trim()), matchWrap());
-        if (pages > 1) {
-            Button previous = button("PREVIOUS CHANNELS"), next = button("NEXT CHANNELS");
-            previous.setEnabled(importedLogPage > 0); next.setEnabled(importedLogPage + 1 < pages);
-            previous.setOnClickListener(view -> { importedLogPage--; showLogSummary(); });
-            next.setOnClickListener(view -> { importedLogPage++; showLogSummary(); });
-            card.addView(actionRow(previous, next), matchWrap());
-        }
-        importedLogCard = card;
-        content.addView(card, Math.min(3, content.getChildCount()), cardParams(dp(10)));
+        if (!activityResumed || !canReviewLog() || logImportLoading || importedLogSummary == null) return;
+        closeLogReview();
+        final List<PortableLogCsvReader.ChannelSummary> channels = importedLogSummary.channels();
+        android.app.Dialog dialog = new android.app.Dialog(this);
+        dialog.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE);
+        LinearLayout body = column();
+        body.setPadding(dp(16), dp(16), dp(16), dp(16));
+        body.setBackgroundColor(PANEL);
+        body.addView(text("Log Review", 22, INK), matchWrap());
+        body.addView(text(importedLogName + "\n" + importedLogSummary.values() + " values · "
+                + channels.size() + " channels\nImported channel summary — not live data", 13, MUTED), matchWrap(dp(8)));
+        android.widget.ListView list = new android.widget.ListView(this);
+        list.setDividerHeight(dp(8));
+        list.setAdapter(new android.widget.BaseAdapter() {
+            public int getCount() { return channels.size(); }
+            public Object getItem(int position) { return channels.get(position); }
+            public long getItemId(int position) { return position; }
+            public boolean isEnabled(int position) { return false; }
+            public View getView(int position, View recycled, android.view.ViewGroup parent) {
+                TextView row = recycled instanceof TextView ? (TextView) recycled : statusText("");
+                PortableLogCsvReader.ChannelSummary channel = channels.get(position);
+                PortableLogSample latest = channel.latest();
+                row.setText(latest.getChannelName() + " [" + latest.getChannelId() + "]\n"
+                        + "Latest: " + (Double.isFinite(latest.getValue()) ? Double.toString(latest.getValue()) : "Unavailable")
+                        + " " + latest.getUnits() + " at " + latest.getTimestampMillis() + " ms\n"
+                        + "Valid samples: " + channel.finite() + " · unavailable: " + channel.missing()
+                        + "\nMin / max: " + (channel.finite() == 0 ? "Unavailable" : channel.minimum() + " / " + channel.maximum()));
+                row.setPadding(dp(8), dp(8), dp(8), dp(8));
+                return row;
+            }
+        });
+        body.addView(list, new LinearLayout.LayoutParams(-1, 0, 1));
+        Button back = button("BACK TO LOGGER");
+        back.setOnClickListener(view -> dialog.dismiss());
+        Button close = button("CLOSE LOG FILE");
+        close.setOnClickListener(view -> closeImportedLog());
+        body.addView(actionRow(back, close), matchWrap(dp(8)));
+        dialog.setContentView(body);
+        dialog.setOnDismissListener(ignored -> {
+            if (importedLogDialog == dialog) { importedLogDialog = null; importedLogList = null; }
+        });
+        importedLogDialog = dialog;
+        importedLogList = list;
+        dialog.show();
+        if (dialog.getWindow() != null) dialog.getWindow().setLayout(-1, -1);
+    }
+
+    private void closeLogReview() {
+        if (importedLogDialog != null) importedLogDialog.dismiss();
+        importedLogDialog = null;
+        importedLogList = null;
+    }
+
+    private void closeImportedLog() {
+        cancelLogImport(null);
+        importedLogSummary = null;
+        importedLogName = "";
+        logImportStatus = "No CSV open.";
+        refreshLogImportStatus();
     }
 
     private boolean loggerImportPending() {

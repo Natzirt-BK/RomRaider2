@@ -229,6 +229,23 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
         check(java.util.Arrays.equals(setup.encode(), Files.readAllBytes(exported.toPath())), "Export bytes changed");
         check(java.util.Arrays.equals(setup.encode(), Files.readAllBytes(source.toPath())), "Import altered source file");
         check(field("setupExportBytes") == null, "Export snapshot was not consumed");
+        File profileFile = new File(folder, "exported-profile.xml");
+        byte[] profileBytes = com.romraider.portable.logger.definition.PortableLoggerProfileWriter.encode(
+                imported, (PortableLoggerDefinition) field("loggerDefinition"));
+        setField("profileExportBytes", profileBytes);
+        invoke("saveLoggerProfile", new Class<?>[]{Uri.class}, Uri.fromFile(profileFile));
+        ((ExecutorService) field("workerExecutor")).submit(() -> {}).get(10, TimeUnit.SECONDS);
+        check(java.util.Arrays.equals(profileBytes, Files.readAllBytes(profileFile.toPath())), "XML profile save changed the snapshot");
+        check(field("profileExportBytes") == null, "XML save snapshot was not consumed");
+        try (InputStream input = new FileInputStream(profileFile)) {
+            PortableLoggerProfile saved = PortableLoggerProfileReader.read(input);
+            check(saved.selections().get(0).getId().equals("P1") && saved.selections().get(1).getId().equals("P8"),
+                    "XML save changed channel order");
+        }
+        setField("profileExportBytes", profileBytes);
+        invoke("onActivityResult", new Class<?>[]{int.class, int.class, Intent.class}, 21, Activity.RESULT_CANCELED, null);
+        check(field("profileExportBytes") == null, "Cancelled XML profile save retained a snapshot");
+        Files.delete(profileFile.toPath());
         // Clear is intentional and survives restart; restore the fixture afterward.
         PortableLoggerSetup empty = PortableLoggerSetup.capture(PortableLoggerProtocol.SSM, definitionBytes,
                 (PortableLoggerDefinition) field("loggerDefinition"), new PortableLoggerProfile("SSM",
@@ -1575,11 +1592,18 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
                     "Android large CSV import was truncated to the previous full-sample cap");
             check(summary.channels().get(0).latest().getTimestampMillis() == 130_000
                     && summary.channels().get(0).finite() == 130_001, "Large imported summary is incomplete");
-            Object retainedCard = field("importedLogCard");
+            android.app.Dialog review = (android.app.Dialog) field("importedLogDialog");
+            check(review != null && review.isShowing(), "Imported CSV did not open a separate window");
+            check(((android.view.View) field("closeImportedLogButton")).getVisibility() == android.view.View.VISIBLE,
+                    "Close Log File is missing for an imported log");
+            android.view.ViewGroup main = (android.view.ViewGroup) field("content");
+            runOnMainSync(() -> check(viewContainsText(main.getChildAt(main.getChildCount() - 1), "LOG REVIEW"),
+                    "Log Review is not at the bottom"));
+            runOnMainSync(() -> check(!viewContainsText(main, "CANCEL CSV IMPORT"), "Cancel CSV Import still clutters the page"));
             Files.write(invalid.toPath(), new byte[] {'T', 'i', 'm', 'e', ',', 'A', '\n', '0', ',', (byte) 0xff, '\n'});
             invoke("loadLogSummary", new Class<?>[] {Uri.class}, Uri.fromFile(invalid));
             awaitCsvImport();
-            check(field("importedLogSummary") == summary && field("importedLogCard") == retainedCard,
+            check(field("importedLogSummary") == summary,
                     "Invalid UTF-8 replaced the previous imported summary");
             check(((String) field("logImportStatus")).contains("not imported"), "Invalid import was not reported");
             StringBuilder header = new StringBuilder("Time"), row = new StringBuilder("0");
@@ -1588,12 +1612,20 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
             invoke("loadLogSummary", new Class<?>[] {Uri.class}, Uri.fromFile(second));
             awaitCsvImport();
             summary = (com.romraider.portable.PortableLogCsvReader.Summary) field("importedLogSummary");
-            check(summary.channels().size() == 14 && (Integer) field("importedLogPage") == 0, "Paged summary missing");
-            // Use the native button even when the summary starts outside the viewport.
-            android.view.View card = (android.view.View) field("importedLogCard");
-            runOnMainSync(() -> check(clickViewText(card, "NEXT CHANNELS"), "Next-channel control missing"));
-            check((Integer) field("importedLogPage") == 1 && field("importedLogSummary") == summary,
-                    "Paging reimported or replaced the file");
+            check(summary.channels().size() == 14, "Full summary missing");
+            android.widget.ListView list = (android.widget.ListView) field("importedLogList");
+            check(list != null && list.getAdapter().getCount() == 14, "Scrollable review omitted channels");
+            runOnMainSync(() -> list.smoothScrollToPosition(13));
+            long scrollDeadline = SystemClock.uptimeMillis() + 5000;
+            while (list.getLastVisiblePosition() != 13 && SystemClock.uptimeMillis() < scrollDeadline) SystemClock.sleep(50);
+            waitForIdleSync();
+            check(list.getLastVisiblePosition() == 13 && field("importedLogSummary") == summary,
+                    "Could not scroll to the final channel without reimporting");
+            check(!dialogContains("NEXT CHANNELS") && !dialogContains("PREVIOUS CHANNELS"), "Paging controls remain");
+            clickDialogText("BACK TO LOGGER");
+            check(field("importedLogDialog") == null && field("importedLogSummary") == summary, "Back discarded imported file");
+            invoke("showLogSummary", new Class<?>[0]);
+            check(field("importedLogDialog") != null, "Retained file cannot reopen");
             java.util.concurrent.ThreadPoolExecutor executor = (java.util.concurrent.ThreadPoolExecutor) field("logImportExecutor");
             CountDownLatch release = new CountDownLatch(1);
             CountDownLatch entered = new CountDownLatch(1);
@@ -1630,7 +1662,19 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
             invoke("loadLogSummary", new Class<?>[] {Uri.class}, Uri.fromFile(large));
             check(!(Boolean) field("loggerVisible") && !(Boolean) field("logImportLoading"), "CSV import hijacked the editor");
             invoke("showLogger", new Class<?>[0]);
-            check(field("importedLogSummary") == summary && field("importedLogCard") != null, "Returning to LOGGER lost imported summary");
+            check(field("importedLogSummary") == summary && field("importedLogDialog") == null,
+                    "Returning to LOGGER lost the file or unexpectedly reopened its window");
+            invoke("showLogSummary", new Class<?>[0]);
+            clickDialogText("CLOSE LOG FILE");
+            check(field("importedLogSummary") == null && field("importedLogDialog") == null
+                    && ((String) field("importedLogName")).isEmpty(), "Close Log File did not unload the file");
+            check(second.isFile(), "Closing the log deleted its source file");
+            check(((android.view.View) field("closeImportedLogButton")).getVisibility() == android.view.View.GONE,
+                    "Close Log File remains visible without an open file");
+            invoke("loadLogSummary", new Class<?>[] {Uri.class}, Uri.fromFile(second));
+            awaitCsvImport();
+            summary = (com.romraider.portable.PortableLogCsvReader.Summary) field("importedLogSummary");
+            invoke("closeLogReview", new Class<?>[0]);
             ServiceFixture fixture = new ServiceFixture((ReadOnlyLoggingService) field("recordingService"));
             try {
                 fixture.start(false); waitForSamples(fixture, 4);
@@ -1661,7 +1705,7 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
             check(executor.awaitTermination(10, TimeUnit.SECONDS), "Destroyed Activity CSV worker survived");
             check(field("importedLogSummary") == null && !(Boolean) field("logImportLoading"), "Old CSV result reached replacement Activity");
             verifyNotRunning();
-            System.out.println("PASS: Android streamed 260,002 values, retained prior summaries on failure/cancel, paged channels, and rejected stale/active-capture imports.");
+            System.out.println("PASS: Android streamed 260,002 values, retained prior summaries on failure/cancel, scrolled a separate review window, unloaded without deleting, and rejected stale/active-capture imports.");
         } finally {
             Files.deleteIfExists(large.toPath()); Files.deleteIfExists(second.toPath()); Files.deleteIfExists(invalid.toPath());
         }
@@ -1672,6 +1716,15 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
         if (view instanceof android.view.ViewGroup) {
             android.view.ViewGroup group = (android.view.ViewGroup) view;
             for (int i = 0; i < group.getChildCount(); i++) if (clickViewText(group.getChildAt(i), text)) return true;
+        }
+        return false;
+    }
+
+    private boolean viewContainsText(android.view.View view, String text) {
+        if (view instanceof android.widget.TextView && ((android.widget.TextView) view).getText().toString().equals(text)) return true;
+        if (view instanceof android.view.ViewGroup) {
+            android.view.ViewGroup group = (android.view.ViewGroup) view;
+            for (int i = 0; i < group.getChildCount(); i++) if (viewContainsText(group.getChildAt(i), text)) return true;
         }
         return false;
     }

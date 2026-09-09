@@ -82,6 +82,7 @@ public final class PortableLoggerDefinitionReader {
                         value(attributes, "name"), value(attributes, "desc"),
                         parseTarget(value(attributes, "target")));
                 readSupportFlag(attributes, "bit");
+                parameter.switchChannel = true;
                 int address = parseAddress(value(attributes, "byte"));
                 int bit = parseBit(value(attributes, "bit"));
                 parameter.addresses.computeIfAbsent(
@@ -243,6 +244,7 @@ public final class PortableLoggerDefinitionReader {
         private final int target;
         private int supportByteIndex = -1;
         private int supportBit = -1;
+        private boolean switchChannel;
         private final Map<String, List<PortableLoggerAddress>> addresses =
                 new LinkedHashMap<>();
         private final List<String> dependencies = new ArrayList<>();
@@ -258,7 +260,7 @@ public final class PortableLoggerDefinitionReader {
 
         private PortableLoggerParameter build() {
             return new PortableLoggerParameter(id, name, description, target,
-                    addresses, dependencies, conversions, supportByteIndex, supportBit);
+                    addresses, dependencies, conversions, supportByteIndex, supportBit, switchChannel);
         }
     }
 }

@@ -20,6 +20,7 @@ public final class PortableLoggerParameter {
     private final List<PortableLoggerConversion> conversions;
     private final int supportByteIndex;
     private final int supportBit;
+    private final boolean switchChannel;
 
     public PortableLoggerParameter(String id, String name, String description,
             int target,
@@ -33,6 +34,14 @@ public final class PortableLoggerParameter {
             int target, Map<String, List<PortableLoggerAddress>> addresses,
             List<String> dependencies, List<PortableLoggerConversion> conversions,
             int supportByteIndex, int supportBit) {
+        this(id, name, description, target, addresses, dependencies, conversions, supportByteIndex, supportBit, false);
+    }
+
+    public PortableLoggerParameter(String id, String name, String description,
+            int target, Map<String, List<PortableLoggerAddress>> addresses,
+            List<String> dependencies, List<PortableLoggerConversion> conversions,
+            int supportByteIndex, int supportBit, boolean switchChannel) {
+        this.switchChannel = switchChannel;
         if (!(supportByteIndex == -1 && supportBit == -1)
                 && (supportByteIndex < 0 || supportByteIndex > 254 || supportBit < 0 || supportBit > 7)) {
             throw new IllegalArgumentException("Logger support flag is invalid");
@@ -61,6 +70,7 @@ public final class PortableLoggerParameter {
     public int getTarget() { return target; }
     public List<String> getDependencies() { return dependencies; }
     public List<PortableLoggerConversion> getConversions() { return conversions; }
+    public boolean isSwitch() { return switchChannel; }
 
     /** Init payload excludes the frame header, response command and checksum, as on desktop. */
     public boolean supportedBySsm(byte[] initPayload) {
