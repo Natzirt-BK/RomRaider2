@@ -93,8 +93,7 @@ probe pass. This is DLL inspection, not adapter-command execution.
 
 Pinned installed DLL SHA-256:
 `f432084801762d919a3c31974616e097562424470003edc4f4fb843df34103cf`.
-The successful capture is local-only:
-`/home/tristan/.cache/evo-ecuflash-probes.r2ewUg/openport-dll-offline.gcLQM3/openport-memory.bin`.
+The successful capture, `openport-memory.bin`, is kept locally and is not distributed.
 Its SHA-256 is
 `37f5095eb628ea0949f6ed4b0165a7aba8dbd00f0772d4453ac9534e35d2e9fe`;
 image base `0x77640000`, size `0x458000`, no unreadable bytes. This is the hash

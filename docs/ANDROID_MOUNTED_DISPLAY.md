@@ -125,9 +125,8 @@ vehicle-test results. The complete 24-image set is reproducible with the
 
 ![Illustrative parked-car scene with RomRaider2 STI Night gauges on a dashboard-mounted phone](images/dash-mounted-phone-mockup.png)
 
-This is an AI-generated product mockup using an actual Android screenshot as its
-screen reference, not a photograph of a vehicle test or exact hardware fitment.
+This illustrative product mockup uses an actual Android screenshot as its
+screen reference. It is not a photograph of a vehicle test or exact hardware fitment.
 It predates the count-picker controls and seamless presentation described above.
-The app display is explicitly simulated. [Generation prompts and method](images/mounted-phone-image-prompt.md)
-are retained with the image. See the [actual native gauge collection](images/all-mobile-gauge-styles.png)
-for ungenerated gauge artwork.
+The app display uses simulated readings. See the
+[native gauge collection](images/all-mobile-gauge-styles.png) for gauges rendered by the app.

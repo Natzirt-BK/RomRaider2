@@ -150,14 +150,14 @@ architecture or replace signed vendor drivers to conceal this mismatch.
    improve explicit ROM-pair selection and validate representative
    edit/undo/paste/Save As/reopen/checksum and populated-log/marker/Dyno/gauge flows.
 2. Review the separate installer definitions-preservation patch and validate
-   clean/upgrade migration in disposable installation roots. Preserve the
-   unrelated local installer commit; do not reset it or silently publish it.
+   clean/upgrade migration in disposable installation roots. That patch is
+   tracked separately and is not part of this audit.
 3. Run physical DPI/multi-monitor, keyboard/accessibility and real-device Logger
    tests, then obtain user acceptance tied to the two archive hashes.
-4. Only after those gates and explicit promotion authority: publish release
+4. After qualification and release approval, publish release
    artifacts/update installer pins. ECU memory writes remain outside this work.
 
-## Boundaries and handoff
+## Test scope
 
 No real ROM was edited, no ECU connection or production memory write was made,
 and no raw vehicle files or private screenshots were committed. Probe runtime

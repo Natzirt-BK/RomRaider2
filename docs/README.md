@@ -15,6 +15,8 @@
 - [Gauge styles](GAUGE_DESIGN.md) and [fullscreen layouts](ANDROID_MOUNTED_DISPLAY.md)
 - [Desktop editor controls](DESKTOP_EDITOR_COMMANDS.md)
 - [Logger setup transfer](PORTABLE_LOGGER_SETUP.md)
+- [Android Logger layout](ANDROID_LOGGER_LAYOUT.md), [profiles](ANDROID_LOGGER_PROFILES.md)
+  and [CSV review](ANDROID_CSV_REVIEW.md)
 - [Saved-log fuel analysis](FUEL_LOG_ANALYSIS.md)
 - [Android background recording](ANDROID_BACKGROUND_RECORDING.md) and [recovery](ANDROID_RECORDING_RECOVERY.md)
 - [Android build signing and saved setup](ANDROID_UPDATE_RELIABILITY.md)

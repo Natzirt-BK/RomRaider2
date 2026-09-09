@@ -47,7 +47,7 @@ Shared review includes initial connecting versus reconnecting wording, startup p
 - Full JavaFX suite with native-window smoke tests and the audit capture enabled: **263 tests passed**, zero failures/skips, under Xvfb with a functioning Openbox window manager. This includes the pending startup-preference and Dashboard changes. A passing suite does not negate the uncovered logic/UX gaps above.
 - Compose suite: **38 passed, 8 conditional native-gauge tests skipped**, zero failures; compilation includes the pending desktop navigation/setup changes.
 - `git diff --check`: passed.
-- Opt-in `FxLoggerAuditCaptureTest` captures all eight tabs at 1024×768 and 1280×800 using in-memory synthetic channels and a synthetic CSV; it never starts a connection or opens a log writer. Captures are local under `/home/tristan/.cache/rr2-logger-audit.G3iB4E` and are not release assets.
+- Opt-in `FxLoggerAuditCaptureTest` captures all eight tabs at 1024×768 and 1280×800 using in-memory synthetic channels and a synthetic CSV; it never starts a connection or opens a log writer. Captures are kept locally and are not release assets.
 - Initial UI runs without a functioning window manager failed focus/placement checks. The first capture harness also left synthetic LIVE state active when closing, triggering the application's legitimate disconnect confirmation; the harness now publishes STOPPED before cleanup. These are not established product defects.
 - No real adapter/ECU commands, road pulls, Windows/macOS validation, actual Steam Deck touch checks, or sustained multi-hour recording tests were performed.
 

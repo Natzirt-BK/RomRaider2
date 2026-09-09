@@ -10,13 +10,16 @@ Lancer Evolution. Built on RomRaider and DimeMod, with desktop and Android inter
 RomRaider2 is in development. **The current download is 1.1.5 RC1; a stable
 release is not available yet.**
 
-Development source is **1.1.6**, with a separate desktop
+Development source is **1.1.8**, with a separate desktop
 [read-only ELM/OBDLink adapter test](docs/ELM_IN_CAR_TEST.md) awaiting vehicle
 qualification. It is not included in the current download.
 
-Android development also adds [automatic DimeMod channel discovery](docs/ANDROID_CHANNEL_CATALOG.md)
-and clearer channel selection. SSM connection setup includes the DimeMod
-negotiation handshake; channel polling remains read-only. Vehicle testing is pending.
+Android development adds [automatic DimeMod channel discovery](docs/ANDROID_CHANNEL_CATALOG.md),
+ECU-specific channel selection and a [compact Logger layout](docs/ANDROID_LOGGER_LAYOUT.md).
+[XML profile saving](docs/ANDROID_LOGGER_PROFILES.md) and a separate scrollable
+[CSV summary viewer](docs/ANDROID_CSV_REVIEW.md) are also available in source.
+SSM connection setup includes the DimeMod negotiation handshake; channel polling
+remains read-only. Further vehicle qualification is pending.
 
 ## Downloads
 
