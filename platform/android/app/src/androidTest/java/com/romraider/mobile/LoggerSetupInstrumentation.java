@@ -164,8 +164,7 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
 
     private void verifyMut2DefinitionRejection() throws Exception {
         invoke("showLogger", new Class<?>[0]);
-        setField("loggerProtocol", PortableLoggerProtocol.MUT2);
-        invoke("showLogger", new Class<?>[0]);
+        chooseProtocol("SSM", "Mitsubishi MUT-II (15625 baud)");
         File definition = new File(getTargetContext().getFilesDir(), "invalid-mut2.txt");
         String body = "type=mut2\nparamname=RPM\nparamid=0x21\nscalingrpn=x,31.25,*\n";
         Files.write(definition.toPath(), body.getBytes(StandardCharsets.UTF_8));
@@ -174,21 +173,34 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
         check(field("loggerDefinition") == null, "Invalid definition was accepted");
         check("Invalid logger definition.".equals(field("loggerSetupProblem")), "Rejection exposed internal validation details");
         clickDialogText("OK");
-        runOnMainSync(() -> check(!viewContainsText((android.view.View) fieldUnchecked("content"), "XXRR2"),
+        runOnMainSync(() -> check(!viewContainsFragment((android.view.View) fieldUnchecked("content"), "XXRR2"),
                 "Protocol setup exposes internal validation details"));
         Files.write(definition.toPath(), ("XXRR2-MUT-IIXX\n" + body).getBytes(StandardCharsets.UTF_8));
         invoke("loadLoggerDefinition", new Class<?>[] {Uri.class, String.class}, Uri.fromFile(definition), definition.getName());
         awaitImports();
         check(field("loggerDefinition") != null, "Compatible definition was rejected");
         check(!testRecordingActive(), "Definition import started a recording");
-        setField("loggerProtocol", PortableLoggerProtocol.SSM);
-        setField("loggerDefinition", null);
-        setField("loggerDefinitionBytes", new byte[0]);
-        setField("loggerDefinitionName", "");
-        invoke("scheduleLoggerSetupSave", new Class<?>[0]);
-        invoke("showLogger", new Class<?>[0]);
+        chooseProtocol("MUT2", "Subaru SSM (4800 baud)");
         Files.delete(definition.toPath());
         System.out.println("PASS: invalid MUT-II definition shows a generic dialog; compatible definition imports without connecting.");
+    }
+
+    private void chooseProtocol(String current, String choice) throws Exception {
+        runOnMainSync(() -> check(clickViewText((android.view.View) fieldUnchecked("content"), "PROTOCOL: " + current),
+                "Protocol selector missing"));
+        clickDialogText(choice);
+        awaitImports();
+    }
+
+    private boolean viewContainsFragment(android.view.View view, String text) {
+        if (view instanceof android.widget.TextView
+                && ((android.widget.TextView) view).getText().toString().contains(text)) return true;
+        if (view instanceof android.view.ViewGroup) {
+            android.view.ViewGroup group = (android.view.ViewGroup) view;
+            for (int i = 0; i < group.getChildCount(); i++)
+                if (viewContainsFragment(group.getChildAt(i), text)) return true;
+        }
+        return false;
     }
 
     private void verifyChannelTransfer() throws Exception {
