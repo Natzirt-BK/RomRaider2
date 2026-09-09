@@ -11,8 +11,9 @@ RomRaider2 is in development. **Builds are release candidates; a stable
 release is not available yet.**
 
 Version **1.1.9** improves the Android logging workflow and desktop logger controls.
-Release package qualification is in progress; the preceding candidate remains
-available until its replacement is verified.
+The current candidate is **1.1.9 RC1**. See the
+[package qualification record](docs/RELEASE_1_1_9_QUALIFICATION.md) for completed
+checks and remaining hardware testing.
 
 ## Downloads
 

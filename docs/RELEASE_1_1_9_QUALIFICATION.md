@@ -31,6 +31,8 @@ production desktop parser. No emulator test sent vehicle commands.
   emulator without uninstalling; app-private test data survived and 1.1.9 launched.
 - A synthetic retained recording was exported through Android's system document
   picker. The resulting CSV contained the expected headers, timestamps and values.
+  Reopening that CSV through the picker showed the correct channels and statistics
+  in Review.
 - Linux internal checksums, source stamp and bundled defaults passed verification.
   Unmodified Linux and SteamOS launchers opened and closed normally on private
   displays using bundled Java 21. Startup and window-title versions matched.
@@ -39,6 +41,9 @@ production desktop parser. No emulator test sent vehicle commands.
 - Both macOS packages passed their configured native-host builds/tests and archive
   checks. Application metadata and compiled core version match 1.1.9.
   macOS packages remain unsigned.
+
+The companion Linux installer is pinned to the verified 1.1.9 archive and checksum.
+Its regression suite and an isolated install of the downloaded package passed.
 
 ## Package SHA-256
 

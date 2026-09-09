@@ -2,7 +2,7 @@
 
 ## Start here
 
-- [1.1.9 release preparation](RELEASE_1_1_9.md)
+- [Current release candidate: 1.1.9 RC1](RELEASE_1_1_9.md)
 - [1.1.9 package qualification](RELEASE_1_1_9_QUALIFICATION.md)
 - [Android setup and testing](ANDROID_PREVIEW_TESTING.md)
 - [Building RomRaider2](Building_RomRaider_VSCode.md)

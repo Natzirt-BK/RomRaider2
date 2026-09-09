@@ -6,9 +6,8 @@ Desktop and Android share `major.minor.patch` versions:
 - Milestones: `1.2.0`, followed by `1.2.x` updates.
 - Rare major changes: `2.0.0`.
 
-The next candidate is **RomRaider2 1.1.9 RC1**, with Android versionCode
-**110413**. Release 1.1.8 remains available until replacement packages pass
-qualification. There is no stable release yet.
+The current downloadable candidate is **RomRaider2 1.1.9 RC1**, with Android
+versionCode **110413**. There is no stable release yet.
 
 **RC1 describes the release stage.** Keep it separate from application versions,
 package filenames and numeric Android versionName values. Release titles may use
