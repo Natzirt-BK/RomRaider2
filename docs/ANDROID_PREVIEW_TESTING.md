@@ -30,7 +30,8 @@ MUT-II vehicle qualification remain open.
 - Open traditional RomRaider wide-column CSV logs and RomRaider2 portable CSV
   logs.
 - Import a RomRaider v370 Logger definition and an existing Logger profile.
-- Run the clearly marked simulated Logger and save its CSV.
+- In 1.1.6 development, the simulated Logger/CSV preview is removed. The
+  separate visual Gauge Demo remains available and clearly labeled.
 - Choose from 25 gauge styles, mix styles per channel, reset measured peaks and
   show or hide the simulated gauge demo without an ECU. Set up 1–6 fullscreen
   gauges independently, or copy the logger selection. Fullscreen mode keeps the
@@ -113,11 +114,14 @@ when safe. See [the investigation](EVO_MUT2_CONNECTION_DIAGNOSIS.md).
 3. Use **Choose channels**. Start with RPM and battery voltage for the parked
    test; add channels after checking those values. All selected channels are
    recorded; fullscreen mode shows 1–6 independently configured gauges.
-4. Try **Start offline preview** first. Those values are simulated, not vehicle
-   measurements. Stop it before the connected test.
-5. With the vehicle parked, ignition on and engine off, start the read-only
+4. To browse gauge designs without a car, use **Show Gauge Demo** on the Gauges
+   screen. It does not record a log or represent vehicle measurements.
+5. With the vehicle parked, ignition on and engine off, start the
    logger. `MUT2_GENERIC` means a plausible battery-PID response, **not** a match
    to a particular ECU calibration. Verify the definition against your vehicle.
+   Android 1.1.6 development automatically performs DimeMod discovery during
+   SSM setup; that handshake uses negotiation writes, while channel polling
+   stays read-only. See [channel discovery](ANDROID_CHANNEL_CATALOG.md).
 6. Stop and wait for completion, then **Save live CSV**. Switching between
    LOGGER and GAUGES preserves the session. Recording can continue in the
    background through the service described below. USB

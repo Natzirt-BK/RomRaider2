@@ -211,12 +211,12 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
         blocker.get(10, TimeUnit.SECONDS);
         awaitTransfer();
         check(field("loggerProfile") == imported, "Late worker replaced edited selection");
-        invoke("toggleLoggerPreview", new Class<?>[0]);
-        check((Boolean) field("previewRunning"), "Synthetic logger did not start");
+        startTestRecording();
+        check(testRecordingActive(), "Synthetic logger did not start");
         invoke("loadPortableLoggerSetup", new Class<?>[] {Uri.class}, Uri.fromFile(source));
-        check((Boolean) field("previewRunning") && field("loggerProfile") == imported,
+        check(testRecordingActive() && field("loggerProfile") == imported,
                 "Transfer interrupted active synthetic logging");
-        invoke("stopLoggerPreview", new Class<?>[] {String.class}, (Object) null);
+        stopTestRecording();
         invoke("preparePortableLoggerSetupExport", new Class<?>[0]);
         awaitTransfer();
         clickDialogText("Cancel");
@@ -389,11 +389,21 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
         }
     }
     private void verifyNotRunning() throws Exception {
-        check(!(Boolean) field("previewRunning"),
+        try {
+            MainActivity.class.getDeclaredMethod("toggleLoggerPreview");
+            throw new AssertionError("Offline simulation must not ship in the application");
+        } catch (NoSuchMethodException expected) { }
+        runOnMainSync(() -> {
+            java.util.ArrayList<android.view.View> controls = new java.util.ArrayList<>();
+            activity.getWindow().getDecorView().findViewsWithText(controls, "OFFLINE PREVIEW",
+                    android.view.View.FIND_VIEWS_WITH_TEXT);
+            check(controls.isEmpty(), "Offline Preview controls remain visible");
+        });
+        check(!testRecordingActive(),
                 "Restore started logging automatically");
         runOnMainSync(() -> {
             ReadOnlyLoggingService service = (ReadOnlyLoggingService) fieldUnchecked("recordingService");
-            check(service != null && !service.busy() && service.recording() == null,
+            check(service != null && !service.busy(),
                     "Restoration acquired or resumed a service recording");
         });
     }
@@ -482,31 +492,74 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
             } finally { bitmap.recycle(); }
         });
     }
+
+    // Synthetic capture exists only in the instrumentation APK, never in the application.
+    private ReadOnlyRecording testRecording;
+    private com.romraider.portable.PortableLogSession testLog;
+
+    private boolean testRecordingActive() {
+        return testRecording != null && testRecording.snapshot().active();
+    }
+    private int testSamples() { return testLog == null ? 0 : testLog.size(); }
+
+    private void startTestRecording() throws Exception {
+        ReadOnlyLoggingService service = (ReadOnlyLoggingService) field("recordingService");
+        check(service != null, "Recording service is unavailable");
+        testLog = new com.romraider.portable.PortableLogSession();
+        com.romraider.portable.logger.ReadOnlyLoggerTransport transport =
+                new com.romraider.portable.logger.ReadOnlyLoggerTransport() {
+            public String identifyEcu(PortableLoggerProtocol protocol) { return "SYNTHETIC"; }
+            public byte[] read(com.romraider.portable.logger.PortableLoggerQueryBatch batch) {
+                SystemClock.sleep(25);
+                byte[] values = new byte[batch.getAddresses().length];
+                java.util.Arrays.fill(values, (byte) 120);
+                return values;
+            }
+            public void closeReadOnlyKLine() { }
+        };
+        invoke("clearLoggerGauges", new Class<?>[0]);
+        testRecording = startServiceRecording(service, transport,
+                (PortableLoggerDefinition) field("loggerDefinition"),
+                (PortableLoggerProfile) field("loggerProfile"), testLog, () -> { }, false);
+        long deadline = SystemClock.uptimeMillis() + 5000;
+        while ((testSamples() < 4 || field("displayedRecording") != testRecording)
+                && SystemClock.uptimeMillis() < deadline) SystemClock.sleep(30);
+        invoke("refreshRecording", new Class<?>[0]);
+        check(testRecordingActive() && testSamples() >= 4, "Synthetic transport did not produce readings");
+    }
+
+    private void stopTestRecording() throws Exception {
+        ReadOnlyLoggingService service = (ReadOnlyLoggingService) field("recordingService");
+        runOnMainSync(service::stop);
+        waitForServiceIdle(service);
+        invoke("refreshRecording", new Class<?>[0]);
+    }
+
     private void verifyGaugesOnly() throws Exception {
         verifyBundledNotices();
         verifyMissingGaugeReading();
         verifySelection(2);
-        invoke("toggleLoggerPreview", new Class<?>[0]);
+        startTestRecording();
         long deadline = SystemClock.uptimeMillis() + 5000;
-        while ((Integer) field("previewCycle") < 2 && SystemClock.uptimeMillis() < deadline) SystemClock.sleep(50);
-        check((Boolean) field("previewRunning"), "Synthetic session did not start");
-        Object session = field("previewSession");
+        while (testSamples() < 2 && SystemClock.uptimeMillis() < deadline) SystemClock.sleep(50);
+        check(testRecordingActive(), "Synthetic session did not start");
+        Object session = testLog;
         Object grid = field("loggerGaugeGrid");
-        int cycle = (Integer) field("previewCycle");
+        int cycle = testSamples();
         for (MobileGaugeTheme theme : MobileGaugeTheme.values()) {
             invoke("setLoggerGaugeTheme", new Class<?>[] {MobileGaugeTheme.class}, theme);
             invoke("showGaugesOnly", new Class<?>[0]);
             check((Boolean) field("gaugesVisible"), "Gauges view is not visible");
-            check(field("previewSession") == session && field("loggerGaugeGrid") == grid
-                    && (Boolean) field("previewRunning"), "Gauges view replaced/stopped the session");
+            check(testLog == session && field("loggerGaugeGrid") == grid
+                    && testRecordingActive(), "Gauges view replaced/stopped the session");
             invoke("leaveGaugesOnly", new Class<?>[0]);
-            check(field("previewSession") == session && field("loggerGaugeGrid") == grid,
+            check(testLog == session && field("loggerGaugeGrid") == grid,
                     "Returning to LOGGER replaced session or gauges");
         }
         deadline = SystemClock.uptimeMillis() + 5000;
-        while ((Integer) field("previewCycle") <= cycle && SystemClock.uptimeMillis() < deadline) SystemClock.sleep(50);
-        check((Integer) field("previewCycle") > cycle, "Recording stopped advancing across view switches");
-        invoke("stopLoggerPreview", new Class<?>[] {String.class}, (Object) null);
+        while (testSamples() <= cycle && SystemClock.uptimeMillis() < deadline) SystemClock.sleep(50);
+        check(testSamples() > cycle, "Recording stopped advancing across view switches");
+        stopTestRecording();
         invoke("refreshGaugeAvailability", new Class<?>[0]);
         runOnMainSync(() -> {
             java.util.Map<?, ?> gauges = (java.util.Map<?, ?>) fieldUnchecked("loggerGaugeViews");
@@ -522,7 +575,7 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
     private void verifyGaugeDemoToggle() throws Exception {
         verifySelection(2);
         Object profile = field("loggerProfile"), definition = field("loggerDefinition");
-        Object session = field("previewSession"), recording = field("displayedRecording");
+        Object session = testLog, recording = field("displayedRecording");
         Object grid = field("loggerGaugeGrid");
         android.widget.Button demo = (android.widget.Button) field("loggerGaugeDemoButton");
         check(demo.getText().toString().equals("SHOW GAUGE DEMO"), "Initial demo action is wrong");
@@ -549,7 +602,7 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
             check(empty.getVisibility() == android.view.View.VISIBLE
                     && !empty.getText().toString().contains("SIMULATED GAUGE DEMO"), "Demo hint was not cleared");
             check(field("loggerProfile") == profile && field("loggerDefinition") == definition
-                    && field("previewSession") == session && field("displayedRecording") == recording,
+                    && testLog == session && field("displayedRecording") == recording,
                     "Demo toggle changed setup or retained recording");
             if (cycle == 0) captureMountedScreenshot(new File(renders, "demo-hidden.png"));
         }
@@ -562,20 +615,20 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
         check((Boolean) field("mountedFullScreen") && screenAwake(), "Hiding demo exited/dimmed mounted mode");
         invoke("leaveGaugesOnly", new Class<?>[0]);
         runOnMainSync(demo::performClick);
-        invoke("toggleLoggerPreview", new Class<?>[0]);
+        startTestRecording();
         try {
             long deadline = SystemClock.uptimeMillis() + 5000;
-            while ((Integer) field("previewCycle") < 2 && SystemClock.uptimeMillis() < deadline) SystemClock.sleep(30);
-            check((Boolean) field("previewRunning") && !(Boolean) field("gaugeDemo"), "Preview did not replace demo");
+            while (testSamples() < 2 && SystemClock.uptimeMillis() < deadline) SystemClock.sleep(30);
+            check(testRecordingActive() && !(Boolean) field("gaugeDemo"), "Test recording did not replace demo");
             check(demo.getText().toString().equals("SHOW GAUGE DEMO"), "Recording start left a stale Hide label");
-            Object active = field("previewSession");
+            Object active = testLog;
             int count = ((android.view.ViewGroup) grid).getChildCount();
-            check(count > 0, "Preview has no gauge readings");
+            check(count > 0, "Test recording has no gauge readings");
             invoke("hideLoggerGaugeDemo", new Class<?>[0]);
-            check((Boolean) field("previewRunning") && field("previewSession") == active
+            check(testRecordingActive() && testLog == active
                     && ((android.view.ViewGroup) grid).getChildCount() == count,
-                    "Stale Hide stopped/cleared an offline recording");
-        } finally { invoke("stopLoggerPreview", new Class<?>[]{String.class}, (Object) null); }
+                    "Stale Hide stopped/cleared an test recording");
+        } finally { stopTestRecording(); }
         System.out.println("PASS: demo Show/Hide toggles, clears only simulated gauges, survives view switches, and preserves recordings/setup.");
     }
 
@@ -600,12 +653,12 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
         clickDialogText("Unselected channel [P2]");
         check(((java.util.List<?>) field("gaugeChannelSlots")).get(0).equals("P2"), "Independent channel was not assigned");
         check(field("loggerProfile") == profile, "Display assignment changed Logger profile");
-        invoke("toggleLoggerPreview", new Class<?>[0]);
+        startTestRecording();
         try {
             long deadline = SystemClock.uptimeMillis() + 5000;
-            while ((Integer) field("previewCycle") < 2 && SystemClock.uptimeMillis() < deadline) SystemClock.sleep(30);
+            while (testSamples() < 2 && SystemClock.uptimeMillis() < deadline) SystemClock.sleep(30);
             invoke("refreshAssignedGauges", new Class<?>[0]);
-            Object session = field("previewSession");
+            Object session = testLog;
             java.util.Map<?, ?> gauges = (java.util.Map<?, ?>) field("loggerGaugeViews");
             check(gauges.size() == 1 && gauges.containsKey("P2"), "Logger choices replaced independent display assignment");
             check(((MobileGaugeView) gauges.get("P2")).getContentDescription().toString().contains("NO DATA"),
@@ -614,7 +667,7 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
                     "Use logger channels shortcut is missing"));
             check(((java.util.List<?>) field("gaugeChannelSlots")).subList(0, 2).equals(java.util.Arrays.asList("P8", "P1")),
                     "Explicit logger copy did not preserve channel order");
-            check(field("previewSession") == session && field("loggerProfile") == profile, "Copy restarted or changed Logger");
+            check(testLog == session && field("loggerProfile") == profile, "Copy restarted or changed Logger");
 
             invoke("setLoggerGaugeTheme", new Class<?>[]{MobileGaugeTheme.class}, MobileGaugeTheme.RR2_CLASSIC);
             runOnMainSync(() -> ((MobileGaugeStyles) fieldUnchecked("loggerGaugeStyles")).clear("SSM"));
@@ -642,7 +695,7 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
             check(styles.resolve("SSM", "P1", MobileGaugeTheme.STI_NIGHT) == MobileGaugeTheme.RETRO_VFD
                     && styles.override("SSM", "P8") == null && styles.override("MUT2", "P1") == null
                     && styles.override("DEMO", "P1") == null, "Per-channel style leaked into another channel/protocol/demo");
-            check(field("previewSession") == session && (Boolean) field("previewRunning"), "Gallery interrupted capture");
+            check(testLog == session && testRecordingActive(), "Gallery interrupted capture");
 
             invoke("setMountedFullScreen", new Class<?>[]{boolean.class}, true);
             android.view.View controls = (android.view.View) field("gaugesControls");
@@ -663,9 +716,9 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
             runOnMainSync(first::performClick);
             runOnMainSync(() -> ((android.widget.Button) fieldUnchecked("mountedModeButton")).performClick());
             check(!(Boolean) field("mountedFullScreen") && !screenAwake() && (Boolean) field("gaugesVisible"), "Exit did not return to non-awake gauge setup");
-            check(field("previewSession") == session && (Boolean) field("previewRunning"), "Menu stopped recording");
+            check(testLog == session && testRecordingActive(), "Menu stopped recording");
             captureMountedScreenshot(new File(renders, "gauge-setup.png"));
-        } finally { invoke("stopLoggerPreview", new Class<?>[]{String.class}, (Object) null); }
+        } finally { stopTestRecording(); }
         verifyActivityRecreation();
         check(((java.util.List<?>) field("gaugeChannelSlots")).subList(0, 2).equals(java.util.Arrays.asList("P8", "P1")), "Display assignments did not survive recreation");
         check(((MobileGaugeStyles) field("loggerGaugeStyles")).override("SSM", "P1") == MobileGaugeTheme.RETRO_VFD,
@@ -1043,20 +1096,20 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
         check(((PortableLoggerProfile) field("loggerProfile")).selections().size() == 2,
                 "Hidden dependencies expanded the saved profile");
         invoke("useLoggerGaugeChannels", new Class<?>[0]); // This is now an explicit display choice.
-        invoke("toggleLoggerPreview", new Class<?>[0]);
+        startTestRecording();
         try {
             long deadline = SystemClock.uptimeMillis() + 5000;
-            while ((Integer) field("previewCycle") < 2 && SystemClock.uptimeMillis() < deadline) SystemClock.sleep(50);
+            while (testSamples() < 2 && SystemClock.uptimeMillis() < deadline) SystemClock.sleep(50);
             com.romraider.portable.PortableLogSession log =
-                    (com.romraider.portable.PortableLogSession) field("previewSession");
-            check(log != null && log.size() >= 4, "Calculated simulation did not produce samples");
+                    (com.romraider.portable.PortableLogSession) testLog;
+            check(log != null && log.size() >= 4, "Calculated test recording did not produce samples");
             for (com.romraider.portable.PortableLogSample sample : log.snapshot()) {
                 check((sample.getChannelId().equals("P200") || sample.getChannelId().equals("P201"))
-                        && Double.isFinite(sample.getValue()), "Calculated simulation exposed an input or invalid value");
+                        && Double.isFinite(sample.getValue()), "Calculated test recording exposed an input or invalid value");
             }
             check(((java.util.Map<?, ?>) field("loggerGaugeViews")).size() == 2,
                     "Hidden dependencies became visible gauges");
-        } finally { invoke("stopLoggerPreview", new Class<?>[] {String.class}, (Object) null); }
+        } finally { stopTestRecording(); }
         verifyReadOnlySessionViewSwitch(true);
     }
     private void verifyReadOnlySessionViewSwitch() throws Exception {

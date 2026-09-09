@@ -63,8 +63,6 @@ import com.romraider.portable.logger.definition.PortableLoggerProfileReader;
 import com.romraider.portable.logger.definition.PortableLoggerSelection;
 import com.romraider.portable.logger.definition.PortableLoggerSelectionService;
 import com.romraider.portable.logger.definition.PortableSelectedParameter;
-import com.romraider.portable.logger.PortableLoggerQueryBatch;
-import com.romraider.portable.logger.PortableLoggerQueryPlan;
 import com.romraider.portable.logger.PortableLoggerValue;
 import com.romraider.portable.logger.PortableLoggerProtocol;
 import com.romraider.portable.logger.definition.PortableLoggerParameter;
@@ -76,8 +74,6 @@ import java.io.File;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -97,7 +93,6 @@ public final class MainActivity extends Activity {
     private static final int OPEN_LOG = 12;
     private static final int OPEN_LOGGER_DEFINITION = 13;
     private static final int OPEN_LOGGER_PROFILE = 14;
-    private static final int SAVE_PREVIEW_LOG = 15;
     private static final int SAVE_LIVE_LOG = 16;
     private static final int OPEN_ECU_DEFINITION = 17;
     private static final int SAVE_ARCHIVED_LOG = 18;
@@ -156,7 +151,7 @@ public final class MainActivity extends Activity {
     private final Runnable gaugeMonitor = new Runnable() {
         @Override public void run() {
             refreshGaugeAvailability();
-            previewHandler.postDelayed(this, 1000);
+            uiHandler.postDelayed(this, 1000);
         }
     };
     private PortableRomDocument rom;
@@ -177,8 +172,6 @@ public final class MainActivity extends Activity {
     private EditText tableColumnInput;
     private EditText tableValueInput;
     private TextView loggerSetupView;
-    private TextView loggerPreviewView;
-    private Button loggerPreviewButton;
     private TextView usbStatusView;
     private TextView liveLoggerView;
     private Button liveLoggerButton;
@@ -193,7 +186,7 @@ public final class MainActivity extends Activity {
     private MobileGaugeTheme loggerGaugeTheme = MobileGaugeTheme.RR2_CLASSIC;
     private MobileGaugeStyles loggerGaugeStyles;
     private List<String> gaugeChannelSlots = new ArrayList<>(java.util.Collections.nCopies(6, ""));
-    private final Handler previewHandler = new Handler(Looper.getMainLooper());
+    private final Handler uiHandler = new Handler(Looper.getMainLooper());
     private final ExecutorService workerExecutor = Executors.newSingleThreadExecutor();
     private final AtomicInteger recoveryGeneration = new AtomicInteger();
     private volatile OpenPortUsbTransport openPort;
@@ -232,7 +225,7 @@ public final class MainActivity extends Activity {
         @Override public void run() {
             if (!activityResumed || activityDestroyed) return;
             refreshRecording();
-            previewHandler.postDelayed(this, 100);
+            uiHandler.postDelayed(this, 100);
         }
     };
     private File archiveToExport;
@@ -263,37 +256,6 @@ public final class MainActivity extends Activity {
     private String loggerProfileName = "";
     private volatile String loggerSetupState =
             "Open a logger definition and, optionally, an existing profile.";
-    private PortableLoggerQueryPlan previewPlan;
-    private List<PortableSelectedParameter> previewSelections =
-            java.util.Collections.emptyList();
-    private PortableLogSession previewSession;
-    private boolean previewRunning;
-    private int previewCycle;
-    private long previewStartedAt;
-    private final Runnable previewTick = new Runnable() {
-        @Override
-        public void run() {
-            if (!previewRunning) return;
-            try {
-                List<PortableLoggerValue> values = previewPlan.decode(
-                        simulatedResponses(previewPlan, previewCycle));
-                long timestamp = SystemClock.elapsedRealtime() - previewStartedAt;
-                for (PortableLoggerValue value : values) {
-                    PortableSelectedParameter selected = value.getSelection();
-                    previewSession.append(new PortableLogSample(timestamp,
-                            selected.getParameter().getId(),
-                            selected.getParameter().getName(), value.getValue(),
-                            selected.getConversion().getUnits()));
-                }
-                previewCycle++;
-                showPreviewValues(values, timestamp);
-                previewHandler.postDelayed(this, 250);
-            } catch (RuntimeException ex) {
-                stopLoggerPreview(ex.getMessage() == null
-                        ? "Offline logger preview stopped." : ex.getMessage());
-            }
-        }
-    };
     private final BroadcastReceiver usbPermissionReceiver =
             new BroadcastReceiver() {
                 @Override
@@ -353,15 +315,15 @@ public final class MainActivity extends Activity {
         if (mountedFullScreen) applyMountedSystemBars();
         closeMissingOpenPort();
         refreshUsbStatus();
-        previewHandler.removeCallbacks(gaugeMonitor);
-        previewHandler.post(gaugeMonitor);
-        previewHandler.removeCallbacks(recordingTick);
-        previewHandler.post(recordingTick);
+        uiHandler.removeCallbacks(gaugeMonitor);
+        uiHandler.post(gaugeMonitor);
+        uiHandler.removeCallbacks(recordingTick);
+        uiHandler.post(recordingTick);
     }
 
     @Override
     protected void onDestroy() {
-        previewHandler.removeCallbacks(hideMountedMenu);
+        uiHandler.removeCallbacks(hideMountedMenu);
         if (loggerGaugeStyleDialog != null) { loggerGaugeStyleDialog.dismiss(); loggerGaugeStyleDialog = null; }
         if (mountedLayoutDialog != null) { mountedLayoutDialog.dismiss(); mountedLayoutDialog = null; }
         setMountedFullScreen(false);
@@ -376,8 +338,7 @@ public final class MainActivity extends Activity {
         discardArchiveRecovery();
         setupTransferGeneration++;
         setupExportBytes = null;
-        stopLoggerPreview(null);
-        previewHandler.removeCallbacks(recordingTick);
+        uiHandler.removeCallbacks(recordingTick);
         if (serviceBound) { unbindService(recordingConnection); serviceBound = false; }
         recordingService = null;
         unregisterReceiver(usbPermissionReceiver);
@@ -396,12 +357,11 @@ public final class MainActivity extends Activity {
     @Override
     protected void onStop() {
         activityResumed = false;
-        previewHandler.removeCallbacks(hideMountedMenu);
+        uiHandler.removeCallbacks(hideMountedMenu);
         if (mountedFullScreen && gaugesControls != null) gaugesControls.setVisibility(View.GONE);
         updateScreenAwake();
-        previewHandler.removeCallbacks(gaugeMonitor);
-        previewHandler.removeCallbacks(recordingTick);
-        stopLoggerPreview(null);
+        uiHandler.removeCallbacks(gaugeMonitor);
+        uiHandler.removeCallbacks(recordingTick);
         scheduleWorkspaceRecovery();
         super.onStop();
     }
@@ -526,11 +486,8 @@ public final class MainActivity extends Activity {
         cancelLogImport(null);
         importedLogCard = null;
         if (gaugesVisible) leaveGaugesOnly();
-        stopLoggerPreview(null);
         loggerVisible = true;
         loggerSetupView = null;
-        loggerPreviewView = null;
-        loggerPreviewButton = null;
         usbStatusView = null;
         liveLoggerView = null;
         liveLoggerButton = null;
@@ -579,7 +536,6 @@ public final class MainActivity extends Activity {
                             PortableLoggerProtocol next = which == 0
                                     ? PortableLoggerProtocol.SSM : PortableLoggerProtocol.MUT2;
                             if (next == loggerProtocol) return;
-                            stopLoggerPreview(null);
                             stopLiveLogger(null);
                             loggerSetupRevision++;
                             loggerImports.reset();
@@ -612,21 +568,6 @@ public final class MainActivity extends Activity {
         loggerSetupView = statusText(loggerSetupSummary());
         setupCard.addView(loggerSetupView, matchWrap());
         content.addView(setupCard, cardParams(dp(10)));
-
-        LinearLayout previewCard = sectionCard("OFFLINE PREVIEW",
-                "Exercise selected parameters, conversions, display, and CSV "
-                        + "recording with simulated data. No ECU is used.");
-        loggerPreviewButton = button(getString(R.string.logger_preview_start));
-        styleButton(loggerPreviewButton, POSITIVE, POSITIVE);
-        loggerPreviewButton.setOnClickListener(view -> toggleLoggerPreview());
-        Button savePreview = button("SAVE PREVIEW CSV");
-        savePreview.setOnClickListener(view -> savePreviewLog());
-        previewCard.addView(actionRow(loggerPreviewButton, savePreview),
-                matchWrap(dp(9)));
-        loggerPreviewView = statusText(
-                "Load a logger definition, then choose channels or import a profile.");
-        previewCard.addView(loggerPreviewView, matchWrap());
-        content.addView(previewCard, cardParams(dp(10)));
 
         LinearLayout usbCard = sectionCard("OPENPORT USB",
                 "Prepare an OpenPort 2.0 and check adapter access and vehicle "
@@ -662,7 +603,7 @@ public final class MainActivity extends Activity {
         liveCard.addView(archive, matchWrap(dp(9)));
         liveLoggerView = statusText("LIVE LOGGER\nPrepare the OpenPort and "
                 + "load a matching definition and profile. Live logging reads the "
-                + "vehicle; offline preview uses simulated values.");
+                + "vehicle. Gauge Demo is separate and uses simulated values.");
         liveCard.addView(liveLoggerView, matchWrap());
         content.addView(liveCard, cardParams(dp(12)));
         displayedRecordingState = null;
@@ -892,18 +833,15 @@ public final class MainActivity extends Activity {
     }
 
     private void showEditor() {
-        if (isLiveActive() || previewRunning) {
+        if (isLiveActive()) {
             notice("Stop logging before opening the editor. LOGGER and GAUGES remain available.");
             return;
         }
         cancelLogImport(null);
         if (gaugesVisible) leaveGaugesOnly();
-        stopLoggerPreview(null);
         stopLiveLogger(null);
         loggerVisible = false;
         loggerSetupView = null;
-        loggerPreviewView = null;
-        loggerPreviewButton = null;
         usbStatusView = null;
         liveLoggerView = null;
         liveLoggerButton = null;
@@ -1106,9 +1044,6 @@ public final class MainActivity extends Activity {
             loadLoggerProfile(uri, displayName(uri));
         } else if (requestCode == OPEN_ECU_DEFINITION) {
             loadEcuDefinition(uri, displayName(uri));
-        } else if (requestCode == SAVE_PREVIEW_LOG
-                && previewSession != null) {
-            saveLogAsync(uri, previewSession, "Saved the offline preview log.");
         } else if (requestCode == SAVE_LIVE_LOG && liveLog != null) {
             saveLogAsync(uri, liveLog, "Saved the read-only live log.");
         } else if (requestCode == SAVE_ARCHIVED_LOG && archiveToExport != null) {
@@ -1433,7 +1368,6 @@ public final class MainActivity extends Activity {
     private void loadLoggerDefinition(Uri uri, String name) {
         if (!loggerSetupEditable()) return;
         loggerSetupRevision++;
-        stopLoggerPreview(null);
         stopLiveLogger(null);
         loggerDefinition = null;
         loggerDefinitionBytes = new byte[0];
@@ -1475,7 +1409,6 @@ public final class MainActivity extends Activity {
     private void loadLoggerProfile(Uri uri, String name) {
         if (!loggerSetupEditable()) return;
         loggerSetupRevision++;
-        stopLoggerPreview(null);
         stopLiveLogger(null);
         loggerProfile = null;
         loggerProfileName = "";
@@ -1566,7 +1499,6 @@ public final class MainActivity extends Activity {
                     if (loggerImports.isLoading() || loggerDefinition != baseDefinition
                             || loggerProfile != originalProfile) return;
                     loggerSetupRevision++;
-                    stopLoggerPreview(null);
                     stopLiveLogger(null);
                     loggerProfile = new PortableLoggerProfile(loggerProtocol.name(), Collections.emptyList(), Collections.emptyList());
                     loggerProfileName = "Custom channels";
@@ -1578,7 +1510,6 @@ public final class MainActivity extends Activity {
                     if (loggerImports.isLoading() || loggerDefinition != baseDefinition
                             || loggerProfile != originalProfile) return;
                     loggerSetupRevision++;
-                    stopLoggerPreview(null);
                     stopLiveLogger(null);
                     loggerProfile = com.romraider.mobile.logger.LoggerChannelCatalog.select(
                             loggerProtocol.name(), originalProfile, parameters, checked);
@@ -1589,7 +1520,7 @@ public final class MainActivity extends Activity {
     }
 
     private boolean setupTransferAllowed() {
-        if (isLiveActive() || previewRunning) {
+        if (isLiveActive()) {
             notice("Stop logging and wait for the recording to finish before transferring a setup.");
             return false;
         }
@@ -1663,7 +1594,7 @@ public final class MainActivity extends Activity {
     private boolean setupTransferCurrent(int generation, int revision, PortableLoggerDefinition definition) {
         return !isDestroyed() && generation == setupTransferGeneration && revision == loggerSetupRevision
                 && definition == loggerDefinition && !loggerImports.isLoading()
-                && !isLiveActive() && !previewRunning;
+                && !isLiveActive();
     }
 
     private void preparePortableLoggerSetupExport() {
@@ -1858,7 +1789,7 @@ public final class MainActivity extends Activity {
     }
 
     private boolean canReviewLog() {
-        return !isDestroyed() && loggerVisible && !gaugesVisible && !isLiveActive() && !previewRunning;
+        return !isDestroyed() && loggerVisible && !gaugesVisible && !isLiveActive();
     }
 
     private void cancelLogImport(String message) {
@@ -1978,69 +1909,6 @@ public final class MainActivity extends Activity {
         return true;
     }
 
-    private void toggleLoggerPreview() {
-        if (previewRunning) {
-            stopLoggerPreview("Offline preview stopped. The recorded values can be saved as CSV.");
-            return;
-        }
-        if (isLiveActive()) {
-            notice("Stop the live logger before starting simulated data.");
-            return;
-        }
-        if (loggerImportPending()) return;
-        PortableLoggerDefinition definition = loggerDefinition;
-        PortableLoggerProfile profile = loggerProfile;
-        if (definition == null || profile == null) {
-            notice("Open a logger definition and profile first.");
-            return;
-        }
-        try {
-            PortableLoggerSelection selection = PortableLoggerSelectionService
-                    .resolve(definition, profile, null);
-            if (selection.ready().isEmpty()) {
-                throw new IllegalArgumentException(
-                        "No selected parameters are available before ECU identification.");
-            }
-            previewSelections = selection.ready();
-            previewPlan = PortableLoggerQueryPlan.create(previewSelections, loggerProtocol);
-            clearLoggerGauges();
-            previewSession = new PortableLogSession();
-            previewCycle = 0;
-            previewStartedAt = SystemClock.elapsedRealtime();
-            cancelLogImport(null);
-            previewRunning = true;
-            loggerPreviewButton.setText(R.string.logger_preview_stop);
-            loggerPreviewView.setText("SIMULATED DATA\nStarting offline logger preview...");
-            previewHandler.post(previewTick);
-        } catch (RuntimeException ex) {
-            notice(ex.getMessage() == null
-                    ? "The offline logger preview could not start." : ex.getMessage());
-        }
-    }
-
-    private void stopLoggerPreview(String message) {
-        previewRunning = false;
-        previewHandler.removeCallbacks(previewTick);
-        if (loggerPreviewButton != null) {
-            loggerPreviewButton.setText(R.string.logger_preview_start);
-        }
-        if (message != null && loggerPreviewView != null) {
-            loggerPreviewView.setText(message);
-        }
-    }
-
-    private void savePreviewLog() {
-        if (previewSession == null || previewSession.size() == 0) {
-            notice("Run the offline logger preview first.");
-            return;
-        }
-        Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
-        intent.addCategory(Intent.CATEGORY_OPENABLE);
-        intent.setType("text/csv");
-        intent.putExtra(Intent.EXTRA_TITLE, "RomRaider2-android-simulated.csv");
-        startActivityForResult(intent, SAVE_PREVIEW_LOG);
-    }
-
     private boolean isLiveActive() {
         // An unbound screen cannot assume that an existing service is idle.
         return recordingService == null || recordingService.busy();
@@ -2086,7 +1954,6 @@ public final class MainActivity extends Activity {
             notice("After choosing notification permission, press Start again. Logging has not started.");
             return;
         }
-        stopLoggerPreview(null);
         try {
             UsbDevice selected = findOpenPort((UsbManager) getSystemService(USB_SERVICE));
             if (!recordingService.start(transport, selected, definition, profile, discoveryOnly)) {
@@ -2214,25 +2081,6 @@ public final class MainActivity extends Activity {
                     .append(value.getSelection().getConversion().getUnits());
         }
         return summary.toString();
-    }
-
-    private void showPreviewValues(List<PortableLoggerValue> values,
-            long timestamp) {
-        if (loggerPreviewView == null) return;
-        StringBuilder summary = new StringBuilder("SIMULATED DATA  /  ")
-                .append(timestamp).append(" ms  /  ")
-                .append(previewPlan.batches().size()).append(" ").append(loggerProtocol).append(" batch");
-        if (previewPlan.batches().size() != 1) summary.append("es");
-        for (PortableLoggerValue value : values) {
-            summary.append("\n")
-                    .append(value.getSelection().getParameter().getName())
-                    .append("   ")
-                    .append(MobileGaugeSnapshot.summaryValue(value.getValue()))
-                    .append(' ')
-                    .append(value.getSelection().getConversion().getUnits());
-        }
-        loggerPreviewView.setText(summary.toString());
-        updateLoggerGauges(values);
     }
 
     private LinearLayout loggerDashboardCard() {
@@ -2508,7 +2356,7 @@ public final class MainActivity extends Activity {
                 snapshot.displayValue(), snapshot.units, snapshot.value,
                 snapshot.minimum, snapshot.maximum);
         gaugeReceivedAt.put(id, SystemClock.elapsedRealtime());
-        gauge.setDataState(gaugeDemo || previewRunning ? "SIMULATED" : "LIVE");
+        gauge.setDataState(gaugeDemo ? "SIMULATED" : "LIVE");
         if (loggerGaugeEmpty != null && !loggerGaugeViews.isEmpty()) {
             loggerGaugeEmpty.setVisibility(View.GONE);
         }
@@ -2520,7 +2368,6 @@ public final class MainActivity extends Activity {
             return;
         }
         cancelLogImport(null);
-        stopLoggerPreview(null);
         clearLoggerGauges();
         gaugeDemo = true;
         refreshGaugeDemoButton();
@@ -2541,7 +2388,7 @@ public final class MainActivity extends Activity {
 
     private void hideLoggerGaugeDemo() {
         // A stale Hide action must never clear real or offline-recording gauges.
-        if (!gaugeDemo || previewRunning || isLiveActive()) return;
+        if (!gaugeDemo || isLiveActive()) return;
         clearLoggerGauges();
         refreshGaugeAvailability();
     }
@@ -2563,7 +2410,7 @@ public final class MainActivity extends Activity {
     }
 
     private void resetLoggerGaugePeaks() {
-        if (!gaugeDemo && !previewRunning && recordingService != null
+        if (!gaugeDemo && recordingService != null
                 && recordingService.recording() != null) {
             recordingService.recording().resetPeaks();
             refreshRecording();
@@ -2596,58 +2443,6 @@ public final class MainActivity extends Activity {
             loggerGaugeEmpty.setText(R.string.logger_gauge_empty);
             loggerGaugeEmpty.setVisibility(View.VISIBLE);
         }
-    }
-
-    private static List<byte[]> simulatedResponses(
-            PortableLoggerQueryPlan plan, int cycle) {
-        Map<Integer, Byte> valuesByAddress = new HashMap<>();
-        for (PortableSelectedParameter selection : plan.readParameters()) {
-            byte[] raw = simulatedRawValue(selection, cycle);
-            int[] addresses = selection.getAddresses();
-            for (int index = 0; index < addresses.length; index++) {
-                valuesByAddress.put(addresses[index], raw[index]);
-            }
-        }
-        List<byte[]> result = new ArrayList<>();
-        for (PortableLoggerQueryBatch batch : plan.batches()) {
-            int[] addresses = batch.getAddresses();
-            byte[] values = new byte[addresses.length];
-            for (int index = 0; index < addresses.length; index++) {
-                Byte value = valuesByAddress.get(addresses[index]);
-                values[index] = value == null ? 0 : value;
-            }
-            result.add(values);
-        }
-        return result;
-    }
-
-    private static byte[] simulatedRawValue(
-            PortableSelectedParameter selection, int cycle) {
-        int length = selection.getAddresses().length;
-        String storage = selection.getConversion().getStorageType();
-        boolean little = "little".equalsIgnoreCase(
-                selection.getConversion().getEndian());
-        ByteBuffer buffer = ByteBuffer.allocate(length);
-        if (little) buffer.order(ByteOrder.LITTLE_ENDIAN);
-        if ("float".equalsIgnoreCase(storage)) {
-            if (length != 4) {
-                throw new IllegalArgumentException(
-                        selection.getParameter().getId()
-                        + ": floating-point value is not 4 bytes");
-            }
-            buffer.putFloat(25.0f + cycle * 0.25f);
-        } else {
-            long seed = Math.abs(selection.getParameter().getId().hashCode());
-            if (length == 1) buffer.put((byte) (80 + (seed + cycle) % 120));
-            else if (length == 2) buffer.putShort((short)
-                    (1000 + (seed + cycle * 17) % 12000));
-            else if (length == 4) buffer.putInt((int)
-                    (100000 + (seed + cycle * 257) % 1000000));
-            else throw new IllegalArgumentException(
-                    selection.getParameter().getId()
-                    + ": preview supports 1, 2, or 4-byte values");
-        }
-        return buffer.array();
     }
 
     private void applyEdit() {
@@ -2799,7 +2594,6 @@ public final class MainActivity extends Activity {
         stop.setMinHeight(dp(48));
         stop.setOnClickListener(view -> {
             if (mountedFullScreen) showMountedMenu();
-            stopLoggerPreview(null);
             stopLiveLogger("Stopped from gauges dashboard.");
             hideLoggerGaugeDemo();
             refreshGaugeAvailability();
@@ -2867,7 +2661,7 @@ public final class MainActivity extends Activity {
             }
         }
         mountedFullScreen = enabled;
-        previewHandler.removeCallbacks(hideMountedMenu);
+        uiHandler.removeCallbacks(hideMountedMenu);
         gaugesStatus.setBackground(enabled ? null : rounded(BACKGROUND, BORDER, 7));
         ((ViewGroup) loggerGaugeGrid.getParent()).removeView(loggerGaugeGrid);
         gaugesScroll.setVisibility(enabled ? View.GONE : View.VISIBLE);
@@ -2977,7 +2771,7 @@ public final class MainActivity extends Activity {
         if (!mountedFullScreen || gaugesControls == null) return;
         gaugesControls.setVisibility(View.VISIBLE);
         gaugesControls.bringToFront();
-        previewHandler.removeCallbacks(hideMountedMenu);
+        uiHandler.removeCallbacks(hideMountedMenu);
         // An accessibility-focused menu must remain reachable; Android supplies the user's preferred timeout.
         int timeout = 5000;
         if (Build.VERSION.SDK_INT >= 29) {
@@ -2986,7 +2780,7 @@ public final class MainActivity extends Activity {
                     android.view.accessibility.AccessibilityManager.FLAG_CONTENT_CONTROLS
                             | android.view.accessibility.AccessibilityManager.FLAG_CONTENT_TEXT);
         }
-        previewHandler.postDelayed(hideMountedMenu, timeout);
+        uiHandler.postDelayed(hideMountedMenu, timeout);
     }
 
     @Override
@@ -3012,10 +2806,10 @@ public final class MainActivity extends Activity {
     }
 
     private void refreshGaugeAvailability() {
-        String state = gaugeDemo || previewRunning ? "SIMULATED"
+        String state = gaugeDemo ? "SIMULATED"
                 : recordingService == null ? "CHECKING RECORDING"
                 : isLiveActive() ? (liveEcuIdentified ? "LIVE • RECORDING" : "CONNECTING / STOPPING") : "STOPPED";
-        if (!gaugeDemo && !previewRunning && displayedRecordingState != null && isLiveActive()) {
+        if (!gaugeDemo && displayedRecordingState != null && isLiveActive()) {
             ReadOnlyRecording.Phase phase = displayedRecordingState.phase();
             if (phase == ReadOnlyRecording.Phase.STOPPING || phase == ReadOnlyRecording.Phase.STOPPED) state = "STOPPING";
             else if (phase == ReadOnlyRecording.Phase.RECORDING
@@ -3031,7 +2825,7 @@ public final class MainActivity extends Activity {
         for (Map.Entry<String, MobileGaugeView> entry : loggerGaugeViews.entrySet()) {
             if (gaugeDemo) entry.getValue().setDataState("SIMULATED");
             else if (!gaugeReceivedAt.containsKey(entry.getKey())) entry.getValue().markUnavailable("NO DATA");
-            else if (!previewRunning && !isLiveActive()) entry.getValue().markUnavailable("STOPPED");
+            else if (!isLiveActive()) entry.getValue().markUnavailable("STOPPED");
             else if (now - gaugeReceivedAt.getOrDefault(entry.getKey(), 0L) > 3000)
                 entry.getValue().markUnavailable("NO RECENT DATA");
         }

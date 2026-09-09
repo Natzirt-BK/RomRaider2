@@ -7,8 +7,6 @@
         <item quantity="other">%d bytes</item>
     </plurals>
     <string name="rom_unchanged">unchanged</string>
-    <string name="logger_preview_start">START OFFLINE PREVIEW</string>
-    <string name="logger_preview_stop">STOP OFFLINE PREVIEW</string>
     <string name="logger_live_start">START LOGGER</string>
     <string name="logger_live_stop">STOP LIVE LOGGER</string>
     <string name="logger_live_opening">LOGGER\nConnecting %1$s and discovering channels…</string>

@@ -61,3 +61,16 @@ Local qualification: 110 Android unit tests passed, Android lint passed, the
 signed 1.1.6 APK built successfully, and shared-core checks passed (including
 the five-million-value CSV test with a 64 MiB heap). No Android device UI test
 or actual vehicle test is claimed by this checkpoint.
+
+## Logger preview removal
+
+The Android logger's Offline Preview and simulated CSV export are removed.
+The separate **Show/Hide Gauge Demo** remains a clearly labeled visual sample,
+with no log recording. Existing saved files are unchanged. UI automation now
+uses an instrumentation-only fake transport through the recording service;
+the production application has no offline logger simulation entry point.
+
+The removal passed 110 unit tests, lint and seven isolated Android 36 emulator
+phases: setup seeding/restoration, gauge view continuity, demo Show/Hide, gauge
+setup/fullscreen controls, calculated channels and setup transfer. Those tests
+use the automation package only; they do not connect to a vehicle.
