@@ -7,24 +7,24 @@
 ECU editing, read-only logging, gauges and log analysis for Subaru and Mitsubishi
 Lancer Evolution. Built on RomRaider and DimeMod, with desktop and Android interfaces.
 
-RomRaider2 is in development. **The current download is 1.1.5 RC1; a stable
+RomRaider2 is in development. **Builds are release candidates; a stable
 release is not available yet.**
 
-Development source is **1.1.8**, with a separate desktop
+Version **1.1.8** includes a separate desktop
 [read-only ELM/OBDLink adapter test](docs/ELM_IN_CAR_TEST.md) awaiting vehicle
-qualification. It is not included in the current download.
+qualification.
 
-Android development adds [automatic DimeMod channel discovery](docs/ANDROID_CHANNEL_CATALOG.md),
+Android adds [automatic DimeMod channel discovery](docs/ANDROID_CHANNEL_CATALOG.md),
 ECU-specific channel selection and a [compact Logger layout](docs/ANDROID_LOGGER_LAYOUT.md).
 [XML profile saving](docs/ANDROID_LOGGER_PROFILES.md) and a separate scrollable
-[CSV summary viewer](docs/ANDROID_CSV_REVIEW.md) are also available in source.
+[CSV summary viewer](docs/ANDROID_CSV_REVIEW.md) simplify setup and log review.
 SSM connection setup includes the DimeMod negotiation handshake; channel polling
 remains read-only. Further vehicle qualification is pending.
 
 ## Downloads
 
-[Download 1.1.5 RC1](https://github.com/Natzirt-BK/RomRaider2/releases/tag/romraider2-1.1.5)
-· [Release notes](docs/RELEASE_1_1_5.md)
+[Download the current candidate](https://github.com/Natzirt-BK/RomRaider2/releases)
+· [1.1.8 release notes](docs/RELEASE_1_1_8.md)
 
 | Platform | Package |
 | --- | --- |
@@ -55,13 +55,12 @@ sequence. See [versioning](docs/RELEASE_VERSIONING.md).
 Platform features differ. Read the [Android guide](docs/ANDROID_PREVIEW_TESTING.md)
 before connecting an OpenPort 2.0 through a USB host/OTG adapter.
 
-### New in 1.1.5
+### New in 1.1.8
 
-Desktop Logger gains responsive channel controls, inline units, a Target Module
-dropdown and connection/setup fixes. Dashboard opens the full-screen gauge view
-without a duplicate tab. Graphs, Dyno timing checks, CSV recording and desktop
-shutdown are improved. Android includes MUT-II startup fixes and explicit
-imported-channel unit labels.
+Android Logger puts the current session first, with expandable setup sections,
+ECU-specific channel selection and automatic DimeMod discovery. Profiles save as
+standard XML, and CSV summaries open in a separate scrollable viewer. Desktop
+adds a separate standard-OBD adapter test and improves fullscreen window restoration.
 
 The [25 gauge styles](docs/GAUGE_DESIGN.md), independent 1–6-gauge layouts,
 [background recording](docs/ANDROID_BACKGROUND_RECORDING.md) and
