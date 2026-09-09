@@ -623,4 +623,3 @@ public final class PortableDimeModMetadata {
                 conversion("psi", "x*.0193384", "0.0", "float"));
     }
 }
-
