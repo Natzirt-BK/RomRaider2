@@ -2,6 +2,11 @@ name: Platform packages
 
 on:
   workflow_dispatch:
+    inputs:
+      android_only:
+        description: Build only the signed Android packages
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -15,6 +20,7 @@ jobs:
         run: bash packaging/test-version-check.sh
 
   macos-package:
+    if: ${{ !inputs.android_only }}
     needs: version-consistency
     name: macOS ${{ matrix.package_arch }}
     strategy:
@@ -150,6 +156,7 @@ jobs:
         run: rm -f -- "$RUNNER_TEMP/romraider2-signing.p12"
 
   steamos-package:
+    if: ${{ !inputs.android_only }}
     needs: version-consistency
     runs-on: ubuntu-latest
     steps:

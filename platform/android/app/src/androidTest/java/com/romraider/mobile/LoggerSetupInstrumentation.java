@@ -54,6 +54,7 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
             startActivitySync(intent);
             awaitImports();
             if (phase.equals("seed")) seed();
+            else if (phase.equals("mut2-definition")) verifyMut2DefinitionRejection();
             else if (phase.equals("gauges")) verifyGaugesOnly();
             else if (phase.equals("gauge-demo-toggle")) verifyGaugeDemoToggle();
             else if (phase.equals("gauge-setup")) verifyGaugeSetup();
@@ -159,6 +160,35 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
                 + "600,P8,Engine Speed,800.0,rpm\n600,P1,Battery Voltage,13.24,V\n")
                         .getBytes(StandardCharsets.UTF_8));
         verify(2);
+    }
+
+    private void verifyMut2DefinitionRejection() throws Exception {
+        invoke("showLogger", new Class<?>[0]);
+        setField("loggerProtocol", PortableLoggerProtocol.MUT2);
+        invoke("showLogger", new Class<?>[0]);
+        File definition = new File(getTargetContext().getFilesDir(), "invalid-mut2.txt");
+        String body = "type=mut2\nparamname=RPM\nparamid=0x21\nscalingrpn=x,31.25,*\n";
+        Files.write(definition.toPath(), body.getBytes(StandardCharsets.UTF_8));
+        invoke("loadLoggerDefinition", new Class<?>[] {Uri.class, String.class}, Uri.fromFile(definition), definition.getName());
+        awaitImports();
+        check(field("loggerDefinition") == null, "Invalid definition was accepted");
+        check("Invalid logger definition.".equals(field("loggerSetupProblem")), "Rejection exposed internal validation details");
+        clickDialogText("OK");
+        runOnMainSync(() -> check(!viewContainsText((android.view.View) fieldUnchecked("content"), "XXRR2"),
+                "Protocol setup exposes internal validation details"));
+        Files.write(definition.toPath(), ("XXRR2-MUT-IIXX\n" + body).getBytes(StandardCharsets.UTF_8));
+        invoke("loadLoggerDefinition", new Class<?>[] {Uri.class, String.class}, Uri.fromFile(definition), definition.getName());
+        awaitImports();
+        check(field("loggerDefinition") != null, "Compatible definition was rejected");
+        check(!testRecordingActive(), "Definition import started a recording");
+        setField("loggerProtocol", PortableLoggerProtocol.SSM);
+        setField("loggerDefinition", null);
+        setField("loggerDefinitionBytes", new byte[0]);
+        setField("loggerDefinitionName", "");
+        invoke("scheduleLoggerSetupSave", new Class<?>[0]);
+        invoke("showLogger", new Class<?>[0]);
+        Files.delete(definition.toPath());
+        System.out.println("PASS: invalid MUT-II definition shows a generic dialog; compatible definition imports without connecting.");
     }
 
     private void verifyChannelTransfer() throws Exception {
