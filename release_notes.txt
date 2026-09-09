@@ -1,9 +1,27 @@
-RomRaider2 ECU Studio 1.1.6
+RomRaider2 ECU Studio 1.1.8
 ================================
 
 Development source for the next patch. Public downloads remain 1.1.5 until a
 separately verified release is published. For published packages:
 https://github.com/Natzirt-BK/RomRaider2/releases
+
+What changed for 1.1.8
+---------------------
+
+- Android Logger puts connection status and Start/Stop first, with live readings
+  below and compact Vehicle, Adapter, and Profile & channels setup sections.
+- Portrait and landscape layouts retain the same recording. Setup controls
+  cannot change the active session, and connection/import errors stay visible.
+- Log Review remains at the bottom, with CSV review and recording exports.
+
+What changed for 1.1.7
+---------------------
+
+- Android CSV summaries open in a separate scrollable window. Close Log File
+  unloads the review without deleting the recording; visible import cancellation
+  and channel pagination are removed.
+- Save Logger Profile exports standard XML. RR2-specific channel transfers
+  remain under More Profile Options.
 
 What changed for 1.1.6 (hardware qualification pending)
 ---------------------
@@ -15,11 +33,16 @@ What changed for 1.1.6 (hardware qualification pending)
   no-overwrite CSV output are covered by offline tests. Ambiguous responders
   stop the test. This does not enable enhanced SSM/MUT-II on ELM adapters,
   Android ELM connectivity, flashing, live tuning or DTC clearing.
-- Existing OpenPort logging remains unchanged. See docs/ELM_IN_CAR_TEST.md
+- The desktop adapter test does not change OpenPort logging. See docs/ELM_IN_CAR_TEST.md
   for the parked-vehicle qualification procedure and current limitations.
 - The Compose desktop shell restores the visible window's position and size
   after full-screen gauges, including when window-manager updates lag behind
   the UI model. A synthetic native-window regression covers stale coordinates.
+- Android SSM setup adds automatic DimeMod discovery and filters selectable
+  channels by the loaded definition and identified ECU. The setup handshake
+  follows DimeMod negotiation; channel polling remains read-only.
+- Removed the Android offline logger. A visual gauge demo remains available
+  separately from vehicle recording.
 
 What changed for 1.1.5
 ---------------------

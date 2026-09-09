@@ -44,7 +44,7 @@ jobs:
           env RR2_FX_WINDOW_SMOKE=1 bash packaging/run-desktop-window-tests.sh gradle --no-daemon :ui:javafx-desktop:test :ui:javafx-desktop:stageJavaFxLinux
           python3 packaging/test-elm-serial-pty.py "$JAVA_HOME/bin/java" 'ui/javafx-desktop/build/classes/java/test:ui/javafx-desktop/build/classes/java/main:platform/shared-core/build/classes/java/main:lib/common/jSerialComm-2.11.4.jar'
           packaging/java21/audit-runtime-modules.sh build/linux/lib/RomRaider2.jar
-          packaging/java21/build-linux-app-image.sh build/release-1.1.6
+          packaging/java21/build-linux-app-image.sh build/release-1.1.8
           packaging/java21/build-linux-release.sh
       - name: Preserve failed native-window diagnostics
         if: failure()
@@ -60,10 +60,10 @@ jobs:
       - name: Upload Linux x64 package
         uses: actions/upload-artifact@v4
         with:
-          name: RomRaider2-1.1.6-Linux-x64
+          name: RomRaider2-1.1.8-Linux-x64
           path: |
-            build/releases/RomRaider2_ECU_Studio_1.1.6_Linux_x64.zip
-            build/releases/RomRaider2_ECU_Studio_1.1.6_Linux_x64.zip.sha256
+            build/releases/RomRaider2_ECU_Studio_1.1.8_Linux_x64.zip
+            build/releases/RomRaider2_ECU_Studio_1.1.8_Linux_x64.zip.sha256
           if-no-files-found: error
 
   windows-x64-package:
@@ -124,8 +124,8 @@ jobs:
       - name: Upload Windows x64 package
         uses: actions/upload-artifact@v4
         with:
-          name: RomRaider2-1.1.6-Windows-x64
+          name: RomRaider2-1.1.8-Windows-x64
           path: |
-            build/releases-windows/RomRaider2_ECU_Studio_1.1.6_Windows_x64.zip
-            build/releases-windows/RomRaider2_ECU_Studio_1.1.6_Windows_x64.zip.sha256
+            build/releases-windows/RomRaider2_ECU_Studio_1.1.8_Windows_x64.zip
+            build/releases-windows/RomRaider2_ECU_Studio_1.1.8_Windows_x64.zip.sha256
           if-no-files-found: error

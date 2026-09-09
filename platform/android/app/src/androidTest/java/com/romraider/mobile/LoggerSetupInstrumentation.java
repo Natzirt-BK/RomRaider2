@@ -64,6 +64,7 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
             else if (phase.equals("calculated-gauges")) verifyCalculatedGauges();
             else if (phase.equals("channel-transfer")) verifyChannelTransfer();
             else if (phase.equals("vehicle-channels")) verifyVehicleChannels();
+            else if (phase.equals("logger-layout")) verifyLoggerLayout();
             else if (phase.equals("background-service")) verifyBackgroundService();
             else if (phase.equals("background-denied")) verifyBackgroundDenied();
             else if (phase.equals("background-process-death")) prepareBackgroundProcessDeath();
@@ -951,6 +952,116 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
                 "Display count did not restore independently of mounted/running state");
         invoke("setMountedGaugeCount", new Class<?>[]{int.class}, 6);
         System.out.println("PASS: all 1–6 mounted layouts fit portrait/landscape with retained gauges/profile, no scrolling, and count-only persistence.");
+    }
+
+    @SuppressWarnings("unchecked")
+    private void verifyLoggerLayout() throws Exception {
+        verifySelection(2);
+        invoke("showLogger", new Class<?>[0]);
+        long deadline = SystemClock.uptimeMillis() + 5000;
+        while (field("recordingService") == null && SystemClock.uptimeMillis() < deadline) SystemClock.sleep(50);
+        invoke("refreshRecording", new Class<?>[0]);
+        java.util.Map<String, android.widget.LinearLayout> sections =
+                (java.util.Map<String, android.widget.LinearLayout>) field("loggerSetupSections");
+        java.util.Map<String, android.widget.Button> toggles =
+                (java.util.Map<String, android.widget.Button>) field("loggerSetupToggles");
+        check(sections.size() == 3, "Expected three compact setup sections");
+        for (android.view.View body : sections.values()) check(body.getVisibility() == android.view.View.GONE, "Setup starts expanded");
+        check(((android.widget.TextView) field("loggerSessionTitle")).getText().toString().equals("Not connected"),
+                "Idle screen claims an active/reconnecting ECU");
+        check(((android.view.View) field("liveReadingsCard")).getVisibility() == android.view.View.GONE, "Idle screen exposes live readings");
+        android.view.ViewGroup content = (android.view.ViewGroup) field("content");
+        runOnMainSync(() -> {
+            check(viewContainsText(content.getChildAt(content.getChildCount() - 1), "LOG REVIEW"), "Log Review is not last");
+            toggles.get("Vehicle").performClick();
+            check(sections.get("Vehicle").isShown(), "Vehicle controls did not expand");
+            toggles.get("Profile & channels").performClick();
+            check(sections.get("Vehicle").getVisibility() == android.view.View.GONE && sections.get("Profile & channels").isShown(),
+                    "Accordion left multiple sections expanded");
+            check(viewContainsText(sections.get("Profile & channels"), "SAVE LOGGER PROFILE"), "XML profile save is missing");
+            toggles.get("Profile & channels").performClick();
+        });
+        File renders = getTargetContext().getExternalFilesDir("logger-layout");
+        check(renders != null && (renders.isDirectory() || renders.mkdirs()), "Cannot create layout render folder");
+        rotateMountedDisplay(android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+        captureMountedScreenshot(new File(renders, "idle-portrait.png"));
+        android.widget.Button startStop = (android.widget.Button) field("liveLoggerButton");
+        android.graphics.Rect buttonBounds = new android.graphics.Rect();
+        runOnMainSync(() -> check(startStop.getGlobalVisibleRect(buttonBounds) && buttonBounds.height() == startStop.getHeight(),
+                "Start button is not fully visible on the initial portrait screen"));
+        String oldUsb = (String) field("usbState");
+        setField("usbState", "OpenPort USB permission was not granted.");
+        invoke("refreshUsbStatus", new Class<?>[0]);
+        check(((android.widget.TextView) field("loggerSessionDetail")).getText().toString().contains("permission was not granted"),
+                "Collapsed adapter controls hide a connection problem");
+        setField("usbState", oldUsb);
+        setField("loggerSetupProblem", "Logger definition could not be opened.");
+        invoke("refreshLoggerSetupStatus", new Class<?>[0]);
+        check(((android.widget.TextView) field("loggerSessionDetail")).getText().toString().contains("definition could not be opened"),
+                "Collapsed setup hides an import problem");
+        setField("loggerSetupProblem", "");
+        runOnMainSync(() -> toggles.get("Vehicle").performClick());
+        Object profile = field("loggerProfile");
+        startTestRecording();
+        try {
+            check(((android.widget.TextView) field("loggerSessionTitle")).getText().toString().equals("Recording"), "Recording status missing");
+            check(((android.view.View) field("liveReadingsCard")).isShown(), "Live readings are hidden during capture");
+            for (android.view.View body : sections.values()) check(body.getVisibility() == android.view.View.GONE, "Starting did not collapse setup");
+            runOnMainSync(() -> toggles.get("Vehicle").performClick());
+            assertButtonsDisabled(sections.get("Vehicle"));
+            check(field("loggerProfile") == profile && testRecordingActive(), "Inspecting setup changed the session/profile");
+            runOnMainSync(() -> toggles.get("Vehicle").performClick());
+            rotateMountedDisplay(android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
+            waitForLoggerHeaderLayout(true);
+            runOnMainSync(() -> check(startStop.getGlobalVisibleRect(buttonBounds) && buttonBounds.height() == startStop.getHeight(),
+                    "Stop button is cropped in landscape"));
+            captureMountedScreenshot(new File(renders, "recording-landscape.png"));
+            check(testRecordingActive(), "Rotation stopped capture");
+            rotateMountedDisplay(android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+            waitForLoggerHeaderLayout(false);
+            captureMountedScreenshot(new File(renders, "recording-portrait.png"));
+            invoke("showGaugesOnly", new Class<?>[0]);
+            invoke("leaveGaugesOnly", new Class<?>[0]);
+            check(testRecordingActive() && field("loggerProfile") == profile, "Gauge navigation changed the session");
+            runOnMainSync(startStop::performClick);
+            waitForServiceIdle((ReadOnlyLoggingService) field("recordingService"));
+            invoke("refreshRecording", new Class<?>[0]);
+            check(!testRecordingActive() && startStop.isEnabled(), "Top Stop button failed or Start did not recover");
+            check(((android.widget.TextView) field("loggerSessionTitle")).getText().toString().equals("Not connected"), "Stopped screen claims a connection");
+        } finally { if (testRecordingActive()) stopTestRecording(); }
+        System.out.println("PASS: compact Logger layout, accordion behavior, idle/recording/stop status, visible errors, portrait/landscape and session continuity.");
+    }
+
+    private void waitForLoggerHeaderLayout(boolean wide) throws Exception {
+        android.view.View title = (android.view.View) field("loggerSessionTitle");
+        android.view.View detail = (android.view.View) field("loggerSessionDetail");
+        android.view.View button = (android.view.View) field("liveLoggerButton");
+        boolean[] ready = {false};
+        long deadline = SystemClock.uptimeMillis() + 5000;
+        do {
+            waitForIdleSync();
+            runOnMainSync(() -> {
+                android.graphics.Rect titleBounds = new android.graphics.Rect();
+                android.graphics.Rect detailBounds = new android.graphics.Rect();
+                android.graphics.Rect buttonBounds = new android.graphics.Rect();
+                ready[0] = title.getGlobalVisibleRect(titleBounds) && titleBounds.width() > 0
+                        && titleBounds.height() == title.getHeight()
+                        && detail.getGlobalVisibleRect(detailBounds) && detailBounds.width() > 0
+                        && detailBounds.height() == detail.getHeight()
+                        && button.getGlobalVisibleRect(buttonBounds) && buttonBounds.height() == button.getHeight()
+                        && (wide ? titleBounds.right < buttonBounds.left : titleBounds.bottom <= buttonBounds.top);
+            });
+            if (!ready[0]) SystemClock.sleep(50);
+        } while (!ready[0] && SystemClock.uptimeMillis() < deadline);
+        check(ready[0], "Logger header status/detail/button did not settle into the expected layout");
+    }
+
+    private void assertButtonsDisabled(android.view.View view) {
+        if (view instanceof android.widget.Button) check(!view.isEnabled(), "Setup mutation control enabled during recording");
+        if (view instanceof android.view.ViewGroup) {
+            android.view.ViewGroup group = (android.view.ViewGroup) view;
+            for (int i = 0; i < group.getChildCount(); i++) assertButtonsDisabled(group.getChildAt(i));
+        }
     }
 
     private boolean screenAwake() {

@@ -176,6 +176,14 @@ public final class MainActivity extends Activity {
     private TextView usbStatusView;
     private TextView liveLoggerView;
     private Button liveLoggerButton;
+    private TextView loggerSessionTitle;
+    private TextView loggerSessionDetail;
+    private LinearLayout liveReadingsCard;
+    private final Map<String, LinearLayout> loggerSetupSections = new LinkedHashMap<>();
+    private final Map<String, Button> loggerSetupToggles = new LinkedHashMap<>();
+    private String expandedLoggerSection = "";
+    private boolean loggerStopStyle;
+    private String loggerSetupProblem = "";
     private GridLayout loggerGaugeGrid;
     private TextView loggerGaugeEmpty;
     private final Map<String, MobileGaugeView> loggerGaugeViews =
@@ -220,6 +228,7 @@ public final class MainActivity extends Activity {
             recordingService = null;
             liveEcuIdentified = false;
             if (liveLoggerView != null) liveLoggerView.setText(R.string.logger_service_unavailable);
+            refreshSessionHeader();
             refreshGaugeAvailability();
         }
     };
@@ -494,6 +503,13 @@ public final class MainActivity extends Activity {
         usbStatusView = null;
         liveLoggerView = null;
         liveLoggerButton = null;
+        loggerSessionTitle = null;
+        loggerSessionDetail = null;
+        liveReadingsCard = null;
+        loggerSetupSections.clear();
+        loggerSetupToggles.clear();
+        expandedLoggerSection = "";
+        loggerStopStyle = false;
         loggerGaugeGrid = null;
         loggerGaugeEmpty = null;
         loggerGaugeDemoButton = null;
@@ -505,21 +521,65 @@ public final class MainActivity extends Activity {
         selectTab(loggerTab, editorTab);
         content.removeAllViews();
 
-        TextView heading = text("Logger", 24, INK);
-        heading.setTypeface(Typeface.DEFAULT_BOLD);
-        content.addView(heading);
-        content.addView(text("Review logs, prepare a session, and verify the "
-                + "OpenPort from one workspace.", 13, MUTED), matchWrap(dp(14)));
-
         // Gauge setup belongs exclusively to the Gauges tab, not the logger's channel setup.
         gaugeSetupCard = loggerDashboardCard();
 
-        LinearLayout setupCard = sectionCard("LOGGER SETUP",
-                "Select the vehicle protocol, then load logger XML or a MUT2 "
-                        + "OpenPort logcfg.txt. Choose channels here or import a profile.");
+        LinearLayout session = sectionCard("LOGGER", "");
+        loggerSessionTitle = text("Checking logger status…", 21, INK);
+        loggerSessionTitle.setTypeface(Typeface.DEFAULT_BOLD);
+        LinearLayout sessionBody = column();
+        session.addView(sessionBody, matchWrap());
+        sessionBody.addView(loggerSessionTitle, matchWrap(dp(8)));
+        liveLoggerButton = button(getString(R.string.logger_live_start));
+        liveLoggerButton.setTextSize(15);
+        liveLoggerButton.setMinHeight(dp(52));
+        styleButton(liveLoggerButton, POSITIVE, POSITIVE);
+        liveLoggerButton.setOnClickListener(view -> toggleLiveLogger());
+        sessionBody.addView(liveLoggerButton, matchWrap(dp(8)));
+        loggerSessionDetail = text("", 13, MUTED);
+        sessionBody.addView(loggerSessionDetail, matchWrap());
+        final TextView sessionTitle = loggerSessionTitle, sessionDetail = loggerSessionDetail;
+        final Button sessionButton = liveLoggerButton;
+        final boolean[] wideSession = {false};
+        sessionBody.addOnLayoutChangeListener((view, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> view.post(() -> {
+            boolean wide = view.getWidth() >= dp(520);
+            if (wide == wideSession[0]) return;
+            wideSession[0] = wide;
+            // Run outside layout traversal so reparented children get a fresh measure/layout pass.
+            // Reuse the existing views without rebuilding the screen or touching the recording.
+            for (View child : new View[]{sessionTitle, sessionButton, sessionDetail}) {
+                if (child.getParent() instanceof ViewGroup) ((ViewGroup) child.getParent()).removeView(child);
+            }
+            sessionBody.removeAllViews();
+            sessionBody.setOrientation(wide ? LinearLayout.HORIZONTAL : LinearLayout.VERTICAL);
+            if (wide) {
+                LinearLayout info = column();
+                info.addView(sessionTitle, matchWrap(dp(6)));
+                info.addView(sessionDetail, matchWrap());
+                sessionBody.addView(info, new LinearLayout.LayoutParams(0, -2, 1));
+                LinearLayout.LayoutParams action = new LinearLayout.LayoutParams(dp(190), -2);
+                action.leftMargin = dp(16);
+                action.gravity = Gravity.CENTER_VERTICAL;
+                sessionBody.addView(sessionButton, action);
+            } else {
+                sessionBody.addView(sessionTitle, matchWrap(dp(8)));
+                sessionBody.addView(sessionButton, matchWrap(dp(8)));
+                sessionBody.addView(sessionDetail, matchWrap());
+            }
+        }));
+        content.addView(session, cardParams(dp(10)));
+
+        liveReadingsCard = sectionCard("LIVE READINGS", "");
+        liveLoggerView = statusText("");
+        liveReadingsCard.addView(liveLoggerView, matchWrap());
+        liveReadingsCard.setVisibility(View.GONE);
+        content.addView(liveReadingsCard, cardParams(dp(10)));
+
+        LinearLayout setupCard = sectionCard("SESSION SETUP", "");
+        LinearLayout vehicle = column();
         Button protocolChoice = button("PROTOCOL: " + loggerProtocol);
         protocolChoice.setOnClickListener(view -> new AlertDialog.Builder(this)
-                .setTitle("Read-only vehicle protocol")
+                .setTitle("Vehicle protocol")
                 .setItems(new String[] {"Subaru SSM (4800 baud)", "Mitsubishi MUT-II (15625 baud)"},
                         (dialog, which) -> {
                             if (!loggerSetupEditable()) return;
@@ -536,23 +596,44 @@ public final class MainActivity extends Activity {
                             loggerDefinitionName = "";
                             loggerProfileName = "";
                             loggerSetupState = "Load a " + next + " logger definition.";
+                            loggerSetupProblem = "";
                             getPreferences(MODE_PRIVATE).edit()
                                     .putString("logger_protocol", next.name()).apply();
                             scheduleLoggerSetupSave();
                             showLogger();
                         }).show());
-        setupCard.addView(protocolChoice, matchWrap(dp(9)));
+        vehicle.addView(protocolChoice, matchWrap(dp(8)));
         Button definition = button("OPEN LOGGER DEFINITION");
         definition.setOnClickListener(view -> openLoggerDefinition());
+        vehicle.addView(definition, matchWrap(dp(8)));
+        vehicle.addView(text("Load the matching logger XML or MUT-II logcfg.txt. SSM connection setup "
+                + "checks for DimeMod using its negotiation writes; channel polling is read-only.", 12, MUTED), matchWrap(dp(8)));
+        addLoggerSetupSection(setupCard, "Vehicle", vehicle);
+
+        LinearLayout adapter = column();
+        Button prepare = button("PREPARE OPENPORT");
+        prepare.setOnClickListener(view -> prepareOpenPort());
+        Button scan = button("SCAN USB");
+        scan.setOnClickListener(view -> showUsbDevices());
+        adapter.addView(actionRow(prepare, scan), matchWrap(dp(8)));
+        if (loggerProtocol == PortableLoggerProtocol.SSM) {
+            Button discover = button("CONNECT & FIND CHANNELS");
+            discover.setOnClickListener(view -> toggleLiveLogger(true));
+            adapter.addView(discover, matchWrap(dp(8)));
+        }
+        usbStatusView = statusText(usbSummary());
+        adapter.addView(usbStatusView, matchWrap());
+        addLoggerSetupSection(setupCard, "Adapter", adapter);
+
+        LinearLayout profileOptions = column();
         Button profile = button("OPEN LOGGER PROFILE");
         profile.setOnClickListener(view -> openLoggerProfile());
         Button saveProfile = button("SAVE LOGGER PROFILE");
         saveProfile.setOnClickListener(view -> prepareLoggerProfileExport());
-        setupCard.addView(definition, matchWrap(dp(9)));
-        setupCard.addView(actionRow(profile, saveProfile), matchWrap(dp(9)));
+        profileOptions.addView(actionRow(profile, saveProfile), matchWrap(dp(8)));
         Button channels = button("CHOOSE CHANNELS");
         channels.setOnClickListener(view -> chooseLoggerChannels());
-        setupCard.addView(channels, matchWrap(dp(9)));
+        profileOptions.addView(channels, matchWrap(dp(8)));
         Button transfer = button("MORE PROFILE OPTIONS");
         transfer.setOnClickListener(view -> new AlertDialog.Builder(this)
                 .setTitle("RR2 profile transfer (.rr2logger)")
@@ -561,51 +642,19 @@ public final class MainActivity extends Activity {
                             if (which == 0) openPortableLoggerSetup();
                             else preparePortableLoggerSetupExport();
                         }).setNegativeButton("Cancel", null).show());
-        setupCard.addView(transfer, matchWrap(dp(9)));
+        profileOptions.addView(transfer, matchWrap(dp(8)));
         loggerSetupView = statusText(loggerSetupSummary());
-        setupCard.addView(loggerSetupView, matchWrap());
+        profileOptions.addView(loggerSetupView, matchWrap());
+        addLoggerSetupSection(setupCard, "Profile & channels", profileOptions);
         content.addView(setupCard, cardParams(dp(10)));
 
-        LinearLayout usbCard = sectionCard("OPENPORT USB",
-                "Prepare an OpenPort 2.0 and check adapter access and vehicle "
-                        + "voltage without querying the ECU.");
-        Button prepare = button("PREPARE OPENPORT");
-        styleButton(prepare, PANEL_RAISED, ACCENT);
-        prepare.setOnClickListener(view -> prepareOpenPort());
-        Button scan = button("SCAN USB");
-        scan.setOnClickListener(view -> showUsbDevices());
-        usbCard.addView(actionRow(prepare, scan), matchWrap(dp(9)));
-        usbStatusView = statusText(usbSummary());
-        usbCard.addView(usbStatusView, matchWrap());
-        content.addView(usbCard, cardParams(dp(10)));
-
-        LinearLayout liveCard = sectionCard("LIVE LOGGER",
-                "Identify the ECU, resolve profile addresses, display values, "
-                        + "and record CSV. SSM setup automatically checks for DimeMod using its discovery handshake; subsequent channel polling is read-only. Compatibility depends on the vehicle, "
-                        + "protocol, definition, selected channels, and adapter.");
-        liveLoggerButton = button(getString(R.string.logger_live_start));
-        styleButton(liveLoggerButton, POSITIVE, POSITIVE);
-        liveLoggerButton.setOnClickListener(view -> toggleLiveLogger());
-        if (loggerProtocol == PortableLoggerProtocol.SSM) {
-            Button discover = button("CONNECT & FIND CHANNELS");
-            discover.setOnClickListener(view -> toggleLiveLogger(true));
-            liveCard.addView(discover, matchWrap(dp(9)));
-        }
+        LinearLayout reviewCard = sectionCard("LOG REVIEW",
+                "Saved logs and recording exports.");
         Button saveLive = button("SAVE LIVE CSV");
         saveLive.setOnClickListener(view -> saveLiveLog());
-        liveCard.addView(actionRow(liveLoggerButton, saveLive),
-                matchWrap(dp(9)));
         Button archive = button("RECOVER / EXPORT RECORDINGS");
         archive.setOnClickListener(view -> chooseArchivedLog());
-        liveCard.addView(archive, matchWrap(dp(9)));
-        liveLoggerView = statusText("LIVE LOGGER\nPrepare the OpenPort and "
-                + "load a matching definition and profile. Live logging reads the "
-                + "vehicle. Gauge Demo is separate and uses simulated values.");
-        liveCard.addView(liveLoggerView, matchWrap());
-        content.addView(liveCard, cardParams(dp(12)));
-
-        LinearLayout reviewCard = sectionCard("LOG REVIEW",
-                "Open a saved CSV in a separate, scrollable channel-summary window.");
+        reviewCard.addView(actionRow(saveLive, archive), matchWrap(dp(8)));
         Button open = button("OPEN CSV LOG");
         open.setOnClickListener(view -> openLog());
         reviewImportedLogButton = button("VIEW IMPORTED LOG");
@@ -620,6 +669,115 @@ public final class MainActivity extends Activity {
         refreshLogImportStatus();
         displayedRecordingState = null;
         refreshRecording();
+        workspaceScroll.scrollTo(0, 0);
+    }
+
+    private void addLoggerSetupSection(LinearLayout parent, String name, LinearLayout body) {
+        Button toggle = button(name);
+        toggle.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+        toggle.setPadding(dp(12), dp(8), dp(12), dp(8));
+        toggle.setMaxLines(2);
+        toggle.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        toggle.setOnClickListener(view -> {
+            expandedLoggerSection = name.equals(expandedLoggerSection) ? "" : name;
+            refreshLoggerSections();
+        });
+        loggerSetupSections.put(name, body);
+        loggerSetupToggles.put(name, toggle);
+        parent.addView(toggle, matchWrap(dp(6)));
+        body.setVisibility(View.GONE);
+        parent.addView(body, matchWrap(dp(8)));
+    }
+
+    private void refreshLoggerSections() {
+        for (Map.Entry<String, LinearLayout> entry : loggerSetupSections.entrySet()) {
+            String name = entry.getKey();
+            boolean expanded = name.equals(expandedLoggerSection);
+            entry.getValue().setVisibility(expanded ? View.VISIBLE : View.GONE);
+            String detail = name.equals("Vehicle") ? loggerProtocol.name() + " · "
+                    + (loggerDefinition == null ? "Load a definition" : loggerDefinitionName)
+                    : name.equals("Adapter") ? "OpenPort 2.0 · "
+                        + (recordingService != null && recordingService.busy() ? "In use by logger"
+                            : openPort == null ? "Not prepared" : "Prepared")
+                    : (loggerProfile == null ? "Open a profile or choose channels"
+                        : loggerProfileName + " · " + loggerProfile.size() + " selected");
+            Button toggle = loggerSetupToggles.get(name);
+            String label = (expanded ? "− " : "+ ") + name + "\n" + detail;
+            if (!label.contentEquals(toggle.getText())) toggle.setText(label);
+            toggle.setContentDescription((expanded ? "Collapse " : "Expand ") + name + ". " + detail);
+            setLoggerControlsEnabled(entry.getValue(), recordingService != null && !recordingService.busy());
+        }
+    }
+
+    private void setLoggerControlsEnabled(View view, boolean enabled) {
+        if (view instanceof Button) view.setEnabled(enabled);
+        if (view instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) view;
+            for (int i = 0; i < group.getChildCount(); i++) setLoggerControlsEnabled(group.getChildAt(i), enabled);
+        }
+    }
+
+    private String idleLoggerInstruction() {
+        if (loggerDefinition == null) return "Open Vehicle to load the matching logger definition.";
+        if (openPort == null) return "Open Adapter to prepare the OpenPort.";
+        if (loggerProfile == null || loggerProfile.selections().isEmpty()) {
+            return loggerProtocol == PortableLoggerProtocol.SSM && loggerEcuId().isEmpty()
+                    ? "Open Adapter to find vehicle channels, then open Profile & channels to select them or load a profile."
+                    : "Open Profile & channels to load a profile or select channels.";
+        }
+        return "Adapter prepared. Park safely with ignition on, then start logging.";
+    }
+
+    private void refreshSessionHeader() {
+        if (!loggerVisible || gaugesVisible || loggerSessionTitle == null) return;
+        ReadOnlyRecording recording = recordingService == null ? null : recordingService.recording();
+        ReadOnlyRecording.Snapshot state = recording == null ? null : recording.snapshot();
+        boolean busy = recordingService != null && recordingService.busy();
+        String title = "Not connected", detail = idleLoggerInstruction();
+        boolean stopping = busy && state != null && (state.phase() == ReadOnlyRecording.Phase.STOPPING
+                || state.phase() == ReadOnlyRecording.Phase.STOPPED);
+        if (recordingService == null) {
+            title = "Checking logger status…";
+            detail = "Waiting for recording-service status. Existing recording state is unknown.";
+        } else if (busy && state != null) {
+            title = stopping ? "Stopping…" : state.phase() == ReadOnlyRecording.Phase.RECORDING ? "Recording"
+                    : state.phase() == ReadOnlyRecording.Phase.CONNECTING ? "Connecting to ECU…" : "Preparing session…";
+            detail = state.phase() == ReadOnlyRecording.Phase.RECORDING
+                    ? "ECU " + state.ecuId() + " · " + state.ready() + " channels · " + state.samples()
+                        + " values\n" + state.timestampMillis() / 1000 + " seconds recorded"
+                    : state.message();
+        } else if (state != null) {
+            String previous = state.samples() > 0 ? "Last recording: " + state.samples() + " values.\n" : "";
+            String message = state.message();
+            if (!message.isEmpty() && !message.equals("Read-only logger stopped.")) previous += message + "\n";
+            detail = previous + detail;
+        }
+        if (!busy && recordingService != null && !usbState.equals("OpenPort not prepared.") && !detail.contains(usbState)) {
+            detail += "\n" + usbState;
+        }
+        if (!busy && loggerImports.isLoading()) detail = loggerSetupState + "\n" + detail;
+        else if (!busy && !loggerSetupProblem.isEmpty()) {
+            detail = "Setup: " + loggerSetupProblem.substring(0, Math.min(240, loggerSetupProblem.length())) + "\n" + detail;
+        }
+        if (recordingService != null && !recordingService.failure().isEmpty() && !detail.contains(recordingService.failure())) {
+            detail = recordingService.failure() + "\n" + detail;
+        }
+        if (!title.contentEquals(loggerSessionTitle.getText())) loggerSessionTitle.setText(title);
+        if (!detail.contentEquals(loggerSessionDetail.getText())) loggerSessionDetail.setText(detail);
+        if (liveLoggerButton != null) {
+            String label = stopping ? "STOPPING…" : getString(busy ? R.string.logger_live_stop : R.string.logger_live_start);
+            if (!label.contentEquals(liveLoggerButton.getText())) liveLoggerButton.setText(label);
+            if (loggerStopStyle != busy) {
+                loggerStopStyle = busy;
+                styleButton(liveLoggerButton, busy ? Color.rgb(115, 38, 46) : POSITIVE,
+                        busy ? Color.rgb(230, 94, 108) : POSITIVE);
+            }
+            liveLoggerButton.setEnabled(recordingService != null && !stopping
+                    && (busy || !loggerImports.isLoading() && !setupTransferLoading));
+        }
+        if (liveReadingsCard != null) liveReadingsCard.setVisibility(busy && state != null
+                && state.phase() == ReadOnlyRecording.Phase.RECORDING ? View.VISIBLE : View.GONE);
+        refreshLoggerSections();
     }
 
     private void showUsbDevices() {
@@ -829,11 +987,13 @@ public final class MainActivity extends Activity {
     private void refreshUsbStatus() {
         if (isDestroyed()) return;
         if (loggerVisible && content != null) showUsbDevices();
+        refreshSessionHeader();
     }
 
     private void refreshLoggerSetupStatus() {
         if (isDestroyed()) return;
         if (loggerVisible && content != null) showLoggerSetupStatus();
+        refreshSessionHeader();
     }
 
     private void showEditor() {
@@ -1385,6 +1545,7 @@ public final class MainActivity extends Activity {
         final int generation = loggerImports.beginDefinition();
         final PortableLoggerProtocol protocol = loggerProtocol;
         loggerSetupState = "Reading logger definition...";
+        loggerSetupProblem = "";
         refreshLoggerSetupStatus();
         workerExecutor.execute(() -> {
             try (InputStream input = getContentResolver().openInputStream(uri)) {
@@ -1409,6 +1570,7 @@ public final class MainActivity extends Activity {
                     if (isDestroyed() || !loggerImports.finishDefinition(generation)) return;
                     loggerSetupState = ex.getMessage() == null
                             ? "Logger definition could not be opened." : ex.getMessage();
+                    loggerSetupProblem = loggerSetupState;
                     scheduleLoggerSetupSave();
                     refreshLoggerSetupStatus();
                 });
@@ -1425,6 +1587,7 @@ public final class MainActivity extends Activity {
         final int generation = loggerImports.beginProfile();
         final PortableLoggerProtocol protocol = loggerProtocol;
         loggerSetupState = "Reading logger profile...";
+        loggerSetupProblem = "";
         refreshLoggerSetupStatus();
         workerExecutor.execute(() -> {
             try (InputStream input = getContentResolver().openInputStream(uri)) {
@@ -1447,6 +1610,7 @@ public final class MainActivity extends Activity {
                     if (isDestroyed() || !loggerImports.finishProfile(generation)) return;
                     loggerSetupState = ex.getMessage() == null
                             ? "Logger profile could not be opened." : ex.getMessage();
+                    loggerSetupProblem = loggerSetupState;
                     scheduleLoggerSetupSave();
                     refreshLoggerSetupStatus();
                 });
@@ -1562,6 +1726,7 @@ public final class MainActivity extends Activity {
                     stopLiveLogger(null);
                     loggerProfile = new PortableLoggerProfile(loggerProtocol.name(), Collections.emptyList(), Collections.emptyList());
                     loggerProfileName = "Custom channels";
+                    loggerSetupProblem = "";
                     scheduleLoggerSetupSave();
                     refreshLoggerSetupStatus();
                 })
@@ -1574,6 +1739,7 @@ public final class MainActivity extends Activity {
                     loggerProfile = com.romraider.mobile.logger.LoggerChannelCatalog.select(
                             loggerProtocol.name(), originalProfile, parameters, checked);
                     loggerProfileName = "Custom channels";
+                    loggerSetupProblem = "";
                     scheduleLoggerSetupSave();
                     refreshLoggerSetupStatus();
                 }).show();
@@ -1636,6 +1802,7 @@ public final class MainActivity extends Activity {
                                 loggerProfile = setup.profile();
                                 loggerProfileName = "Imported channel setup";
                                 loggerSetupState = "Channel setup imported. Logging has not started.";
+                                loggerSetupProblem = "";
                                 clearLoggerGauges();
                                 scheduleLoggerSetupSave();
                                 refreshLoggerSetupStatus();
@@ -2120,11 +2287,20 @@ public final class MainActivity extends Activity {
     }
 
     private void refreshRecording() {
+        refreshSessionHeader();
         if (recordingService == null || activityDestroyed) return;
         ReadOnlyRecording current = recordingService.recording();
         if (current == null) return;
         ReadOnlyRecording.Snapshot state = current.snapshot();
         boolean busy = recordingService.busy();
+        if (!busy && usbState.equals("OpenPort is owned by the logger service.")) {
+            usbState = "OpenPort released. Prepare it before another session.";
+            refreshUsbStatus();
+        }
+        if (busy && !displayedRecordingBusy) {
+            expandedLoggerSection = "";
+            refreshLoggerSections();
+        }
         if (current == displayedRecording && state == displayedRecordingState
                 && !busy && !displayedRecordingBusy) return;
         if (current != displayedRecording) {
@@ -2162,8 +2338,6 @@ public final class MainActivity extends Activity {
         }
         liveEcuIdentified = busy && state.phase() == ReadOnlyRecording.Phase.RECORDING;
         updateScreenAwake();
-        if (liveLoggerButton != null) liveLoggerButton.setText(busy
-                ? R.string.logger_live_stop : R.string.logger_live_start);
         if (liveLoggerView != null) {
             String message = !recordingService.failure().isEmpty() ? recordingService.failure()
                     : !busy ? getString(R.string.logger_live_stopped, state.message(),
@@ -3036,7 +3210,7 @@ public final class MainActivity extends Activity {
         TextView heading = text(title, 12, ACCENT);
         heading.setTypeface(Typeface.DEFAULT_BOLD);
         card.addView(heading, matchWrap(dp(5)));
-        card.addView(text(detail, 13, INK), matchWrap(dp(11)));
+        if (!detail.isEmpty()) card.addView(text(detail, 13, INK), matchWrap(dp(11)));
         return card;
     }
 

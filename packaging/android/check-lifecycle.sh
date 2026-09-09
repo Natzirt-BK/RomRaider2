@@ -57,6 +57,10 @@ run_phase verify-corrupt
 run_phase calculated-gauges
 run_phase channel-transfer
 run_phase csv-import
+run_phase seed
+run_phase logger-layout
+run_phase vehicle-channels
+run_phase seed
 run_phase recording-recovery
 run_phase background-service
 "$adb_command" -s "$serial" shell pm revoke com.romraider.mobile.automation android.permission.POST_NOTIFICATIONS
@@ -76,6 +80,7 @@ run_phase background-after-death
 echo 'PASS: setup restoration, source removal, same-key upgrade, retained log export, gauge view/session/CSV continuity, calculated channels, reviewed channel transfer, clear selection, corrupt setup, and no automatic logging.'
 echo 'PASS: service-owned synthetic capture through Home/screen-off and recreation, notification/in-app Stop, stale requests, denied notifications, and retained spool prefix with no restart after process death.'
 echo 'PASS: retained recording validation, reviewed incomplete-tail recovery, source preservation, cancellation and stale Activity cleanup.'
-echo 'PASS: streamed CSV summaries beyond the old sample cap, bounded channel paging, retained results on failure/cancel, and workspace/recording isolation.'
+echo 'PASS: streamed CSV summaries, scrollable review and close controls, retained results on failure, and workspace/recording isolation.'
+echo 'PASS: compact Logger sections, visible connection status, portrait/landscape reflow, session continuity and ECU-specific channel selection.'
 echo 'PASS: mounted full screen and system-bar restoration, portrait/landscape, stopped display keep-awake, Home/return, Back/Exit, and same-writer Stop.'
 echo 'PASS: saved 1–6 gauge layouts fit the viewport without scrolling and preserve hidden gauges, channel selection and recording continuity.'
