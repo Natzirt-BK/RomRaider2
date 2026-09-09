@@ -5,6 +5,8 @@ import java.io.IOException;
 
 /** Injectable read-only session boundary shared by USB and deterministic tests. */
 public interface ReadOnlyLoggerTransport extends PortableLoggerDataSource {
+    /** Support flags from this connection's validated SSM identity, or null if unavailable. */
+    default byte[] ssmInitPayload() { return null; }
     String identifyEcu(PortableLoggerProtocol protocol) throws IOException;
     default String identifyEcu(PortableLoggerProtocol protocol,
             java.util.function.BooleanSupplier cancelled) throws IOException {

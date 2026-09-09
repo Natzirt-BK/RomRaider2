@@ -10,10 +10,9 @@ public final class LoggerChannelCatalog {
 
     public static List<PortableLoggerParameter> channels(PortableLoggerDefinition definition,
             PortableLoggerProfile profile, String ecuId) {
-        Set<String> selected = new HashSet<>();
-        if (profile != null) for (PortableLoggerProfile.Selection choice : profile.selections()) {
-            selected.add(choice.getId());
-        }
+        // An SSM definition spans many vehicles. Without identity none are vehicle-confirmed.
+        if ("SSM".equalsIgnoreCase(definition.getProtocol())
+                && (ecuId == null || ecuId.isEmpty())) return Collections.emptyList();
         Set<String> mapped = new HashSet<>();
         boolean filter = ecuId != null && !ecuId.isEmpty();
         if (filter) {
@@ -29,9 +28,8 @@ public final class LoggerChannelCatalog {
         }
         List<PortableLoggerParameter> result = new ArrayList<>();
         for (PortableLoggerParameter parameter : definition.parameters()) {
-            // Keep selected unavailable entries visible so a filter cannot silently erase them.
-            if (selected.contains(parameter.getId()) || ((parameter.getTarget() & 1) != 0
-                    && (!filter || mapped.contains(parameter.getId())))) result.add(parameter);
+            if ((parameter.getTarget() & 1) != 0
+                    && (!filter || mapped.contains(parameter.getId()))) result.add(parameter);
         }
         return Collections.unmodifiableList(result);
     }

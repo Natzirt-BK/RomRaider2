@@ -59,6 +59,11 @@ public final class ReadOnlySsmProtocol {
         return id.toString();
     }
 
+    public static byte[] ecuInitPayload(byte[] response) {
+        ecuId(response); // Validate framing, checksum and minimum identity length first.
+        return Arrays.copyOfRange(response, 5, response.length - 1);
+    }
+
     public static byte[] readAddressValues(byte[] response,
             int expectedValues) {
         if (expectedValues < 1 || expectedValues > MAX_ADDRESSES) {

@@ -111,7 +111,11 @@ when safe. See [the investigation](EVO_MUT2_CONNECTION_DIAGNOSIS.md).
    SSM definitions are unchanged. This copyable marker is simple validation,
    not authentication or proof of ECU compatibility. The previously supplied
    local 1.1.4 startup-test APK does not contain this later validation change.
-3. Use **Choose channels**. Start with RPM and battery voltage for the parked
+3. For SSM in 1.1.6 development, first use **Connect & Find Channels** with
+   the ignition on. **Choose channels** then shows a searchable vehicle-only
+   list, also used by the gauge picker. Unsupported imported selections remain
+   saved but are not polled. MUT-II uses the loaded vehicle definition without
+   claiming calibration identification. Start with RPM and battery voltage for the parked
    test; add channels after checking those values. All selected channels are
    recorded; fullscreen mode shows 1–6 independently configured gauges.
 4. To browse gauge designs without a car, use **Show Gauge Demo** on the Gauges

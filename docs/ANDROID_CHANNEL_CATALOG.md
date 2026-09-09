@@ -1,20 +1,36 @@
 # Android channel catalog
 
 The channel picker labels each entry with its parameter ID, units and source
-type. Identical names do not imply identical parameters: ECU-specific variants
-must retain their separate IDs. Transmission-only entries are omitted from the
-engine picker unless already selected in the imported profile.
+type, with search by name, ID or units. Identical names do not imply identical
+parameters: ECU-specific variants retain their separate IDs.
 
-When the recording owner retains an identified ECU for the same definition
-object, the picker offers **Mapped for last ECU** and **All engine channels**.
-The first view resolves address mappings and calculated dependencies using the
-existing engine selection resolver. Selected unavailable entries remain visible
-so filtering cannot silently remove them. Definition replacement discards this
-hint. No identity hint is persisted or used to authorize ECU reads.
+SSM users first run **Connect & Find Channels**, or start with an imported
+profile. The logger and gauge pickers then use the same vehicle-specific catalog:
+only engine channels from the loaded definition and successfully discovered
+DimeMod metadata, filtered by ECU address mappings, standard SSM support flags
+and resolvable calculated dependencies. The all-ECUs picker is removed.
 
-"Mapped" means resolvable in the definition, not hardware-verified support.
-Standard SSM availability-bit filtering remains separate work. Offline browsing
-therefore still includes legitimate same-name variants, now distinguishable.
+The SSM support-byte indices match the desktop init-payload layout. Unsupported
+flags, including flags beyond a short reply, exclude the channel and dependent
+calculations. Filtering applies before both picker publication and recording
+query planning, so importing an incompatible profile cannot bypass it. Channels
+without support flags rely on the definition mapping; a matching mapping is not
+independent validation of a custom definition's addresses or conversions.
+
+Unavailable imported selections are hidden from the picker, counted in its
+explanation, preserved in the saved profile, and excluded from polling/CSV.
+Searching and editing visible choices preserve hidden selections and existing
+CSV column order. **Clear all** explicitly clears the entire profile.
+Transmission-only channels never appear in the engine picker.
+
+The last identified catalog is retained only for the same loaded definition in
+the current recording service. Replacing the definition or losing the service
+requires identification again. Each new session rebuilds its catalog from its
+own ECU reply; no retained identity authorizes reads. Before identification,
+SSM users can import profiles but are not offered an unfiltered channel list.
+MUT-II continues to offer channels from the loaded definition: its generic
+response does not identify a calibration or supply SSM support flags, so users
+must supply a vehicle-matching definition.
 
 ## Automatic DimeMod discovery
 
@@ -51,16 +67,21 @@ Editing the picker before discovery retains unresolved profile IDs and preserves
 the order of previously selected CSV columns. **Clear all** still explicitly
 clears the entire profile.
 
-Automated tests cover same-name IDs, mappings and dependencies, retained
-selections, both runtime layouts, stock-ECU fallback, cancellation, timeouts,
+Automated tests cover support-byte offsets, switches, short replies, malformed
+flags, same-name ECU variants, calculated dependencies, profile retention,
+unsupported-channel exclusion from polling/CSV, and stale-identity invalidation.
+DimeMod tests cover runtime layouts, stock-ECU fallback, cancellation, timeouts,
 malformed metadata, real transport packet decoding with fake USB, session
-isolation, ethanol decoding and CSV output. Hardware validation remains pending;
-no actual ECU communication was performed during development.
+isolation, ethanol decoding and CSV output.
 
-Local qualification: 110 Android unit tests passed, Android lint passed, the
-signed 1.1.6 APK built successfully, and shared-core checks passed (including
-the five-million-value CSV test with a 64 MiB heap). No Android device UI test
-or actual vehicle test is claimed by this checkpoint.
+Local qualification: 118 Android unit tests, lint and shared-core checks passed,
+including the five-million-value CSV test with a 64 MiB heap. Seven isolated
+Android 36 emulator phases passed: setup seeding/restoration, gauge continuity,
+demo Show/Hide, gauge setup, setup transfer, and vehicle-channel selection/search.
+The vehicle-channel phase also checks gauge filtering and copy-from-logger.
+These automated checks send no ECU commands. The new support-flag filtering
+still needs a vehicle test; an earlier build's successful logging does not
+validate this filtering change.
 
 ## Logger preview removal
 

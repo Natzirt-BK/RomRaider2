@@ -63,6 +63,7 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
             else if (phase.equals("live-gauges")) verifyReadOnlySessionViewSwitch();
             else if (phase.equals("calculated-gauges")) verifyCalculatedGauges();
             else if (phase.equals("channel-transfer")) verifyChannelTransfer();
+            else if (phase.equals("vehicle-channels")) verifyVehicleChannels();
             else if (phase.equals("background-service")) verifyBackgroundService();
             else if (phase.equals("background-denied")) verifyBackgroundDenied();
             else if (phase.equals("background-process-death")) prepareBackgroundProcessDeath();
@@ -649,6 +650,8 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
         clickDialogText("3 gauges");
         check(((android.view.ViewGroup) field("gaugeSlotOptions")).getChildCount() == 3,
                 "Portrait layout did not expose three assignable slots");
+        startTestRecording();
+        stopTestRecording(); // Retain an identified ECU before choosing vehicle-specific channels.
         invoke("chooseGaugeSlotChannel", new Class<?>[]{int.class}, 0);
         clickDialogText("Unselected channel [P2]");
         check(((java.util.List<?>) field("gaugeChannelSlots")).get(0).equals("P2"), "Independent channel was not assigned");
@@ -1760,6 +1763,88 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
             SystemClock.sleep(50);
         }
         throw new AssertionError("Dialog button not found: " + text);
+    }
+
+    private void verifyVehicleChannels() throws Exception {
+        long boundDeadline = SystemClock.uptimeMillis() + 5000;
+        while (field("recordingService") == null && SystemClock.uptimeMillis() < boundDeadline) SystemClock.sleep(50);
+        check(field("recordingService") != null, "Recording service did not bind");
+        String definitionXml = DEFINITION.replace("id=\"P2\"", "id=\"P2\" ecubyteindex=\"8\" ecubit=\"0\"")
+                .replace("</parameters>", "<ecuparam id='E99' name='Other vehicle'><ecu id='OTHER'><address>32</address></ecu>"
+                        + "<conversions><conversion units='V' expr='x' format='0.0'/></conversions></ecuparam></parameters>");
+        PortableLoggerDefinition definition = PortableLoggerDefinitionReader.read(
+                new ByteArrayInputStream(definitionXml.getBytes(StandardCharsets.UTF_8)), "SSM");
+        setField("loggerDefinition", definition);
+        PortableLoggerProfile profile = new PortableLoggerProfile("SSM", java.util.List.of(
+                new PortableLoggerProfile.Selection("P8", "rpm"), new PortableLoggerProfile.Selection("P1", "V"),
+                new PortableLoggerProfile.Selection("P2", "%"), new PortableLoggerProfile.Selection("DM911", "%")), java.util.List.of());
+        setField("loggerProfile", profile);
+        invoke("chooseLoggerChannels", new Class<?>[0]);
+        awaitDialogText("Use Connect & Find Channels");
+        clickDialogText("OK");
+        startTestRecording();
+        stopTestRecording();
+        invoke("chooseLoggerChannels", new Class<?>[0]);
+        awaitDialogText("2 available channels");
+        check(!dialogContains("Unselected channel") && !dialogContains("Other vehicle"), "Unavailable entries leaked into picker");
+        check(dialogContains("2 profile selections unavailable"), "Hidden profile selections were not explained");
+        setDialogSearch("Battery");
+        clickDialogText("Battery Voltage [P1]"); // Uncheck a filtered item.
+        setDialogSearch("no matching channel");
+        check(!dialogContains("Engine Speed [P8]"), "Empty search did not filter the list");
+        setDialogSearch("");
+        clickDialogText("Use channels");
+        PortableLoggerProfile updated = (PortableLoggerProfile) field("loggerProfile");
+        check(updated.selections().stream().map(PortableLoggerProfile.Selection::getId).collect(java.util.stream.Collectors.toList())
+                .equals(java.util.List.of("P8", "P2", "DM911")), "Search lost hidden selections or changed CSV order");
+        invoke("chooseGaugeSlotChannel", new Class<?>[]{int.class}, 0);
+        awaitDialogText("Empty slot");
+        check(dialogContains("Engine Speed [P8]") && !dialogContains("Unselected channel") && !dialogContains("Other vehicle"),
+                "Gauge picker differs from vehicle logger catalog");
+        clickDialogText("Cancel");
+        invoke("useLoggerGaugeChannels", new Class<?>[0]);
+        check(((java.util.List<?>) field("gaugeChannelSlots")).equals(java.util.List.of("P8", "", "", "", "", "")),
+                "Copy from logger assigned unavailable channels to gauges");
+        setField("loggerDefinition", PortableLoggerDefinitionReader.read(
+                new ByteArrayInputStream(DEFINITION.getBytes(StandardCharsets.UTF_8)), "SSM"));
+        invoke("chooseLoggerChannels", new Class<?>[0]);
+        awaitDialogText("Use Connect & Find Channels");
+        clickDialogText("OK");
+        System.out.println("PASS: vehicle-only logger/gauge pickers, search selection stability, hidden-profile retention and definition invalidation.");
+    }
+
+    private boolean dialogContains(String text) {
+        waitForIdleSync();
+        AccessibilityNodeInfo root = getUiAutomation().getRootInActiveWindow();
+        return root != null && !root.findAccessibilityNodeInfosByText(text).isEmpty();
+    }
+
+    private void awaitDialogText(String text) {
+        long deadline = SystemClock.uptimeMillis() + 5000;
+        while (SystemClock.uptimeMillis() < deadline) {
+            if (dialogContains(text)) return;
+            SystemClock.sleep(50);
+        }
+        throw new AssertionError("Expected dialog text missing: " + text);
+    }
+
+    private void setDialogSearch(String text) {
+        waitForIdleSync();
+        AccessibilityNodeInfo node = findEditable(getUiAutomation().getRootInActiveWindow());
+        check(node != null, "Channel search is missing");
+        Bundle args = new Bundle();
+        args.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text);
+        check(node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args), "Could not type in channel search");
+        waitForIdleSync();
+    }
+
+    private AccessibilityNodeInfo findEditable(AccessibilityNodeInfo node) {
+        if (node == null || node.isEditable()) return node;
+        for (int i = 0; i < node.getChildCount(); i++) {
+            AccessibilityNodeInfo found = findEditable(node.getChild(i));
+            if (found != null) return found;
+        }
+        return null;
     }
     private static String parameter(String id, String name, String units, String address, String expression) {
         return "<parameter id=\"" + id + "\" name=\"" + name + "\"><address length=\"2\">" + address

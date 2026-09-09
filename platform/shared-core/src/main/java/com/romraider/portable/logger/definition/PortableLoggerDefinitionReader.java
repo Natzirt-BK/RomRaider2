@@ -74,12 +74,14 @@ public final class PortableLoggerDefinitionReader {
                 parameter = new ParameterBuilder(value(attributes, "id"),
                         value(attributes, "name"), value(attributes, "desc"),
                         parseTarget(value(attributes, "target")));
+                readSupportFlag(attributes, "ecubit");
             } else if ("switch".equals(qName)) {
                 if (parameter != null) throw new SAXException(
                         "Nested logger parameters are invalid");
                 parameter = new ParameterBuilder(value(attributes, "id"),
                         value(attributes, "name"), value(attributes, "desc"),
                         parseTarget(value(attributes, "target")));
+                readSupportFlag(attributes, "bit");
                 int address = parseAddress(value(attributes, "byte"));
                 int bit = parseBit(value(attributes, "bit"));
                 parameter.addresses.computeIfAbsent(
@@ -167,6 +169,21 @@ public final class PortableLoggerDefinitionReader {
             return value == null ? "" : value.trim();
         }
 
+        private void readSupportFlag(Attributes attributes, String bitAttribute) throws SAXException {
+            if (!"SSM".equalsIgnoreCase(requestedProtocol)) return;
+            String index = value(attributes, "ecubyteindex");
+            if (index.isEmpty()) return;
+            try {
+                parameter.supportByteIndex = Integer.parseInt(index);
+                if (parameter.supportByteIndex < 0 || parameter.supportByteIndex > 254) {
+                    throw new NumberFormatException();
+                }
+            } catch (NumberFormatException ex) {
+                throw new SAXException("Logger support byte index is invalid", ex);
+            }
+            parameter.supportBit = parseBit(value(attributes, bitAttribute));
+        }
+
         private static List<String> splitIds(String ids) {
             List<String> values = new ArrayList<>();
             for (String id : ids.split(",")) {
@@ -224,6 +241,8 @@ public final class PortableLoggerDefinitionReader {
         private final String name;
         private final String description;
         private final int target;
+        private int supportByteIndex = -1;
+        private int supportBit = -1;
         private final Map<String, List<PortableLoggerAddress>> addresses =
                 new LinkedHashMap<>();
         private final List<String> dependencies = new ArrayList<>();
@@ -239,7 +258,7 @@ public final class PortableLoggerDefinitionReader {
 
         private PortableLoggerParameter build() {
             return new PortableLoggerParameter(id, name, description, target,
-                    addresses, dependencies, conversions);
+                    addresses, dependencies, conversions, supportByteIndex, supportBit);
         }
     }
 }

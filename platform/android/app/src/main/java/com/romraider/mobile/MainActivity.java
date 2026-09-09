@@ -661,20 +661,13 @@ public final class MainActivity extends Activity {
             try {
                 PortableLoggerSelection selection =
                         PortableLoggerSelectionService.resolve(
-                                definition, profile, null);
-                result.append("\nReady before ECU ID: ")
+                                definition, profile, loggerEcuId(), 1);
+                result.append(loggerEcuId().isEmpty() ? "\nDefinition matches (connect to verify): " : "\nReady for this ECU: ")
                         .append(selection.ready().size())
                         .append("  /  waiting or unavailable: ")
                         .append(selection.unavailable().size());
                 if (selection.ready().stream().anyMatch(PortableSelectedParameter::isCalculated)) {
                     result.append("\nCalculated inputs use definition-default units or explicit [ID:units], independently of gauge display units. Hidden inputs add reads, not CSV columns.");
-                }
-                for (PortableSelectedParameter selected : selection.ready()) {
-                    result.append("\n  READY  ")
-                            .append(selected.getParameter().getName())
-                            .append("  [")
-                            .append(selected.getConversion().getUnits())
-                            .append(']');
                 }
                 for (String unavailable : selection.unavailable()) {
                     result.append("\n  CHECK  ").append(unavailable);
@@ -1451,21 +1444,29 @@ public final class MainActivity extends Activity {
 
     private void chooseLoggerChannels() {
         if (!loggerSetupEditable() || loggerImportPending()) return;
+        if (!vehicleChannelsAvailable()) return;
+        chooseLoggerChannels(loggerEcuId());
+    }
+
+    private String loggerEcuId() {
         ReadOnlyRecording recording = recordingService == null ? null : recordingService.recording();
-        PortableLoggerDefinition catalogDefinition = loggerDefinition;
-        String ecuId = recording == null ? "" : recording.identifiedEcuFor(loggerDefinition);
-        if (ecuId.isEmpty()) {
-            chooseLoggerChannels(null);
-        } else {
-            new AlertDialog.Builder(this).setTitle("Channel catalog")
-                    .setItems(new String[]{"Mapped for last ECU: " + ecuId, "All engine channels"},
-                            (dialog, which) -> {
-                                if (loggerDefinition == catalogDefinition) {
-                                    chooseLoggerChannels(which == 0 ? ecuId : null);
-                                }
-                            })
-                    .setNegativeButton("Cancel", null).show();
+        return recording == null ? "" : recording.identifiedEcuFor(loggerDefinition);
+    }
+
+    private boolean vehicleChannelsAvailable() {
+        if (loggerDefinition == null) {
+            notice("Load a logger definition first.");
+            return false;
         }
+        if (loggerProtocol == PortableLoggerProtocol.SSM && loggerEcuId().isEmpty()) {
+            new AlertDialog.Builder(this).setTitle("Find your vehicle's channels")
+                    .setMessage("Use Connect & Find Channels with the ignition on first. "
+                            + "Then only channels matching this ECU and your definition will be shown. "
+                            + "You can still load a saved profile before connecting.")
+                    .setPositiveButton("OK", null).show();
+            return false;
+        }
+        return true;
     }
 
     private void chooseLoggerChannels(String ecuId) {
@@ -1490,13 +1491,55 @@ public final class MainActivity extends Activity {
             names[index] = com.romraider.mobile.logger.LoggerChannelCatalog.label(parameters.get(index));
             checked[index] = previousUnits.containsKey(parameters.get(index).getId());
         }
-        new AlertDialog.Builder(this).setTitle(ecuId == null
-                        ? "Engine channels (all ECUs)" : "Mapped for last ECU: " + ecuId)
-                .setMultiChoiceItems(names, checked, (dialog, which, selected) -> checked[which] = selected)
+        LinearLayout body = column();
+        body.addView(text(parameters.size() + " available channels"
+                + (ecuId.isEmpty() ? " · loaded definition" : " · ECU " + ecuId), 13, MUTED), matchWrap());
+        java.util.Set<String> availableIds = new java.util.HashSet<>();
+        for (PortableLoggerParameter parameter : parameters) availableIds.add(parameter.getId());
+        long hidden = originalProfile == null ? 0 : originalProfile.selections().stream()
+                .filter(choice -> !availableIds.contains(choice.getId())).count();
+        if (hidden > 0) body.addView(text(hidden + " profile selections unavailable for this ECU. "
+                + "Kept in the profile; excluded from logging.", 13, MUTED), matchWrap());
+        EditText search = new EditText(this);
+        search.setSingleLine(true);
+        search.setHint("Search name, ID or units");
+        body.addView(search, matchWrap());
+        android.widget.ListView list = new android.widget.ListView(this);
+        list.setChoiceMode(android.widget.ListView.CHOICE_MODE_MULTIPLE);
+        List<Integer> visibleIndices = new ArrayList<>();
+        android.widget.ArrayAdapter<String> adapter = new android.widget.ArrayAdapter<>(this,
+                android.R.layout.simple_list_item_multiple_choice, new ArrayList<>());
+        list.setAdapter(adapter);
+        Runnable filter = () -> {
+            String query = search.getText().toString().trim().toLowerCase(java.util.Locale.ROOT);
+            visibleIndices.clear();
+            adapter.clear();
+            list.clearChoices();
+            for (int i = 0; i < names.length; i++) {
+                if (names[i].toLowerCase(java.util.Locale.ROOT).contains(query)) {
+                    visibleIndices.add(i);
+                    adapter.add(names[i]);
+                }
+            }
+            for (int i = 0; i < visibleIndices.size(); i++) list.setItemChecked(i, checked[visibleIndices.get(i)]);
+        };
+        list.setOnItemClickListener((parent, view, position, id) ->
+                checked[visibleIndices.get(position)] = list.isItemChecked(position));
+        search.addTextChangedListener(new TextWatcher() {
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) { }
+            public void onTextChanged(CharSequence s, int start, int before, int count) { filter.run(); }
+            public void afterTextChanged(Editable s) { }
+        });
+        filter.run();
+        body.addView(list, new LinearLayout.LayoutParams(-1, dp(300)));
+        body.setFocusableInTouchMode(true);
+        body.requestFocus();
+        new AlertDialog.Builder(this).setTitle("Logger channels")
+                .setView(body)
                 .setNegativeButton("Cancel", null)
                 .setNeutralButton("Clear all", (dialog, which) -> {
                     if (!loggerSetupEditable()) return;
-                    if (loggerImports.isLoading() || loggerDefinition != baseDefinition
+                    if (loggerImports.isLoading() || loggerDefinition != baseDefinition || loggerCatalog() != definition
                             || loggerProfile != originalProfile) return;
                     loggerSetupRevision++;
                     stopLiveLogger(null);
@@ -1507,7 +1550,7 @@ public final class MainActivity extends Activity {
                 })
                 .setPositiveButton("Use channels", (dialog, which) -> {
                     if (!loggerSetupEditable()) return;
-                    if (loggerImports.isLoading() || loggerDefinition != baseDefinition
+                    if (loggerImports.isLoading() || loggerDefinition != baseDefinition || loggerCatalog() != definition
                             || loggerProfile != originalProfile) return;
                     loggerSetupRevision++;
                     stopLiveLogger(null);
@@ -2172,15 +2215,18 @@ public final class MainActivity extends Activity {
             return;
         }
         List<String> slots = new ArrayList<>(java.util.Collections.nCopies(6, ""));
+        PortableLoggerDefinition catalog = loggerCatalog();
+        boolean identified = !loggerEcuId().isEmpty();
         int index = 0;
         for (PortableLoggerProfile.Selection selection : loggerProfile.selections()) {
             if (index == 6) break;
+            if (identified && (catalog == null || catalog.parameter(selection.getId()) == null)) continue;
             if (selection.getId().length() <= 240 && !slots.contains(selection.getId()))
                 slots.set(index++, selection.getId());
         }
         saveGaugeChannels(slots);
         setMountedGaugeCount(Math.max(1, index));
-        if (loggerProfile.selections().size() > 6) notice("Copied the first six logger channels. Recording is unchanged.");
+        if (loggerProfile.selections().size() > index) notice("Copied available logger channels, up to six. Recording is unchanged.");
     }
 
     private void saveGaugeChannels(List<String> slots) {
@@ -2216,12 +2262,14 @@ public final class MainActivity extends Activity {
     }
 
     private void chooseGaugeSlotChannel(int slot) {
-        if (loggerDefinition == null) { notice("Load a logger definition before choosing display channels."); return; }
+        if (loggerImportPending() || !vehicleChannelsAvailable()) return;
+        PortableLoggerDefinition catalog = loggerCatalog();
         String scope = loggerProtocol.name();
         List<String> ids = new ArrayList<>();
         List<String> labels = new ArrayList<>();
         ids.add(""); labels.add("Empty slot");
-        for (PortableLoggerParameter parameter : loggerCatalog().parameters()) {
+        for (PortableLoggerParameter parameter : com.romraider.mobile.logger.LoggerChannelCatalog.channels(
+                catalog, loggerProfile, loggerEcuId())) {
             if (parameter.getId().length() > 240) continue;
             ids.add(parameter.getId());
             labels.add(parameter.getName() + " [" + parameter.getId() + "]");
@@ -2243,7 +2291,7 @@ public final class MainActivity extends Activity {
             public void afterTextChanged(Editable s) { }
         });
         list.setOnItemClickListener((parent, view, position, rowId) -> {
-            if (!scope.equals(loggerProtocol.name()) || activityDestroyed) { dialog.dismiss(); return; }
+            if (!scope.equals(loggerProtocol.name()) || activityDestroyed || loggerCatalog() != catalog) { dialog.dismiss(); return; }
             String id = ids.get(labels.indexOf(adapter.getItem(position)));
             List<String> slots = new ArrayList<>(gaugeChannelSlots);
             int previous = id.isEmpty() ? -1 : slots.indexOf(id);

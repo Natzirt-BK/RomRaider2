@@ -48,6 +48,7 @@ public final class OpenPortUsbTransport implements Closeable,
     private boolean closed;
     private boolean dimeDiscovery;
     private boolean ssmIdentified;
+    private byte[] ssmInitPayload;
     private final OpenPortMut2Startup mut2Startup = new OpenPortMut2Startup();
 
     /** Small I/O boundary so the actual transport can be tested without Android USB. */
@@ -202,6 +203,7 @@ public final class OpenPortUsbTransport implements Closeable,
             java.util.function.BooleanSupplier cancelled) throws IOException {
         this.cancelled = cancelled;
         ssmIdentified = false;
+        ssmInitPayload = null;
         openReadOnlyKLine(protocol);
         try {
             if (protocol == PortableLoggerProtocol.MUT2) {
@@ -210,11 +212,18 @@ public final class OpenPortUsbTransport implements Closeable,
             }
             byte[] response = transceiveSsm(ReadOnlySsmProtocol.ecuInitRequest());
             String id = ReadOnlySsmProtocol.ecuId(response);
+            ssmInitPayload = ReadOnlySsmProtocol.ecuInitPayload(response);
             ssmIdentified = true;
             return id;
         } catch (IllegalArgumentException ex) {
             throw new IOException("The ECU identification response was invalid.", ex);
         }
+    }
+
+    /** Return a defensive copy of this connection's validated identity payload. */
+    @Override
+    public synchronized byte[] ssmInitPayload() {
+        return ssmInitPayload == null ? null : ssmInitPayload.clone();
     }
 
     /** Executes one address-read batch; no write request is exposed. */
@@ -275,6 +284,7 @@ public final class OpenPortUsbTransport implements Closeable,
             kLineOpen = false;
             activeProtocol = null;
             ssmIdentified = false;
+            ssmInitPayload = null;
             kLineDecoder.reset();
         }
         if (pinFailure != null) throw new IllegalStateException(

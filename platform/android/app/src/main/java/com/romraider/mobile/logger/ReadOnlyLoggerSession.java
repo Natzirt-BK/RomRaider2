@@ -99,6 +99,8 @@ public final class ReadOnlyLoggerSession {
                             + " channels discovered. Choose channels before your next recording.";
                 } else catalogStatus = "ECU " + ecuId + " identified; DimeMod not detected.";
             }
+            catalog = com.romraider.portable.logger.definition.PortableVehicleCatalog.forEcu(
+                    catalog, ecuId, transport.ssmInitPayload());
             listener.onCatalog(ecuId, catalog, catalogStatus);
             if (stopRequested) return;
             if (discoveryMode == DimeModDiscovery.Mode.DISCOVER_ONLY) {

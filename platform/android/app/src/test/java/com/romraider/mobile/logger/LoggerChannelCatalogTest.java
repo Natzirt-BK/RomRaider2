@@ -33,9 +33,9 @@ public class LoggerChannelCatalogTest {
         return parameters.stream().map(PortableLoggerParameter::getId).collect(Collectors.toList());
     }
 
-    @Test public void offlineKeepsSameNameVariantsButOmitsUnselectedTransmission() throws Exception {
+    @Test public void offlineSsmWaitsForIdentityInsteadOfOfferingOtherVehicles() throws Exception {
         PortableLoggerDefinition definition = definition();
-        assertEquals(List.of("P8", "E5", "E35", "C1"), ids(LoggerChannelCatalog.channels(definition, null, null)));
+        assertTrue(LoggerChannelCatalog.channels(definition, null, null).isEmpty());
         assertEquals("Boost Error [E5]\nECU-specific · psi", LoggerChannelCatalog.label(definition.parameter("E5")));
         assertNotEquals(LoggerChannelCatalog.label(definition.parameter("E5")), LoggerChannelCatalog.label(definition.parameter("E35")));
     }
@@ -47,11 +47,11 @@ public class LoggerChannelCatalogTest {
         assertEquals(List.of("P8"), ids(LoggerChannelCatalog.channels(definition, null, "CCC")));
     }
 
-    @Test public void filterRetainsPreviouslySelectedUnavailableChannels() throws Exception {
+    @Test public void selectedUnavailableChannelsDoNotBypassVehicleFilter() throws Exception {
         PortableLoggerProfile profile = new PortableLoggerProfile("SSM", List.of(
                 new PortableLoggerProfile.Selection("E35", "psi"),
                 new PortableLoggerProfile.Selection("T1", "V")), List.of());
-        assertEquals(List.of("P8", "E5", "E35", "T1", "C1"),
+        assertEquals(List.of("P8", "E5", "C1"),
                 ids(LoggerChannelCatalog.channels(definition(), profile, "AAA")));
     }
 
@@ -66,12 +66,18 @@ public class LoggerChannelCatalogTest {
                 new PortableLoggerProfile.Selection("DM911", "%"),
                 new PortableLoggerProfile.Selection("E5", "psi"),
                 new PortableLoggerProfile.Selection("P8", "rpm")), List.of("External input unavailable"));
-        List<PortableLoggerParameter> visible = LoggerChannelCatalog.channels(definition(), previous, null);
+        List<PortableLoggerParameter> visible = LoggerChannelCatalog.channels(definition(), previous, "BBB");
         PortableLoggerProfile result = LoggerChannelCatalog.select("SSM", previous, visible,
-                new boolean[]{true, false, true, false});
-        assertEquals(List.of("DM911", "P8", "E35"), result.selections().stream()
+                new boolean[]{true, true});
+        assertEquals(List.of("DM911", "E5", "P8", "E35"), result.selections().stream()
                 .map(PortableLoggerProfile.Selection::getId).collect(Collectors.toList()));
         assertEquals("%", result.selections().get(0).getUnits());
         assertEquals(previous.unsupported(), result.unsupported());
+    }
+
+    @Test public void mut2OfflineStillUsesOnlyTheLoadedDefinition() throws Exception {
+        PortableLoggerDefinition source = definition();
+        PortableLoggerDefinition mut = new PortableLoggerDefinition("", "MUT2", source.parameters());
+        assertEquals(List.of("P8", "E5", "E35", "C1"), ids(LoggerChannelCatalog.channels(mut, null, null)));
     }
 }

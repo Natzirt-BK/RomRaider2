@@ -18,12 +18,27 @@ public final class PortableLoggerParameter {
     private final Map<String, List<PortableLoggerAddress>> addresses;
     private final List<String> dependencies;
     private final List<PortableLoggerConversion> conversions;
+    private final int supportByteIndex;
+    private final int supportBit;
 
     public PortableLoggerParameter(String id, String name, String description,
             int target,
             Map<String, List<PortableLoggerAddress>> addresses,
             List<String> dependencies,
             List<PortableLoggerConversion> conversions) {
+        this(id, name, description, target, addresses, dependencies, conversions, -1, -1);
+    }
+
+    public PortableLoggerParameter(String id, String name, String description,
+            int target, Map<String, List<PortableLoggerAddress>> addresses,
+            List<String> dependencies, List<PortableLoggerConversion> conversions,
+            int supportByteIndex, int supportBit) {
+        if (!(supportByteIndex == -1 && supportBit == -1)
+                && (supportByteIndex < 0 || supportByteIndex > 254 || supportBit < 0 || supportBit > 7)) {
+            throw new IllegalArgumentException("Logger support flag is invalid");
+        }
+        this.supportByteIndex = supportByteIndex;
+        this.supportBit = supportBit;
         if (blank(id) || blank(name)) {
             throw new IllegalArgumentException("Logger parameter ID and name are required");
         }
@@ -46,6 +61,12 @@ public final class PortableLoggerParameter {
     public int getTarget() { return target; }
     public List<String> getDependencies() { return dependencies; }
     public List<PortableLoggerConversion> getConversions() { return conversions; }
+
+    /** Init payload excludes the frame header, response command and checksum, as on desktop. */
+    public boolean supportedBySsm(byte[] initPayload) {
+        return supportByteIndex < 0 || (initPayload != null && supportByteIndex < initPayload.length
+                && (initPayload[supportByteIndex] & (1 << supportBit)) != 0);
+    }
 
     public List<PortableLoggerAddress> addressesFor(String ecuId) {
         List<PortableLoggerAddress> common = addresses.get(ALL_ECUS);

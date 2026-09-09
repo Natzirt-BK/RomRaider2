@@ -23,6 +23,22 @@ public class OpenPortDimeModTest {
         assertEquals(1, endpoint.closes);
     }
 
+    @Test public void identitySupportBytesAreIsolatedAndClearedOnCloseOrReidentifyFailure() throws Exception {
+        Endpoint endpoint = new Endpoint();
+        try (OpenPortUsbTransport transport = new OpenPortUsbTransport(endpoint)) {
+            assertNull(transport.ssmInitPayload());
+            transport.identifyEcu(PortableLoggerProtocol.SSM);
+            assertEquals((byte) 0x80, transport.ssmInitPayload()[8]);
+            byte[] copy = transport.ssmInitPayload(); copy[8] = 0;
+            assertEquals((byte) 0x80, transport.ssmInitPayload()[8]);
+            assertThrows(IOException.class, () -> transport.identifyEcu(PortableLoggerProtocol.SSM, () -> true));
+            assertNull(transport.ssmInitPayload());
+            transport.identifyEcu(PortableLoggerProtocol.SSM);
+            transport.closeReadOnlyKLine();
+            assertNull(transport.ssmInitPayload());
+        }
+    }
+
     @Test public void stoppedTransportStillSendsConfirmedEntryExit() throws Exception {
         Endpoint endpoint = new Endpoint();
         try (OpenPortUsbTransport transport = new OpenPortUsbTransport(endpoint)) {
@@ -57,7 +73,7 @@ public class OpenPortDimeModTest {
                 byte[] response;
                 if ((frame[4] & 255) == 0xBF) {
                     identifies++;
-                    response = DimeModDiscoveryTest.response(0xFF, new byte[]{0, 0, 0, 1, 2, 3, 4, 5});
+                    response = DimeModDiscoveryTest.response(0xFF, new byte[]{0, 0, 0, 1, 2, 3, 4, 5, (byte) 0x80});
                 } else {
                     boolean cleanup = (frame[4] & 255) == 0xB8 && writes > 0;
                     if ((frame[4] & 255) == 0xB8) writes++;
