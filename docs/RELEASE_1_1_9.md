@@ -2,6 +2,10 @@
 
 Release candidate for Android, Windows, Linux, SteamOS Desktop Mode and macOS.
 
+The Android packages were refreshed on September 9, 2026 to simplify
+invalid-definition messages. The displayed version remains 1.1.9; the internal
+Android build code is 110414. Desktop packages are unchanged.
+
 ## Android
 
 - Workspace menu for Logger, Gauges, Review and Editor.
@@ -49,7 +53,9 @@ match the ROM. Configure logging and gauges while parked.
 
 ## Verification
 
-Built from `ed422f4faa64926bddf8fd306c533c993d4e6976`. Hosted builds and Android
+Desktop packages were built from `ed422f4faa64926bddf8fd306c533c993d4e6976`.
+Refreshed Android packages use `3184a8789987b10edd035be8c40661594b2dedbe`.
+Hosted builds and Android
 regression checks passed. Downloaded packages passed integrity, version and
 signing checks; Linux/SteamOS launch and signed Android upgrade checks passed.
 See the

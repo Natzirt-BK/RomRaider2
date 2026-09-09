@@ -3,7 +3,40 @@
 September 9, 2026. Automated release checks passed. Physical-device and vehicle
 acceptance remains incomplete; this is not a stable-release sign-off.
 
-## Source and hosted checks
+## Android refresh: build 110414
+
+The Android downloads retain displayed version **1.1.9** and use internal build
+code **110414**. Desktop packages and their checksums are unchanged. The refreshed
+APKs use source `3184a8789987b10edd035be8c40661594b2dedbe` and simplify invalid
+definition messages without changing the acceptance rules.
+
+- [Signed Android packages](https://github.com/Natzirt-BK/RomRaider2/actions/runs/34417259559): passed.
+- [Full Android regression rerun](https://github.com/Natzirt-BK/RomRaider2/actions/runs/34417631861): passed,
+  including the invalid-definition dialog, lifecycle/recovery checks and desktop
+  parsing of exported synthetic CSV. Only the test harness differs from the
+  packaged source; production code and build metadata are identical.
+- Both downloaded APKs passed checksum, archive-integrity, application-ID,
+  version, distribution-signature, service-manifest and bundled-notice checks.
+- The signed main APK upgraded over the original 1.1.9 / 110413 APK in an
+  isolated emulator. App-private test data survived and the app cold-launched
+  as 1.1.9 / 110414 without uninstalling.
+- A targeted emulator test exercised the protocol selector, generic invalid-file
+  dialog and accepted-file import without connecting. The first test attempt had
+  bypassed the selector's profile reset; the corrected test uses the actual UI.
+- The downloaded signed APK was also checked through Android's actual file
+  picker: an invalid text definition produced only the generic rejection dialog
+  and OK button, without exposing internal validation instructions.
+
+| Current Android package | SHA-256 |
+| --- | --- |
+| Android main | `ddad083a939d51d6a413d7ff62e424c1f43a0a02fb06d570d57185f50cb8f524` |
+| Android OpenPort Test | `f0e40ac5071b487be24355c0d37844ad21fb05413dadbaf8a536676620780887` |
+
+The original qualification below is retained as a record of the initial release.
+Its desktop checksums remain current; its Android checksums describe the
+superseded build 110413.
+
+## Original source and hosted checks
 
 All seven packages were built from clean source commit
 `ed422f4faa64926bddf8fd306c533c993d4e6976`.
@@ -21,7 +54,7 @@ selection, recording continuity, gauge layouts, CSV review, notification Stop,
 background capture and process-death recovery. Exported synthetic CSVs pass the
 production desktop parser. No emulator test sent vehicle commands.
 
-## Downloaded package checks
+## Original downloaded package checks
 
 - All seven checksums, ZIP integrity and archive-path checks passed.
   No private ROM or signing-key files were included.
@@ -45,7 +78,7 @@ production desktop parser. No emulator test sent vehicle commands.
 The companion Linux installer is pinned to the verified 1.1.9 archive and checksum.
 Its regression suite and an isolated install of the downloaded package passed.
 
-## Package SHA-256
+## Original package SHA-256
 
 | Package | SHA-256 |
 | --- | --- |

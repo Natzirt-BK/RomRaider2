@@ -7,7 +7,11 @@ Desktop and Android share `major.minor.patch` versions:
 - Rare major changes: `2.0.0`.
 
 The current downloadable candidate is **RomRaider2 1.1.9 RC1**, with Android
-versionCode **110413**. There is no stable release yet.
+versionCode **110414**. There is no stable release yet.
+
+The September 9 Android-only refresh retains the displayed 1.1.9 version by
+request. Its internal code increased from 110413 to 110414; desktop packages
+remain unchanged. The release qualification record distinguishes both builds.
 
 **RC1 describes the release stage.** Keep it separate from application versions,
 package filenames and numeric Android versionName values. Release titles may use
@@ -27,7 +31,7 @@ IDs and signing identity; historical `.preview` ID segments are installation
 identifiers, not display labels.
 
 `packaging/verify-version.sh` checks shared version components, build consumers,
-release-note headings and artifact names. Version 1.1.9 / Android 110413 is
+release-note headings and artifact names. Version 1.1.9 / Android 110414 is
 checked against the preceding 1.1.8 / 110412 baseline. Source tags retain
 their original checks and remain independently buildable.
 `packaging/test-version-check.sh` tests rejection of inconsistent metadata.
