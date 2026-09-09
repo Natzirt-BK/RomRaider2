@@ -76,6 +76,9 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
             else if (phase.equals("verify")) verify(2);
             else if (phase.equals("clear")) {
                 verify(2);
+                // The picker requires current ECU identity; identify only the isolated fake transport.
+                startTestRecording();
+                stopTestRecording();
                 // Hold a save pending while the Activity is closed and reopened.
                 CountDownLatch releaseSave = new CountDownLatch(1);
                 Future<?> blocker = ((ExecutorService) field("LOGGER_SETUP_IO")).submit(() -> {
