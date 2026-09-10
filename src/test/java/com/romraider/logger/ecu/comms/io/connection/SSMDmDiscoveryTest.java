@@ -18,7 +18,7 @@ import static org.junit.Assert.*;
 
 /** Native protocol framing with an in-memory manager; no adapter or vehicle access. */
 public class SSMDmDiscoveryTest {
-    private enum Fault { NONE, EMPTY, OVERSIZED, WRONG_TYPE, BAD_ID, BAD_CHECKSUM, BAD_LENGTH, TRUNCATED }
+    enum Fault { NONE, EMPTY, OVERSIZED, WRONG_TYPE, BAD_ID, BAD_CHECKSUM, BAD_LENGTH, TRUNCATED }
 
     @Test(timeout = 10000)
     public void readsExactMultiChunkBlocksOnBothTransports() throws Exception {
@@ -372,14 +372,14 @@ public class SSMDmDiscoveryTest {
         assertEquals(9, f.requests.size());
     }
 
-    private static byte[] discovery(int minor) {
+    static byte[] discovery(int minor) {
         ByteBuffer bytes = ByteBuffer.allocate(minor >= 3 ? 112 : 96);
         bytes.put((byte) 2).put((byte) minor).putShort((short) 100).putInt(0x20000).putInt(0).putInt(0xDEAD0001);
         for (int i = 0; i < (minor >= 3 ? 24 : 20); i++) bytes.putInt(0x2000 + i * 0x10);
         return bytes.array();
     }
 
-    private static final class Callback implements DmInitCallback {
+    static final class Callback implements DmInitCallback {
         DmInit value;
         int calls;
         Callback(DmInit value) { this.value = value; }
@@ -392,13 +392,17 @@ public class SSMDmDiscoveryTest {
         return (request[offset] & 0xff) << 16 | (request[offset + 1] & 0xff) << 8 | request[offset + 2] & 0xff;
     }
 
-    private static final class Fixture implements ConnectionManager {
+    static final class Fixture implements ConnectionManager {
         final boolean can;
         final Module module;
         final SSMLoggerConnection connection;
         final List<byte[]> requests = new ArrayList<>();
         byte[] block = new byte[256];
         byte[] runtimeData;
+        byte[] identity = new byte[16];
+        Runnable onMetadataRead = () -> { };
+        boolean pollAllowed;
+        int polls;
         Runnable onRuntimeRead = () -> { };
         int readOffset, writes, runtimeReads, scalar, memoryLimit = 256;
         int startAddress = 0x1000, faultOnRequest = 1;
@@ -419,7 +423,9 @@ public class SSMDmDiscoveryTest {
             int command = request[4] & 0xff;
             byte[] data;
             int responseCode = command == 0xa0 ? 0xe0 : 0xe8;
-            if (command == 0xb8) {
+            if (command == 0xbf || command == 0xaa) {
+                data = identity.clone(); responseCode = can ? 0xea : 0xff;
+            } else if (command == 0xb8) {
                 assertTrue("Unexpected write", handshake);
                 int target = address(request, 5);
                 assertEquals(writes == 0 ? 0x60 : 0, target);
@@ -441,12 +447,14 @@ public class SSMDmDiscoveryTest {
                     data = runtimeData == null ? new byte[requested] : runtimeData.clone();
                     onRuntimeRead.run();
                 } else {
+                    if (target == startAddress) readOffset = 0;
                     assertEquals(startAddress + readOffset, target);
                     assertTrue(requested <= (can ? 32 : 96));
                     if (can) for (int i = 0; i < requested; i++) assertEquals(target + i, address(request, 6 + i * 3));
                     int size = Math.min(requested, memoryLimit);
                     data = Arrays.copyOfRange(block, readOffset, readOffset + size);
                     readOffset += size;
+                    onMetadataRead.run();
                 }
             }
             if (fault == Fault.EMPTY) data = new byte[0];
@@ -470,7 +478,17 @@ public class SSMDmDiscoveryTest {
             return echoAndFrame;
         }
         public void open(byte[] start, byte[] stop) { throw new AssertionError("No device open allowed"); }
-        public void send(byte[] request, byte[] response, PollingState state) { throw new AssertionError("Unexpected polling API"); }
+        public void send(byte[] request, byte[] response, PollingState state) {
+            assertTrue("Unexpected polling API", pollAllowed);
+            polls++;
+            int offset = !can && state.getCurrentState() == PollingState.State.STATE_0 ? request.length : 0;
+            if (offset != 0) System.arraycopy(request, 0, response, 0, offset);
+            if (can) System.arraycopy(module.getAddress(), 0, response, offset, 4);
+            else { response[offset] = (byte) 0x80; response[offset + 1] = (byte) 0xf0; response[offset + 2] = 0x10;
+                response[offset + 3] = (byte) (response.length - offset - 5); }
+            response[offset + 4] = (byte) 0xe8;
+            if (!can) for (int i = offset; i < response.length - 1; i++) response[response.length - 1] += response[i];
+        }
         public void clearLine() { throw new AssertionError("No real line allowed"); }
         public void close() { }
     }

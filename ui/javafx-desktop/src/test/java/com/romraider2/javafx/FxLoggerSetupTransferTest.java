@@ -895,6 +895,19 @@ class FxLoggerSetupTransferTest {
         }
     }
 
+    @Test void sameIdChangedInitializationPayloadInvalidatesDesktopCache() throws Exception {
+        try (Fixture fixture = new Fixture(); DimeStateSnapshot ignored = new DimeStateSnapshot()) {
+            EcuInit initial = syntheticEcu("1111111111");
+            ecuCallback(fixture.runtime).callback(initial);
+            dmCallback(fixture.runtime).callback(syntheticDime(), true);
+            byte[] changed = initial.getEcuInitBytes(); changed[20] ^= 1;
+            ecuCallback(fixture.runtime).callback(new com.romraider.logger.ecu.comms.query.SSMEcuInit(changed, initial.getEcuId()));
+            assertNull(dmCallback(fixture.runtime).getDmInit());
+            assertEquals(DimeModState.UNKNOWN, PlatformContext.getInstance().getDimeModState());
+            assertArrayEquals(changed, fixture.runtime.getEcuInit().getEcuInitBytes());
+        }
+    }
+
     @Test void expiredAttemptIsRecheckedInsideTheRuntimeOwnerLock() throws Exception {
         try (Fixture fixture = new Fixture(); DimeStateSnapshot ignored = new DimeStateSnapshot()) {
             EcuInit original = syntheticEcu("1111111111");
@@ -903,7 +916,7 @@ class FxLoggerSetupTransferTest {
             DmInitCallback dime = dmCallback(fixture.runtime);
             ecu.callback(original);
             dime.callback(metadata, true);
-            for (int operation = 0; operation < 3; operation++) {
+            for (int operation = 0; operation < 4; operation++) {
                 var attempt = new com.romraider.logger.ecu.comms.query.InitializationAttempt();
                 final int selected = operation;
                 AtomicReference<Throwable> failure = new AtomicReference<>();
@@ -911,6 +924,7 @@ class FxLoggerSetupTransferTest {
                     try {
                         if (selected == 0) ecu.callback(syntheticEcu("2222222222"), attempt);
                         else if (selected == 1) dime.callback(null, true, attempt);
+                        else if (selected == 3) dime.invalidate(attempt);
                         else assertThrows(IllegalStateException.class, () -> dime.getDmInit(attempt));
                     } catch (Throwable error) { failure.set(error); }
                 }, "synthetic callback waiting for desktop owner");
@@ -929,6 +943,20 @@ class FxLoggerSetupTransferTest {
                 assertSame(metadata, dime.getDmInit());
                 assertEquals(DimeModState.ACTIVE, PlatformContext.getInstance().getDimeModState());
             }
+        }
+    }
+
+    @Test void rejectedCacheClearsDesktopCapabilitiesWithoutClaimingAbsence() throws Exception {
+        try (Fixture fixture = new Fixture(); DimeStateSnapshot ignored = new DimeStateSnapshot()) {
+            ecuCallback(fixture.runtime).callback(syntheticEcu("1111111111"));
+            dmCallback(fixture.runtime).callback(syntheticDime(), true);
+            dmCallback(fixture.runtime).invalidate();
+            assertNull(dmCallback(fixture.runtime).getDmInit());
+            assertEquals(DimeModState.UNKNOWN, PlatformContext.getInstance().getDimeModState());
+            FxTestRuntime.run(fixture.runtime::close);
+            PlatformContext.getInstance().setDimeModRuntime(DimeModState.ACTIVE, false);
+            dmCallback(fixture.runtime).invalidate();
+            assertEquals(DimeModState.ACTIVE, PlatformContext.getInstance().getDimeModState());
         }
     }
 

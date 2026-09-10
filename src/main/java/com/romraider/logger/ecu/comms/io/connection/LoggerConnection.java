@@ -60,6 +60,28 @@ public interface LoggerConnection {
      */
     void dmInit(DmInitCallback callback, Module module) throws InterruptedException;
 
+    /** Managed initialization. Automatic retries must not turn invalidation into discovery writes. */
+    default void initializeDmSession(DmInitCallback callback, Module module, boolean allowDiscovery) throws InterruptedException {
+        if (callback.getDmInit() != null)
+            throw new UnsupportedOperationException("This connection cannot verify cached DimeMod metadata");
+        if (!allowDiscovery) return;
+        dmInit(callback, module);
+    }
+
+    /** Reject retained dynamic queries on backends without a session-bound DimeMod implementation. */
+    default void prepareDmQueries(Collection<EcuQuery> queries, Module module) {
+        for (EcuQuery query : queries) {
+            if (query.getLoggerData() instanceof com.romraider.logger.ecu.definition.EcuParameter parameter
+                    && parameter.getSourceIdentity() instanceof DmInit)
+                throw new UnsupportedOperationException("DimeMod channels are unavailable on this connection");
+        }
+    }
+
+    /** Verify discovery provenance on this physical connection using read-only operations. */
+    default void verifyDmSession(DmInit cached, Module module) throws InterruptedException {
+        throw new UnsupportedOperationException("DimeMod session verification is unsupported");
+    }
+
     /**
      * Read runtime state using supplied, previously discovered metadata only.
      * Returns an independent snapshot without mutating the supplied cache.

@@ -177,6 +177,12 @@ public final class LoggerDesktopRuntime implements EcuRelatedMessageListener,
             }
         };
         DmInitCallback dmCallback = new DmInitCallback() {
+            @Override public void invalidate() { invalidateDimeMod(); }
+            @Override public void invalidate(InitializationAttempt attempt) {
+                synchronized (LoggerDesktopRuntime.this) {
+                    if (attempt.isActive()) invalidateDimeMod();
+                }
+            }
             @Override
             public void callback(DmInit next, boolean forceUpdate) {
                 handleDimeModInit(next, forceUpdate);
@@ -627,14 +633,24 @@ public final class LoggerDesktopRuntime implements EcuRelatedMessageListener,
     private synchronized void handleEcuInit(EcuInit next) {
         if (closed || next == null) return;
         String oldId = ecuInit == null ? null : ecuInit.getEcuId();
+        byte[] oldBytes = ecuInit == null ? null : ecuInit.getEcuInitBytes();
         ecuInit = next;
-        if (oldId == null || !oldId.equals(next.getEcuId())) {
+        if (oldId == null || !oldId.equals(next.getEcuId())
+                || !java.util.Arrays.equals(oldBytes, next.getEcuInitBytes())) {
             LOGGER.info("ECU ID = " + next.getEcuId());
             dmInit = null;
             PlatformContext.getInstance().setDimeModRuntime(
                     DimeModState.UNKNOWN, false);
             reloadDefinitionAndChannels(false);
         }
+    }
+
+    private synchronized void invalidateDimeMod() {
+        if (closed) return;
+        DmInit previous = dmInit;
+        dmInit = null;
+        PlatformContext.getInstance().setDimeModRuntime(DimeModState.UNKNOWN, false);
+        if (previous != null) reloadDefinitionAndChannels(false);
     }
 
     private synchronized void handleDimeModInit(DmInit next,

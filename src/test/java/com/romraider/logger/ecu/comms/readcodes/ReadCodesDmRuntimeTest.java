@@ -35,7 +35,8 @@ public class ReadCodesDmRuntimeTest {
         bytes.put((byte) 2).put((byte) 3).putShort((short) 100)
                 .putInt(0x20000).putInt(0).putInt(0xDEAD0001);
         for (int i = 0; i < 24; i++) bytes.putInt(0x2000 + i * 0x10);
-        return new DmInit(bytes.array());
+        return new DmInit(bytes.array(), new com.romraider.logger.ecu.comms.query.dimemod.DmCacheBinding(
+                List.of("synthetic"), identity(), MODULE, 0x1000, bytes.array().length));
     }
     private static DmRuntimeReadRequest request() {
         return new DmRuntimeReadRequest(identity(), metadata(), () -> true);
@@ -55,15 +56,21 @@ public class ReadCodesDmRuntimeTest {
                 calls.add("identify"); callback.callback(identity());
             }
             public DmInit readDmRuntime(DmInit snapshot, Module module) {
-                assertEquals(List.of("identify"), calls);
+                assertEquals(List.of("identify", "verify"), calls);
                 assertSame(MODULE, module);
                 assertNotSame(cached, snapshot);
                 assertArrayEquals(cached.getDmInitBytes(), snapshot.getDmInitBytes());
                 calls.add("runtime"); return refreshed;
             }
+            public void verifyDmSession(DmInit snapshot, Module module) {
+                assertEquals(List.of("identify"), calls);
+                assertSame(MODULE, module);
+                assertSame(cached.getCacheBinding(), snapshot.getCacheBinding());
+                calls.add("verify");
+            }
         };
         assertSame(refreshed, new DmRuntimeReadRequest(identity(), cached, () -> true).read(connection, MODULE));
-        assertEquals(List.of("identify", "runtime"), calls);
+        assertEquals(List.of("identify", "verify", "runtime"), calls);
     }
 
     @Test public void changedIdOrInitializationBytesRejectBeforeAnyDynamicRead() throws Exception {
@@ -187,12 +194,30 @@ public class ReadCodesDmRuntimeTest {
         } catch (UnsupportedOperationException expected) { }
     }
 
+    @Test public void failedOrStaleVerificationCannotProceedToRuntime() throws Exception {
+        for (boolean stale : new boolean[] {false, true}) {
+            AtomicBoolean current = new AtomicBoolean(true);
+            DmRuntimeReadRequest request = new DmRuntimeReadRequest(identity(), metadata(), current::get);
+            try {
+                request.read(new NoIoConnection() {
+                    public void ecuInit(EcuInitCallback callback, Module module) { callback.callback(identity()); }
+                    public void verifyDmSession(DmInit cached, Module module) {
+                        if (stale) current.set(false);
+                        else throw new InvalidResponseException("changed metadata");
+                    }
+                }, MODULE);
+                fail("Failed verification permitted runtime read");
+            } catch (InvalidResponseException | IllegalStateException expected) { }
+        }
+    }
+
     private static class MatchingConnection extends NoIoConnection {
         public void ecuInit(EcuInitCallback callback, Module module) { callback.callback(identity()); }
         public DmInit readDmRuntime(DmInit cached, Module module) { return metadata(); }
     }
 
     private static class NoIoConnection implements LoggerConnection {
+        public void verifyDmSession(DmInit cached, Module module) { }
         public void open(Module module) { throw new AssertionError("open"); }
         public void ecuReset(Module module, int code) { throw new AssertionError("reset"); }
         public void ecuInit(EcuInitCallback callback, Module module) { throw new AssertionError("identify"); }

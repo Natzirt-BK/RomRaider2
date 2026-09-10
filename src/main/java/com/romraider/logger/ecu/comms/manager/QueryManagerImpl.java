@@ -40,6 +40,7 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.concurrent.atomic.AtomicReference;
 import com.romraider.logger.ecu.comms.query.dimemod.DmInitCallback;
+import com.romraider.logger.ecu.comms.query.dimemod.DmInit;
 import org.apache.log4j.Logger;
 
 import com.romraider.Settings;
@@ -105,6 +106,8 @@ public final class QueryManagerImpl implements QueryManager {
     private int queryCounter;
     private long queryStart;
     private boolean initFailureReported;
+    // One normal discovery opportunity per logger run, never per retry.
+    private boolean dmDiscoveryAvailable = true;
 
     public QueryManagerImpl(EcuInitCallback ecuInitCallback,
             DmInitCallback dmInitCallback,
@@ -213,6 +216,7 @@ public final class QueryManagerImpl implements QueryManager {
         try {
             stop = false;
             initFailureReported = false;
+            dmDiscoveryAvailable = true;
             boolean reconnecting = false;
             long retryDelay = INITIAL_RETRY_DELAY_MS;
 
@@ -308,6 +312,9 @@ public final class QueryManagerImpl implements QueryManager {
                     rb.getString("SENDINIT"), module.getName(), name));
             connection = connectionFactory.get();
             requireInitializationActive(attempt);
+            // Identification can invalidate the owner's displayed catalog. Keep
+            // the preceding cache as a verification candidate, not a null miss.
+            DmInit candidate = dmInitCallback == null ? null : attempt.bind(dmInitCallback).getDmInit();
             connection.ecuInit(attempt.bind(ecuInitCallback), module);
             requireInitializationActive(attempt);
             messageListener.reportMessage(MessageFormat.format(
@@ -317,7 +324,16 @@ public final class QueryManagerImpl implements QueryManager {
                     messageListener.reportMessage(MessageFormat.format(
                             rb.getString("SENDDMINIT"), module.getName(), name));
                     requireInitializationActive(attempt);
-                    connection.dmInit(attempt.bind(dmInitCallback), module);
+                    DmInitCallback scoped = attempt.bind(dmInitCallback);
+                    DmInitCallback request = new DmInitCallback() {
+                        public DmInit getDmInit() { scoped.getDmInit(); return candidate; }
+                        public boolean needToInit() { return getDmInit() == null; }
+                        public void callback(DmInit next, boolean force) { scoped.callback(next, force); }
+                        public void invalidate() { scoped.invalidate(); }
+                    };
+                    boolean allowDiscovery = dmDiscoveryAvailable;
+                    dmDiscoveryAvailable = false;
+                    connection.initializeDmSession(request, module, allowDiscovery);
                     requireInitializationActive(attempt);
                     messageListener.reportMessage(MessageFormat.format(
                             rb.getString("INITDMDONE"), module.getName(), name));
@@ -326,8 +342,11 @@ public final class QueryManagerImpl implements QueryManager {
             catch (Exception e) {
                 if (e instanceof InterruptedException) throw e;
                 requireInitializationActive(attempt);
+                // A rejected cache is unavailable, not valid metadata to poll.
+                attempt.bind(dmInitCallback).invalidate();
                 messageListener.reportMessage(MessageFormat.format(
                         rb.getString("INITDMFAIL"), module.getName()));
+                messageListener.reportMessage("DimeMod channels unavailable. Disconnect and connect again to rediscover them.");
                 LOGGER.error("Error in DimeMod init: ", e);
             }
 

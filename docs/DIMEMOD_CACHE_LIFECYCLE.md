@@ -1,5 +1,10 @@
 # DimeMod cache and owner lifecycle audit
 
+Current development: the [desktop reconnect contract](DESKTOP_DIMEMOD_RECONNECT.md)
+supersedes the ID-only cache boundary and reconnect work described in the
+historical checkpoints below. It verifies observed identification and metadata
+on each connection without claiming whole-firmware or hardware authentication.
+
 September 6, 2026; 1.1.3 development source. No vehicle session was initiated.
 
 ## Closed-owner repair

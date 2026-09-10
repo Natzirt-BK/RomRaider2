@@ -56,7 +56,9 @@ public final class TransmissionManagerImpl implements TransmissionManager {
         checkNotNull(queries, "queries");
         checkNotNull(pollState, "pollState");
         if (connection == null) throw new NotConnectedException("TransmissionManager must be started before queries can be sent!");
-        connection.sendAddressReads(queries, SettingsManager.getSettings().getDestinationTarget(), pollState);
+        var module = SettingsManager.getSettings().getDestinationTarget();
+        connection.prepareDmQueries(queries, module);
+        connection.sendAddressReads(queries, module, pollState);
     }
 
     @Override
@@ -67,10 +69,15 @@ public final class TransmissionManagerImpl implements TransmissionManager {
 
     @Override
     public void stop() {
-        if (connection != null) {
-            endQueries();
-            connection.close();
+        LoggerConnection previous = connection;
+        connection = null;
+        try {
+            if (previous != null) {
+                try { previous.clearLine(); }
+                finally { previous.close(); }
+            }
+        } finally {
+            LOGGER.info("TX Manager Stopped.");
         }
-        LOGGER.info("TX Manager Stopped.");
     }
 }

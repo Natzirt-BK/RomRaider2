@@ -29,6 +29,13 @@ public interface DmInitCallback {
 
     DmInit getDmInit();
 
+    /** Rejected/unverified metadata is unknown, not a confirmed absence of DimeMod. */
+    default void invalidate() { callback(null, true); }
+
+    default void invalidate(InitializationAttempt attempt) {
+        if (attempt.isActive()) invalidate();
+    }
+
     /** Owners with a state lock must recheck the token while holding that lock. */
     default void callback(DmInit dmInit, boolean forceUpdate, InitializationAttempt attempt) {
         if (attempt.isActive()) callback(dmInit, forceUpdate);

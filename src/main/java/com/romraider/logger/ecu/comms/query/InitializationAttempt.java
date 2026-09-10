@@ -28,6 +28,9 @@ public final class InitializationAttempt implements AutoCloseable {
 
     public DmInitCallback bind(DmInitCallback callback) {
         return new DmInitCallback() {
+            public void invalidate() {
+                if (isActive()) callback.invalidate(InitializationAttempt.this);
+            }
             public void callback(DmInit next, boolean forceUpdate) {
                 if (isActive()) callback.callback(next, forceUpdate, InitializationAttempt.this);
             }

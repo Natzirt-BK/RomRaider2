@@ -44,6 +44,12 @@ published 1.1.9 / 110414 APK contains the definition-message fix, not these cont
 See the [development checkpoint](PROFILE_GAUGE_CONTROLS_CHECKPOINT_2026-09-09.md)
 for automated checks and remaining physical acceptance.
 
+Desktop DimeMod development now verifies full identification and discovery
+metadata on reconnect and on the polling connection, without turning automatic
+retry/cache rejection into extra discovery writes. See the
+[reconnect contract](DESKTOP_DIMEMOD_RECONNECT.md). Physical acceptance remains
+open; this is observed metadata verification, not whole-firmware authentication.
+
 1. Complete physical acceptance of 1.1.9: phone button feel, portrait/landscape
    scaling, document-provider exports, adapter/background/reconnect sessions,
    Steam Deck control sizing and interactive Windows/macOS operation. Signed
@@ -54,21 +60,14 @@ for automated checks and remaining physical acceptance.
    validation, initiating logger/configuration ownership and stale completion.
    Linux diagnostic-image checks cover KDE and fallback pickers, confirmation,
    cancellation, validation and shutdown. Physical acceptance remains open.
-3. Bind desktop DimeMod cached addresses to verified ECU/module/session identity.
-   Diagnostic reads now compare a fresh ECU identification reply before reading
-   cached addresses; full firmware identity and reconnect-cache binding remain
-   open. Matching identification bytes alone do not establish either. Keep
-   runtime reads distinct from discovery negotiation; reconnect must not silently
-   increase write-based discovery attempts. See the
-   [cache lifecycle contract](DIMEMOD_CACHE_LIFECYCLE.md#next-contract-work).
-4. Review remaining desktop logger parity: serial-port refresh and ELM discovery,
+3. Review remaining desktop logger parity: serial-port refresh and ELM discovery,
    plugin setup, logger debugging and
    diagnostic-tool entry points. Other retained diagnostic tools need a separate
    responsiveness review. Do not add controls for unimplemented workflows.
-5. Continue analysis and fork integration, including reviewed injector transfer
+4. Continue analysis and fork integration, including reviewed injector transfer
    and external sensors. A fitted injector intercept is not a voltage-dependent
    latency curve; automatic calibration transfer is not planned.
-6. Resume the [adapter roadmap](ADAPTER_COMPATIBILITY_ROADMAP.md) after the earlier
+5. Resume the [adapter roadmap](ADAPTER_COMPATIBILITY_ROADMAP.md) after the earlier
    reliability work. Begin with the existing
    [desktop ELM/OBDLink hardware test](ELM_IN_CAR_TEST.md). Android OBDLink LX/MX
    Bluetooth and KKL USB requests require actual transport/protocol qualification.
@@ -76,7 +75,7 @@ for automated checks and remaining physical acceptance.
    stream tests, but device selection, permissions and logger-service integration
    remain unimplemented. It is not a selectable adapter. Android ELM support and
    enhanced SSM/MUT-II over ELM are not available.
-7. Review transmission editing and expanded diagnostics using the
+6. Review transmission editing and expanded diagnostics using the
    [5EAT, Atlas and ecuEdit findings](TCU_ATLAS_ECUEDIT_REVIEW_2026-09-08.md).
    Bundled vehicle-specific TCU editing and expanded module diagnostics remain
    future work, not current application capabilities.

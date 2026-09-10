@@ -23,4 +23,7 @@ public interface EcuParameter extends EcuData {
 
     void addConvertorUpdateListener(ConvertorUpdateListener listener);
 
+    /** Optional owner of dynamically discovered addresses; null for definition-file channels. */
+    default Object getSourceIdentity() { return null; }
+
 }

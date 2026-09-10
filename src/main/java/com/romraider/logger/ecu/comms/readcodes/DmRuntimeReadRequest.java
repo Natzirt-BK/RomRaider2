@@ -14,14 +14,14 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
 
 /**
- * A diagnostic read uses paired owner metadata and a fresh identification reply.
- * Matching initialization bytes are not proof of firmware identity or RAM ownership.
+ * A diagnostic read uses paired owner metadata, a fresh identification reply,
+ * and connection-local verification of the advertised metadata block.
  * This never negotiates discovery, clears the owner cache, or publishes runtime state.
  */
 public final class DmRuntimeReadRequest {
     private final String ecuId;
     private final byte[] initializationBytes;
-    private final byte[] metadata;
+    private final DmInit metadata;
     private final BooleanSupplier ownerCurrent;
 
     public DmRuntimeReadRequest(EcuInit ecu, DmInit cached, BooleanSupplier ownerCurrent) {
@@ -29,7 +29,7 @@ public final class DmRuntimeReadRequest {
         ecuId = ecu == null ? null : ecu.getEcuId();
         byte[] bytes = ecu == null ? null : ecu.getEcuInitBytes();
         initializationBytes = bytes == null ? null : bytes.clone();
-        metadata = cached == null ? null : cached.getDmInitBytes();
+        metadata = cached == null ? null : cached.metadataSnapshot();
     }
 
     public void requireCurrent() {
@@ -42,7 +42,7 @@ public final class DmRuntimeReadRequest {
         if (metadata == null) return null;
         if (ecuId == null || ecuId.isBlank() || initializationBytes == null || initializationBytes.length == 0 || module == null)
             throw new IllegalStateException("DimeMod diagnostic read requires the original ECU identity and module");
-        DmInit snapshot = new DmInit(metadata);
+        DmInit snapshot = metadata.metadataSnapshot();
         if (snapshot.getMajorVer() != 2)
             throw new IllegalStateException("Unsupported DimeMod diagnostic metadata");
         checkInterrupted();
@@ -63,6 +63,9 @@ public final class DmRuntimeReadRequest {
                     || !Arrays.equals(initializationBytes, observedBytes.get()))
                 throw new InvalidResponseException("The ECU identification reply does not match the cached DimeMod definition");
         }
+        requireCurrent();
+        connection.verifyDmSession(snapshot, module);
+        checkInterrupted();
         requireCurrent();
         DmInit result = connection.readDmRuntime(snapshot, module);
         checkInterrupted();

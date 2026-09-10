@@ -29,6 +29,7 @@ import java.util.*;
 
 public class DmInit {
     private final byte[] dmInitBytes;
+    private final DmCacheBinding cacheBinding;
 
     private final boolean isDmInitReady;
     private int failsafeReqTrqLimitAddress;
@@ -124,10 +125,17 @@ public class DmInit {
     private List<EcuParameter> params = new ArrayList<>();
 
     public DmInit(byte[] dmInitBytes) {
+        this(dmInitBytes, null);
+    }
+
+    public DmInit(byte[] dmInitBytes, DmCacheBinding cacheBinding) {
         if (dmInitBytes == null || dmInitBytes.length < 4 || dmInitBytes.length > 0xFFFF) {
             throw new IllegalStateException("DimeMod metadata requires 4 to 65535 bytes");
         }
         this.dmInitBytes = dmInitBytes.clone();
+        if (cacheBinding != null && cacheBinding.length() != dmInitBytes.length)
+            throw new IllegalArgumentException("DimeMod discovery length does not match metadata");
+        this.cacheBinding = cacheBinding;
         MetadataReader buf = new MetadataReader(this.dmInitBytes);
         majorVer = buf.get() & 0xFF;
         minorVer = buf.get() & 0xFF;
@@ -576,10 +584,14 @@ public class DmInit {
         return changed;
     }
 
+    private static String wireAddress(int address) {
+        return String.format(Locale.ROOT, "0x%06X", address & 0xFFFFFF);
+    }
+
     private EcuParameterImpl getUInt8Parameter(String id, String name, String description, int address, String units, String conversion) {
-        return new EcuParameterImpl(id, name,
+        return new EcuParameterImpl(this, id, name,
                 description,
-                new EcuAddressImpl("0x" + Integer.toHexString(address & 0xFFFFFF), 1, -1),
+                new EcuAddressImpl(wireAddress(address), 1, -1),
                 null, null, null,
                 new EcuDataConvertor[]{
                         new EcuParameterConvertorImpl(units, conversion, "0", -1, "uint8", Settings.Endian.BIG, new HashMap<>(), new GaugeMinMax(0, 255, 1))
@@ -587,9 +599,9 @@ public class DmInit {
         );
     }
     private EcuParameterImpl getUInt16Parameter(String id, String name, String description, int address, String units, String conversion) {
-        return new EcuParameterImpl(id, name,
+        return new EcuParameterImpl(this, id, name,
                 description,
-                new EcuAddressImpl("0x" + Integer.toHexString(address & 0xFFFFFF), 2, -1),
+                new EcuAddressImpl(wireAddress(address), 2, -1),
                 null, null, null,
                 new EcuDataConvertor[]{
                         new EcuParameterConvertorImpl(units, conversion, "0", -1, "uint16", Settings.Endian.BIG, new HashMap<>(), new GaugeMinMax(0, 65535, 2000))
@@ -599,9 +611,9 @@ public class DmInit {
 
 
     private EcuParameterImpl getUInt32Parameter(String id, String name, String description, int address, String units, String conversion) {
-        return new EcuParameterImpl(id, name,
+        return new EcuParameterImpl(this, id, name,
                 description,
-                new EcuAddressImpl("0x" + Integer.toHexString(address & 0xFFFFFF), 4, -1),
+                new EcuAddressImpl(wireAddress(address), 4, -1),
                 null, null, null,
                 new EcuDataConvertor[]{
                         new EcuParameterConvertorImpl(units, conversion, "0", -1, "uint32", Settings.Endian.BIG, new HashMap<>(), new GaugeMinMax(-1, 1, 1))
@@ -610,9 +622,9 @@ public class DmInit {
     }
 
     private EcuParameterImpl getFloatParameter(String id, String name, String description, int address, String units, float min, float max, float step) {
-        return new EcuParameterImpl(id, name,
+        return new EcuParameterImpl(this, id, name,
                 description,
-                new EcuAddressImpl(Integer.toHexString(address & 0xFFFFFF), 4, -1),
+                new EcuAddressImpl(wireAddress(address), 4, -1),
                 null, null, null,
                 new EcuDataConvertor[]{
                         new EcuParameterConvertorImpl(units, "x", "0.00", -1, "float", Settings.Endian.BIG, new HashMap<>(), new GaugeMinMax(min, max, step))
@@ -621,9 +633,9 @@ public class DmInit {
     }
 
     private EcuParameterImpl getFloatTempParameter(String id, String name, String description, int address) {
-        return new EcuParameterImpl(id, name,
+        return new EcuParameterImpl(this, id, name,
                 description,
-                new EcuAddressImpl(Integer.toHexString(address & 0xFFFFFF), 4, -1),
+                new EcuAddressImpl(wireAddress(address), 4, -1),
                 null, null, null,
                 new EcuDataConvertor[]{
                         new EcuParameterConvertorImpl("Degrees C", "x", "0.0", -1, "float", Settings.Endian.BIG, new HashMap<>(), new GaugeMinMax(-40, 120, 5)),
@@ -633,9 +645,9 @@ public class DmInit {
     }
 
     private EcuParameterImpl getFloatMfPressureParameter(String id, String name, String description, int address) {
-        return new EcuParameterImpl(id, name,
+        return new EcuParameterImpl(this, id, name,
                 description,
-                new EcuAddressImpl(Integer.toHexString(address & 0xFFFFFF), 4, -1),
+                new EcuAddressImpl(wireAddress(address), 4, -1),
                 null, null, null,
                 new EcuDataConvertor[]{
                         new EcuParameterConvertorImpl("bar", "x*.001333333333", "0.000", -1, "float", Settings.Endian.BIG, new HashMap<>(), new GaugeMinMax(0, 10, 1)),
@@ -646,9 +658,9 @@ public class DmInit {
 
 
     private EcuParameterImpl getFloatParameter(String id, String name, String description, int address, String units, String conversion, float min, float max, float step) {
-        return new EcuParameterImpl(id, name,
+        return new EcuParameterImpl(this, id, name,
                 description,
-                new EcuAddressImpl(Integer.toHexString(address & 0xFFFFFF), 4, -1),
+                new EcuAddressImpl(wireAddress(address), 4, -1),
                 null, null, null,
                 new EcuDataConvertor[]{
                         new EcuParameterConvertorImpl(units, conversion, "0.00", -1, "float", Settings.Endian.BIG, new HashMap<>(), new GaugeMinMax(min, max, step))
@@ -668,6 +680,11 @@ public class DmInit {
     public byte[] getDmInitBytes() {
         return dmInitBytes.clone();
     }
+
+    public DmCacheBinding getCacheBinding() { return cacheBinding; }
+
+    /** Independent runtime state while retaining immutable discovery provenance. */
+    public DmInit metadataSnapshot() { return new DmInit(dmInitBytes, cacheBinding); }
 
     public Collection<? extends EcuParameter> getEcuParams() {
         return Collections.unmodifiableList(new ArrayList<>(params));

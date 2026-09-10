@@ -1,6 +1,9 @@
 /* RomRaider2 ECU Studio - GPL 2.0 or later. */
 package com.romraider.logger.ecu.comms.manager;
 
+import com.romraider.Settings;
+import com.romraider.util.SettingsManager;
+
 import com.romraider.logger.ecu.comms.io.connection.LoggerConnection;
 import com.romraider.logger.ecu.comms.query.EcuInit;
 import com.romraider.logger.ecu.comms.query.EcuInitCallback;
@@ -154,7 +157,7 @@ public class QueryManagerInitializationTest {
         assertTrue(f.initialize()); // Standard logging remains available as before.
         f.connection.dime.callback(f.metadata, true);
         assertNull(f.cached);
-        assertEquals(0, f.dimeResults);
+        assertEquals(1, f.dimeResults); // Invalidation only; the late callback is still rejected.
         assertEquals(1, f.connection.closes);
     }
 
@@ -256,6 +259,56 @@ public class QueryManagerInitializationTest {
         } finally { Thread.interrupted(); }
     }
 
+    @Test public void failedDiscoveryDoesNotGainAnotherOpportunityOnAutomaticRetry() throws Exception {
+        Fixture f = new Fixture(); f.connection.failDime = true;
+        assertTrue(f.initialize()); // Standard logging remains usable.
+        assertNull(f.cached); assertEquals(1, f.connection.dimeCalls);
+        f.connection.failDime = false;
+        assertTrue(f.initialize());
+        assertEquals(1, f.connection.dimeCalls);
+        assertEquals(List.of(true, false), f.connection.discoveryPermissions);
+        assertNull(f.cached);
+    }
+
+    @Test public void identificationInvalidationCannotTurnExistingCacheIntoDiscoveryMiss() throws Exception {
+        Fixture f = new Fixture(); f.cached = f.metadata;
+        f.connection.onEcu = () -> f.cached = null;
+        assertTrue(f.initialize());
+        assertSame(f.metadata, f.connection.candidate);
+        assertSame(f.metadata, f.cached);
+    }
+
+    @Test public void rejectedCachedRefreshClearsChannelsWithoutAutomaticRediscovery() throws Exception {
+        Fixture f = new Fixture(); f.cached = f.metadata; f.connection.failDime = true;
+        assertTrue(f.initialize());
+        assertNull(f.cached);
+        f.connection.failDime = false;
+        assertTrue(f.initialize());
+        assertNull(f.cached); assertEquals(1, f.connection.dimeCalls);
+    }
+
+    @Test public void explicitNewRunRenewsDiscoveryButDoesNotStartPollingWhenStopped() throws Exception {
+        Fixture f = new Fixture(); f.connection.failDime = true;
+        assertTrue(f.initialize());
+        Settings settings = SettingsManager.getSettings();
+        String transport = settings.getTransportProtocol(), device = settings.getJ2534Device(), port = settings.getLoggerPort();
+        boolean external = settings.isLogExternalsOnly(); Module target = settings.getDestinationTarget();
+        String threadName = Thread.currentThread().getName();
+        try {
+            settings.setTransportProtocol("ISO9141"); settings.setJ2534Device(""); settings.setLoggerPort("synthetic");
+            settings.setLogExternalsOnly(false);
+            settings.setDestinationTarget(new Module("ECU", new byte[] {0x10}, "Synthetic", new byte[] {(byte) 0xf0}, false));
+            f.connection.failDime = false; f.connection.onDime = f.manager::stop;
+            f.manager.run();
+            assertEquals(List.of(true, true), f.connection.discoveryPermissions);
+            assertEquals(2, f.connection.dimeCalls);
+        } finally {
+            settings.setTransportProtocol(transport); settings.setJ2534Device(device); settings.setLoggerPort(port);
+            settings.setLogExternalsOnly(external); settings.setDestinationTarget(target);
+            Thread.currentThread().setName(threadName);
+        }
+    }
+
     private static EcuInit ecu(String id) {
         return new EcuInit() {
             public String getEcuId() { return id; }
@@ -310,7 +363,16 @@ public class QueryManagerInitializationTest {
         Runnable onEcu = () -> { }, onDime = () -> { }, onClose = () -> { };
         int dimeCalls, closes;
         boolean failDime, interruptDime;
+        DmInit candidate;
+        final List<Boolean> discoveryPermissions = new ArrayList<>();
         FakeConnection(DmInit metadata) { this.metadata = metadata; }
+        public void initializeDmSession(DmInitCallback callback, Module module, boolean allowDiscovery) throws InterruptedException {
+            discoveryPermissions.add(allowDiscovery); candidate = callback.getDmInit();
+            // This fake models a cache-capable transport; real unsupported
+            // backends reject retained metadata through the default method.
+            if (candidate != null) dmInit(callback, module);
+            else LoggerConnection.super.initializeDmSession(callback, module, allowDiscovery);
+        }
         public void ecuInit(EcuInitCallback callback, Module module) {
             ecu = callback;
             onEcu.run();

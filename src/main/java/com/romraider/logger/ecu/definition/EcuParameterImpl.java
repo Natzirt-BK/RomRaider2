@@ -27,6 +27,7 @@ import java.util.HashSet;
 import java.util.Set;
 
 public final class EcuParameterImpl implements EcuParameter {
+    private final Object sourceIdentity;
     private final String id;
     private final String name;
     private final String description;
@@ -43,6 +44,13 @@ public final class EcuParameterImpl implements EcuParameter {
             String id, String name, String description, EcuAddress address,
             String group, String subgroup, String groupsize,
             EcuDataConvertor[] convertors) {
+        this(null, id, name, description, address, group, subgroup, groupsize, convertors);
+    }
+
+    public EcuParameterImpl(Object sourceIdentity,
+            String id, String name, String description, EcuAddress address,
+            String group, String subgroup, String groupsize, EcuDataConvertor[] convertors) {
+        this.sourceIdentity = sourceIdentity;
         checkNotNullOrEmpty(id, "id");
         checkNotNullOrEmpty(name, "name");
         checkNotNull(description, "description");
@@ -57,6 +65,9 @@ public final class EcuParameterImpl implements EcuParameter {
         this.groupsize = groupsize == null ? 0 : Integer.parseInt(groupsize);
         this.convertors = convertors;
     }
+
+    @Override
+    public Object getSourceIdentity() { return sourceIdentity; }
 
     @Override
     public String getId() {

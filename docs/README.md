@@ -35,6 +35,7 @@ status. Historical records are not a list of available applications.
 - [Window placement audit](WINDOW_PLACEMENT_AUDIT.md)
 - [Gauge source/package verification](GAUGE_PACKAGE_QUALIFICATION.md)
 - [DimeMod cache and callback lifecycle](DIMEMOD_CACHE_LIFECYCLE.md)
+- [Desktop DimeMod reconnect verification](DESKTOP_DIMEMOD_RECONNECT.md)
 - [Desktop diagnostic-read reliability](DESKTOP_DIAGNOSTIC_READS.md)
 - [Background diagnostic reads and saved results](DESKTOP_ASYNC_DIAGNOSTICS.md)
 - [Android workflow qualification](ANDROID_WORKFLOW_CHECKPOINT_2026-09-09.md)

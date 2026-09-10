@@ -8,6 +8,7 @@ import com.romraider.logger.ecu.comms.query.dimemod.DmInit;
 import com.romraider.logger.ecu.comms.query.dimemod.DmInitCallback;
 import com.romraider.logger.ecu.definition.EcuParameter;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.BooleanSupplier;
@@ -18,7 +19,8 @@ import javax.swing.SwingUtilities;
  * Owner-scoped initialization state. Transport callbacks update the cache
  * synchronously; queued UI notifications never assign cache state. Notifications
  * and close run on the EDT so an old queued notification cannot outlive closure.
- * This retains the existing ECU-ID cache key, not a transport/session identity.
+ * Observed identity includes the complete initialization reply. Transport code
+ * separately verifies metadata provenance before reusing dynamic addresses.
  */
 final class SwingLoggerInitialization {
     static final class Snapshot {
@@ -50,6 +52,12 @@ final class SwingLoggerInitialization {
         }
     };
     private final DmInitCallback dimeCallback = new DmInitCallback() {
+        public void invalidate() { invalidateDime(); }
+        public void invalidate(InitializationAttempt attempt) {
+            synchronized (SwingLoggerInitialization.this) {
+                if (attempt.isActive()) invalidateDime();
+            }
+        }
         public void callback(DmInit next, boolean forceUpdate) { acceptDime(next, forceUpdate); }
         public boolean needToInit() { return cacheForConnection() == null; }
         public DmInit getDmInit() { return cacheForConnection(); }
@@ -165,11 +173,24 @@ final class SwingLoggerInitialization {
         final Snapshot snapshot;
         synchronized (this) {
             if (closed || next == null || current.ecu != null
-                    && Objects.equals(current.ecu.getEcuId(), next.getEcuId())) return;
+                    && Objects.equals(current.ecu.getEcuId(), next.getEcuId())
+                    && Arrays.equals(current.ecu.getEcuInitBytes(), next.getEcuInitBytes())) return;
             snapshot = new Snapshot(next, null, false, current.channelRevision + 1);
             current = snapshot;
             // Invalidate shared capabilities immediately, even while the EDT is
             // busy. The publisher must not wait for UI work or perform device I/O.
+            statePublisher.accept(snapshot);
+        }
+        notifyUi(snapshot);
+    }
+
+    private void invalidateDime() {
+        final Snapshot snapshot;
+        synchronized (this) {
+            if (closed) return;
+            snapshot = new Snapshot(current.ecu, null, false,
+                    current.channelRevision + (current.dime != null ? 1 : 0));
+            current = snapshot;
             statePublisher.accept(snapshot);
         }
         notifyUi(snapshot);

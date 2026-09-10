@@ -27,10 +27,18 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.IdentityHashMap;
+import java.util.Set;
 
 import com.romraider.io.protocol.ssm.iso9141.SSMProtocol;
 import com.romraider.logger.ecu.comms.query.dimemod.DmInit;
 import com.romraider.logger.ecu.comms.query.dimemod.DmInitCallback;
+import com.romraider.logger.ecu.comms.query.dimemod.DmCacheBinding;
+import com.romraider.logger.ecu.comms.query.EcuInit;
+import com.romraider.logger.ecu.comms.query.SSMEcuInit;
+import com.romraider.logger.ecu.definition.EcuParameter;
 import com.romraider.logger.ecu.definition.Module;
 import com.romraider.logger.ecu.exception.UnsupportedProtocolException;
 import com.romraider.logger.ecu.exception.InvalidResponseException;
@@ -53,6 +61,12 @@ public final class SSMLoggerConnection implements LoggerConnection {
     private List<EcuQuery> tcuQueries = new ArrayList<EcuQuery>();
     private final Collection<EcuQuery> tcuSubQuery = new ArrayList<EcuQuery>();
     Settings settings = SettingsManager.getSettings();
+    private final List<String> route;
+    private EcuInit observedEcu;
+    private String observedModule;
+    private byte[] observedAddress, observedTester;
+    private final Set<DmInit> verifiedMetadata = Collections.newSetFromMap(new IdentityHashMap<>());
+    private boolean closed;
 
     public SSMLoggerConnection(ConnectionManager manager) {
         checkNotNull(manager, "manager");
@@ -61,6 +75,7 @@ public final class SSMLoggerConnection implements LoggerConnection {
         this.protocol = ProtocolFactory.getProtocol(
                 settings.getLoggerProtocol(),
                 settings.getTransportProtocol());
+        route = currentRoute();
     }
 
     /** Package-local seam for synthetic transport qualification; never opens a device. */
@@ -69,6 +84,7 @@ public final class SSMLoggerConnection implements LoggerConnection {
         checkNotNull(protocol, "protocol");
         this.manager = manager;
         this.protocol = protocol;
+        route = currentRoute();
     }
 
     @Override
@@ -89,6 +105,9 @@ public final class SSMLoggerConnection implements LoggerConnection {
 
     @Override
     public void ecuInit(EcuInitCallback callback, Module module) {
+        observedEcu = null;
+        verifiedMetadata.clear();
+        requireRoute();
         byte[] request = protocol.constructEcuInitRequest(module);
         if (LOGGER.isDebugEnabled())
             LOGGER.debug(module + " Init Request  ---> " + asHex(request));
@@ -96,7 +115,78 @@ public final class SSMLoggerConnection implements LoggerConnection {
         byte[] processedResponse = protocol.preprocessResponse(request, response, new PollingStateImpl());
         if (LOGGER.isDebugEnabled())
             LOGGER.debug(module + " Init Response <--- " + asHex(processedResponse));
-        protocol.processEcuInitResponse(callback, processedResponse);
+        EcuInit[] received = new EcuInit[1];
+        int[] replies = {0};
+        protocol.processEcuInitResponse(next -> { replies[0]++; received[0] = next; }, processedResponse);
+        if (replies[0] != 1 || received[0] == null)
+            throw new InvalidResponseException("Expected one ECU identification reply");
+        observedEcu = new SSMEcuInit(received[0].getEcuInitBytes(), received[0].getEcuId());
+        observedModule = module.getName(); observedAddress = module.getAddress().clone(); observedTester = module.getTester().clone();
+        callback.callback(observedEcu);
+    }
+
+    @Override
+    public void initializeDmSession(DmInitCallback callback, Module module, boolean allowDiscovery) throws InterruptedException {
+        try { initializeVerifiedDmSession(callback, module, allowDiscovery); }
+        catch (InterruptedException | RuntimeException failure) { verifiedMetadata.clear(); throw failure; }
+    }
+
+    private void initializeVerifiedDmSession(DmInitCallback callback, Module module, boolean allowDiscovery) throws InterruptedException {
+        DmInit cached = callback.getDmInit();
+        requireRoute();
+        if (observedEcu == null || module == null || !module.getName().equals(observedModule)
+                || !Arrays.equals(module.getAddress(), observedAddress) || !Arrays.equals(module.getTester(), observedTester))
+            throw new InvalidResponseException("Identify the selected module before DimeMod initialization");
+        if (cached == null) {
+            if (!allowDiscovery) return;
+            dmInit(new DmInitCallback() {
+                public DmInit getDmInit() { return callback.getDmInit(); }
+                public boolean needToInit() { return getDmInit() == null; }
+                public void callback(DmInit next, boolean force) {
+                    if (next != null && (next.getMajorVer() != 2 || next.getCacheBinding() == null))
+                        throw new InvalidResponseException("Unsupported or unbound DimeMod discovery metadata");
+                    callback.getDmInit();
+                    callback.callback(next, force);
+                }
+            }, module);
+            return;
+        }
+        verifyDmSession(cached, module);
+        callback.getDmInit(); // Expired initialization cannot continue into runtime reads.
+        DmInit fresh = cached.metadataSnapshot();
+        boolean force = refreshDmRuntime(fresh, module);
+        callback.getDmInit();
+        requireRoute();
+        verifiedMetadata.add(fresh);
+        callback.callback(fresh, force);
+    }
+
+    @Override
+    public void verifyDmSession(DmInit cached, Module module) throws InterruptedException {
+        requireRoute();
+        DmCacheBinding binding = cached == null ? null : cached.getCacheBinding();
+        if (binding == null || cached.getMajorVer() != 2 || !binding.matchesRoute(route, module))
+            throw new InvalidResponseException("DimeMod cache is unbound or belongs to another connection. Disconnect and connect again to rediscover it.");
+        if (Thread.currentThread().isInterrupted()) throw new InterruptedException("DimeMod verification cancelled");
+        ecuInit(next -> {}, module);
+        if (!binding.matchesEcu(observedEcu))
+            throw new InvalidResponseException("ECU identification changed; cached DimeMod channels are unavailable. Disconnect and connect again to rediscover them.");
+        byte[] bytes = readDmDiscovery(module, binding.address(), binding.length());
+        requireRoute();
+        if (Thread.currentThread().isInterrupted()) throw new InterruptedException("DimeMod verification cancelled");
+        if (!Arrays.equals(cached.getDmInitBytes(), bytes))
+            throw new InvalidResponseException("DimeMod metadata changed; cached channels are unavailable. Disconnect and connect again to rediscover them.");
+        verifiedMetadata.add(cached);
+    }
+
+    private List<String> currentRoute() {
+        return DmCacheBinding.route(settings, protocol.getProtocol() == null ? "unsupported" : protocol.getProtocol().getClass().getName());
+    }
+    private void requireRoute() {
+        if (closed || !route.equals(currentRoute())) {
+            verifiedMetadata.clear();
+            throw new IllegalStateException("Logger connection is closed or its configuration changed");
+        }
     }
 
     public void dmInit(DmInitCallback callback, Module module) throws InterruptedException {
@@ -108,7 +198,7 @@ public final class SSMLoggerConnection implements LoggerConnection {
         // A late reply must not mutate the owner's retained runtime state before
         // its scoped callback has a chance to reject the expired attempt.
         if (dmInit != null && dmInit.getMajorVer() == 2)
-            dmInit = new DmInit(dmInit.getDmInitBytes());
+            dmInit = dmInit.metadataSnapshot();
         byte resetState;
         if (dmInit == null) {
             byte[] request = protocol.getProtocol().constructReadAddressRequest(module, new byte[][]{new byte[]{0x00, 0x00, 0x60}});
@@ -195,7 +285,8 @@ public final class SSMLoggerConnection implements LoggerConnection {
 
                 if (responseType == SSMProtocol.WRITE_ADDRESS_RESPONSE)
                     dmPayload(processedResponse, SSMProtocol.WRITE_ADDRESS_RESPONSE, 1, 1);
-                dmInit = new DmInit(readDmDiscovery(module, startAddress, length));
+                dmInit = new DmInit(readDmDiscovery(module, startAddress, length), observedEcu == null ? null
+                        : new DmCacheBinding(route, observedEcu, module, startAddress, length));
             } else {
                 // restoring Reset state
                 request = protocol.constructWriteAddressRequest(module, new byte[]{0x00, 0x00, 0x60}, resetState);
@@ -205,6 +296,10 @@ public final class SSMLoggerConnection implements LoggerConnection {
         }
 
         boolean forceUpdate = refreshDmRuntime(dmInit, module);
+        if (dmInit != null && dmInit.getCacheBinding() != null) {
+            requireRoute();
+            verifiedMetadata.add(dmInit);
+        }
         callback.callback(dmInit, forceUpdate);
     }
 
@@ -215,7 +310,7 @@ public final class SSMLoggerConnection implements LoggerConnection {
             throw new UnsupportedOperationException("Read-only DimeMod runtime refresh requires SSM");
         if (cached == null || cached.getMajorVer() != 2 || module == null)
             throw new IllegalArgumentException("DimeMod runtime refresh requires supported cached metadata and a module");
-        DmInit snapshot = new DmInit(cached.getDmInitBytes());
+        DmInit snapshot = cached.metadataSnapshot();
         refreshDmRuntime(snapshot, module);
         return snapshot;
     }
@@ -407,10 +502,45 @@ public final class SSMLoggerConnection implements LoggerConnection {
     }
 
     @Override
+    public void prepareDmQueries(Collection<EcuQuery> queries, Module module) {
+        // sendAddressReads verifies on this connection, including direct callers.
+    }
+
+    @Override
     public final void sendAddressReads(
             Collection<EcuQuery> queries,
             Module module,
             PollingState pollState) {
+        requireRoute();
+        boolean fastPoll = pollState.isFastPoll();
+        try {
+            for (EcuQuery query : queries) {
+                if (query.getLoggerData() instanceof EcuParameter parameter
+                        && parameter.getSourceIdentity() instanceof DmInit metadata) {
+                    if (metadata.getCacheBinding() == null || !metadata.getCacheBinding().matchesRoute(route, module))
+                        throw new InvalidResponseException("DimeMod channel does not belong to this connection");
+                    if (!verifiedMetadata.contains(metadata)) {
+                        if (pollState.getCurrentState() != PollingState.State.STATE_0) manager.clearLine();
+                        verifyDmSession(metadata, module);
+                        // Verification uses native initialization/read parsers. Restart
+                        // any stream while preserving the user's fast-poll choice.
+                        pollState.setFastPoll(fastPoll);
+                        pollState.setCurrentState(PollingState.State.STATE_0);
+                        pollState.setLastState(PollingState.State.STATE_0);
+                        pollState.setNewQuery(true); pollState.setLastQuery(false);
+                    }
+                }
+            }
+            sendVerifiedAddressReads(queries, module, pollState);
+        } catch (InterruptedException interrupted) {
+            verifiedMetadata.clear(); Thread.currentThread().interrupt();
+            throw new InvalidResponseException("DimeMod session verification cancelled", interrupted);
+        } catch (RuntimeException failure) {
+            verifiedMetadata.clear(); throw failure;
+        }
+    }
+
+    private void sendVerifiedAddressReads(Collection<EcuQuery> queries, Module module, PollingState pollState) {
 
         // Determine if ISO15765 is selected and then if TCU is selected.  If
         // both are true then proceed to split queries so max CAN data packet
@@ -472,6 +602,7 @@ public final class SSMLoggerConnection implements LoggerConnection {
 
     @Override
     public void close() {
+        closed = true; observedEcu = null; verifiedMetadata.clear();
         manager.close();
     }
 

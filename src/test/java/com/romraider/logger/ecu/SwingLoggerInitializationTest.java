@@ -168,7 +168,7 @@ public class SwingLoggerInitializationTest {
 
     @Test(timeout = 10000)
     public void nestedReviewCannotApplyAfterIdentityMetadataChangeOrClosure() throws Exception {
-        for (int operation = 0; operation < 3; operation++) {
+        for (int operation = 0; operation < 4; operation++) {
             Fixture f = initialized();
             SwingLoggerInitialization.Snapshot before = f.owner.snapshot();
             final int change = operation;
@@ -223,6 +223,7 @@ public class SwingLoggerInitializationTest {
                 try {
                     if (selected == 0) f.owner.ecuCallback().callback(ecu("2222222222"), attempt);
                     else if (selected == 1) f.owner.dimeCallback().callback(null, true, attempt);
+                    else if (selected == 3) f.owner.dimeCallback().invalidate(attempt);
                     else {
                         try { f.owner.dimeCallback().getDmInit(attempt); fail("Expired cache lookup succeeded"); }
                         catch (IllegalStateException expected) { }
@@ -313,6 +314,28 @@ public class SwingLoggerInitializationTest {
         assertSame(dime, f.owner.getDmInit());
         assertFalse(f.owner.dimeCallback().needToInit());
         assertTrue(f.pending.isEmpty());
+    }
+
+    @Test public void sameIdWithChangedInitializationBytesInvalidatesMetadata() throws Exception {
+        Fixture f = initialized();
+        String id = f.owner.getEcuInit().getEcuId();
+        byte[] bytes = f.owner.getEcuInit().getEcuInitBytes(); bytes[20] ^= 1;
+        f.owner.ecuCallback().callback(new com.romraider.logger.ecu.comms.query.SSMEcuInit(bytes, id));
+        assertNull(f.owner.getDmInit());
+        assertFalse(f.owner.snapshot().dimeKnown);
+        assertArrayEquals(bytes, f.owner.getEcuInit().getEcuInitBytes());
+        f.drain();
+    }
+
+    @Test public void rejectedCachePublishesUnknownInsteadOfConfirmedAbsence() throws Exception {
+        Fixture f = initialized();
+        f.owner.dimeCallback().invalidate();
+        assertNull(f.owner.getDmInit()); assertFalse(f.owner.snapshot().dimeKnown);
+        f.drain();
+        SwingUtilities.invokeAndWait(f.owner::close);
+        var closed = f.owner.snapshot();
+        f.owner.dimeCallback().invalidate();
+        assertSame(closed, f.owner.snapshot());
     }
 
     @Test

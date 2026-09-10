@@ -15,6 +15,18 @@ import org.junit.Test;
 import com.romraider.logger.ecu.definition.EcuParameter;
 
 public class DmInitTest {
+    @Test public void dynamicChannelAddressesAlwaysUseThreeWireBytes() {
+        for (int minor : new int[] {0, 1, 3}) {
+            DmInit metadata = new DmInit(discovery(minor, 300, false));
+            metadata.updateRuntimeData(-1, 0x3ff, new int[8], new int[8]);
+            for (EcuParameter parameter : metadata.getEcuParams()) {
+                assertEquals(parameter.getId(), parameter.getAddress().getAddresses().length * 3,
+                        parameter.getAddress().getBytes().length);
+                org.junit.Assert.assertSame(metadata, parameter.getSourceIdentity());
+            }
+        }
+    }
+
     @Test
     public void parsesDm20DiscoveryAndBuildsRuntimeParameters() {
         DmInit discovery = new DmInit(dm20Discovery());
