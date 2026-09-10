@@ -174,8 +174,31 @@ class FxLoggerSetupTransferTest {
             assertFalse(Files.exists(target)); assertEquals(0, fixture.reviews.get());
             fixture.runtime.getWorkspaceContext().getLiveData().stopped();
             fixture.onReview.set(fixture.transfer::close);
-            FxTestRuntime.run(() -> fixture.transfer.saveProfileTo(target.toFile())); await(fixture.transfer);
+            FxTestRuntime.run(() -> fixture.transfer.saveProfileTo(target.toFile())); awaitClosed(fixture.transfer);
+            assertEquals(1, fixture.reviews.get());
             assertFalse(Files.exists(target)); assertNull(fixture.transfer.profilePath());
+        }
+    }
+
+    @Test void closingQueuedProfileSaveCancelsPendingWorkWithoutWriting() throws Exception {
+        try (Fixture fixture = new Fixture()) {
+            Path target = folder.resolve("queued.xml");
+            ExecutorService worker = field(fixture.transfer, "worker");
+            CountDownLatch entered = new CountDownLatch(1), release = new CountDownLatch(1);
+            worker.submit(() -> { entered.countDown(); release.await(10, TimeUnit.SECONDS); return null; });
+            try {
+                assertTrue(entered.await(10, TimeUnit.SECONDS));
+                FxTestRuntime.run(() -> {
+                    fixture.transfer.saveProfileTo(target.toFile());
+                    fixture.transfer.close();
+                });
+                Future<?> pending = field(fixture.transfer, "pending");
+                assertTrue(pending.isCancelled());
+                assertThrows(CancellationException.class, () -> pending.get(10, TimeUnit.SECONDS));
+                awaitClosed(fixture.transfer);
+                assertEquals(0, fixture.reviews.get());
+                assertFalse(Files.exists(target)); assertNull(fixture.transfer.profilePath());
+            } finally { release.countDown(); }
         }
     }
 
@@ -1038,6 +1061,20 @@ class FxLoggerSetupTransferTest {
     private static List<String> ids(PortableLoggerProfile profile) { return profile.selections().stream().map(PortableLoggerProfile.Selection::getId).toList(); }
     private static void await(FxLoggerSetupTransfer transfer) throws Exception {
         for (int i = 0; i < 2; i++) { Future<?> pending = field(transfer, "pending"); if (pending != null) pending.get(10, TimeUnit.SECONDS); FxTestRuntime.run(() -> {}); }
+    }
+    private static void awaitClosed(FxLoggerSetupTransfer transfer) throws Exception {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        while (!Boolean.TRUE.equals(field(transfer, "closed"))) {
+            assertTrue(System.nanoTime() < deadline, "Profile review did not close the transfer");
+            FxTestRuntime.run(() -> {});
+            Thread.sleep(10);
+        }
+        // close() is allowed to cancel the preparation Future before it completes.
+        // Wait for the actual worker exit and drain late UI callbacks instead of
+        // treating that expected CancellationException as a failed save.
+        ExecutorService worker = field(transfer, "worker");
+        assertTrue(worker.awaitTermination(10, TimeUnit.SECONDS), "Closed profile worker did not terminate");
+        FxTestRuntime.run(() -> {});
     }
     @SuppressWarnings("unchecked") private static <T> T field(Object target, String name) throws Exception {
         Field field = target.getClass().getDeclaredField(name); field.setAccessible(true); return (T) field.get(target);

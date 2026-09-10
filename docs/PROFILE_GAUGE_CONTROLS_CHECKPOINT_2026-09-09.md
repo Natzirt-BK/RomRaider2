@@ -51,3 +51,21 @@ baseline-alignment issue fixed in application code.
 Physical-phone touch/haptic feel, vendor file pickers and physical
 Windows/Steam Deck acceptance remain pending. Automatic tests do not establish
 adapter or vehicle compatibility. The published packages remain unchanged.
+
+## Desktop CI follow-up
+
+The first hosted desktop runs exposed two test synchronization defects:
+
+- Closing a profile review may cancel its preparation future before completion.
+  The close test now waits for worker termination and drains late UI callbacks,
+  instead of requiring the deliberately cancelled future to succeed. A separate
+  queued-save test forces cancellation and verifies that no file is written.
+- The fullscreen test sampled restoration before the window manager finished
+  minimizing the window. The failed runner still reported `minimized=true`, for
+  which releasing the screen-awake request was correct. The test now waits for
+  settled window states on the UI thread and retries native restoration within
+  its existing deadline. Awake ownership checks remain intact, with transition
+  names and window state included in timeout failures.
+
+These corrections affect tests only; application behavior and release packages
+are unchanged.

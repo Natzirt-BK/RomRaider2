@@ -30,46 +30,71 @@ class FxDisplayAwakeSmokeTest {
             });
             assertEquals(0, held.get());
             FxTestRuntime.run(() -> { window[0].setMountedFullScreen(true); stage[0].requestFocus(); });
-            await(() -> held.get() == 1);
+            await("enter fullscreen", stage[0], awake, () -> stage[0].isFocused() && held.get() == 1);
             FxTestRuntime.run(() -> {
                 probe[0] = new Stage(); probe[0].setScene(new Scene(new Label("Synthetic focus probe"), 160, 100));
                 probe[0].show(); probe[0].requestFocus();
             });
-            await(() -> held.get() == 0);
+            await("transfer focus", stage[0], awake, () -> probe[0].isFocused() && !stage[0].isFocused() && held.get() == 0);
             FxTestRuntime.run(() -> { probe[0].close(); stage[0].requestFocus(); });
-            await(() -> held.get() == 1);
+            await("regain focus", stage[0], awake, () -> stage[0].isFocused() && held.get() == 1);
             FxTestRuntime.run(() -> stage[0].setIconified(true));
-            await(() -> held.get() == 0);
-            FxTestRuntime.run(() -> { stage[0].setIconified(false); stage[0].requestFocus(); });
+            await("minimize", stage[0], awake, () -> stage[0].isIconified() && !stage[0].isFocused() && held.get() == 0);
+            restore(stage[0], awake);
             // Some window managers leave native full screen when minimized. Merely
             // restoring that now-windowed logger must not request screen awake.
-            boolean[] stillFullScreen = new boolean[1];
-            FxTestRuntime.run(() -> stillFullScreen[0] = stage[0].isFullScreen());
-            try { await(() -> held.get() == (stillFullScreen[0] ? 1 : 0)); }
-            catch (AssertionError error) {
-                FxTestRuntime.run(() -> System.err.println("Restored stage: full=" + stage[0].isFullScreen()
-                        + ", focused=" + stage[0].isFocused() + ", showing=" + stage[0].isShowing()
-                        + ", minimized=" + stage[0].isIconified() + ", awake=" + awake.getStatus()));
-                throw error;
-            }
+            await("restored awake ownership", stage[0], awake, () -> !stage[0].isIconified()
+                    && stage[0].isFocused() && held.get() == (stage[0].isFullScreen() ? 1 : 0));
             FxTestRuntime.run(() -> { window[0].setMountedFullScreen(true); stage[0].requestFocus(); });
-            await(() -> held.get() == 1);
+            await("reenter fullscreen", stage[0], awake, () -> held.get() == 1);
             FxTestRuntime.run(() -> window[0].setMountedFullScreen(false));
-            await(() -> held.get() == 0);
+            await("leave fullscreen", stage[0], awake, () -> held.get() == 0);
             FxTestRuntime.run(() -> { window[0].setMountedFullScreen(true); stage[0].requestFocus(); });
-            await(() -> held.get() == 1);
+            await("enter fullscreen before hiding", stage[0], awake, () -> held.get() == 1);
             FxTestRuntime.run(() -> stage[0].hide());
-            await(() -> awake.getStatus() == DesktopDisplayAwake.Status.OFF);
+            await("hide", stage[0], awake, () -> awake.getStatus() == DesktopDisplayAwake.Status.OFF);
             assertEquals(0, held.get());
         } finally {
             FxTestRuntime.run(() -> { if (probe[0] != null) probe[0].close(); if (stage[0] != null) stage[0].hide(); });
             awake.close();
         }
     }
-    private static void await(BooleanSupplier condition) throws Exception {
+    private static void restore(Stage stage, DesktopDisplayAwake awake) throws Exception {
+        // Iconify/restore is asynchronous at the window manager. A late minimize
+        // acknowledgement can overwrite JavaFX's optimistic setIconified(false).
+        // Retry only the native restore request, never the app's awake request.
+        long[] nextRequest = {0};
+        await("restore window", stage, awake, () -> {
+            if (!stage.isIconified() && stage.isShowing() && stage.isFocused()) return true;
+            long now = System.nanoTime();
+            if (now >= nextRequest[0]) {
+                stage.setIconified(false); stage.toFront(); stage.requestFocus();
+                nextRequest[0] = now + 250_000_000L;
+            }
+            return false;
+        });
+    }
+
+    private static void await(String transition, Stage stage, DesktopDisplayAwake awake,
+            BooleanSupplier condition) throws Exception {
         long deadline = System.nanoTime() + 6_000_000_000L;
-        while (!condition.getAsBoolean()) {
-            assertTrue(System.nanoTime() < deadline, "Display-awake lifecycle timed out");
+        long stableSince = 0;
+        while (true) {
+            boolean[] satisfied = new boolean[1];
+            String[] state = new String[1];
+            // Read all native window properties on their owning UI thread and
+            // wait for a settled state, not a transient backend lease count.
+            FxTestRuntime.run(() -> {
+                satisfied[0] = condition.getAsBoolean();
+                state[0] = "full=" + stage.isFullScreen() + ", focused=" + stage.isFocused()
+                        + ", showing=" + stage.isShowing() + ", minimized=" + stage.isIconified()
+                        + ", awake=" + awake.getStatus();
+            });
+            long now = System.nanoTime();
+            if (!satisfied[0]) stableSince = 0;
+            else if (stableSince == 0) stableSince = now;
+            else if (now - stableSince >= 150_000_000L) return;
+            assertTrue(now < deadline, "Display-awake lifecycle timed out during " + transition + ": " + state[0]);
             Thread.sleep(20);
         }
     }
