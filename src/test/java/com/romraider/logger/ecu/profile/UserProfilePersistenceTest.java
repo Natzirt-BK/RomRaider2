@@ -14,6 +14,34 @@ import org.xml.sax.Attributes;
 import org.xml.sax.helpers.DefaultHandler;
 
 public class UserProfilePersistenceTest {
+    @Test public void cancelledOrRejectedCommitPreservesExistingProfile() throws Exception {
+        Path directory = Files.createTempDirectory("rr2-profile-cancel-");
+        Path target = directory.resolve("saved.xml");
+        byte[] previous = profile("SSM", "P1", "V").getBytes();
+        UserProfile next = profile("SSM", "P2", "mV");
+        try {
+            Files.write(target, previous);
+            try {
+                UserProfileWriter.saveChecked(next, target, () -> { throw new IOException("Review expired"); });
+                fail("Rejected replacement committed");
+            } catch (IOException expected) { assertEquals("Review expired", expected.getMessage()); }
+            assertArrayEquals(previous, Files.readAllBytes(target));
+            try {
+                UserProfileWriter.saveChecked(next, target, () -> Thread.currentThread().interrupt());
+                fail("Cancelled replacement committed");
+            } catch (java.io.InterruptedIOException expected) { }
+            finally { Thread.interrupted(); }
+            assertArrayEquals(previous, Files.readAllBytes(target));
+            Thread.currentThread().interrupt();
+            try { UserProfileWriter.save(next, target); fail("Interrupted save committed"); }
+            catch (java.io.InterruptedIOException expected) { }
+            finally { Thread.interrupted(); }
+            try (var entries = Files.list(directory)) { assertEquals(1, entries.count()); }
+            UserProfileWriter.saveChecked(next, target, () -> {});
+            assertArrayEquals(next.getBytes(), Files.readAllBytes(target));
+        } finally { Files.deleteIfExists(target); Files.delete(directory); }
+    }
+
     @Test public void unicodeAndXmlAttributesRoundTripWithTheCapturedProtocol() throws Exception {
         String id = "P<&\"'𝄞";
         String units = "λ ≤ µs & <rich> \"quoted\" 'single'\t\n\r";

@@ -28,6 +28,10 @@ final class FxLoggerSetupTransfer implements AutoCloseable {
     private Future<?> pending;
     private volatile long generation;
     private volatile boolean closed;
+    // Explicit file ownership is separate from the runtime's automatic recovery path.
+    private Path profilePath;
+    private byte[] profileBytes;
+    private List<String> unavailableProfileIds = List.of();
 
     FxLoggerSetupTransfer(Window owner, LoggerDesktopRuntime runtime, Consumer<String> status) {
         this(owner, runtime, status, (title, text) -> FxDialogs.confirmScrollable(owner, title, text, "Continue"),
@@ -56,6 +60,94 @@ final class FxLoggerSetupTransfer implements AutoCloseable {
         } catch (RuntimeException failure) { failure(failure); }
     }
 
+    Path profilePath() { return profilePath; }
+    void showProfileSave() { saveProfileTo(profilePath == null ? null : profilePath.toFile()); }
+    void showProfileSaveAs() { saveProfileTo(null); }
+    void reloadProfile() {
+        if (closed) return;
+        if (profilePath == null) {
+            failure(new IllegalStateException("Load or save a logger profile in this window before reloading it."));
+            return;
+        }
+        loadProfile(profilePath.toFile());
+    }
+
+    /** Normal Save As opens a picker; explicit destinations support isolated native tests. */
+    void saveProfileTo(File destination) {
+        if (closed) return;
+        cancelWork(); long ticket = generation;
+        try {
+            LoggerSetupSnapshot snapshot = runtime.captureChannelSetup();
+            var profile = runtime.captureLoggerProfile(snapshot);
+            File chosen = destination;
+            if (chosen == null) {
+                FileChooser picker = new FileChooser();
+                picker.setTitle("Save Logger Profile As");
+                picker.getExtensionFilters().add(new FileChooser.ExtensionFilter("Logger profiles", "*.xml", "*.XML"));
+                picker.setInitialFileName(profilePath == null ? "RomRaider2-profile.xml" : profilePath.getFileName().toString());
+                if (profilePath != null && Files.isDirectory(profilePath.getParent()))
+                    picker.setInitialDirectory(profilePath.getParent().toFile());
+                chosen = picker.showSaveDialog(owner);
+            }
+            if (!current(ticket)) return;
+            if (chosen == null) { status.accept("Profile save cancelled; no file written."); return; }
+            runtime.requireCurrentChannelSetup(snapshot);
+            Path target = FxLoggerProfileFiles.destination(chosen);
+            boolean sameFile = target.equals(profilePath);
+            byte[] loadedBytes = sameFile ? profileBytes : null;
+            List<String> omitted = unavailableProfileIds.stream()
+                    .filter(id -> !profile.getSelectedIds().contains(id)).toList();
+            status.accept("Preparing logger XML profile…");
+            pending = worker.submit(() -> {
+                try {
+                    byte[] encoded = profile.getBytes();
+                    FxLoggerProfileFiles.parse(encoded);
+                    byte[] previous = FxLoggerProfileFiles.existing(target);
+                    if (sameFile && !Arrays.equals(loadedBytes, previous))
+                        throw new IOException("Profile file changed outside this window. Reload it or use Save Profile As with a new filename.");
+                    if (previous != null) {
+                        String protocol = FxLoggerProfileFiles.parse(previous).getProtocol();
+                        if (!protocol.isEmpty() && !protocol.equalsIgnoreCase(profile.getProtocol()))
+                            throw new IOException("Destination belongs to another logger protocol. Use Save Profile As with a new filename.");
+                    }
+                    Platform.runLater(() -> {
+                        if (!current(ticket)) return;
+                        try {
+                            runtime.requireCurrentChannelSetup(snapshot);
+                            String detail = "File: " + target + "\nProtocol: " + profile.getProtocol()
+                                    + "\nSelected channels: " + profile.getSelectedIds().size()
+                                    + "\n" + String.join(", ", profile.getSelectedIds())
+                                    + (omitted.isEmpty() ? "" : "\n\nUnavailable selections from the loaded profile will not be saved: "
+                                            + String.join(", ", omitted))
+                                    + "\n\n" + (previous == null ? "Create this profile?" : "Replace this profile with the current selections and units?")
+                                    + "\nGauge layout, recordings, definitions and connection settings are not included."
+                                    + " The automatic recovery profile is separate.";
+                            if (!review.test("Save Logger Profile", detail)) {
+                                status.accept("Profile save cancelled; no file written."); return;
+                            }
+                            if (!current(ticket)) return;
+                            runtime.requireCurrentChannelSetup(snapshot);
+                            pending = worker.submit(() -> {
+                                try {
+                                    com.romraider.logger.ecu.profile.UserProfileWriter.saveChecked(profile, target, () -> {
+                                        if (!current(ticket)) throw new InterruptedIOException("Profile save cancelled");
+                                        runtime.requireCurrentChannelSetup(snapshot);
+                                        FxLoggerProfileFiles.requireUnchanged(target, previous);
+                                    });
+                                    Platform.runLater(() -> {
+                                        if (!current(ticket)) return;
+                                        profilePath = target; profileBytes = encoded; unavailableProfileIds = List.of();
+                                        status.accept("Logger profile saved: " + target + ". Logger remains disconnected.");
+                                    });
+                                } catch (IOException | RuntimeException failure) { publishFailure(ticket, failure); }
+                            });
+                        } catch (RuntimeException failure) { failure(failure); }
+                    });
+                } catch (IOException | RuntimeException failure) { publishFailure(ticket, failure); }
+            });
+        } catch (IOException | RuntimeException failure) { failure(failure); }
+    }
+
     void loadProfile(File file) {
         if (closed || file == null) return;
         cancelWork(); long ticket = generation;
@@ -65,10 +157,8 @@ final class FxLoggerSetupTransfer implements AutoCloseable {
         status.accept("Reading logger profile; current selection is unchanged…");
         pending = worker.submit(() -> {
             try {
-                byte[] bytes = com.romraider.io.BinaryFileIO.read(file, 4L * 1024 * 1024);
-                var handler = new com.romraider.logger.ecu.profile.xml.UserProfileHandler();
-                com.romraider.util.SaxParserFactory.getSaxParser().parse(new ByteArrayInputStream(bytes), handler);
-                var profile = handler.getUserProfile();
+                byte[] bytes = com.romraider.io.BinaryFileIO.read(file, FxLoggerProfileFiles.MAX_BYTES);
+                var profile = FxLoggerProfileFiles.parse(bytes);
                 Platform.runLater(() -> {
                     if (!current(ticket)) return;
                     try {
@@ -89,10 +179,13 @@ final class FxLoggerSetupTransfer implements AutoCloseable {
                             if (!current(ticket) || Thread.currentThread().isInterrupted()) return;
                             try {
                                 boolean saved = runtime.applyLoggerProfile(snapshot, profile);
-                                Platform.runLater(() -> { if (current(ticket)) status.accept(saved
+                                Platform.runLater(() -> { if (current(ticket)) {
+                                    profilePath = file.toPath().toAbsolutePath().normalize();
+                                    profileBytes = bytes; unavailableProfileIds = preview.unavailable();
+                                    status.accept(saved
                                         ? "Logger profile loaded: " + preview.available().size() + " channels selected; "
                                                 + preview.unavailable().size() + " unavailable. Logger remains disconnected."
-                                        : "Profile loaded for this session, but its recovery copy could not be saved."); });
+                                        : "Profile loaded for this session, but its recovery copy could not be saved."); } });
                             } catch (RuntimeException failure) { publishFailure(ticket, failure); }
                         });
                     } catch (RuntimeException failure) { failure(failure); }

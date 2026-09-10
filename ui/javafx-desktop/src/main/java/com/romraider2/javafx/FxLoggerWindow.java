@@ -286,14 +286,25 @@ final class FxLoggerWindow {
     }
 
     private MenuBar menuBar() {
+        MenuItem saveProfile = item("Save Profile", event -> setupTransfer.showProfileSave());
+        saveProfile.setAccelerator(new javafx.scene.input.KeyCodeCombination(javafx.scene.input.KeyCode.S,
+                javafx.scene.input.KeyCombination.SHORTCUT_DOWN));
+        MenuItem saveProfileAs = item("Save Profile As…", event -> setupTransfer.showProfileSaveAs());
+        saveProfileAs.setAccelerator(new javafx.scene.input.KeyCodeCombination(javafx.scene.input.KeyCode.S,
+                javafx.scene.input.KeyCombination.SHORTCUT_DOWN, javafx.scene.input.KeyCombination.SHIFT_DOWN));
+        MenuItem reloadProfile = item("Reload Profile", event -> setupTransfer.reloadProfile());
+        reloadProfile.setDisable(true);
         Menu file = new Menu("File", null,
                 item("Open CSV log…", event -> openLog()),
                 new SeparatorMenuItem(),
                 item("Logger Setup…", event -> showSetup()),
                 item("Load Profile…", event -> setupTransfer.showProfileLoad()),
+                saveProfile, saveProfileAs, reloadProfile,
+                new SeparatorMenuItem(),
                 item("Import channel setup…", event -> setupTransfer.showImport()),
                 item("Export channel setup…", event -> setupTransfer.showExport()),
                 item("Close", event -> close()));
+        file.setOnShowing(event -> reloadProfile.setDisable(setupTransfer.profilePath() == null));
         Menu logger = new Menu("Logger", null,
                 item("Connect", event -> context.getSession().connect()),
                 item("Disconnect", event -> context.getSession().disconnect()),

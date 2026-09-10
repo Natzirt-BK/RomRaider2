@@ -313,6 +313,12 @@ public final class LoggerDesktopRuntime implements EcuRelatedMessageListener,
         return applyProfileConversions(profileConversions(profile));
     }
 
+    /** Frozen XML profile; named-file saving must not repoint automatic recovery. */
+    public synchronized UserProfile captureLoggerProfile(LoggerSetupSnapshot snapshot) {
+        requireCurrentChannelSetup(snapshot);
+        return currentProfile();
+    }
+
     private Map<String, EcuDataConvertor> profileConversions(UserProfile profile) {
         if (profile == null) throw new IllegalArgumentException("Logger profile is required");
         if (!isNullOrEmpty(profile.getProtocol()) && !profile.getProtocol().equalsIgnoreCase(loadedProtocol))

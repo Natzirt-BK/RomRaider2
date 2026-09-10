@@ -35,6 +35,15 @@ current publication status.
 
 ## Next priorities
 
+Development after 1.1.9 adds [desktop XML Save/Save As/Reload](DESKTOP_LOGGER_PROFILES.md)
+with named-file ownership separate from automatic recovery. These changes are
+not yet packaged or published; native file-picker acceptance remains pending.
+Android development also adds matching green START/red STOP controls to Gauges
+and its fullscreen overlay, sharing Logger's session and disabled states. The
+published 1.1.9 / 110414 APK contains the definition-message fix, not these controls.
+See the [development checkpoint](PROFILE_GAUGE_CONTROLS_CHECKPOINT_2026-09-09.md)
+for automated checks and remaining physical acceptance.
+
 1. Complete physical acceptance of 1.1.9: phone button feel, portrait/landscape
    scaling, document-provider exports, adapter/background/reconnect sessions,
    Steam Deck control sizing and interactive Windows/macOS operation. Signed
@@ -52,8 +61,8 @@ current publication status.
    runtime reads distinct from discovery negotiation; reconnect must not silently
    increase write-based discovery attempts. See the
    [cache lifecycle contract](DIMEMOD_CACHE_LIFECYCLE.md#next-contract-work).
-4. Review remaining desktop logger parity: native XML Save/Save As/Reload Profile,
-   serial-port refresh and ELM discovery, plugin setup, logger debugging and
+4. Review remaining desktop logger parity: serial-port refresh and ELM discovery,
+   plugin setup, logger debugging and
    diagnostic-tool entry points. Other retained diagnostic tools need a separate
    responsiveness review. Do not add controls for unimplemented workflows.
 5. Continue analysis and fork integration, including reviewed injector transfer

@@ -25,6 +25,190 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 class FxLoggerSetupTransferTest {
+    @Test void namedProfileSaveReloadAndSaveAsKeepRecoverySeparate() throws Exception {
+        try (Fixture fixture = new Fixture()) {
+            fixture.apply(ordered("P2", "mV", "S1", "On/Off", "P1", "V"));
+            String recovery = fixture.settings.getLoggerProfileFilePath();
+            Path first = folder.resolve("chosen.xml"), second = folder.resolve("copy.XML");
+            byte[] expected = fixture.runtime.captureLoggerProfile(fixture.runtime.captureChannelSetup()).getBytes();
+            FxTestRuntime.run(() -> fixture.transfer.saveProfileTo(folder.resolve("chosen").toFile())); await(fixture.transfer);
+            assertArrayEquals(expected, Files.readAllBytes(first));
+            assertEquals(first, fixture.transfer.profilePath());
+            assertEquals(recovery, fixture.settings.getLoggerProfileFilePath());
+            fixture.apply(ordered("P1", "mV"));
+            FxTestRuntime.run(fixture.transfer::reloadProfile); await(fixture.transfer);
+            assertEquals(List.of("P2", "S1", "P1"), fixture.selected());
+            assertEquals("mV", fixture.runtime.captureChannelSetup().selectedChannels().getFirst().getUnits());
+            fixture.apply(ordered("S1", "On/Off"));
+            FxTestRuntime.run(fixture.transfer::showProfileSave); await(fixture.transfer);
+            byte[] savedFirst = Files.readAllBytes(first);
+            assertEquals(List.of("S1"), FxLoggerProfileFiles.parse(savedFirst).getSelectedIds());
+            fixture.apply(ordered("P1", "V"));
+            FxTestRuntime.run(() -> fixture.transfer.saveProfileTo(second.toFile())); await(fixture.transfer);
+            assertEquals(second, fixture.transfer.profilePath());
+            assertArrayEquals(savedFirst, Files.readAllBytes(first));
+            assertEquals(List.of("P1"), FxLoggerProfileFiles.parse(Files.readAllBytes(second)).getSelectedIds());
+            assertEquals(recovery, fixture.settings.getLoggerProfileFilePath());
+            assertEquals(LoggerSessionState.STOPPED, fixture.runtime.getWorkspaceContext().getSession().getState());
+        }
+    }
+
+    @Test void loadedFileBecomesSaveAndReloadTargetOnlyAfterAcceptedLoad() throws Exception {
+        try (Fixture fixture = new Fixture()) {
+            Path first = folder.resolve("first.xml"), second = folder.resolve("second.xml");
+            Files.writeString(first, "<profile protocol='SSM'><parameter id='P1' units='V' livedata='selected'/></profile>");
+            Files.writeString(second, "<profile protocol='SSM'><parameter id='P2' units='mV' livedata='selected'/></profile>");
+            FxTestRuntime.run(() -> fixture.transfer.loadProfile(first.toFile())); await(fixture.transfer);
+            assertEquals(first, fixture.transfer.profilePath());
+            fixture.accept.set(false);
+            FxTestRuntime.run(() -> fixture.transfer.loadProfile(second.toFile())); await(fixture.transfer);
+            assertEquals(first, fixture.transfer.profilePath());
+            fixture.accept.set(true);
+            fixture.apply(ordered("P2", "V"));
+            FxTestRuntime.run(fixture.transfer::showProfileSave); await(fixture.transfer);
+            assertEquals(List.of("P2"), FxLoggerProfileFiles.parse(Files.readAllBytes(first)).getSelectedIds());
+            assertTrue(Files.readString(second).contains("mV"));
+        }
+    }
+
+    @Test void cancelledOrStaleSaveDoesNotCreateFileOrChangeNamedTarget() throws Exception {
+        try (Fixture fixture = new Fixture()) {
+            fixture.apply(ordered("P1", "V"));
+            Path target = folder.resolve("cancelled.xml");
+            fixture.accept.set(false);
+            FxTestRuntime.run(() -> fixture.transfer.saveProfileTo(target.toFile())); await(fixture.transfer);
+            assertFalse(Files.exists(target)); assertNull(fixture.transfer.profilePath());
+            fixture.accept.set(true);
+            fixture.onReview.set(fixture.runtime::reloadConfiguration);
+            FxTestRuntime.run(() -> fixture.transfer.saveProfileTo(target.toFile())); await(fixture.transfer);
+            assertFalse(Files.exists(target)); assertNull(fixture.transfer.profilePath());
+            assertTrue(fixture.status.get().contains("changed"));
+        }
+    }
+
+    @Test void failedSaveAndExternalEditsPreserveFilesAndCurrentSelection() throws Exception {
+        try (Fixture fixture = new Fixture()) {
+            fixture.apply(ordered("P1", "V"));
+            Path target = folder.resolve("saved.xml");
+            FxTestRuntime.run(() -> fixture.transfer.saveProfileTo(target.toFile())); await(fixture.transfer);
+            String changed = "<profile protocol='SSM'><parameter id='P2' units='mV' livedata='selected'/></profile>";
+            Files.writeString(target, changed);
+            FxTestRuntime.run(fixture.transfer::showProfileSave); await(fixture.transfer);
+            assertEquals(changed, Files.readString(target));
+            assertEquals(List.of("P1"), fixture.selected());
+            assertTrue(fixture.status.get().contains("changed outside"));
+            FxTestRuntime.run(fixture.transfer::reloadProfile); await(fixture.transfer);
+            assertEquals(List.of("P2"), fixture.selected());
+            FxTestRuntime.run(() -> fixture.transfer.saveProfileTo(folder.resolve("missing/failed.xml").toFile())); await(fixture.transfer);
+            assertEquals(target, fixture.transfer.profilePath());
+            assertEquals(changed, Files.readString(target));
+        }
+    }
+
+    @Test void destinationChangedDuringReviewIsNotOverwritten() throws Exception {
+        try (Fixture fixture = new Fixture()) {
+            fixture.apply(ordered("P1", "V"));
+            Path target = folder.resolve("raced.xml");
+            String changed = "<profile protocol='SSM'/>";
+            fixture.onReview.set(() -> { try { Files.writeString(target, changed); } catch (IOException failure) { throw new UncheckedIOException(failure); } });
+            FxTestRuntime.run(() -> fixture.transfer.saveProfileTo(target.toFile())); await(fixture.transfer);
+            assertEquals(changed, Files.readString(target));
+            assertNull(fixture.transfer.profilePath());
+            assertTrue(fixture.status.get().contains("changed outside"));
+            try (var files = Files.list(folder)) { assertFalse(files.anyMatch(path -> path.getFileName().toString().startsWith(".rr2-profile-"))); }
+        }
+    }
+
+    @Test void definitionWrongProtocolAndNonXmlDestinationsAreProtected() throws Exception {
+        try (Fixture fixture = new Fixture()) {
+            fixture.apply(ordered("P1", "V"));
+            for (String name : List.of("definition.xml", "other.xml", "saved.csv")) {
+                Path target = folder.resolve(name);
+                if (!name.equals("definition.xml")) Files.writeString(target, "<profile protocol='MUT2'/>");
+                byte[] previous = Files.readAllBytes(target);
+                FxTestRuntime.run(() -> fixture.transfer.saveProfileTo(target.toFile())); await(fixture.transfer);
+                assertArrayEquals(previous, Files.readAllBytes(target));
+                assertNull(fixture.transfer.profilePath());
+                assertTrue(fixture.status.get().startsWith("Logger setup action failed:"));
+            }
+        }
+    }
+
+    @Test void missingAndMalformedReloadDoNotReplaceSelectionsOrNamedPath() throws Exception {
+        try (Fixture fixture = new Fixture()) {
+            FxTestRuntime.run(fixture.transfer::reloadProfile);
+            assertTrue(fixture.status.get().contains("Load or save"));
+            fixture.apply(ordered("P1", "V"));
+            Path target = folder.resolve("reload.xml");
+            FxTestRuntime.run(() -> fixture.transfer.saveProfileTo(target.toFile())); await(fixture.transfer);
+            for (boolean missing : List.of(false, true)) {
+                if (missing) Files.delete(target); else Files.writeString(target, "<broken>");
+                FxTestRuntime.run(fixture.transfer::reloadProfile); await(fixture.transfer);
+                assertEquals(List.of("P1"), fixture.selected()); assertEquals(target, fixture.transfer.profilePath());
+                assertTrue(fixture.status.get().startsWith("Logger setup action failed:"));
+            }
+        }
+    }
+
+    @Test void unavailableLoadedSelectionsAreDisclosedBeforeSave() throws Exception {
+        try (Fixture fixture = new Fixture()) {
+            Path source = folder.resolve("partial.xml");
+            Files.writeString(source, "<profile protocol='SSM'><parameter id='P1' units='V' livedata='selected'/>"
+                    + "<parameter id='DM_PENDING' units='%' livedata='selected'/></profile>");
+            AtomicReference<String> review = new AtomicReference<>();
+            try (var transfer = new FxLoggerSetupTransfer(null, fixture.runtime, fixture.status::set,
+                    (title, detail) -> { review.set(detail); return true; })) {
+                FxTestRuntime.run(() -> transfer.loadProfile(source.toFile())); await(transfer);
+                FxTestRuntime.run(transfer::showProfileSave); await(transfer);
+                assertTrue(review.get().contains("will not be saved: DM_PENDING"));
+                assertEquals(List.of("P1"), FxLoggerProfileFiles.parse(Files.readAllBytes(source)).getSelectedIds());
+            }
+        }
+    }
+
+    @Test void busyAndClosedProfileActionsCannotWrite() throws Exception {
+        try (Fixture fixture = new Fixture()) {
+            Path target = folder.resolve("busy.xml");
+            fixture.runtime.getWorkspaceContext().getLiveData().connecting();
+            FxTestRuntime.run(() -> fixture.transfer.saveProfileTo(target.toFile())); await(fixture.transfer);
+            assertFalse(Files.exists(target)); assertEquals(0, fixture.reviews.get());
+            fixture.runtime.getWorkspaceContext().getLiveData().stopped();
+            fixture.onReview.set(fixture.transfer::close);
+            FxTestRuntime.run(() -> fixture.transfer.saveProfileTo(target.toFile())); await(fixture.transfer);
+            assertFalse(Files.exists(target)); assertNull(fixture.transfer.profilePath());
+        }
+    }
+
+    @Test void newlyAvailableSelectedChannelsAreNotReportedAsOmittedDuringSave() throws Exception {
+        try (Fixture fixture = new Fixture()) {
+            Path source = folder.resolve("discovered.xml"), target = folder.resolve("complete.xml");
+            Files.writeString(source, "<profile protocol='SSM'><parameter id='P1' units='V' livedata='selected'/>"
+                    + "<parameter id='LATER' units='V' livedata='selected'/></profile>");
+            AtomicReference<String> review = new AtomicReference<>();
+            try (var transfer = new FxLoggerSetupTransfer(null, fixture.runtime, fixture.status::set,
+                    (title, detail) -> { review.set(detail); return true; })) {
+                FxTestRuntime.run(() -> transfer.loadProfile(source.toFile())); await(transfer);
+                Files.writeString(fixture.definition, XML.replace("</parameters>", parameter("LATER", "0x000004") + "</parameters>"));
+                FxTestRuntime.run(fixture.runtime::reloadConfiguration);
+                fixture.apply(ordered("P1", "V", "LATER", "V"));
+                FxTestRuntime.run(() -> transfer.saveProfileTo(target.toFile())); await(transfer);
+                assertFalse(review.get().contains("will not be saved"));
+                assertEquals(List.of("P1", "LATER"), FxLoggerProfileFiles.parse(Files.readAllBytes(target)).getSelectedIds());
+            }
+        }
+    }
+
+    @Test void emptySelectionRoundTripsAsAnExplicitEmptyProfile() throws Exception {
+        try (Fixture fixture = new Fixture()) {
+            fixture.apply(ordered());
+            Path target = folder.resolve("empty.xml");
+            FxTestRuntime.run(() -> fixture.transfer.saveProfileTo(target.toFile())); await(fixture.transfer);
+            fixture.apply(ordered("P1", "V"));
+            FxTestRuntime.run(fixture.transfer::reloadProfile); await(fixture.transfer);
+            assertTrue(fixture.selected().isEmpty()); assertTrue(fixture.recordedOrder().isEmpty());
+        }
+    }
+
     @Test void captureOptionsApplyAndRollbackTogetherWithoutConnecting() throws Exception {
         try (Fixture fixture = new Fixture()) {
             var s = fixture.settings;

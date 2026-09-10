@@ -57,6 +57,7 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
             else if (phase.equals("mut2-definition")) verifyMut2DefinitionRejection();
             else if (phase.equals("gauges")) verifyGaugesOnly();
             else if (phase.equals("gauge-demo-toggle")) verifyGaugeDemoToggle();
+            else if (phase.equals("gauge-recording-controls")) verifyGaugeRecordingControls();
             else if (phase.equals("gauge-setup")) verifyGaugeSetup();
             else if (phase.equals("mounted-fullscreen")) verifyMountedFullScreen();
             else if (phase.equals("mounted-layouts")) verifyMountedLayouts();
@@ -605,6 +606,87 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
         invoke("refreshRecording", new Class<?>[0]);
     }
 
+    private void verifyGaugeRecordingControls() throws Exception {
+        verifySelection(2);
+        invoke("showGaugesOnly", new Class<?>[0]);
+        android.widget.Button start = (android.widget.Button) field("gaugeStartButton");
+        android.widget.Button stop = (android.widget.Button) field("gaugeStopButton");
+        Object profile = field("loggerProfile");
+        runOnMainSync(() -> {
+            check(start.getText().toString().equals("START") && stop.getText().toString().equals("STOP"), "Gauge labels missing");
+            check(start.isEnabled() && !stop.isEnabled(), "Idle gauge control states wrong");
+            check(start.getContentDescription().toString().equals("Start recording")
+                    && stop.getContentDescription().toString().equals("Stop recording"), "Recording accessibility labels missing");
+            check(start.getBackground() instanceof android.graphics.drawable.RippleDrawable, "Gauge button lost touch feedback");
+            android.graphics.drawable.GradientDrawable startSurface = (android.graphics.drawable.GradientDrawable)
+                    ((android.graphics.drawable.RippleDrawable) start.getBackground()).getDrawable(0);
+            android.graphics.drawable.GradientDrawable stopSurface = (android.graphics.drawable.GradientDrawable)
+                    ((android.graphics.drawable.RippleDrawable) stop.getBackground()).getDrawable(0);
+            check(startSurface.getColor().getDefaultColor() == android.graphics.Color.rgb(36, 120, 75)
+                    && stopSurface.getColor().getDefaultColor() == android.graphics.Color.rgb(115, 38, 46),
+                    "START/STOP semantic colors changed");
+            check(stop.getAlpha() < .5f, "Disabled gauge button is not visibly disabled");
+        });
+        check(!testRecordingActive() && field("loggerProfile") == profile, "Opening Gauges changed the session/setup");
+        ReadOnlyLoggingService service = (ReadOnlyLoggingService) field("recordingService");
+        try {
+            setField("recordingService", null);
+            invoke("refreshGaugeAvailability", new Class<?>[0]);
+            check(!start.isEnabled() && !stop.isEnabled(), "Unknown service state enables recording controls");
+        } finally { setField("recordingService", service); }
+        setField("setupTransferLoading", true);
+        invoke("refreshGaugeAvailability", new Class<?>[0]);
+        check(!start.isEnabled(), "Pending setup transfer enables Start");
+        setField("setupTransferLoading", false);
+        invoke("refreshGaugeAvailability", new Class<?>[0]);
+        File renders = getTargetContext().getExternalFilesDir("gauge-recording-controls");
+        check(renders != null && (renders.isDirectory() || renders.mkdirs()), "Cannot create gauge captures");
+        startTestRecording();
+        try {
+            invoke("refreshGaugeAvailability", new Class<?>[0]);
+            check(!start.isEnabled() && stop.isEnabled(), "Active gauge control states wrong");
+            Object active = testRecording;
+            runOnMainSync(start::performClick); // Even a stale/programmatic click must not toggle Stop.
+            check(testRecordingActive() && testRecording == active, "Repeated Start stopped/replaced the recording");
+            for (int orientation : new int[] {android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT,
+                    android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE}) {
+                rotateMountedDisplay(orientation);
+                for (boolean fullscreen : new boolean[] {false, true}) {
+                    invoke("setMountedFullScreen", new Class<?>[] {boolean.class}, fullscreen);
+                    invoke("showMountedMenu", new Class<?>[0]);
+                    waitForIdleSync();
+                    captureMountedScreenshot(new File(renders, orientation + "-" + fullscreen + ".png"));
+                    runOnMainSync(() -> {
+                        for (android.widget.Button button : new android.widget.Button[] {start, stop,
+                                (android.widget.Button) fieldUnchecked("mountedModeButton")}) {
+                            android.graphics.Rect bounds = new android.graphics.Rect();
+                            check(button.getGlobalVisibleRect(bounds) && bounds.width() == button.getWidth()
+                                    && bounds.height() == button.getHeight(), "Gauge recording control is clipped: "
+                                            + button.getText() + " size=" + button.getWidth() + "x" + button.getHeight()
+                                            + " visible=" + bounds + " orientation=" + orientation + " fullscreen=" + fullscreen);
+                            android.text.Layout layout = button.getLayout();
+                            check(layout != null && layout.getLineEnd(layout.getLineCount() - 1) == button.getText().length(),
+                                    "Gauge recording label is truncated");
+                        }
+                    });
+                    check(testRecordingActive() && testRecording == active, "Display change interrupted recording");
+                }
+            }
+            runOnMainSync(stop::performClick);
+            waitForServiceIdle(service);
+            invoke("refreshRecording", new Class<?>[0]);
+            invoke("refreshGaugeAvailability", new Class<?>[0]);
+            check(start.isEnabled() && !stop.isEnabled(), "Stopped gauge control states did not reset");
+            check((Boolean) field("mountedFullScreen") && screenAwake(), "Stop exited fullscreen or disabled keep-awake");
+            check(testLog.size() > 0 && testRecording.completedLog() == testLog, "Gauge Stop lost the same recording");
+        } finally { stopTestRecording(); }
+        // Check the unprepared action after screenshots so its expected toast does not obscure them.
+        runOnMainSync(start::performClick);
+        check(!service.busy() && field("loggerProfile") == profile, "Unprepared Start changed the session/setup");
+        invoke("leaveGaugesOnly", new Class<?>[0]);
+        System.out.println("PASS: shared colored gauge recording controls, busy gating, orientation/fullscreen layout and same-session Stop.");
+    }
+
     private void verifyGaugesOnly() throws Exception {
         verifyBundledNotices();
         verifyMissingGaugeReading();
@@ -679,9 +761,11 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
         runOnMainSync(demo::performClick);
         invoke("showGaugesOnly", new Class<?>[0]);
         invoke("setMountedFullScreen", new Class<?>[]{boolean.class}, true);
-        runOnMainSync(() -> check(clickViewText((android.view.View) fieldUnchecked("gaugesPage"), "STOP"), "Stop missing"));
+        runOnMainSync(() -> check(!((android.widget.Button) fieldUnchecked("gaugeStopButton")).isEnabled(),
+                "Demo must not enable recording Stop"));
+        invoke("hideLoggerGaugeDemo", new Class<?>[0]);
         check(!(Boolean) field("gaugeDemo") && ((android.view.ViewGroup) grid).getChildCount() == 0,
-                "Mounted Stop left demo gauges behind");
+                "Hide left demo gauges behind");
         check((Boolean) field("mountedFullScreen") && screenAwake(), "Hiding demo exited/dimmed mounted mode");
         invoke("leaveGaugesOnly", new Class<?>[0]);
         runOnMainSync(demo::performClick);
@@ -873,8 +957,9 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
             assertMountedWindow(true);
             check(field("loggerGaugeGrid") == grid, "Rotation replaced the mounted gauge grid");
         }
-        runOnMainSync(() -> check(clickViewText((android.view.View) fieldUnchecked("gaugesPage"), "STOP"),
-                "Mounted Stop control missing"));
+        runOnMainSync(() -> check(!((android.widget.Button) fieldUnchecked("gaugeStopButton")).isEnabled(),
+                "Mounted idle Stop should be disabled"));
+        invoke("hideLoggerGaugeDemo", new Class<?>[0]);
         invoke("refreshGaugeAvailability", new Class<?>[0]);
         invoke("refreshRecording", new Class<?>[0]);
         assertMountedWindow(true); // STOPPED still stays awake; never manufactures live data.

@@ -32,6 +32,15 @@ class FxLoggerDisplaySmokeTest {
                 var elapsed = (javafx.scene.control.Label) stage.getScene().lookup("#logger-recording-elapsed");
                 assertEquals("00:00:00", elapsed.getText());
                 assertNotNull(elapsed.getTooltip());
+                var menu = (javafx.scene.control.MenuBar) stage.getScene().lookup(".menu-bar");
+                var file = menu.getMenus().getFirst();
+                var profileActions = file.getItems().stream()
+                        .filter(item -> item.getText() != null && item.getText().contains("Profile")).toList();
+                assertEquals(List.of("Load Profile…", "Save Profile", "Save Profile As…", "Reload Profile"),
+                        profileActions.stream().map(javafx.scene.control.MenuItem::getText).toList());
+                assertNotNull(profileActions.get(1).getAccelerator());
+                assertNotNull(profileActions.get(2).getAccelerator());
+                assertTrue(profileActions.get(3).isDisable());
                 var labels = actions.getChildren().stream().filter(Button.class::isInstance).map(Button.class::cast)
                         .map(Button::getText).toList();
                 int definition = labels.indexOf("Load Definition");

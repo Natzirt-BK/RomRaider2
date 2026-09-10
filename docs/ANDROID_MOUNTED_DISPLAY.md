@@ -1,4 +1,4 @@
-# Full-screen mounted gauges — 1.1.3 development source
+# Full-screen mounted gauges
 
 Open **GAUGES** to configure the display while parked: layout, channel assignments,
 default style, per-channel styles, demo Show/Hide and peak reset are together here.
@@ -41,7 +41,14 @@ The same borderless presentation is used in JavaFX and Compose mounted views;
 their normal workspace theme is restored on exit.
 
 Tap anywhere on the mounted gauges or backdrop to reveal an overlay menu with
-**EXIT FULL SCREEN** and **STOP**. The menu hides after five seconds of inactivity;
+**EXIT FULL SCREEN** and recording controls. Development after the published
+1.1.9 / 110414 APK adds green **START** and red **STOP** to both Gauges setup and
+this overlay, matching Logger's recording actions. START is disabled while the
+service is busy or setup is loading; STOP is disabled while idle or already
+stopping. Unknown service state disables both. Text, pressed feedback and dimmed
+disabled states supplement color. These additions are not in that published APK.
+
+The menu hides after five seconds of inactivity;
 another tap resets the timer. Android's accessibility timeout preference is respected.
 Fullscreen taps reveal controls, never a style picker. **EXIT FULL SCREEN** or Android
 Back restores gauge setup. **STOP** stops the same recording without leaving mounted mode. The display
@@ -50,6 +57,11 @@ mounted mode does not connect USB, identify an ECU, start recording, or create d
 Channel and style settings remain in GAUGES setup. View switches retain the gauge grid,
 recording owner and CSV writer. Stopped/stale labels and unavailable readings are
 not hidden by full-screen mode.
+
+START still requires the normal logger definition, channel selection, prepared
+adapter and permissions. It never acts as a stop toggle. The gauge demo is
+separate: **Hide Gauge Demo** clears simulated values; it does not enable the
+recording STOP button or create a recording.
 
 This is an awake application display, not Android's lock-screen Always On Display.
 It does not change system timeout preferences, force maximum brightness, disable

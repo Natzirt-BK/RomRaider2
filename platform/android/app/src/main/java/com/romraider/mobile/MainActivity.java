@@ -123,6 +123,8 @@ public final class MainActivity extends Activity {
     private boolean reviewVisible;
     private LinearLayout loggerActions;
     private Button stopLoggerButton;
+    private Button gaugeStartButton;
+    private Button gaugeStopButton;
     private AlertDialog completedLogDialog;
     private ScrollView workspaceScroll;
     private LinearLayout workspacePage;
@@ -565,16 +567,9 @@ public final class MainActivity extends Activity {
         sessionBody.addView(loggerSessionTitle, matchWrap(dp(8)));
         loggerActions.removeAllViews();
         loggerActions.setVisibility(View.VISIBLE);
-        liveLoggerButton = button(getString(R.string.logger_live_start));
-        liveLoggerButton.setTextSize(15);
-        liveLoggerButton.setMinHeight(dp(52));
-        styleButton(liveLoggerButton, POSITIVE, POSITIVE);
-        liveLoggerButton.setOnClickListener(view -> { if (!isLiveActive()) toggleLiveLogger(); });
+        liveLoggerButton = recordingButton(true);
         loggerActions.addView(liveLoggerButton, matchWrap(dp(6)));
-        stopLoggerButton = button(getString(R.string.logger_live_stop));
-        styleButton(stopLoggerButton, Color.rgb(115, 38, 46), Color.rgb(230, 94, 108));
-        stopLoggerButton.setMinHeight(dp(52));
-        stopLoggerButton.setOnClickListener(view -> stopLiveLogger("Finishing the recording…"));
+        stopLoggerButton = recordingButton(false);
         loggerActions.addView(stopLoggerButton, matchWrap());
         loggerSessionDetail = text("", 13, MUTED);
         sessionBody.addView(loggerSessionDetail, matchWrap());
@@ -750,6 +745,7 @@ public final class MainActivity extends Activity {
     }
 
     private void refreshSessionHeader() {
+        refreshRecordingButtons();
         if (!loggerVisible || gaugesVisible || loggerSessionTitle == null) return;
         ReadOnlyRecording recording = recordingService == null ? null : recordingService.recording();
         ReadOnlyRecording.Snapshot state = recording == null ? null : recording.snapshot();
@@ -786,17 +782,43 @@ public final class MainActivity extends Activity {
         }
         if (!title.contentEquals(loggerSessionTitle.getText())) loggerSessionTitle.setText(title);
         if (!detail.contentEquals(loggerSessionDetail.getText())) loggerSessionDetail.setText(detail);
-        if (liveLoggerButton != null) {
-            liveLoggerButton.setEnabled(recordingService != null && !busy
-                    && !loggerImports.isLoading() && !setupTransferLoading);
-        }
-        if (stopLoggerButton != null) {
-            stopLoggerButton.setText(stopping ? R.string.logger_live_stopping : R.string.logger_live_stop);
-            stopLoggerButton.setEnabled(busy && !stopping);
-        }
         if (liveReadingsCard != null) liveReadingsCard.setVisibility(busy && state != null
                 && state.phase() == ReadOnlyRecording.Phase.RECORDING ? View.VISIBLE : View.GONE);
         refreshLoggerSections();
+    }
+
+    /** Every screen controls the same service; START must never act as a toggle. */
+    private Button recordingButton(boolean start) {
+        Button control = button(getString(start ? R.string.logger_live_start : R.string.logger_live_stop));
+        control.setTextSize(15);
+        control.setMinHeight(dp(52));
+        styleButton(control, start ? POSITIVE : Color.rgb(115, 38, 46),
+                start ? POSITIVE : Color.rgb(230, 94, 108));
+        control.setContentDescription(start ? "Start recording" : "Stop recording");
+        control.setOnClickListener(view -> {
+            if (mountedFullScreen) showMountedMenu();
+            if (start) { if (!isLiveActive()) toggleLiveLogger(); }
+            else stopLiveLogger("Finishing the recording…");
+            refreshRecordingButtons();
+        });
+        return control;
+    }
+
+    private void refreshRecordingButtons() {
+        ReadOnlyRecording recording = recordingService == null ? null : recordingService.recording();
+        ReadOnlyRecording.Snapshot snapshot = recording == null ? null : recording.snapshot();
+        boolean busy = recordingService != null && recordingService.busy();
+        boolean stopping = busy && snapshot != null && (snapshot.phase() == ReadOnlyRecording.Phase.STOPPING
+                || snapshot.phase() == ReadOnlyRecording.Phase.STOPPED);
+        for (Button start : new Button[] {liveLoggerButton, gaugeStartButton}) {
+            if (start != null) start.setEnabled(recordingService != null && !busy
+                    && !loggerImports.isLoading() && !setupTransferLoading);
+        }
+        for (Button stop : new Button[] {stopLoggerButton, gaugeStopButton}) {
+            if (stop == null) continue;
+            stop.setText(stopping ? R.string.logger_live_stopping : R.string.logger_live_stop);
+            stop.setEnabled(busy && !stopping);
+        }
     }
 
     private void showUsbDevices() {
@@ -2973,28 +2995,31 @@ public final class MainActivity extends Activity {
         gaugesStatus = statusText("");
         gaugesStatus.setMaxLines(3);
         gaugesStatus.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        Button stop = button("STOP");
-        stop.setMinHeight(dp(48));
-        stop.setOnClickListener(view -> {
-            if (mountedFullScreen) showMountedMenu();
-            stopLiveLogger("Stopped from gauges dashboard.");
-            hideLoggerGaugeDemo();
-            refreshGaugeAvailability();
-        });
-        LinearLayout status = new LinearLayout(this);
+        gaugeStartButton = recordingButton(true);
+        gaugeStopButton = recordingButton(false);
+        for (Button control : new Button[] {gaugeStartButton, gaugeStopButton}) {
+            control.setTextSize(13);
+            control.setMinWidth(0);
+            control.setPadding(dp(8), 0, dp(8), 0);
+        }
+        LinearLayout status = column();
         gaugesControls = status;
         status.setGravity(Gravity.CENTER_VERTICAL);
         status.setBackgroundColor(BACKGROUND);
-        status.addView(gaugesStatus, weighted());
+        status.addView(gaugesStatus, matchWrap());
         mountedModeButton = button("FULL SCREEN");
         mountedModeButton.setTextSize(11);
-        mountedModeButton.setMinHeight(dp(48));
+        mountedModeButton.setMinHeight(dp(52));
         mountedModeButton.setPadding(dp(12), 0, dp(12), 0);
         mountedModeButton.setContentDescription("Full screen gauges; keep the display awake while visible");
         mountedModeButton.setOnClickListener(view -> setMountedFullScreen(!mountedFullScreen));
         status.setOnClickListener(view -> { if (mountedFullScreen) showMountedMenu(); });
-        status.addView(mountedModeButton);
-        status.addView(stop);
+        LinearLayout controls = actionRow(gaugeStartButton, gaugeStopButton);
+        // Multi-line Full Screen must not baseline-align below single-line recording labels.
+        controls.setBaselineAligned(false);
+        controls.setGravity(Gravity.CENTER_VERTICAL);
+        controls.addView(mountedModeButton, weighted());
+        status.addView(controls, matchWrap());
         gaugesPage.addView(status, matchWrap());
         gaugesScroll = new ScrollView(this);
         gaugesScroll.addView(gaugeSetupCard, matchWrap());
@@ -3192,6 +3217,7 @@ public final class MainActivity extends Activity {
     }
 
     private void refreshGaugeAvailability() {
+        refreshRecordingButtons();
         String state = gaugeDemo ? "SIMULATED"
                 : recordingService == null ? "CHECKING RECORDING"
                 : isLiveActive() ? (liveEcuIdentified ? "LIVE • RECORDING" : "CONNECTING / STOPPING") : "STOPPED";

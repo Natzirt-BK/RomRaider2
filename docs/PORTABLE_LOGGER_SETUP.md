@@ -1,9 +1,9 @@
 # Portable channel setups
 
-Implemented in **1.1.3 development source**. Public downloads remain 1.1.2.
-The same shared Java 11 format is available through Android and the replacement
-JavaFX desktop Logger. Legacy Swing and standalone Compose surfaces do not gain
-separate exchange controls in this change.
+Portable channel setups can be exchanged between Android and the
+Windows/Linux/SteamOS desktop Logger. Legacy Swing and standalone Compose
+surfaces do not provide these exchange controls. Standard XML profiles are a
+separate workflow; see [desktop logger profiles](DESKTOP_LOGGER_PROFILES.md).
 
 The [desktop profile-integrity repair](DESKTOP_PROFILE_INTEGRITY.md) prepares
 that integration by preserving UTF-8 units, escaped XML attributes, captured
@@ -75,7 +75,7 @@ channel before connection cannot leave its earlier addition queued for polling.
 
 ## Android workflow
 
-1. Stop live or simulated logging and wait for the recording to finish.
+1. Stop logging and wait for the recording to finish.
 2. Load your logger definition and choose channels or import a traditional XML
    profile. Select **Export channel setup**, review what is included, then choose
    a new `.rr2logger` file in the document picker.
@@ -123,7 +123,7 @@ definition/profile restoration remain available.
 - Parsing/hashing runs off the UI thread. Configuration revisions and import
   generations prevent late work or stale review dialogs from replacing newer
   selections. Failed/cancelled imports leave the current profile intact.
-- Transfer entry points refuse to interrupt an active live or simulated session.
+- Transfer entry points refuse to interrupt an active logging session.
   A review is checked again before applying or launching the export picker.
 - Export serializes a frozen snapshot before opening the destination. Activity
   recreation discards a pending export rather than writing a different setup.

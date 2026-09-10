@@ -47,6 +47,7 @@ run_phase verify
 run_phase verify
 run_phase gauges
 run_phase gauge-demo-toggle
+run_phase gauge-recording-controls
 run_phase gauge-setup
 run_phase mounted-fullscreen
 run_phase mounted-layouts
