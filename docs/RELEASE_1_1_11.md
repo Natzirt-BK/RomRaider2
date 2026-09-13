@@ -24,4 +24,4 @@ does not independently validate a definition's scaling or physical sensor fitmen
 No production flashing or live tuning is added.
 
 This is a release candidate. Consolidated in-car and physical-device acceptance
-remains pending. See the [qualification record](RELEASE_1_1_11_QUALIFICATION.md).
+remains pending. See the [qualification record](https://github.com/Natzirt-BK/RomRaider2/blob/master/docs/RELEASE_1_1_11_QUALIFICATION.md).
