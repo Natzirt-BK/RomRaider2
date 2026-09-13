@@ -72,6 +72,14 @@ public final class PortableLoggerParameter {
     public List<PortableLoggerConversion> getConversions() { return conversions; }
     public boolean isSwitch() { return switchChannel; }
 
+    public boolean hasSupportFlag() { return supportByteIndex >= 0; }
+
+    /** Common fallback addresses are not proof of an ECU-specific mapping. */
+    public boolean hasExactEcuMapping(String ecuId) {
+        return !addresses.containsKey(ALL_ECUS) && ecuId != null
+                && addresses.containsKey(ecuId.trim()) && !addressesFor(ecuId).isEmpty();
+    }
+
     /** Init payload excludes the frame header, response command and checksum, as on desktop. */
     public boolean supportedBySsm(byte[] initPayload) {
         return supportByteIndex < 0 || (initPayload != null && supportByteIndex < initPayload.length

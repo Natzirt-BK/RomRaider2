@@ -49,6 +49,19 @@ public class VehicleCatalogTest {
         assertEquals(List.of("E1", "DM911"), ids(PortableVehicleCatalog.forEcu(base, "AAA", new byte[8])));
         assertEquals(List.of("P1", "C1", "E1", "DM911"), ids(PortableVehicleCatalog.forEcu(base, "AAA", Arrays.copyOf(payload(), 9))));
     }
+
+    @Test public void genericAddressesAndTheirCalculationsNeedSupportEvidence() throws Exception {
+        String extra = "<parameter id='U1' name='Unverified'><address>7</address>" + conversion("x") + "</parameter>"
+                + "<parameter id='U2' name='Unverified calculation'><depends><ref parameter='U1'/></depends>"
+                + conversion("U1*2") + "</parameter>";
+        PortableLoggerDefinition base = read(XML.replace("</protocol>", extra + "</protocol>"));
+        PortableLoggerDefinition confirmed = PortableVehicleCatalog.forEcu(base, "AAA", payload());
+        assertNull(confirmed.parameter("U1"));
+        assertNull(confirmed.parameter("U2"));
+        assertNotNull(confirmed.parameter("P1"));
+        assertNotNull(confirmed.parameter("DM911"));
+        assertNotNull(base.parameter("U1"));
+    }
     @Test public void malformedSupportAttributesAreRejected() {
         for (String xml : List.of(XML.replace("ecubyteindex='8'", "ecubyteindex='-1'"),
                 XML.replace("ecubyteindex='8'", "ecubyteindex='255'"),
@@ -74,7 +87,8 @@ public class VehicleCatalogTest {
         PortableLoggerProfile profile = new PortableLoggerProfile("SSM", List.of(
                 new PortableLoggerProfile.Selection("P1", "V"),
                 new PortableLoggerProfile.Selection("P2", "V"),
-                new PortableLoggerProfile.Selection("C2", "V")), List.of());
+                new PortableLoggerProfile.Selection("C2", "V"),
+                new PortableLoggerProfile.Selection("U1", "V")), List.of());
         com.romraider.portable.PortableLogSession log = new com.romraider.portable.PortableLogSession();
         int[] reads = {0};
         ReadOnlyLoggerSession[] owner = new ReadOnlyLoggerSession[1];
@@ -88,13 +102,17 @@ public class VehicleCatalogTest {
             }
             public void closeReadOnlyKLine() { }
         };
-        owner[0] = new ReadOnlyLoggerSession(transport, read(XML), profile, log, new ReadOnlyLoggerSession.Listener() {
+        PortableLoggerDefinition definition = read(XML.replace("</protocol>",
+                "<parameter id='U1' name='Unverified'><address>7</address>" + conversion("x")
+                        + "</parameter></protocol>"));
+        owner[0] = new ReadOnlyLoggerSession(transport, definition, profile, log, new ReadOnlyLoggerSession.Listener() {
             public void onCatalog(String ecuId, PortableLoggerDefinition catalog, String status) {
                 assertNull(catalog.parameter("P2"));
+                assertNull(catalog.parameter("U1"));
                 assertNotNull(catalog.parameter("DM911"));
             }
             public void onIdentified(String ecuId, int ready, int unavailable) {
-                assertEquals(1, ready); assertEquals(2, unavailable);
+                assertEquals(1, ready); assertEquals(3, unavailable);
             }
             public void onValues(String ecuId, long timestamp, List<com.romraider.portable.logger.PortableLoggerValue> values, int count) {
                 owner[0].stop();
@@ -105,6 +123,6 @@ public class VehicleCatalogTest {
         assertEquals(1, reads[0]);
         StringWriter csv = new StringWriter(); log.writeRomRaiderCsv(csv);
         assertEquals("Time (msec),Supported (V)\n0,12.00\n", csv.toString());
-        assertEquals(3, profile.size());
+        assertEquals(4, profile.size());
     }
 }

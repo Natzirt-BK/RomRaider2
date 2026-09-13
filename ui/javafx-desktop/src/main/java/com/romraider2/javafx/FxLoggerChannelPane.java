@@ -249,7 +249,13 @@ final class FxLoggerChannelPane extends VBox {
                 + selectedInCategory + " selected");
         clearCategory.setDisable(scope == Category.ALL || selectedInCategory == 0);
         clearAll.setDisable(snapshot.stream().noneMatch(LoggerChannel::isSelected));
-        if (shown == 0) rows.getChildren().add(new Label("No matching channels"));
+        if (shown == 0) {
+            Label empty = new Label(snapshot.isEmpty()
+                    ? "Connect to identify vehicle channels, or check the loaded definition."
+                    : "No matching channels");
+            empty.setWrapText(true);
+            rows.getChildren().add(empty);
+        }
         layoutColumns();
     }
 }

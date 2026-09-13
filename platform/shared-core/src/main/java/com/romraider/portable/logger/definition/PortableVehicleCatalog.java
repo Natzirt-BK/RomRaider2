@@ -18,8 +18,15 @@ public final class PortableVehicleCatalog {
         List<PortableLoggerProfile.Selection> choices = new ArrayList<>();
         for (PortableLoggerParameter parameter : definition.parameters()) {
             if ((parameter.getTarget() & 1) == 0) continue;
-            if ("SSM".equalsIgnoreCase(definition.getProtocol())
-                    && !parameter.supportedBySsm(ssmInitPayload)) continue;
+            if ("SSM".equalsIgnoreCase(definition.getProtocol())) {
+                if (!parameter.supportedBySsm(ssmInitPayload)) continue;
+                // A readable-looking generic address alone does not establish
+                // vehicle support. Calculated channels are resolved against
+                // this confirmed-only catalog below, including dependencies.
+                if (!parameter.hasSupportFlag() && !parameter.hasExactEcuMapping(ecuId)
+                        && (parameter.getDependencies().isEmpty()
+                        || !parameter.addressesFor(ecuId).isEmpty())) continue;
+            }
             candidates.add(parameter);
             choices.add(new PortableLoggerProfile.Selection(parameter.getId(), ""));
         }

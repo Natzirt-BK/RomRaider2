@@ -39,7 +39,9 @@ public final class EditorLoggerCommunication {
     public enum Exec_type {EDITOR, LOGGER, UNKNOWN};
     
     private static final InetAddress LOOPBACK = InetAddress.getLoopbackAddress();
-    private static final int PORT = 23272;
+    // Original RomRaider uses 23272. Keep RR2's launch forwarding independent
+    // so either application can start while the other is already running.
+    static final int PORT = 23273;
     private static final String ARGUMENT_PREFIX = "RR2ARGS1:";
     private static final int MAX_MESSAGE = 1024 * 1024;
     

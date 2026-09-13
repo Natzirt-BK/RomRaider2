@@ -398,7 +398,11 @@ public class ReadOnlyRecordingTest {
             }
             public void closeReadOnlyKLine() { }
         };
-        PortableLoggerDefinition definition = new PortableLoggerDefinition("test", "SSM", definition().parameters());
+        PortableLoggerDefinition definition = new PortableLoggerDefinition("test", "SSM",
+                definition().parameters().stream().map(p -> new com.romraider.portable.logger.definition.PortableLoggerParameter(
+                        p.getId(), p.getName(), p.getDescription(), p.getTarget(),
+                        java.util.Map.of("SYNTHETIC_SSM", p.addressesFor(null)),
+                        p.getDependencies(), p.getConversions())).toList());
         PortableLoggerProfile profile = new PortableLoggerProfile("SSM", List.of(
                 new PortableLoggerProfile.Selection("Battery", "scaled"),
                 new PortableLoggerProfile.Selection("RPM", "scaled")), List.of());

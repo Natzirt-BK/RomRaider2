@@ -105,6 +105,18 @@ public final class EcuDataLoaderImpl implements EcuDataLoader {
 
     private void loadConfig(String loggerConfigFilePath, String protocol,
             String fileLoggingControllerSwitchId, EcuInit ecuInit, byte[] snapshot, boolean strict) {
+        loadConfig(loggerConfigFilePath, protocol, fileLoggingControllerSwitchId, ecuInit, snapshot, strict, false, 3);
+    }
+
+    /** Runtime SSM catalog only; setup previews retain the unfiltered definition. */
+    public void loadConfirmedConfigForDesktop(String sourcePath, byte[] snapshot, String protocol,
+            String switchId, EcuInit ecuInit, int moduleTarget) {
+        loadConfig(sourcePath, protocol, switchId, ecuInit, snapshot.clone(), true, true, moduleTarget);
+    }
+
+    private void loadConfig(String loggerConfigFilePath, String protocol,
+            String fileLoggingControllerSwitchId, EcuInit ecuInit, byte[] snapshot, boolean strict,
+            boolean confirmedOnly, int moduleTarget) {
         checkNotNullOrEmpty(loggerConfigFilePath, "loggerConfigFilePath");
         checkNotNullOrEmpty(protocol, "protocol");
         checkNotNullOrEmpty(fileLoggingControllerSwitchId, "fileLoggingControllerSwitchId");
@@ -120,6 +132,7 @@ public final class EcuDataLoaderImpl implements EcuDataLoader {
             try {
                 LoggerDefinitionHandler handler = new LoggerDefinitionHandler(
                         protocol, fileLoggingControllerSwitchId, ecuInit);
+                if (confirmedOnly) handler.requireConfirmedVehicleChannels(moduleTarget);
                 getSaxParser().parse(inputStream, handler, loggerConfigFilePath);
                               
                 ecuParameters = handler.getEcuParameters();

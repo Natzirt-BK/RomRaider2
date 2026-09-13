@@ -17,6 +17,103 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
 @EnabledIfEnvironmentVariable(named = "RR2_FX_WINDOW_SMOKE", matches = "1")
 class FxEditorCatalogSmokeTest {
+    @Test void refreshAndConversionChoicesFollowActiveImageSize() throws Exception {
+        FxEditorWindow[] window = {null};
+        try {
+            FxTestRuntime.run(() -> {
+                window[0] = new FxEditorWindow(() -> {}, () -> {});
+                Button refresh = field(window[0], "refreshImage");
+                assertTrue(refresh.isDisabled());
+                assertNotNull(refresh.getTooltip());
+            });
+            for (int size : new int[] {163840, 196608, 524288}) {
+                FxTestRuntime.run(() -> {
+                    Rom rom = new Rom(new RomID()); rom.setFileName("synthetic-" + size + ".bin");
+                    rom.populateTables(new byte[size], new JProgressPane());
+                    EditorDocumentController controller = field(window[0], "controller");
+                    controller.getSession().openRom(rom);
+                    controller.getSession().activateRom(rom);
+                });
+                FxTestRuntime.run(() -> {
+                    Button refresh = field(window[0], "refreshImage");
+                    MenuItem increase = field(window[0], "convertIncrease");
+                    MenuItem decrease = field(window[0], "convertDecrease");
+                    assertFalse(refresh.isDisabled());
+                    assertEquals(size != 163840, increase.isDisable());
+                    assertEquals(size != 196608, decrease.isDisable());
+                    assertEquals("Convert Image", increase.getParentMenu().getText());
+                });
+            }
+        } finally { FxTestRuntime.run(() -> { if (window[0] != null) window[0].close(); }); }
+    }
+
+    @Test void mouseCanOpenSeveralDtcCalibrations() throws Exception {
+        FxEditorWindow[] window = {null};
+        Rom rom = new Rom(new RomID()); rom.setFileName("dtc-synthetic.bin");
+        for (int i = 0; i < 3; i++) {
+            var table = new com.romraider.maps.TableSwitch();
+            table.setName("(P030" + i + ") Misfire diagnostic " + i);
+            table.setCategory("Diagnostic Trouble Codes");
+            table.setStorageAddress(i); table.setDataSize(1);
+            rom.addTableByName(table);
+        }
+        rom.populateTables(new byte[] {1, 1, 1}, new JProgressPane());
+        int previousClicks = SettingsManager.getSettings().getTableClickCount();
+        int previousBehavior = SettingsManager.getSettings().getTableClickBehavior();
+        try {
+            FxTestRuntime.run(() -> {
+                SettingsManager.getSettings().setTableClickCount(1);
+                SettingsManager.getSettings().setTableClickBehavior(0);
+                window[0] = new FxEditorWindow(() -> {}, () -> {});
+                EditorDocumentController controller = field(window[0], "controller");
+                controller.getSession().openRom(rom);
+                Stage stage = field(window[0], "stage");
+                stage.setWidth(1024); stage.setHeight(700); FxWindowPlacement.show(stage);
+            });
+            FxTestRuntime.run(() -> {
+                TreeView<?> tree = field(window[0], "navigation");
+                tree.getRoot().getChildren().get(0).setExpanded(true);
+            });
+            int[] clickedMaps = {0, 1, 2, 1, 1};
+            int[] expectedCounts = {1, 2, 3, 2, 3};
+            for (int i = 0; i < clickedMaps.length; i++) {
+                var clicked = rom.getTableCatalog().get(clickedMaps[i]);
+                String name = clicked.getName();
+                Thread.sleep(600);
+                FxTestRuntime.run(() -> {
+                    Stage stage = field(window[0], "stage");
+                    stage.getScene().getRoot().applyCss(); stage.getScene().getRoot().layout();
+                    TreeView<?> tree = field(window[0], "navigation");
+                    TreeCell<?> cell = tree.lookupAll(".tree-cell").stream()
+                            .filter(TreeCell.class::isInstance).map(TreeCell.class::cast)
+                            .filter(candidate -> name.equals(candidate.getText())).findFirst().orElseThrow();
+                    var bounds = cell.localToScreen(cell.getBoundsInLocal());
+                    var robot = new javafx.scene.robot.Robot();
+                    robot.mouseMove(bounds.getMinX() + 100, bounds.getCenterY());
+                    robot.mouseClick(javafx.scene.input.MouseButton.PRIMARY);
+                });
+                Thread.sleep(250);
+                int expected = expectedCounts[i];
+                boolean closingTab = i == 3;
+                FxTestRuntime.run(() -> {
+                    TabPane tabs = field(window[0], "calibrationTabs");
+                    assertEquals(expected, tabs.getTabs().size(), "Click on " + name);
+                    assertEquals(!closingTab, tabs.getTabs().stream()
+                            .anyMatch(tab -> tab.getUserData() == clicked));
+                    if (!closingTab) assertSame(clicked,
+                            tabs.getSelectionModel().getSelectedItem().getUserData());
+                    assertArrayEquals(new byte[] {1, 1, 1}, rom.getBinary());
+                });
+            }
+        } finally {
+            FxTestRuntime.run(() -> {
+                if (window[0] != null) window[0].close();
+                SettingsManager.getSettings().setTableClickCount(previousClicks);
+                SettingsManager.getSettings().setTableClickBehavior(previousBehavior);
+            });
+        }
+    }
+
     private static Rom fixture(String name) {
         Rom rom = new Rom(new RomID()); rom.setFileName(name);
         Table2D fuel = new Table2D(); fuel.setName("Fuel target");

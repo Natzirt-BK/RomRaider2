@@ -29,6 +29,11 @@ public final class RomFileService {
         this.writer = java.util.Objects.requireNonNull(writer);
     }
 
+    /** Export captured bytes without changing an open document's path or saved state. */
+    public void exportCopy(File target, byte[] output) throws IOException {
+        writer.write(target.getAbsoluteFile(), output.clone());
+    }
+
     /** Synchronous convenience for callers already owning the document thread. */
     public void save(Rom rom, File target) throws Exception {
         PreparedSave prepared = prepare(rom, target);

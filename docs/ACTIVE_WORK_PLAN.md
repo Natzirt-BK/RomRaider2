@@ -1,10 +1,10 @@
 # Active work plan
 
-Updated September 12, 2026.
+Updated September 13, 2026.
 
-The current candidate is [1.1.10 RC1](RELEASE_1_1_10.md), available for Android,
+The next candidate is [1.1.11 RC1](RELEASE_1_1_11.md), being qualified for Android,
 Windows, Linux, SteamOS Desktop Mode and macOS. The
-[qualification record](RELEASE_1_1_10_QUALIFICATION.md) identifies passed automated
+[qualification record](RELEASE_1_1_11_QUALIFICATION.md) identifies automated
 checks and outstanding physical-device tests.
 
 ## Shipped in 1.1.9
@@ -34,6 +34,18 @@ Compose/Swing interface. Dated checkpoints record development stages, not the
 current publication status.
 
 ## Next priorities
+
+Complete 1.1.11 package qualification and publication for confirmed SSM channel
+filtering, side-by-side startup, restored editor tools and the DTC-tab fix.
+Keep vehicle tests together in the acceptance session below.
+
+Next editor feature: Android ROM checksum support. Start with the Subaru scheme
+used by the Forester's matching definition. Preserve checksum metadata in the
+portable definition reader, validate on open, and offer correction when saving
+a copy. Verify byte-for-byte parity with desktop output, invalid range handling,
+disabled checksums and failure atomicity before enabling it. Unsupported schemes
+must stay explicitly unsupported. The 1.1.11 Android editor still requires
+desktop checksum validation; checksum correction is not part of this candidate.
 
 Version 1.1.10 includes [desktop XML Save/Save As/Reload](DESKTOP_LOGGER_PROFILES.md)
 with named-file ownership separate from automatic recovery. Android includes

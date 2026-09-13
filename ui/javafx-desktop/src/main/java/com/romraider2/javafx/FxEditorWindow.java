@@ -98,6 +98,9 @@ final class FxEditorWindow {
     private boolean rebuilding;
     private boolean closing;
     private boolean recoveryInspected;
+    private final Button refreshImage = new Button("Refresh");
+    private final MenuItem convertIncrease = item("160 KB → 192 KB…", event -> convertImage(true));
+    private final MenuItem convertDecrease = item("192 KB → 160 KB…", event -> convertImage(false));
 
     FxEditorWindow(Runnable closed, Runnable openLogger) {
         this.closed = closed;
@@ -180,7 +183,8 @@ final class FxEditorWindow {
                 item("Exit", event -> close()));
         Menu edit = new Menu("Edit", null,
                 shortcutItem("Undo", "Shortcut+Z", event -> history(false)),
-                shortcutItem("Redo", "Shortcut+Y", event -> history(true)));
+                shortcutItem("Redo", "Shortcut+Y", event -> history(true)),
+                new SeparatorMenuItem(), new Menu("Convert Image", null, convertIncrease, convertDecrease));
 
         Menu view = new Menu("View");
         CheckMenuItem showHigher = new CheckMenuItem(
@@ -236,6 +240,9 @@ final class FxEditorWindow {
                 item("Save Now", event -> save(false)),
                 item("Save As…", event -> save(true)));
         Button definitions = new Button("Definitions Manager");
+        refreshImage.setId("editor-refresh-image");
+        refreshImage.setTooltip(new Tooltip("Reload the saved ROM and its definitions from disk. Unsaved changes require confirmation."));
+        refreshImage.setOnAction(event -> reloadSavedRom());
         definitions.setOnAction(event -> FxDefinitionManager.show(stage,
                 () -> setStatus("ECU definitions updated", 100)));
         Region fill = new Region();
@@ -252,7 +259,7 @@ final class FxEditorWindow {
         brand.managedProperty().bind(brand.visibleProperty());
         brandSeparator.visibleProperty().bind(brand.visibleProperty());
         brandSeparator.managedProperty().bind(brand.visibleProperty());
-        HBox header = new HBox(10, brand, brandSeparator, open, save,
+        HBox header = new HBox(10, brand, brandSeparator, open, save, refreshImage,
                 definitions, fill, context);
         header.setAlignment(Pos.CENTER_LEFT);
         header.getStyleClass().add("brand-header");
@@ -298,7 +305,9 @@ final class FxEditorWindow {
                 Table table = selected.getValue().table;
                 EditorDocument document = controller.getSession().snapshot().getActiveDocument();
                 if (document != null && SettingsManager.getSettings().getTableClickBehavior() == 0
-                        && document.getOpenTables().contains(table)) {
+                        // Table.equals compares calibration values, not map identity.
+                        // Distinct DTC switches commonly contain the same value.
+                        && document.getOpenTables().stream().anyMatch(open -> open == table)) {
                     controller.closeTable(document.getRom(), table);
                 } else controller.openTable(snapshot.getActiveRom(), table);
             }
@@ -450,6 +459,29 @@ final class FxEditorWindow {
             FxDialogs.error(stage, redo ? "Redo failed" : "Undo failed",
                     FxDialogs.rootMessage(failure));
         }
+    }
+
+    private void convertImage(boolean expand) {
+        Rom rom = controller.getSession().snapshot().getActiveRom();
+        if (rom == null) return;
+        if (controller.isBusy(rom)) { setStatus("Wait for the current ROM operation to finish.", 0); return; }
+        if (!FxDialogs.confirm(stage, "Convert Image", "Save a separate " + (expand ? "192" : "160")
+                + " KB copy using the original RomRaider 16-bit image layout? "
+                + (expand ? "This inserts a 32 KB zero-filled segment. " : "This removes the 32 KB segment at 0x20000–0x27FFF, including any data in it. ")
+                + "The current document stays open. This is a file-layout conversion, not a vehicle compatibility conversion.",
+                "Choose output file")) return;
+        String name = rom.getFileName().replaceFirst("(?i)\\.(bin|hex)$", "")
+                + (expand ? "-192KB.bin" : "-160KB.bin");
+        File target = FxDialogs.saveRom(stage, SettingsManager.getSettings().getLastImageDir(), name);
+        if (target == null) return;
+        if (target.exists() && !FxDialogs.confirm(stage, "Replace existing file?",
+                target.getName() + " already exists. Replace it with the converted copy?", "Replace file")) return;
+        setStatus("Converting image…", 0);
+        controller.exportConverted(rom, target, expand).whenComplete((saved, failure) -> Platform.runLater(() -> {
+            if (closing) return;
+            if (failure != null) FxDialogs.error(stage, "Image was not converted", FxDialogs.rootMessage(failure));
+            else setStatus("Converted copy saved: " + saved.getName() + "; original document kept open", 100);
+        }));
     }
 
     private void reloadSavedRom() {
@@ -666,6 +698,11 @@ final class FxEditorWindow {
     }
 
     private void updateMetrics() {
+        Rom rom = snapshot.getActiveRom();
+        refreshImage.setDisable(rom == null);
+        int imageSize = rom == null || rom.getBinary() == null ? 0 : rom.getRealFileSize();
+        convertIncrease.setDisable(imageSize != Settings.SIXTEENBIT_SMALL_SIZE);
+        convertDecrease.setDisable(imageSize != Settings.SIXTEENBIT_LARGE_SIZE);
         int open = snapshot.getDocuments().size();
         long dirty = snapshot.getDocuments().stream()
                 .filter(EditorDocument::isDirty).count();

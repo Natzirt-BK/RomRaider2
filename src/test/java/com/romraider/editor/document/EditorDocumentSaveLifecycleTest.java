@@ -23,6 +23,29 @@ public class EditorDocumentSaveLifecycleTest {
 
     @Rule public TemporaryFolder temporary = new TemporaryFolder();
 
+    @Test public void convertedExportKeepsSourceAndDocumentSavedState() throws Exception {
+        Rom rom = new Rom(new RomID());
+        rom.populateTables(new byte[com.romraider.Settings.SIXTEENBIT_SMALL_SIZE], new JProgressPane());
+        File source = temporary.newFile("original.bin");
+        Files.write(source.toPath(), rom.getBinary());
+        rom.setFullFileName(source);
+        RomChangeService.rememberSavedBinary(rom);
+        rom.getBinary()[0] = 42;
+        File converted = new File(temporary.getRoot(), "converted.bin");
+        try (EditorDocumentController controller = new EditorDocumentController()) {
+            controller.getSession().openRom(rom);
+            controller.exportConverted(rom, converted, true).get(10, TimeUnit.SECONDS);
+            assertSame(source, rom.getFullFileName());
+            assertEquals(0, Files.readAllBytes(source.toPath())[0]);
+            byte[] output = Files.readAllBytes(converted.toPath());
+            assertEquals(com.romraider.Settings.SIXTEENBIT_LARGE_SIZE, output.length);
+            assertEquals(42, output[0]);
+            assertTrue(controller.getSession().snapshot().getActiveDocument().isDirty());
+            assertThrows(ExecutionException.class, () -> controller.exportConverted(rom, source, true).get());
+            assertEquals(0, Files.readAllBytes(source.toPath())[0]);
+        }
+    }
+
     @Test public void legacyChecksumPreparationRemainsOnWorkerThread() throws Exception {
         Thread caller = Thread.currentThread();
         java.util.concurrent.atomic.AtomicReference<Thread> preparationThread =

@@ -157,6 +157,25 @@ public final class LoggerDefinitionHandler extends DefaultHandler {
     private Settings.Endian conversionEndian;
     private GaugeMinMax conversionGauge;
     private String target;
+    private boolean confirmedVehicleOnly;
+    private int vehicleTarget = 3;
+
+    public void requireConfirmedVehicleChannels(int moduleTarget) {
+        confirmedVehicleOnly = true;
+        vehicleTarget = moduleTarget;
+    }
+
+    private boolean matchesVehicleTarget() {
+        if (!confirmedVehicleOnly) return true;
+        int declared = target == null || target.isBlank() ? 3 : Integer.parseInt(target);
+        return ecuInit != null && (declared & vehicleTarget) != 0;
+    }
+
+    private boolean supportedStandardChannel() {
+        if (!matchesVehicleTarget()) return false;
+        if (ecuByteIndex == null || ecuBit == null) return !confirmedVehicleOnly;
+        return ecuInit == null || isSupportedParameter(ecuInit, ecuByteIndex, ecuBit);
+    }
     private String version;
     private String protocolId;
     private Transport transport;
@@ -333,7 +352,8 @@ public final class LoggerDefinitionHandler extends DefaultHandler {
                             dependencies.add(ecuDataMap.get(refid));
                         }
                     }
-                    if (dependsList.size() == dependencies.size()) {
+                    if (matchesVehicleTarget() && (!confirmedVehicleOnly || !dependsList.isEmpty())
+                            && dependsList.size() == dependencies.size()) {
                         EcuParameter param = new EcuDerivedParameterImpl(id, name, desc,
                                 dependencies.toArray(new EcuData[dependencies.size()]),
                                 derivedConvertorList.toArray(new EcuDerivedParameterConvertor[derivedConvertorList.size()]));
@@ -341,8 +361,7 @@ public final class LoggerDefinitionHandler extends DefaultHandler {
                         ecuDataMap.put(param.getId(), param);
                     }
                 } else {
-                    if (ecuByteIndex == null || ecuBit == null || ecuInit == null || isSupportedParameter(ecuInit,
-                            ecuByteIndex, ecuBit)) {
+                    if (supportedStandardChannel()) {
                         if (convertorList.isEmpty()) {
                             convertorList.add(new EcuParameterConvertorImpl());
                         }
@@ -364,7 +383,7 @@ public final class LoggerDefinitionHandler extends DefaultHandler {
                             replaceMap, conversionGauge));
                 }
             } else if (TAG_ECUPARAM.equals(qName)) {
-                if (ecuInit != null && ecuAddressMap.containsKey(ecuInit.getEcuId())) {
+                if (matchesVehicleTarget() && ecuInit != null && ecuAddressMap.containsKey(ecuInit.getEcuId())) {
                     if (convertorList.isEmpty()) {
                         convertorList.add(new EcuParameterConvertorImpl());
                     }
@@ -383,8 +402,7 @@ public final class LoggerDefinitionHandler extends DefaultHandler {
                 }
                 addrStrings.clear();
             } else if (TAG_SWITCH.equals(qName)) {
-                if (ecuByteIndex == null || ecuBit == null || ecuInit == null || isSupportedParameter(ecuInit,
-                        ecuByteIndex, ecuBit)) {
+                if (supportedStandardChannel()) {
                     EcuDataConvertor[] convertors =
                             new EcuDataConvertor[]{new EcuSwitchConvertorImpl(
                                     address.getBit(),
@@ -462,7 +480,7 @@ public final class LoggerDefinitionHandler extends DefaultHandler {
     private boolean isSupportedParameter(EcuInit ecuInit, String ecuByteIndex, String ecuBit) {
         byte[] ecuInitBytes = ecuInit.getEcuInitBytes();
         int index = Integer.parseInt(ecuByteIndex);
-        if (index < ecuInitBytes.length) {
+        if (ecuInitBytes != null && index >= 0 && index < ecuInitBytes.length) {
             byte[] bytes = new byte[1];
             System.arraycopy(ecuInitBytes, index, bytes, 0, 1);
             return (bytes[0] & 1 << Integer.parseInt(ecuBit)) > 0;

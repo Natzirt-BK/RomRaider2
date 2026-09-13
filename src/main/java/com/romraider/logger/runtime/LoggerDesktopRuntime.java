@@ -262,7 +262,9 @@ public final class LoggerDesktopRuntime implements EcuRelatedMessageListener,
                 || !definitionSource.path.equals(new File(settings.getLoggerDefinitionFilePath()).toPath().toAbsolutePath().normalize().toString()))
             throw new IllegalStateException("Load a logger definition before transferring a setup");
         Map<String, LoggerChannel> catalog = new LinkedHashMap<>();
-        for (LoggerChannel channel : channels.getChannels()) catalog.put(channel.getParameterId(), channel);
+        // Offline profiles retain their selections even while the vehicle-only
+        // presentation catalog is waiting for identification.
+        for (LoggerChannel channel : channelSnapshot(false)) catalog.put(channel.getParameterId(), channel);
         List<LoggerChannel> selected = new ArrayList<>();
         for (String id : selectedIds) selected.add(catalog.get(id));
         return new LoggerSetupSnapshot(this, channelRevision, definitionSource, loadedProtocol, selected);
@@ -785,9 +787,13 @@ public final class LoggerDesktopRuntime implements EcuRelatedMessageListener,
             try {
                 LoggerDefinitionSource source = LoggerDefinitionSource.read(definitionPath);
                 EcuDataLoaderImpl loader = new EcuDataLoaderImpl();
-                loader.loadConfigForDesktop(source.path, source.bytes(),
-                        settings.getLoggerProtocol(),
-                        settings.getFileLoggingControllerSwitchId(), ecuInit);
+                if ("SSM".equalsIgnoreCase(settings.getLoggerProtocol()) && ecuInit != null) {
+                    String module = clean(settings.getTargetModule());
+                    int target = "ecu".equalsIgnoreCase(module) ? 1 : "tcu".equalsIgnoreCase(module) ? 2 : 0;
+                    loader.loadConfirmedConfigForDesktop(source.path, source.bytes(), settings.getLoggerProtocol(),
+                            settings.getFileLoggingControllerSwitchId(), ecuInit, target);
+                } else loader.loadConfigForDesktop(source.path, source.bytes(),
+                        settings.getLoggerProtocol(), settings.getFileLoggingControllerSwitchId(), ecuInit);
                 parameters.addAll(loader.getEcuParameters());
                 if (dmInit != null) parameters.addAll(dmInit.getEcuParams());
                 switches.addAll(loader.getEcuSwitches());
@@ -984,15 +990,21 @@ public final class LoggerDesktopRuntime implements EcuRelatedMessageListener,
 
     private void publishChannels() {
         channelRevision++;
+        channels.replaceChannels(channelSnapshot(true));
+    }
+
+    private List<LoggerChannel> channelSnapshot(boolean visibleOnly) {
         List<LoggerChannel> catalog = new ArrayList<LoggerChannel>();
         for (LoggerData data : dataById.values()) {
+            if (visibleOnly && "SSM".equalsIgnoreCase(loadedProtocol) && ecuInit == null
+                    && !(data instanceof ExternalData)) continue;
             EcuDataConvertor convertor = data.getSelectedConvertor();
             catalog.add(new LoggerChannel(data.getId(), data.getName(),
                     convertor == null ? "" : convertor.getUnits(),
                     kind(data), selectedIds.contains(data.getId()),
                     unitOptions(data), com.romraider.logger.api.LoggerConversionIdentity.of(convertor)));
         }
-        channels.replaceChannels(catalog);
+        return catalog;
     }
 
     private static List<LoggerChannelUnitOption> unitOptions(LoggerData data) {

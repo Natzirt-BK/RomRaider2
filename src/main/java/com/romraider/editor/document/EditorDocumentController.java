@@ -74,6 +74,44 @@ public final class EditorDocumentController implements AutoCloseable {
 
     public EditorDocumentSession getSession() { return session; }
 
+    /** Save a converted snapshot, retaining the original document and its history. */
+    public synchronized CompletableFuture<File> exportConverted(Rom rom, File target, boolean expand) {
+        requireOpen();
+        if (!owns(rom) || isBusy(rom))
+            return CompletableFuture.failedFuture(new IllegalStateException("ROM is unavailable or busy"));
+        pendingSaves.add(rom);
+        try {
+            int expected = expand ? com.romraider.Settings.SIXTEENBIT_SMALL_SIZE
+                    : com.romraider.Settings.SIXTEENBIT_LARGE_SIZE;
+            if (rom.getBinary() == null || rom.getBinary().length != expected)
+                throw new IllegalArgumentException("Conversion requires a " + expected / 1024 + " KB image");
+            for (EditorDocument document : session.snapshot().getDocuments()) {
+                File source = document.getRom().getFullFileName();
+                if (source != null && (source.getCanonicalFile().equals(target.getCanonicalFile())
+                        || (source.exists() && target.exists()
+                        && java.nio.file.Files.isSameFile(source.toPath(), target.toPath())))) {
+                    throw new IOException("Choose a separate output file; an open ROM must not be overwritten by conversion.");
+                }
+            }
+            byte[] output = com.romraider.editor.io.RomImageConversion.convert(rom.saveFile().clone(), expand);
+            return CompletableFuture.supplyAsync(() -> {
+                try { files.exportCopy(target, output); return target; }
+                catch (IOException failure) { throw new java.util.concurrent.CompletionException(failure); }
+            }, work).whenComplete((result, failure) -> {
+                try {
+                    RomRecoveryService.getInstance().schedule(rom);
+                    session.refresh(rom);
+                } finally {
+                    synchronized (this) { pendingSaves.remove(rom); }
+                }
+            }).copy();
+        } catch (Exception failure) {
+            pendingSaves.remove(rom);
+            RomRecoveryService.getInstance().schedule(rom);
+            return CompletableFuture.failedFuture(failure);
+        }
+    }
+
     public CompletableFuture<RomLoadResult> open(File image,
             RomLoadInteraction interaction) {
         requireOpen();

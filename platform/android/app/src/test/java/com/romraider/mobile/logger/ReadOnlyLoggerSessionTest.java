@@ -224,7 +224,12 @@ public class ReadOnlyLoggerSessionTest {
             PortableLoggerDefinition imported = PortableMut2LogConfigReader.read(
                     new ByteArrayInputStream(config.getBytes(StandardCharsets.UTF_8)));
             PortableLoggerDefinition definition = new PortableLoggerDefinition("test",
-                    definitionProtocol, imported.parameters());
+                    definitionProtocol, "SSM".equals(definitionProtocol)
+                            ? imported.parameters().stream().map(p -> new PortableLoggerParameter(
+                                    p.getId(), p.getName(), p.getDescription(), p.getTarget(),
+                                    Map.of(ReadOnlyMut2Protocol.GENERIC_ECU_ID, p.addressesFor(null)),
+                                    p.getDependencies(), p.getConversions())).toList()
+                            : imported.parameters());
             PortableLoggerProfile profile = new PortableLoggerProfile(profileProtocol,
                     List.of(new PortableLoggerProfile.Selection("RPM", imported.parameters().get(0).getConversions().get(0).getUnits()),
                             new PortableLoggerProfile.Selection("Battery", imported.parameters().get(1).getConversions().get(0).getUnits())), List.of());

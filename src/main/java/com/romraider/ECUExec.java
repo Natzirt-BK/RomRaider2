@@ -93,7 +93,7 @@ public class ECUExec {
 
     private static void startExecCommunicationDaemon() {
         Thread listener = new Thread(ECUExec::startExecCommunication,
-                "RomRaider single-instance listener");
+                "RomRaider2 single-instance listener");
         listener.setDaemon(true);
         listener.start();
     }

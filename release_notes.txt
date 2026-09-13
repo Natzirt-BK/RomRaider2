@@ -1,8 +1,21 @@
-RomRaider2 ECU Studio 1.1.10
+RomRaider2 ECU Studio 1.1.11
 ================================
 
 Release candidate. For available packages and qualification details:
 https://github.com/Natzirt-BK/RomRaider2/releases
+
+What changed for 1.1.11
+---------------------
+
+- Desktop and Android SSM catalogs require capability flags, matching ECU
+  mappings, or confirmed calculation dependencies. Unverified generic channels
+  are excluded; discovered DimeMod channels remain available.
+- Desktop startup no longer shares original RomRaider's single-instance port.
+- Windows/Linux editor restores Refresh and 160/192 KB Convert Image choices,
+  exporting a separate copy and protecting open ROM files from replacement.
+- Fixed mouse opening of multiple DTC calibrations with identical values.
+
+Physical vehicle acceptance remains pending. MUT-II filtering is unchanged.
 
 What changed for 1.1.10
 ----------------------

@@ -49,6 +49,19 @@ class FxLoggerSetupTransferTest {
         }
     }
 
+    @Test void offlineProfilesRemainIntactUntilConfirmedChannelsAppear() throws Exception {
+        try (Fixture fixture = new Fixture()) {
+            assertTrue(fixture.runtime.getWorkspaceContext().getChannels().getChannels().isEmpty());
+            fixture.apply(ordered("P2", "mV"));
+            assertEquals(List.of("P2"), fixture.selected());
+            EcuInitCallback callback = ecuCallback(fixture.runtime);
+            FxTestRuntime.run(() -> callback.callback(syntheticEcu("1111111111")));
+            assertEquals(3, fixture.runtime.getWorkspaceContext().getChannels().getChannels().size());
+            assertEquals(List.of("P2"), fixture.selected());
+            assertEquals("mV", fixture.runtime.captureChannelSetup().selectedChannels().getFirst().getUnits());
+        }
+    }
+
     @Test void switchMenuMetadataContainsOnlyDefinedSwitchesForTheChosenProtocol() throws Exception {
         try (Fixture fixture = new Fixture()) {
             var catalog = FxLoggerConnectionChoices.read(fixture.definition.toString());
@@ -606,13 +619,13 @@ class FxLoggerSetupTransferTest {
                         "changed", "SSM", invalid[1], invalid[2], !automatic, () -> fail("Invalid setup must not be persisted")));
                 assertEquals(definition, s.getLoggerDefinitionFilePath()); assertEquals(port, s.getLoggerPort());
                 assertEquals(target, s.getTargetModule()); assertEquals(automatic, s.getAutoConnectOnStartup());
-                assertEquals(3, fixture.runtime.getWorkspaceContext().getChannels().getChannels().size());
+                assertEquals(0, fixture.runtime.getWorkspaceContext().getChannels().getChannels().size());
             }
             FxTestRuntime.run(() -> {
                 assertThrows(RuntimeException.class, () -> fixture.runtime.applySetup(definition, s.getLoggerOutputDirPath(),
                         "changed", "SSM", "ISO9141", target, !automatic, () -> { throw new IllegalStateException("Synthetic disk failure"); }));
                 assertEquals(port, s.getLoggerPort()); assertEquals(automatic, s.getAutoConnectOnStartup());
-                assertEquals(3, fixture.runtime.getWorkspaceContext().getChannels().getChannels().size());
+                assertEquals(0, fixture.runtime.getWorkspaceContext().getChannels().getChannels().size());
                 assertEquals(List.of("P2"), fixture.selected());
                 assertEquals("mV", fixture.runtime.captureChannelSetup().selectedChannels().getFirst().getUnits());
             });
@@ -658,7 +671,7 @@ class FxLoggerSetupTransferTest {
                 assertTrue(fixture.settings.getAutoConnectOnStartup());
                 assertThrows(IllegalStateException.class, fixture.runtime::requireConfigurationEditable,
                         "Startup preference must not stop or replace the worker");
-                assertEquals(3, fixture.runtime.getWorkspaceContext().getChannels().getChannels().size());
+                assertEquals(0, fixture.runtime.getWorkspaceContext().getChannels().getChannels().size());
             } finally {
                 worker.set(controller, previousWorker);
                 fixture.settings.setAutoConnectOnStartup(original);
@@ -695,10 +708,10 @@ class FxLoggerSetupTransferTest {
     private static final String XML = "<logger version='370'><protocols><protocol id='SSM' baud='4800' databits='8' stopbits='1' parity='0' connect_timeout='1000' send_timeout='1000'>"
             + "<transports><transport id='ISO9141' name='K-Line' desc='Synthetic'><module id='ecu' address='10' tester='F0' desc='Engine' fastpoll='true'/></transport></transports>"
             + "<parameters>" + parameter("P1", "0x000001") + parameter("P2", "0x000002") + "</parameters>"
-            + "<switches><switch id='S1' name='Flag' desc='Synthetic' byte='0x000003' bit='0' units='On/Off' target='1'/></switches>"
+            + "<switches><switch id='S1' name='Flag' desc='Synthetic' byte='0x000003' bit='0' ecubyteindex='8' ecubit='0' units='On/Off' target='1'/></switches>"
             + "</protocol></protocols></logger>";
     private static String parameter(String id, String address) {
-        return "<parameter id='" + id + "' name='Same name' desc='Synthetic' target='1'><address>" + address
+        return "<parameter id='" + id + "' name='Same name' desc='Synthetic' target='1' ecubyteindex='8' ecubit='0'><address>" + address
                 + "</address><conversions><conversion units='V' expr='x' format='0'/><conversion units='mV' expr='x*1000' format='0'/></conversions></parameter>";
     }
 
@@ -850,7 +863,8 @@ class FxLoggerSetupTransferTest {
             FxTestRuntime.run(() -> fixture.transfer.load(source.toFile())); await(fixture.transfer);
             assertEquals(List.of("P1"), fixture.selected());
             fixture.accept.set(true);
-            fixture.onReview.set(() -> fixture.runtime.getWorkspaceContext().getChannels().setSelected("P2", true));
+            fixture.onReview.set(() -> fixture.runtime.applyChannelSetup(
+                    fixture.runtime.captureChannelSetup(), ordered("P1", "V", "P2", "V")));
             FxTestRuntime.run(() -> fixture.transfer.load(source.toFile())); await(fixture.transfer);
             assertEquals(List.of("P1", "P2"), fixture.selected());
             assertTrue(fixture.status.get().contains("changed"));
@@ -871,7 +885,7 @@ class FxLoggerSetupTransferTest {
             try {
                 FxTestRuntime.run(() -> {
                     fixture.transfer.load(source.toFile());
-                    fixture.runtime.getWorkspaceContext().getChannels().setSelected("P2", true);
+                    fixture.runtime.applyChannelSetup(fixture.runtime.captureChannelSetup(), ordered("P2", "V"));
                 });
             } finally { release.countDown(); }
             await(fixture.transfer);
@@ -1148,7 +1162,7 @@ class FxLoggerSetupTransferTest {
     private static EcuInit syntheticEcu(String id) {
         return new EcuInit() {
             public String getEcuId() { return id; }
-            public byte[] getEcuInitBytes() { return new byte[128]; }
+            public byte[] getEcuInitBytes() { byte[] bytes = new byte[128]; bytes[8] = 1; return bytes; }
         };
     }
     private static DmInit syntheticDime() {
@@ -1205,7 +1219,7 @@ class FxLoggerSetupTransferTest {
                     reviews.incrementAndGet(); onReview.get().run(); return accept.get();
                 });
             });
-            assertEquals(3, runtime.getWorkspaceContext().getChannels().getChannels().size());
+            assertEquals(0, runtime.getWorkspaceContext().getChannels().getChannels().size());
         }
         void apply(Map<String, String> selections) throws Exception {
             FxTestRuntime.run(() -> assertTrue(runtime.applyChannelSetup(runtime.captureChannelSetup(), selections)));
