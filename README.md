@@ -10,15 +10,15 @@ Lancer Evolution. Built on RomRaider and DimeMod, with desktop and Android inter
 RomRaider2 is in development. **Builds are release candidates; a stable
 release is not available yet.**
 
-Version **1.1.9** improves the Android logging workflow and desktop logger controls.
-The current candidate is **1.1.9 RC1**. See the
-[package qualification record](docs/RELEASE_1_1_9_QUALIFICATION.md) for completed
+Version **1.1.10** refines mounted gauges, recording controls and desktop setup.
+The source candidate is **1.1.10 RC1**. See the
+[package qualification record](docs/RELEASE_1_1_10_QUALIFICATION.md) for completed
 checks and remaining hardware testing.
 
 ## Downloads
 
 [Download the current candidate](https://github.com/Natzirt-BK/RomRaider2/releases)
-· [1.1.9 release notes](docs/RELEASE_1_1_9.md)
+· [1.1.10 release notes](docs/RELEASE_1_1_10.md)
 
 | Platform | Package |
 | --- | --- |
@@ -49,13 +49,14 @@ sequence. See [versioning](docs/RELEASE_VERSIONING.md).
 Platform features differ. Read the [Android guide](docs/ANDROID_PREVIEW_TESTING.md)
 before connecting an OpenPort 2.0 through a USB host/OTG adapter.
 
-### New in 1.1.9
+### New in 1.1.10
 
-Android adds a workspace menu, separate bottom START/STOP buttons, clearer button
-feedback, a dedicated Review screen and a save prompt after recording. Desktop
-logger controls add linked setup selectors, XML profile loading, recording
-preferences and elapsed time, alongside fullscreen recording controls and
-definition/profile reliability fixes.
+Android Gauges adds green START/red STOP controls and tighter fullscreen layouts.
+Desktop Logger adds a recording-switch selector, a main-window log-name field,
+detected serial ports and troubleshooting controls. Logger Setup preserves
+fullscreen/maximized window size. Desktop and Android CSV values use two decimal
+places while live readings retain full precision. Desktop DimeMod reconnects
+verify fresh identification/discovery metadata.
 
 The [25 gauge styles](docs/GAUGE_DESIGN.md), independent 1–6-gauge layouts,
 [background recording](docs/ANDROID_BACKGROUND_RECORDING.md) and
