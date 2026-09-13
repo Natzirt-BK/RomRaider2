@@ -3,6 +3,7 @@ package com.romraider.portable;
 
 import com.romraider.portable.gauge.GaugeFaceRenderer;
 import com.romraider.portable.gauge.GaugeReferenceScale;
+import com.romraider.portable.gauge.MountedGaugePresentation;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -28,6 +29,7 @@ public final class PortableGaugeCheck {
             GaugeFaceRenderer.draw(seamless, style, reading(12.7, -15, 30), GaugeFaceRenderer.Presentation.SEAMLESS);
             require(surface.chrome > 0 && seamless.chrome == 0, "Seamless gauge retains card chrome: " + style);
             require(surface.labels.equals(seamless.labels), "Seamless gauge lost reading/status labels: " + style);
+            mounted(style);
             for (double value : new double[] {Double.NaN, Double.POSITIVE_INFINITY,
                     Double.NEGATIVE_INFINITY, -100, 0, 100, Double.MAX_VALUE}) {
                 for (double[] range : new double[][] {{-15, 30}, {0, 0}, {10, -10},
@@ -61,6 +63,35 @@ public final class PortableGaugeCheck {
         System.out.println("Portable gauge checks passed: " + faces.size()
                 + " faces, " + faces.size() * 70 + " card/seamless edge-case renders, unit-aware scales");
     }
+    private static void mounted(GaugeFaceRenderer.Style style) {
+        for (String state : new String[] {"LIVE", "SIMULATED", "NO RECENT DATA", "STOPPED"}) {
+            for (boolean warning : new boolean[] {false, true}) {
+                boolean unavailable = state.equals("NO RECENT DATA") || state.equals("STOPPED");
+                var reading = new GaugeFaceRenderer.Reading("Synthetic boost", "12.7", "psi",
+                        unavailable ? Double.NaN : 12.7, -15, 30, 18.4, state, "REFERENCE SCALE", warning);
+                Recording compact = new Recording(MountedGaugePresentation.viewport(style));
+                MountedGaugePresentation.draw(compact, style, reading);
+                require(compact.chrome == 0, "Mounted card chrome: " + style);
+                require(!compact.labels.contains("RR2") && !compact.labels.contains("REFERENCE SCALE")
+                        && compact.labels.stream().noneMatch(label -> label.startsWith("PEAK ")),
+                        "Mounted redundant labels: " + style);
+                require(compact.labels.contains("SYNTHETIC BOOST") && (unavailable || compact.labels.contains("psi")),
+                        "Mounted channel/units missing: " + style);
+                require(compact.labels.contains(unavailable ? state : warning
+                        ? state.equals("SIMULATED") ? "SIMULATED • LIMIT WARNING" : "LIMIT WARNING" : state),
+                        "Mounted data state/warning missing: " + style);
+                if (unavailable) require(compact.labels.contains("—"), "Mounted stale numeric reading: " + style);
+            }
+        }
+        var bounds = MountedGaugePresentation.viewport(style);
+        require(bounds.width > 0 && bounds.height > 0 && bounds.width < 320 && bounds.height < 250,
+                "Mounted viewport did not tighten: " + style);
+        if (style == GaugeFaceRenderer.Style.LASER_LED) {
+            double oldScale = Math.min(945.0 / 320, 1024.0 / 250);
+            double newScale = Math.min(945.0 / bounds.width, 1024.0 / bounds.height);
+            require(newScale > oldScale * 1.4, "Screenshot's two portrait dials did not materially enlarge");
+        }
+    }
     private static void motion() {
         com.romraider.portable.gauge.GaugeMotion motion = new com.romraider.portable.gauge.GaugeMotion();
         motion.update(100, 0);
@@ -93,6 +124,14 @@ public final class PortableGaugeCheck {
         if (!condition) throw new AssertionError(message);
     }
     private static final class Recording implements GaugeFaceRenderer.Surface {
+        final MountedGaugePresentation.Viewport bounds;
+        Recording() { this(null); }
+        Recording(MountedGaugePresentation.Viewport bounds) { this.bounds = bounds; }
+        private void point(double x, double y) {
+            if (bounds != null) require(x >= bounds.left - .01 && y >= bounds.top - .01
+                    && x <= bounds.left + bounds.width + .01 && y <= bounds.top + bounds.height + .01,
+                    "Mounted drawing outside compact viewport: " + x + ", " + y);
+        }
         final StringBuilder commands = new StringBuilder();
         final StringBuilder geometry = new StringBuilder();
         final java.util.List<String> labels = new java.util.ArrayList<>();
@@ -102,27 +141,41 @@ public final class PortableGaugeCheck {
             geometry.append(java.util.Arrays.toString(values));
         }
         public void rect(double x, double y, double w, double h, double r, int color) {
+            point(x, y); point(x + w, y + h);
             coordinates(x,y,w,h,r); require(w >= 0 && h >= 0 && r >= 0, "Negative rectangle");
             if (x < 5 && y < 5 && w > 310 && (h > 240 || h <= 30)) chrome++;
             commands.append("rect").append(color).append(x).append(y);
         }
         public void circle(double x, double y, double r, int color) {
+            point(x - r, y - r); point(x + r, y + r);
             coordinates(x,y,r); require(r >= 0, "Negative radius"); commands.append("circle").append(r);
         }
         public void line(double x, double y, double xx, double yy, double w, int color) {
+            point(x - w / 2, y - w / 2); point(x + w / 2, y + w / 2);
+            point(xx - w / 2, yy - w / 2); point(xx + w / 2, yy + w / 2);
             coordinates(x,y,xx,yy,w); commands.append("line").append(x).append(y);
             if (y == yy && xx - x >= 200 && (y == 31 || y == 34 || y == 227)) chrome++;
         }
         public void text(String value, double x, double y, double size, int color, int align, double width, boolean mono) {
+            if (!value.isEmpty()) {
+                point(align < 0 ? x : align > 0 ? x - width : x - width / 2, y - size);
+                point(align < 0 ? x + width : align > 0 ? x : x + width / 2, y + size * .25);
+            }
             coordinates(x,y,size,width); require(value != null && size > 0 && width > 0, "Invalid text");
             commands.append(value);
             labels.add(value);
         }
         public void radialCircle(double x, double y, double radius, int center, int edge) {
+            point(x - radius, y - radius); point(x + radius, y + radius);
             coordinates(x, y, radius); require(radius > 0, "Invalid radial fill");
             commands.append("gradient").append(radius);
         }
         public void path(double[] path, int color) {
+            for (int i = 0; i < path.length;) {
+                int command = (int) path[i++];
+                int points = command == 3 ? 0 : command == 2 ? 3 : 1;
+                for (int p = 0; p < points; p++) { point(path[i], path[i + 1]); i += 2; }
+            }
             coordinates(path); commands.append("path").append(path.length).append(color);
         }
     }

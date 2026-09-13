@@ -1,7 +1,9 @@
 # Read-only adapter qualification
 
-Development version **1.1.6**. The published 1.1.5 release does not have this
-test window. Offline tests are not evidence of vehicle compatibility.
+The test window is included in desktop 1.1.9. Current development adds a
+detected-port dropdown with device descriptions, Refresh and manual entry;
+that selector is not yet in the published packages. Offline tests and port
+enumeration are not evidence of vehicle compatibility.
 
 ## Scope
 
@@ -42,7 +44,14 @@ automatically reconnect. A new test creates a new connection.
    **Logger → Read-only adapter test…**. Select the adapter's explicit OS
    serial port, its configured host baud, and Automatic or the known standard
    OBD-II protocol. The default 38,400 baud is a starting selection, not a
-   detected value. There is no baud probing or port scanning.
+   detected value. In current development, the dropdown lists OS-reported ports
+   when the window opens; **Refresh** repeats that enumeration after plugging in
+   an adapter. Descriptions help identify devices but do not prove compatibility.
+   A selected/custom address is retained across refresh, even if the port is no
+   longer listed. No port is automatically chosen. Manual entry remains available
+   when enumeration is empty or fails. There is no baud probing, port opening or
+   adapter command until **Start read-only test** is pressed. The published
+   version requires entering the port address manually.
 4. Choose a **new** CSV filename, 30 or 60 seconds and the adapter confirmation
    checkbox. Start the read-only test. Existing files and symbolic-link paths
    are refused before the adapter is opened.

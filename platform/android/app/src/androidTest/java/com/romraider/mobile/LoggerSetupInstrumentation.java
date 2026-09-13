@@ -61,6 +61,7 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
             else if (phase.equals("gauge-setup")) verifyGaugeSetup();
             else if (phase.equals("mounted-fullscreen")) verifyMountedFullScreen();
             else if (phase.equals("mounted-layouts")) verifyMountedLayouts();
+            else if (phase.equals("mounted-compact")) verifyCompactMountedGauges();
             else if (phase.equals("seamless-gauges")) verifySeamlessGauges();
             else if (phase.equals("gauge-rendering")) verifyGaugeRenderingCache();
             else if (phase.equals("live-gauges")) verifyReadOnlySessionViewSwitch();
@@ -1057,6 +1058,48 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
             }
         });
         System.out.println("PASS: all " + MobileGaugeTheme.values().length + " native gauge styles remove outer card pixels in fullscreen and restore them on exit.");
+    }
+
+    private void verifyCompactMountedGauges() throws Exception {
+        invoke("showLoggerGaugeDemo", new Class<?>[0]);
+        invoke("showGaugesOnly", new Class<?>[0]);
+        invoke("setMountedGaugeCount", new Class<?>[]{int.class}, 2);
+        invoke("setMountedFullScreen", new Class<?>[]{boolean.class}, true);
+        File renders = getTargetContext().getExternalFilesDir("mounted-compact");
+        check(renders != null && (renders.isDirectory() || renders.mkdirs()), "Cannot create compact captures");
+        for (MobileGaugeTheme theme : new MobileGaugeTheme[]{MobileGaugeTheme.LASER_LED,
+                MobileGaugeTheme.RR2_CLASSIC, MobileGaugeTheme.STI_NIGHT, MobileGaugeTheme.PRISM_CASSETTE}) {
+            invoke("setLoggerGaugeTheme", new Class<?>[]{MobileGaugeTheme.class}, theme);
+            for (int orientation : new int[]{android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT,
+                    android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE}) {
+                rotateMountedDisplay(orientation);
+                CountDownLatch frame = new CountDownLatch(1);
+                runOnMainSync(() -> {
+                    ((android.view.View) fieldUnchecked("gaugesControls")).setVisibility(android.view.View.GONE);
+                    ((android.view.View) fieldUnchecked("loggerGaugeGrid")).postOnAnimation(
+                            () -> ((android.view.View) fieldUnchecked("loggerGaugeGrid")).postOnAnimation(frame::countDown));
+                });
+                check(frame.await(5, TimeUnit.SECONDS), "Compact layout did not settle");
+                runOnMainSync(() -> {
+                    android.view.ViewGroup grid = (android.view.ViewGroup) fieldUnchecked("loggerGaugeGrid");
+                    for (int i = 0; i < 2; i++) {
+                        MobileGaugeView view = (MobileGaugeView) grid.getChildAt(i);
+                        check(view.getContentDescription().toString().contains("SIMULATED"), "Compact gauge lost demo identity");
+                        check(view.getWidth() > 0 && view.getHeight() > 0, "Compact gauge has no space");
+                        if (theme == MobileGaugeTheme.LASER_LED) {
+                            var bounds = com.romraider.portable.gauge.MountedGaugePresentation.viewport(theme.instrumentStyle());
+                            double before = Math.min(view.getWidth() / 320.0, view.getHeight() / 250.0);
+                            double after = Math.min(view.getWidth() / bounds.width, view.getHeight() / bounds.height);
+                            check(after > before * 1.05, "Compact dial did not enlarge");
+                        }
+                    }
+                });
+                captureMountedScreenshot(new File(renders, theme.name() + "-" + orientation + ".png"));
+            }
+        }
+        invoke("setMountedFullScreen", new Class<?>[]{boolean.class}, false);
+        check(!screenAwake(), "Compact mode retained keep-awake after exit");
+        System.out.println("PASS: compact circular/legacy/wide gauges in both orientations, larger Laser dials and retained simulation state.");
     }
 
     private void verifyMountedLayouts() throws Exception {

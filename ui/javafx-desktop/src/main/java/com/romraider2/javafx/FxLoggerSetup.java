@@ -31,8 +31,13 @@ import javafx.stage.Window;
 final class FxLoggerSetup {
     private FxLoggerSetup() { }
 
-    static void show(Window owner, LoggerDesktopRuntime runtime,
+    static Stage show(Window owner, LoggerDesktopRuntime runtime,
             Runnable applied) {
+        return show(owner, runtime, applied, new FxSerialPortSelector());
+    }
+
+    static Stage show(Window owner, LoggerDesktopRuntime runtime,
+            Runnable applied, FxSerialPortSelector port) {
         Settings settings = runtime.getSettings();
         Stage stage = new Stage();
         stage.initOwner(owner);
@@ -57,7 +62,14 @@ final class FxLoggerSetup {
                     "Select log output directory", path(output.getText()));
             if (selected != null) output.setText(selected.getAbsolutePath());
         });
-        TextField port = field(settings.getLoggerPort());
+        String originalPort = settings.getLoggerPort();
+        port.ports.setValue(originalPort == null ? "" : originalPort);
+        port.ports.setId("logger-serial-port");
+        boolean j2534 = settings.getJ2534Device() != null && !settings.getJ2534Device().isEmpty();
+        if (j2534) {
+            port.setDisable(true);
+            port.status.setText("J2534 connects directly to the selected adapter; no serial port is needed.");
+        }
         ComboBox<String> protocol = connectionSelector("Select protocol",
                 "Protocols declared by the logger definition with an implementation in RR2. Select the protocol for your vehicle.");
         ComboBox<String> transport = connectionSelector("Select transport",
@@ -81,7 +93,7 @@ final class FxLoggerSetup {
                 browseDefinition);
         form.addRow(1, new Label("Log output directory"), output,
                 browseOutput);
-        form.addRow(2, new Label("Port"), port);
+        form.addRow(2, new Label("Serial port"), port);
         form.addRow(3, new Label("Protocol"), protocol);
         form.addRow(4, new Label("Transport"), transport);
         form.addRow(5, new Label("Target module"), target);
@@ -93,6 +105,7 @@ final class FxLoggerSetup {
         }
         GridPane.setHgrow(definition, Priority.ALWAYS);
         GridPane.setHgrow(output, Priority.ALWAYS);
+        GridPane.setHgrow(port, Priority.ALWAYS);
 
         Label heading = new Label("Logger connection and capture");
         heading.getStyleClass().add("title");
@@ -140,12 +153,12 @@ final class FxLoggerSetup {
         connectionTab.setClosable(false); captureTab.setClosable(false);
         javafx.scene.control.TabPane setupTabs = new javafx.scene.control.TabPane(connectionTab, captureTab);
         definition.textProperty().addListener((o, before, after) -> choices.refresh());
-        stage.setOnHidden(event -> choices.close());
+        stage.setOnHidden(event -> { choices.close(); port.close(); });
         save.setDefaultButton(true);
         save.setOnAction(event -> {
             try {
                 runtime.applySetup(definition.getText(), output.getText(),
-                        port.getText(), protocol.getValue(), transport.getValue(), target.getValue(),
+                        j2534 ? originalPort : port.address(), protocol.getValue(), transport.getValue(), target.getValue(),
                         autoConnect.isSelected(), new LoggerCaptureOptions(!fast.isDisabled() && fast.isSelected(),
                                 controlSwitch.isSelected(), absolute.isSelected(), numbers.isSelected(), logName.getText()),
                         () -> SettingsManager.save(settings));
@@ -165,6 +178,8 @@ final class FxLoggerSetup {
         stage.setScene(scene);
         FxWindowPlacement.show(stage);
         choices.refresh();
+        port.scan();
+        return stage;
     }
 
     private static CheckBox option(String text, String id, boolean selected, String help) {

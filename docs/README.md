@@ -16,6 +16,7 @@
 - [Desktop editor controls](DESKTOP_EDITOR_COMMANDS.md)
 - [Logger setup transfer](PORTABLE_LOGGER_SETUP.md)
 - [Desktop XML logger profiles](DESKTOP_LOGGER_PROFILES.md)
+- [Desktop port selection and troubleshooting](DESKTOP_LOGGER_USABILITY.md)
 - [Android Logger layout](ANDROID_LOGGER_LAYOUT.md), [profiles](ANDROID_LOGGER_PROFILES.md)
   and [CSV review](ANDROID_CSV_REVIEW.md)
 - [Saved-log fuel analysis](FUEL_LOG_ANALYSIS.md)

@@ -20,6 +20,18 @@ public final class GaugeDashboardLayout {
         if (width < 0 || height < 0 || count < 0 || count > 6 || gap < 0
                 || !Double.isFinite(faceAspect) || faceAspect <= 0)
             throw new IllegalArgumentException("Invalid gauge viewport");
+        double[] aspects = new double[count];
+        java.util.Arrays.fill(aspects, faceAspect);
+        return fit(width, height, aspects, gap);
+    }
+
+    /** Preserve channel order while fitting mixed round and wide instruments. */
+    public static List<Tile> fit(int width, int height, double[] faceAspects, int gap) {
+        if (width < 0 || height < 0 || faceAspects == null || faceAspects.length > 6 || gap < 0)
+            throw new IllegalArgumentException("Invalid gauge viewport");
+        for (double aspect : faceAspects) if (!Double.isFinite(aspect) || aspect <= 0)
+            throw new IllegalArgumentException("Invalid gauge aspect");
+        int count = faceAspects.length;
         if (count == 0) return Collections.emptyList();
         gap = Math.min(gap, Math.min(width, height) / (count * 2));
         List<Tile> best = Collections.emptyList();
@@ -37,6 +49,7 @@ public final class GaugeDashboardLayout {
                     int bottom = (int) ((long) (row + 1) * height / rows) - gap;
                     Tile tile = new Tile(left, top, Math.max(0, right - left), Math.max(0, bottom - top));
                     candidate.add(tile);
+                    double faceAspect = faceAspects[candidate.size() - 1];
                     double fittedHeight = Math.min(tile.height, tile.width / faceAspect);
                     area += fittedHeight * fittedHeight * faceAspect;
                 }

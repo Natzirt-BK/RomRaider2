@@ -42,6 +42,7 @@ dependencies {
     testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.14.0")
     testImplementation(files(romraiderJar))
     testImplementation(files("../../lib/common/jSerialComm-2.11.4.jar"))
+    testImplementation(files("../../lib/common/log4j-api-2.26.1.jar", "../../lib/common/log4j-core-2.26.1.jar"))
     testRuntimeOnly(fileTree(rootProject.layout.projectDirectory.dir(
         "lib/common")) { include("*.jar") })
 }

@@ -40,6 +40,15 @@ restores the regular cards without replacing gauge instances or the recording.
 The same borderless presentation is used in JavaFX and Compose mounted views;
 their normal workspace theme is restored on exit.
 
+Current Android development additionally tightens the mounted face bounds:
+circular dials use their own narrow viewport instead of the wide card canvas.
+The channel name is centered close to the dial; the outer RR2 badge, peak footer
+and reference/recent-scale caption are omitted. Units, dial artwork and explicit
+SIMULATED, unavailable/stale and warning states remain. Internal peak displays
+that belong to a style remain labeled. Normal setup cards and desktop artwork
+are unchanged. Mixed styles use their individual aspect ratios when choosing a
+layout. This compact presentation is not yet in the published 1.1.9 APK.
+
 Tap anywhere on the mounted gauges or backdrop to reveal an overlay menu with
 **EXIT FULL SCREEN** and recording controls. Development after the published
 1.1.9 / 110414 APK adds green **START** and red **STOP** to both Gauges setup and
@@ -90,11 +99,10 @@ native count picker, checks restoration, and captures 24 actual screenshots.
 The `seamless-gauges` phase checks native transparent outer-edge pixels for all
 25 Android styles and verifies that regular card pixels return on exit.
 The `live-gauges` phase also changes counts during synthetic capture and verifies
-the original session and exported CSV. Portable layout checks cover 108
+the original session and exported CSV. Portable layout checks cover 132
 viewport/count/face combinations, including tiny and zero-sized viewports.
 These checks do not establish real-phone thermal behavior, sunlight readability,
 USB stability or vehicle safety. Set up while parked; do not adjust it while driving.
-This feature is not in the published 1.1.2 packages.
 
 The collection now contains 25 selectable styles, including Apex 24, Ion OLED,
 Loop Drive and Chrono Roll. [Design references and renderer checks](GAUGE_DESIGN.md)

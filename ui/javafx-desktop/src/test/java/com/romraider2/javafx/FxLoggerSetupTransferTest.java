@@ -348,10 +348,37 @@ class FxLoggerSetupTransferTest {
         }
     }
 
+    @Test void setupPortEditsStayLocalUntilSaveAndJ2534DoesNotEnumerateSerialPorts() throws Exception {
+        try (Fixture fixture = new Fixture()) {
+            FxTestRuntime.run(() -> {
+                fixture.settings.setLoggerPort("/dev/serial/by-id/preserved");
+                fixture.settings.setJ2534Device("");
+                var selector = new FxSerialPortSelector(List::of);
+                var stage = FxLoggerSetup.show(null, fixture.runtime, () -> {}, selector);
+                try {
+                    assertEquals("/dev/serial/by-id/preserved", selector.address());
+                    assertFalse(selector.isDisabled());
+                    selector.ports.getEditor().setText("COM42");
+                    assertEquals("/dev/serial/by-id/preserved", fixture.settings.getLoggerPort());
+                } finally { stage.close(); }
+                assertEquals("/dev/serial/by-id/preserved", fixture.settings.getLoggerPort());
+                fixture.settings.setJ2534Device("synthetic-j2534-driver");
+                AtomicInteger scans = new AtomicInteger();
+                var direct = new FxSerialPortSelector(() -> { scans.incrementAndGet(); return List.of(); });
+                var directStage = FxLoggerSetup.show(null, fixture.runtime, () -> {}, direct);
+                try {
+                    assertTrue(direct.isDisabled()); assertEquals(0, scans.get());
+                    assertTrue(direct.status.getText().contains("no serial port"));
+                    assertEquals("/dev/serial/by-id/preserved", direct.address());
+                } finally { directStage.close(); }
+            });
+        }
+    }
+
     @Test void setupButtonsFitDefaultWindowInBothThemes() throws Exception {
         try (Fixture fixture = new Fixture()) {
             FxTestRuntime.run(() -> {
-                FxLoggerSetup.show(null, fixture.runtime, () -> {});
+                FxLoggerSetup.show(null, fixture.runtime, () -> {}, new FxSerialPortSelector(List::of));
                 var stage = (javafx.stage.Stage) javafx.stage.Window.getWindows().stream()
                         .filter(window -> window instanceof javafx.stage.Stage candidate
                                 && "Logger Setup".equals(candidate.getTitle())).findFirst().orElseThrow();
@@ -364,8 +391,8 @@ class FxLoggerSetupTransferTest {
                         var buttons = root.lookupAll(".button").stream()
                                 .filter(javafx.scene.control.Button.class::isInstance)
                                 .map(javafx.scene.control.Button.class::cast)
-                                .filter(button -> List.of("Browse…", "Disconnect").contains(button.getText())).toList();
-                        assertEquals(3, buttons.size());
+                                .filter(button -> List.of("Browse…", "Disconnect", "Refresh").contains(button.getText())).toList();
+                        assertEquals(4, buttons.size());
                         var outputLabel = root.lookupAll(".label").stream()
                                 .filter(javafx.scene.control.Label.class::isInstance)
                                 .map(javafx.scene.control.Label.class::cast)
@@ -1011,6 +1038,7 @@ class FxLoggerSetupTransferTest {
         final Locale oldProcessLocale = Locale.getDefault();
         final String oldDefinition = settings.getLoggerDefinitionFilePath(), oldProfile = settings.getLoggerProfileFilePath(), oldProtocol = settings.getLoggerProtocol();
         final String oldTransport = settings.getTransportProtocol(), oldTarget = settings.getTargetModule();
+        final String oldPort = settings.getLoggerPort(), oldJ2534 = settings.getJ2534Device();
         final String oldControlSwitch = settings.getFileLoggingControllerSwitchId();
         final boolean oldControlActive = settings.isFileLoggingControllerSwitchActive();
         final boolean oldExternalOnly = settings.isLogExternalsOnly();
@@ -1071,6 +1099,7 @@ class FxLoggerSetupTransferTest {
             finally {
                 settings.setLoggerDefinitionFilePath(oldDefinition); settings.setLoggerProfileFilePath(oldProfile); settings.setLoggerProtocol(oldProtocol);
                 settings.setTransportProtocol(oldTransport); settings.setTargetModule(oldTarget); settings.setEcuDefinitionFiles(oldDefinitions);
+                settings.setLoggerPort(oldPort); settings.setJ2534Device(oldJ2534);
                 settings.setFileLoggingControllerSwitchId(oldControlSwitch);
                 settings.setFileLoggingControllerSwitchActive(oldControlActive);
                 settings.setLogExternalsOnly(oldExternalOnly);

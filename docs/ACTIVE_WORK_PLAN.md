@@ -50,24 +50,45 @@ retry/cache rejection into extra discovery writes. See the
 [reconnect contract](DESKTOP_DIMEMOD_RECONNECT.md). Physical acceptance remains
 open; this is observed metadata verification, not whole-firmware authentication.
 
-1. Complete physical acceptance of 1.1.9: phone button feel, portrait/landscape
-   scaling, document-provider exports, adapter/background/reconnect sessions,
-   Steam Deck control sizing and interactive Windows/macOS operation. Signed
-   Android upgrade and export/reopen checks passed in an isolated emulator.
-   Address findings in the next numeric patch release.
-2. Finish desktop definition-installer acceptance across native pickers and
+In-car tests are deferred into the single acceptance session below. Work that
+can be verified offline continues first; deferral does not count as a test pass.
+Custom ECU firmware/ROM-patch development is on hold until RR2 is stable.
+
+Current development adds [serial-port dropdowns and troubleshooting
+controls](DESKTOP_LOGGER_USABILITY.md). These are not yet published. The same
+review records the remaining retained-tool lifecycle issues; no new ECU-write
+controls are exposed by those usability changes.
+
+1. Finish desktop usability and reliability before adding adapter transports:
+   detected serial-port selection/refresh, profile file operations, plugin setup,
+   logger debugging and diagnostic-tool entry points. Review retained diagnostic
+   tools for responsiveness. Do not add controls for unimplemented workflows.
+2. Continue desktop definition-installer acceptance across native pickers and
    platforms. Automated tests cover isolated rollback snapshots, frozen-byte
    validation, initiating logger/configuration ownership and stale completion.
    Linux diagnostic-image checks cover KDE and fallback pickers, confirmation,
    cancellation, validation and shutdown. Physical acceptance remains open.
-3. Review remaining desktop logger parity: serial-port refresh and ELM discovery,
-   plugin setup, logger debugging and
-   diagnostic-tool entry points. Other retained diagnostic tools need a separate
-   responsiveness review. Do not add controls for unimplemented workflows.
-4. Continue analysis and fork integration, including reviewed injector transfer
+3. Run offline regression and package checks, plus device-only acceptance where
+   equipment is available: phone button feel, portrait/landscape scaling,
+   document-provider exports, Steam Deck control sizing and interactive
+   Windows/macOS operation. Signed Android upgrade and export/reopen checks
+   already passed in an isolated emulator; this does not replace physical UI
+   acceptance. Prepare, but do not call untested packages vehicle-qualified.
+4. Complete one consolidated in-car acceptance session, when available:
+   - Forester desktop: identification, DimeMod channels, automatic reconnect,
+     explicit Disconnect/Connect, selection/profile retention and fresh CSV data.
+   - Forester Android: ECU-specific channels, profile edits, START/STOP from Logger
+     and Gauges, fullscreen exit, background recording, save/export and reconnect.
+   - Exercise unplug/stop/restart and review saved timestamps, units, missing
+     values and elapsed time. Use parked tests; do not operate controls driving.
+   - Run the separate [ELM/OBDLink test](ELM_IN_CAR_TEST.md) only if the appropriate
+     adapter is available. OpenPort results do not qualify ELM or KKL hardware.
+   - Record any platform/adapter checks not performed as outstanding. Fix findings,
+     rerun the relevant gates, then publish the next numeric patch.
+5. Continue analysis and fork integration, including reviewed injector transfer
    and external sensors. A fitted injector intercept is not a voltage-dependent
    latency curve; automatic calibration transfer is not planned.
-5. Resume the [adapter roadmap](ADAPTER_COMPATIBILITY_ROADMAP.md) after the earlier
+6. Resume the [adapter roadmap](ADAPTER_COMPATIBILITY_ROADMAP.md) after the earlier
    reliability work. Begin with the existing
    [desktop ELM/OBDLink hardware test](ELM_IN_CAR_TEST.md). Android OBDLink LX/MX
    Bluetooth and KKL USB requests require actual transport/protocol qualification.
@@ -75,7 +96,7 @@ open; this is observed metadata verification, not whole-firmware authentication.
    stream tests, but device selection, permissions and logger-service integration
    remain unimplemented. It is not a selectable adapter. Android ELM support and
    enhanced SSM/MUT-II over ELM are not available.
-6. Review transmission editing and expanded diagnostics using the
+7. Review transmission editing and expanded diagnostics using the
    [5EAT, Atlas and ecuEdit findings](TCU_ATLAS_ECUEDIT_REVIEW_2026-09-08.md).
    Bundled vehicle-specific TCU editing and expanded module diagnostics remain
    future work, not current application capabilities.

@@ -17,6 +17,54 @@ import org.junit.jupiter.api.io.TempDir;
 @EnabledIfEnvironmentVariable(named = "RR2_FX_WINDOW_SMOKE", matches = "1")
 class FxElmAdapterTestSmokeTest {
     @TempDir Path directory;
+    @Test void detectedDeviceLabelsStayOutOfConnectionAddressAndRefreshFitsCompactWindow() throws Exception {
+        FxElmAdapterTest[] dialog = new FxElmAdapterTest[1];
+        java.util.concurrent.atomic.AtomicReference<ElmAdapterTestRun.Configuration> captured = new java.util.concurrent.atomic.AtomicReference<>();
+        CountDownLatch scanned = new CountDownLatch(1);
+        ElmAdapterTestRun[] task = new ElmAdapterTestRun[1];
+        var link = new ElmAdapterTestFixture();
+        try {
+            FxTestRuntime.run(() -> {
+                var selector = new FxSerialPortSelector(() -> {
+                    scanned.countDown();
+                    return java.util.List.of(new FxSerialPortSelector.Port("COM42", "OBDLink synthetic device"));
+                });
+                dialog[0] = new FxElmAdapterTest(null, directory.toFile(), () -> true, config -> {
+                    captured.set(config); return task[0] = new ElmAdapterTestRun(config, (port, baud) -> link.session(), link.recorder());
+                }, selector);
+                dialog[0].show();
+            });
+            assertTrue(scanned.await(3, TimeUnit.SECONDS));
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+            boolean[] ready = new boolean[1];
+            do {
+                FxTestRuntime.run(() -> ready[0] = !dialog[0].portSelector.refresh.isDisabled());
+                if (ready[0]) break;
+                Thread.sleep(10);
+            } while (System.nanoTime() < deadline);
+            assertTrue(ready[0]);
+            FxTestRuntime.run(() -> {
+                assertNull(captured.get()); assertTrue(link.commands.isEmpty());
+                assertEquals("", dialog[0].portSelector.address());
+                dialog[0].stage.setWidth(480); dialog[0].stage.setHeight(650);
+                var root = dialog[0].stage.getScene().getRoot(); root.applyCss(); root.layout();
+                var refresh = dialog[0].portSelector.refresh;
+                assertTrue(refresh.getWidth() + 1 >= refresh.prefWidth(-1));
+                assertTrue(refresh.localToScene(refresh.getBoundsInLocal()).getMaxX() <= dialog[0].stage.getScene().getWidth());
+                dialog[0].port.show(); root.applyCss(); root.layout();
+                var cells = javafx.stage.Window.getWindows().stream().filter(javafx.stage.Window::isShowing)
+                        .flatMap(window -> window.getScene().getRoot().lookupAll(".list-cell").stream())
+                        .filter(javafx.scene.control.ListCell.class::isInstance)
+                        .map(javafx.scene.control.ListCell.class::cast).toList();
+                assertTrue(cells.stream().anyMatch(cell -> "COM42 — OBDLink synthetic device".equals(cell.getText())));
+                dialog[0].port.getSelectionModel().select("COM42"); dialog[0].port.hide();
+                dialog[0].confirmed.setSelected(true); dialog[0].start.fire();
+                assertEquals("COM42", captured.get().port());
+            });
+            ElmAdapterTestRunTest.await(task[0]);
+        } finally { FxTestRuntime.run(() -> { if (dialog[0] != null) dialog[0].close(); }); }
+    }
+
     @Test void explicitStartRecordsSyntheticCsvAndRequiresStoppedLogger() throws Exception {
         Stage[] owner = new Stage[1]; FxElmAdapterTest[] dialog = new FxElmAdapterTest[1];
         ElmAdapterTestRun[] task = new ElmAdapterTestRun[1];
@@ -27,9 +75,9 @@ class FxElmAdapterTestSmokeTest {
                 owner[0] = new Stage(); owner[0].setScene(new Scene(new StackPane(), 800, 600)); owner[0].show();
                 dialog[0] = new FxElmAdapterTest(owner[0], directory.toFile(), stopped::get, config -> {
                     opened.incrementAndGet(); return task[0] = new ElmAdapterTestRun(config, (port, baud) -> link.session(), link.recorder());
-                });
+                }, new FxSerialPortSelector(java.util.List::of));
                 dialog[0].show(); assertEquals(0, opened.get()); assertTrue(dialog[0].start.isDisabled());
-                dialog[0].port.setText("synthetic-only"); dialog[0].confirmed.setSelected(true);
+                dialog[0].port.getEditor().setText("synthetic-only"); dialog[0].confirmed.setSelected(true);
                 dialog[0].start.fire(); assertEquals(0, opened.get()); assertTrue(dialog[0].status.getText().contains("Disconnect"));
                 stopped.set(true); dialog[0].start.fire(); assertEquals(1, opened.get());
             });
@@ -70,8 +118,10 @@ class FxElmAdapterTestSmokeTest {
                     boolean done = false;
                     while (!done) try { done = release.await(3, TimeUnit.SECONDS); } catch (InterruptedException ignored) { }
                     return link.session();
-                }, link.recorder()));
-                dialog[0].show(); dialog[0].port.setText("synthetic-only"); dialog[0].confirmed.setSelected(true); dialog[0].start.fire();
+                }, link.recorder()), new FxSerialPortSelector(java.util.List::of));
+                dialog[0].show(); dialog[0].port.getEditor().setText("synthetic-only"); dialog[0].confirmed.setSelected(true); dialog[0].start.fire();
+                assertTrue(dialog[0].port.isDisabled());
+                assertTrue(dialog[0].portSelector.refresh.isDisabled());
             });
             assertTrue(entered.await(3, TimeUnit.SECONDS));
             FxTestRuntime.run(() -> {

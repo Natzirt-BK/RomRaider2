@@ -21,7 +21,6 @@ package com.romraider.logger.ecu.ui.swing.menubar.action;
 
 import java.awt.Desktop;
 import java.awt.event.ActionEvent;
-import java.io.File;
 
 import com.romraider.logger.ecu.EcuLogger;
 import com.romraider.swing.menubar.action.AbstractAction;
@@ -41,6 +40,6 @@ public final class LoggerDebugLocationAction extends AbstractAction {
     }
 
     private void openLogFileLocationDialog() throws Exception {
-        Desktop.getDesktop().open(new File(System.getProperty("user.home") + "/.RomRaider"));
+        Desktop.getDesktop().open(com.romraider.util.LogManager.getLogDirectory().toFile());
     }
 }

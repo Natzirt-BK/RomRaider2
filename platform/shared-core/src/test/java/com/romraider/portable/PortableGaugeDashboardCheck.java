@@ -51,6 +51,44 @@ public final class PortableGaugeDashboardCheck {
         }
         try { GaugeDashboardLayout.fit(100, 100, 1, Double.NaN, 2); throw new AssertionError("Invalid aspect accepted"); }
         catch (IllegalArgumentException expected) { }
+        for (int[] size : new int[][] {{945, 2048}, {2048, 945}, {480, 800}, {800, 480}}) {
+            for (int count = 1; count <= 6; count++) {
+                double[] aspects = new double[count];
+                for (int i = 0; i < count; i++) aspects[i] = i % 2 == 0 ? 208.0 / 234 : 304.0 / 234;
+                var tiles = GaugeDashboardLayout.fit(size[0], size[1], aspects, 1);
+                check(tiles.size() == count, "Mixed count mismatch");
+                double actual = 0;
+                for (int i = 0; i < count; i++) {
+                    var tile = tiles.get(i);
+                    double h = Math.min(tile.height, tile.width / aspects[i]); actual += h * h * aspects[i];
+                    check(tile.left >= 0 && tile.top >= 0 && tile.left + tile.width <= size[0]
+                            && tile.top + tile.height <= size[1], "Mixed tile outside viewport");
+                    for (int j = 0; j < i; j++) {
+                        var other = tiles.get(j);
+                        check(tile.left + tile.width <= other.left || other.left + other.width <= tile.left
+                                || tile.top + tile.height <= other.top || other.top + other.height <= tile.top, "Mixed overlap");
+                    }
+                }
+                for (int rows = 1; rows <= count; rows++) {
+                    int index = 0; double alternative = 0;
+                    for (int row = 0; row < rows; row++) {
+                        int columns = count / rows + (row < count % rows ? 1 : 0);
+                        double h = (row + 1) * size[1] / rows - row * size[1] / rows - 2;
+                        for (int col = 0; col < columns; col++) {
+                            double w = (col + 1) * size[0] / columns - col * size[0] / columns - 2;
+                            double fitted = Math.min(h, w / aspects[index]);
+                            alternative += fitted * fitted * aspects[index++];
+                        }
+                    }
+                    check(actual + .0001 >= alternative, "Mixed layout did not maximize candidate face area");
+                }
+                cases++;
+            }
+        }
+        for (double[] invalid : new double[][] {{0}, {-1}, {Double.NaN}, {Double.POSITIVE_INFINITY}, new double[7]}) {
+            try { GaugeDashboardLayout.fit(100, 100, invalid, 1); throw new AssertionError("Invalid mixed aspects accepted"); }
+            catch (IllegalArgumentException expected) { }
+        }
         System.out.println("Mounted gauge layout checks passed: " + cases + " viewports/counts/styles; no overlap, crop or empty slots");
     }
     private static void check(boolean value, String message) { if (!value) throw new AssertionError(message); }

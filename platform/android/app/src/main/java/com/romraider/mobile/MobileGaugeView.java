@@ -10,6 +10,7 @@ import android.view.View;
 
 import java.util.Locale;
 import com.romraider.portable.gauge.GaugeFaceRenderer;
+import com.romraider.portable.gauge.MountedGaugePresentation;
 
 /** Glanceable hybrid number/needle gauge for the Android logger. */
 final class MobileGaugeView extends View {
@@ -62,6 +63,11 @@ final class MobileGaugeView extends View {
         invalidate();
     }
 
+    double mountedAspect() {
+        return (theme.instrumentStyle() == null ? MountedGaugePresentation.CLASSIC
+                : MountedGaugePresentation.viewport(theme.instrumentStyle())).aspect();
+    }
+
     void setTheme(MobileGaugeTheme next) {
         theme = next == null ? MobileGaugeTheme.RR2_CLASSIC : next;
         requestLayout();
@@ -108,17 +114,21 @@ final class MobileGaugeView extends View {
         float height = getHeight();
         if (theme.instrumentStyle() != null) {
             canvas.save();
-            float factor = Math.min(width / 320f, height / 250f);
-            canvas.translate((width - 320 * factor) / 2, (height - 250 * factor) / 2);
+            MountedGaugePresentation.Viewport bounds = MountedGaugePresentation.viewport(theme.instrumentStyle());
+            float designWidth = fitToViewport ? (float) bounds.width : 320;
+            float designHeight = fitToViewport ? (float) bounds.height : 250;
+            float factor = Math.min(width / designWidth, height / designHeight);
+            canvas.translate((width - designWidth * factor) / 2, (height - designHeight * factor) / 2);
             canvas.scale(factor, factor);
+            if (fitToViewport) canvas.translate(-(float) bounds.left, -(float) bounds.top);
             GaugeFaceRenderer.Reading reading = faceReading;
             double indicator = android.animation.ValueAnimator.areAnimatorsEnabled()
                     ? motion.valueAt(System.nanoTime()) : value;
             if (Double.compare(indicator, reading.indicatorValue) != 0) reading = reading.withIndicator(indicator);
             nativeSurface.canvas = canvas;
             try {
-                GaugeFaceRenderer.draw(nativeSurface, theme.instrumentStyle(), reading,
-                        fitToViewport ? GaugeFaceRenderer.Presentation.SEAMLESS : GaugeFaceRenderer.Presentation.CARD);
+                if (fitToViewport) MountedGaugePresentation.draw(nativeSurface, theme.instrumentStyle(), reading);
+                else GaugeFaceRenderer.draw(nativeSurface, theme.instrumentStyle(), reading);
             } finally {
                 nativeSurface.canvas = null;
                 canvas.restore();
@@ -130,9 +140,11 @@ final class MobileGaugeView extends View {
         }
         if (fitToViewport) {
             canvas.save();
-            float factor = Math.min(width / 320f, height / 205f);
-            canvas.translate((width - 320 * factor) / 2, (height - 205 * factor) / 2);
+            MountedGaugePresentation.Viewport bounds = MountedGaugePresentation.CLASSIC;
+            float factor = Math.min(width / (float) bounds.width, height / (float) bounds.height);
+            canvas.translate((width - (float) bounds.width * factor) / 2, (height - (float) bounds.height * factor) / 2);
             canvas.scale(factor, factor);
+            canvas.translate(-(float) bounds.left, -(float) bounds.top);
             width = 320; height = 205; density = 1;
         }
         if (!fitToViewport) {
@@ -148,9 +160,15 @@ final class MobileGaugeView extends View {
 
         paint.setStyle(Paint.Style.FILL);
         paint.setTypeface(labelTypeface);
-        paint.setTextSize(12 * density);
+        paint.setTextSize((fitToViewport ? 10 : 12) * density);
         paint.setColor(theme.primary);
-        canvas.drawText(ellipsize(name, 23), 12 * density, 23 * density, paint);
+        if (fitToViewport) {
+            paint.setTextAlign(Paint.Align.CENTER);
+            String label = ellipsize(name, 30);
+            float measured = paint.measureText(label);
+            if (measured > 154) paint.setTextSize(paint.getTextSize() * 154 / measured);
+            canvas.drawText(label, 160, 23, paint);
+        } else canvas.drawText(ellipsize(name, 23), 12 * density, 23 * density, paint);
 
         float centerX = width / 2f;
         float centerY = 112 * density;
@@ -230,6 +248,15 @@ final class MobileGaugeView extends View {
                 : units.isEmpty() ? "CURRENT" : units,
                 centerX, 120 * density, paint);
 
+        if (fitToViewport) {
+            paint.setTextAlign(Paint.Align.CENTER);
+            paint.setTextSize(8 * density);
+            paint.setColor(Double.isFinite(value) ? 0xFF9CAAB5 : 0xFFFFC56B);
+            canvas.drawText(dataState, centerX, 199, paint);
+            paint.setTextAlign(Paint.Align.LEFT);
+            canvas.restore();
+            return;
+        }
         paint.setTextAlign(Paint.Align.LEFT);
         paint.setTextSize(9 * density);
         paint.setColor(0xFF91A0AE);
@@ -244,7 +271,6 @@ final class MobileGaugeView extends View {
         canvas.drawText(dataState + "  •  " + compact(scale.minimum) + "–"
                 + compact(scale.maximum), centerX, height - 11 * density, paint);
         paint.setTextAlign(Paint.Align.LEFT);
-        if (fitToViewport) canvas.restore();
     }
 
     private String ellipsize(String value, int limit) {

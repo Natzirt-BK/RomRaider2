@@ -158,6 +158,7 @@ public final class LoggerDesktopRuntime implements EcuRelatedMessageListener,
 
     public LoggerDesktopRuntime() {
         settings = SettingsManager.getSettings();
+        LoggerDebugSettings.initialize(settings);
         liveData = LoggerLiveDataBus.getInstance();
         liveData.clearSamples();
         liveData.stopped();

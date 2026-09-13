@@ -314,7 +314,8 @@ final class FxLoggerWindow {
                 item("Stop recording",
                         event -> context.getSession().stopRecording()),
                 new SeparatorMenuItem(),
-                item("Read-only adapter test…", event -> showAdapterTest()));
+                item("Read-only adapter test…", event -> showAdapterTest()),
+                item("Troubleshooting…", event -> FxLoggerTroubleshooting.show(stage, runtime.getSettings())));
         ToggleGroup theme = new ToggleGroup();
         RadioMenuItem light = themeItem("Light", ThemeMode.LIGHT, theme);
         RadioMenuItem dark = themeItem("Dark", ThemeMode.DARK, theme);

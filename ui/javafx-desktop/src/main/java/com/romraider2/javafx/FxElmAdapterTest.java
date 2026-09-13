@@ -25,7 +25,8 @@ import javafx.util.StringConverter;
 /** Deliberately separate test mode. It never changes normal Logger configuration. */
 final class FxElmAdapterTest {
     final Stage stage = new Stage();
-    final TextField port = new TextField();
+    final FxSerialPortSelector portSelector;
+    final ComboBox<String> port;
     final TextField output = new TextField();
     final ComboBox<Integer> baud = new ComboBox<>();
     final ComboBox<Integer> seconds = new ComboBox<>();
@@ -47,10 +48,15 @@ final class FxElmAdapterTest {
     }
     FxElmAdapterTest(Window owner, File directory, BooleanSupplier loggerStopped,
             Function<ElmAdapterTestRun.Configuration, ElmAdapterTestRun> factory) {
+        this(owner, directory, loggerStopped, factory, new FxSerialPortSelector());
+    }
+    FxElmAdapterTest(Window owner, File directory, BooleanSupplier loggerStopped,
+            Function<ElmAdapterTestRun.Configuration, ElmAdapterTestRun> factory,
+            FxSerialPortSelector portSelector) {
         this.loggerStopped = loggerStopped; this.factory = factory;
+        this.portSelector = portSelector; this.port = portSelector.ports;
         stage.initOwner(owner); stage.initModality(Modality.APPLICATION_MODAL);
         stage.setTitle("Read-only adapter test — standard OBD-II");
-        port.setPromptText("For example /dev/ttyUSB0, /dev/cu.usbserial… or COM3");
         baud.getItems().setAll(9600, 19200, 38400, 57600, 115200, 230400, 500000, 1000000); baud.setValue(38400);
         seconds.getItems().setAll(30, 60, 120); seconds.setValue(60);
         protocol.getItems().setAll(Elm327Session.Protocol.values()); protocol.setValue(Elm327Session.Protocol.AUTOMATIC);
@@ -78,13 +84,13 @@ final class FxElmAdapterTest {
             File file = chooser.showSaveDialog(stage); if (file != null) output.setText(file.getAbsolutePath());
         });
         GridPane form = new GridPane(); form.setHgap(10); form.setVgap(10);
-        form.addRow(0, new Label("Serial port"), port);
+        form.addRow(0, new Label("Serial port"), portSelector);
         form.addRow(1, new Label("Adapter baud"), baud);
         form.addRow(2, new Label("OBD-II protocol"), protocol);
         form.addRow(3, new Label("Duration (s)"), seconds);
         form.addRow(4, new Label("New CSV file"), output, browse);
         form.getChildren().stream().filter(node -> node instanceof Label).forEach(node -> ((Label) node).setMinWidth(Region.USE_PREF_SIZE));
-        GridPane.setHgrow(port, Priority.ALWAYS); GridPane.setHgrow(output, Priority.ALWAYS);
+        GridPane.setHgrow(portSelector, Priority.ALWAYS); GridPane.setHgrow(output, Priority.ALWAYS);
         protocol.setMaxWidth(Double.MAX_VALUE);
         confirmed.setWrapText(true);
         Label intro = label("Compatibility test • ELM327 / OBDLink serial\nPark safely and use ignition ON, not ACC. Match the baud rate to your adapter.\nNo flashing, tuning, code clearing or manufacturer-specific SSM/MUT-II commands.");
@@ -103,10 +109,10 @@ final class FxElmAdapterTest {
         form.disableProperty().bind(stop.disabledProperty().not());
         confirmed.disableProperty().bind(stop.disabledProperty().not());
         stage.setOnCloseRequest(event -> { if (active()) { event.consume(); requestClose(); } });
-        stage.setOnHidden(event -> { updates.stop(); if (run != null) run.cancel(); });
+        stage.setOnHidden(event -> { portSelector.close(); updates.stop(); if (run != null) run.cancel(); });
         updates.setCycleCount(Timeline.INDEFINITE);
     }
-    void show() { updates.play(); FxWindowPlacement.show(stage); }
+    void show() { updates.play(); FxWindowPlacement.show(stage); portSelector.scan(); }
     private static Label label(String value) { Label label = new Label(value); label.setWrapText(true); label.setMaxWidth(Double.MAX_VALUE); return label; }
     private boolean active() { return run != null && !run.isFinished(); }
     private void start() {
@@ -114,7 +120,8 @@ final class FxElmAdapterTest {
         if (!loggerStopped.getAsBoolean()) { status.setText("Disconnect the normal Logger and stop connection attempts before testing another adapter."); return; }
         try {
             if (output.getText().isBlank()) throw new IllegalArgumentException("Choose a new CSV file first");
-            var config = new ElmAdapterTestRun.Configuration(port.getText().trim(), baud.getValue(), protocol.getValue(), seconds.getValue(), Path.of(output.getText()).toAbsolutePath());
+            var config = new ElmAdapterTestRun.Configuration(portSelector.address(), baud.getValue(), protocol.getValue(), seconds.getValue(), Path.of(output.getText()).toAbsolutePath());
+            portSelector.cancelScan();
             run = factory.apply(config); closeWhenStopped = false;
             result.setText("CSV: " + config.output()); values.setText("Waiting for verified ECU data…");
             run.start(); refresh();
@@ -139,5 +146,5 @@ final class FxElmAdapterTest {
     }
     private void cancel() { if (run != null) { run.cancel(); status.setText("Stopping and closing the adapter…"); } }
     private void requestClose() { if (active()) { closeWhenStopped = true; cancel(); } else stage.close(); }
-    void close() { if (run != null) run.cancel(); updates.stop(); stage.close(); }
+    void close() { portSelector.close(); if (run != null) run.cancel(); updates.stop(); stage.close(); }
 }

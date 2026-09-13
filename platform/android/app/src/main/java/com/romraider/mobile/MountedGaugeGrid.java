@@ -41,8 +41,11 @@ final class MountedGaugeGrid extends GridLayout {
     @Override protected void onMeasure(int widthSpec, int heightSpec) {
         if (!fitted) { super.onMeasure(widthSpec, heightSpec); return; }
         int width = MeasureSpec.getSize(widthSpec), height = MeasureSpec.getSize(heightSpec);
-        tiles = GaugeDashboardLayout.fit(width, height, Math.min(limit, getChildCount()), aspect,
-                Math.round(2 * getResources().getDisplayMetrics().density));
+        double[] aspects = new double[Math.min(limit, getChildCount())];
+        for (int i = 0; i < aspects.length; i++) aspects[i] = getChildAt(i) instanceof MobileGaugeView
+                ? ((MobileGaugeView) getChildAt(i)).mountedAspect() : aspect;
+        tiles = GaugeDashboardLayout.fit(width, height, aspects,
+                Math.round(getResources().getDisplayMetrics().density));
         for (int i = 0; i < tiles.size(); i++) {
             GaugeDashboardLayout.Tile tile = tiles.get(i);
             getChildAt(i).measure(MeasureSpec.makeMeasureSpec(tile.width, MeasureSpec.EXACTLY),

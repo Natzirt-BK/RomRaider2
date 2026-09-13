@@ -36,13 +36,19 @@ public final class LogManager {
     public static void initDebugLogging() {
         if (System.getProperty(LOG_DIRECTORY_PROPERTY) == null
                 || System.getProperty(LOG_DIRECTORY_PROPERTY).trim().isEmpty()) {
-            System.setProperty(LOG_DIRECTORY_PROPERTY,
-                    Paths.get(System.getProperty("user.home"), ".RomRaider2",
-                            "logs").toString());
+            System.setProperty(LOG_DIRECTORY_PROPERTY, getLogDirectory().toString());
         }
         Path externalConfig = Paths.get("lib", "log4j2.xml").toAbsolutePath();
         if (Files.isRegularFile(externalConfig)) {
             Configurator.reconfigure(externalConfig.toUri());
         }
+    }
+
+    /** Same destination used by the rolling system log, including test/package overrides. */
+    public static Path getLogDirectory() {
+        String configured = System.getProperty(LOG_DIRECTORY_PROPERTY);
+        return configured == null || configured.trim().isEmpty()
+                ? Paths.get(System.getProperty("user.home"), ".RomRaider2", "logs")
+                : Paths.get(configured).toAbsolutePath().normalize();
     }
 }
