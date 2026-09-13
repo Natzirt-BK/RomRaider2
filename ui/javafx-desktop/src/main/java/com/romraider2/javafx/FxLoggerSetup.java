@@ -90,8 +90,8 @@ final class FxLoggerSetup {
 
         GridPane form = new GridPane();
         form.setHgap(10);
-        form.setVgap(12);
-        form.setPadding(new Insets(18));
+        form.setVgap(8);
+        form.setPadding(new Insets(14));
         form.addRow(0, new Label("Logger definition"), definition,
                 browseDefinition);
         form.addRow(1, new Label("Log output directory"), output,

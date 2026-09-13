@@ -542,7 +542,8 @@ class FxLoggerSetupTransferTest {
                             var viewport = root.lookup(".scroll-pane .viewport");
                             var visible = viewport.localToScene(viewport.getBoundsInLocal());
                             assertTrue(bounds.getMinY() >= visible.getMinY());
-                            assertTrue(bounds.getMaxY() <= visible.getMaxY(), button.getText() + " is clipped by the scroll viewport");
+                            assertTrue(bounds.getMaxY() <= visible.getMaxY(), button.getText()
+                                    + " is clipped by the scroll viewport: " + bounds + " outside " + visible);
                         }
                         String directory = System.getenv("RR2_SETUP_CAPTURE_DIR");
                         if (directory != null) {
