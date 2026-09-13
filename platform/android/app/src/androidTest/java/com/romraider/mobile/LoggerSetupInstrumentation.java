@@ -2186,7 +2186,9 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
         long boundDeadline = SystemClock.uptimeMillis() + 5000;
         while (field("recordingService") == null && SystemClock.uptimeMillis() < boundDeadline) SystemClock.sleep(50);
         check(field("recordingService") != null, "Recording service did not bind");
-        String definitionXml = DEFINITION.replace("id=\"P2\"", "id=\"P2\" ecubyteindex=\"8\" ecubit=\"0\"")
+        String unsupported = parameter("P2", "Unselected channel", "%", "0x000012", "x");
+        String definitionXml = DEFINITION.replace(unsupported,
+                unsupported.replace("ecubit=\"0\"", "ecubit=\"1\""))
                 .replace("</parameters>", "<ecuparam id='E99' name='Other vehicle'><ecu id='OTHER'><address>32</address></ecu>"
                         + "<conversions><conversion units='V' expr='x' format='0.0'/></conversions></ecuparam></parameters>");
         PortableLoggerDefinition definition = PortableLoggerDefinitionReader.read(
