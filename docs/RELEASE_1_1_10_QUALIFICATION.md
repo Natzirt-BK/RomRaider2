@@ -25,7 +25,8 @@ All seven packages use source `ed3a414dbc22893880daf9472242b1c605a64d33`.
   private displays with matching startup/window versions and bundled Java 21.
   Linux internal checksums and packaged defaults passed verification.
 - The companion Linux installer is pinned to the verified archive checksum.
-  Its full regression suite and an isolated installation of the actual archive passed.
+  Its full regression suite and isolated installations from both the verified
+  local archive and public download URL passed; the downloaded bytes matched.
 - Windows initially exposed a connection-panel height issue. Tighter spacing
   fixed it; the final native-host tests, helper builds and package verifier passed.
 
