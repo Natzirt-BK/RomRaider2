@@ -576,6 +576,7 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
         com.romraider.portable.logger.ReadOnlyLoggerTransport transport =
                 new com.romraider.portable.logger.ReadOnlyLoggerTransport() {
             public String identifyEcu(PortableLoggerProtocol protocol) { return "SYNTHETIC"; }
+            public byte[] ssmInitPayload() { return supportedFixturePayload(); }
             public byte[] read(com.romraider.portable.logger.PortableLoggerQueryBatch batch) {
                 SystemClock.sleep(25);
                 byte[] values = new byte[batch.getAddresses().length];
@@ -1505,6 +1506,7 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
             public String identifyEcu(com.romraider.portable.logger.PortableLoggerProtocol protocol) {
                 identifies.incrementAndGet(); return "SYNTHETIC";
             }
+            public byte[] ssmInitPayload() { return supportedFixturePayload(); }
             public byte[] read(com.romraider.portable.logger.PortableLoggerQueryBatch batch) {
                 SystemClock.sleep(25);
                 byte[] result = new byte[batch.getAddresses().length];
@@ -1716,6 +1718,7 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
         ReadOnlyRecording recording;
         final com.romraider.portable.logger.ReadOnlyLoggerTransport transport = new com.romraider.portable.logger.ReadOnlyLoggerTransport() {
             public String identifyEcu(PortableLoggerProtocol protocol) { identifies.incrementAndGet(); return "SYNTHETIC_SERVICE"; }
+            public byte[] ssmInitPayload() { return supportedFixturePayload(); }
             public byte[] read(com.romraider.portable.logger.PortableLoggerQueryBatch batch) throws IOException {
                 SystemClock.sleep(25);
                 if (fail) throw new IOException("Synthetic service detach");
@@ -2261,9 +2264,12 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
         return null;
     }
     private static String parameter(String id, String name, String units, String address, String expression) {
-        return "<parameter id=\"" + id + "\" name=\"" + name + "\"><address length=\"2\">" + address
+        return "<parameter id=\"" + id + "\" name=\"" + name + "\" ecubyteindex=\"8\" ecubit=\"0\"><address length=\"2\">" + address
                 + "</address><conversions><conversion units=\"" + units + "\" expr=\"" + expression
                 + "\" format=\"0.00\"/></conversions></parameter>";
+    }
+    private static byte[] supportedFixturePayload() {
+        byte[] payload = new byte[9]; payload[8] = 1; return payload;
     }
     private static void check(boolean condition, String message) {
         if (!condition) throw new AssertionError(message);
