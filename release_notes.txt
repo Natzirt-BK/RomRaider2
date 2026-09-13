@@ -1,8 +1,25 @@
-RomRaider2 ECU Studio 1.1.9
+RomRaider2 ECU Studio 1.1.10
 ================================
 
 Release candidate. For available packages and qualification details:
 https://github.com/Natzirt-BK/RomRaider2/releases
+
+What changed for 1.1.10
+----------------------
+
+- Android Gauges adds green START and red STOP controls, including fullscreen.
+  Compact mounted layouts give the gauges more room while retaining channel,
+  unit, warning and connection-state information.
+- Desktop Logger Setup preserves fullscreen and maximized window size, offers
+  a recording-switch selector and shows the configured switch and default.
+- The main desktop logger has an optional log-name field. Desktop and Android
+  CSV values use two decimal places without changing internal sample precision.
+- Desktop serial-port selectors list detected ports, offer Refresh and retain
+  manual entry. Troubleshooting exposes diagnostic-log levels and location.
+- Desktop DimeMod reconnects verify fresh identification/discovery metadata.
+
+Automated checks do not replace physical-device or in-car acceptance. Adapter
+support is unchanged; production flashing and live tuning remain unavailable.
 
 What changed for 1.1.9
 ---------------------
