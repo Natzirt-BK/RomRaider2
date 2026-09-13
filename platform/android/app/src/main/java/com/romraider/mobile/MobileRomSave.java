@@ -2,6 +2,7 @@
 package com.romraider.mobile;
 
 import com.romraider.portable.PortableRomDocument;
+import com.romraider.portable.editor.PortableRomChecksum;
 import java.io.IOException;
 import java.io.OutputStream;
 
@@ -15,17 +16,24 @@ final class MobileRomSave {
 
     static boolean save(PortableRomDocument document, byte[] snapshot,
             Destination destination) throws IOException {
+        return save(document, snapshot, null, destination);
+    }
+
+    static boolean save(PortableRomDocument document, byte[] snapshot,
+            PortableRomChecksum checksum, Destination destination) throws IOException {
         if (document == null || snapshot == null || destination == null) {
             throw new IllegalArgumentException("Document, snapshot and destination are required");
         }
         // Own the exact bytes that will be written and subsequently marked saved.
-        byte[] written = snapshot.clone();
+        byte[] expected = snapshot.clone();
+        // Validate and correct before opening/truncating the destination.
+        byte[] written = checksum == null ? expected.clone() : checksum.prepareCopy(expected);
         try (OutputStream output = destination.open()) {
             if (output == null) throw new IOException("ROM destination is unavailable");
             output.write(written);
             output.flush();
         }
         // In particular, a provider close failure must leave recovery/dirty state intact.
-        return document.markSavedIfCurrent(written);
+        return document.acceptSavedCopy(expected, written);
     }
 }

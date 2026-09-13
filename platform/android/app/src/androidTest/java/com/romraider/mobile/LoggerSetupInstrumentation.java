@@ -54,6 +54,7 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
             startActivitySync(intent);
             awaitImports();
             if (phase.equals("seed")) seed();
+            else if (phase.equals("rom-checksums")) verifyRomChecksums();
             else if (phase.equals("mut2-definition")) verifyMut2DefinitionRejection();
             else if (phase.equals("gauges")) verifyGaugesOnly();
             else if (phase.equals("gauge-demo-toggle")) verifyGaugeDemoToggle();
@@ -431,6 +432,43 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
         MobileRomRecoveryStore.save(directory, document);
         check(!recovery.exists(), "Successful save did not resolve its isolated recovery snapshot");
         System.out.println("PASS: Android ROM save close-failure recovery and successful save publication.");
+    }
+
+    private void verifyRomChecksums() throws Exception {
+        byte[] bytes = new byte[256];
+        java.nio.ByteBuffer.wrap(bytes).putInt(0, 0x54455354).putInt(64, 123)
+                .putInt(128, 64).putInt(132, 68);
+        PortableRomDocument document = new PortableRomDocument("Synthetic checksum ROM", bytes);
+        String xml = "<roms><rom><romid><xmlid>TEST</xmlid><make>Subaru</make>"
+                + "<internalidaddress>0</internalidaddress><internalidstring>TEST</internalidstring>"
+                + "<filesize>256</filesize></romid><table name='Checksum Fix' type='Switch'"
+                + " storageaddress='80' sizey='12'/><table name='Value' type='2D' sizey='1'"
+                + " storageaddress='40' storagetype='uint8'><scaling expression='x' to_byte='x'/>"
+                + "</table></rom></roms>";
+        com.romraider.portable.editor.PortableEcuDefinition definition = PortableEcuDefinitionReader.read(
+                new ByteArrayInputStream(xml.getBytes(StandardCharsets.UTF_8)), document);
+        setField("rom", document);
+        setField("ecuDefinition", definition);
+        invoke("showEditor", new Class<?>[0]);
+        check(((android.widget.TextView) field("checksumSummary")).getText().toString()
+                .contains("need correction"), "Editor did not show checksum validation");
+        check(java.util.Arrays.equals(bytes, document.snapshot()), "Opening editor changed ROM bytes");
+        ByteArrayOutputStream sink = new ByteArrayOutputStream();
+        check(MobileRomSave.save(document, document.snapshot(), definition.getChecksum(), () -> sink),
+                "Corrected save stayed dirty");
+        invoke("refreshRom", new Class<?>[0]);
+        check(((android.widget.TextView) field("checksumSummary")).getText().toString()
+                .contains("checksums valid"), "Editor did not show corrected status");
+        document.replace(64, new byte[] {1});
+        invoke("refreshRom", new Class<?>[0]);
+        check(((android.widget.TextView) field("checksumSummary")).getText().toString()
+                .contains("need correction"), "Editor did not revalidate edited bytes");
+        setField("ecuDefinition", null);
+        invoke("refreshRom", new Class<?>[0]);
+        check(((android.widget.TextView) field("checksumSummary")).getText().toString()
+                .contains("Load a matching ECU definition"), "Editor hid unsupported checksum warning");
+        setField("rom", null);
+        invoke("showLogger", new Class<?>[0]);
     }
     private void verify(int channels) throws Exception {
         verifySelection(channels);

@@ -12,13 +12,15 @@ public final class PortableEcuDefinition {
     private final String model;
     private final String submodel;
     private final List<PortableRomTable> tables;
+    private final PortableRomChecksum checksum;
 
     PortableEcuDefinition(String xmlId, String make, String model,
-            String submodel, List<PortableRomTable> tables) {
+            String submodel, List<PortableRomTable> tables, PortableRomChecksum checksum) {
         this.xmlId = xmlId;
         this.make = make;
         this.model = model;
         this.submodel = submodel;
+        this.checksum = checksum;
         this.tables = Collections.unmodifiableList(
                 new ArrayList<PortableRomTable>(tables));
     }
@@ -28,6 +30,7 @@ public final class PortableEcuDefinition {
     public String getModel() { return model; }
     public String getSubmodel() { return submodel; }
     public List<PortableRomTable> getTables() { return tables; }
+    public PortableRomChecksum getChecksum() { return checksum; }
 
     public String vehicleName() {
         StringBuilder result = new StringBuilder();

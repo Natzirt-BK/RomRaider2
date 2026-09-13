@@ -73,7 +73,38 @@ public final class PortableEcuDefinitionReader {
             throw new IOException("The matching ECU definition has no supported numeric tables");
         }
         return new PortableEcuDefinition(match.xmlId, match.make, match.model,
-                match.submodel, tables);
+                match.submodel, tables, checksum(chain, metadata.byId, merged, rom.snapshot()));
+    }
+
+    private static PortableRomChecksum checksum(List<String> chain,
+            Map<String, RomMetadata> metadata, Map<String, RawTable> tables, byte[] bytes) {
+        List<int[]> blocks = new ArrayList<>();
+        String reason = null;
+        String make = "";
+        for (String id : chain) {
+            RomMetadata item = metadata.get(id.toLowerCase(Locale.ROOT));
+            if (!item.make.isEmpty()) make = item.make;
+            if (item.customChecksum) reason = "this definition requests a checksum scheme not supported on Android.";
+            if (!item.base.isEmpty() && !metadata.containsKey(item.base.toLowerCase(Locale.ROOT)))
+                reason = "the base definition is missing.";
+        }
+        if (!"subaru".equalsIgnoreCase(make)) reason = "only definition-backed Subaru checksums are supported.";
+        for (RawTable table : tables.values()) {
+            if (!table.name().toLowerCase(Locale.ROOT).startsWith("checksum fix")) continue;
+            // Unaddressed base templates are not tables in this ROM.
+            if (table.attribute("storageaddress") == null) continue;
+            try {
+                if (!"switch".equalsIgnoreCase(table.attribute("type"))
+                        || "little".equalsIgnoreCase(table.attribute("endian")))
+                    throw new IllegalArgumentException();
+                blocks.add(new int[] {address(table.attribute("storageaddress")),
+                        positive(table.attribute("sizey"))});
+            } catch (RuntimeException ex) {
+                reason = "the checksum table metadata is incomplete or unsupported.";
+            }
+        }
+        if (blocks.isEmpty() && reason == null) reason = "no supported checksum table in the matching definition.";
+        return new PortableRomChecksum(blocks, bytes, reason);
     }
 
     private static PortableRomTable toPortable(RawTable raw, int romSize) {
@@ -298,6 +329,8 @@ public final class PortableEcuDefinitionReader {
                 current = new RomMetadata(first(attrs.getValue("base"), ""));
             } else if (current != null && "romid".equals(tag)) {
                 romId = true;
+            } else if (current != null && "checksum".equals(tag)) {
+                current.customChecksum = true;
             } else if (current != null && romId) {
                 field = tag;
                 text = new StringBuilder();
@@ -338,6 +371,7 @@ public final class PortableEcuDefinitionReader {
         private String make = "";
         private String model = "";
         private String submodel = "";
+        private boolean customChecksum;
 
         private RomMetadata(String base) { this.base = base; }
 

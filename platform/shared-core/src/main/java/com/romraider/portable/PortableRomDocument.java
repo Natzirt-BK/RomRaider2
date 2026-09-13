@@ -99,6 +99,15 @@ public final class PortableRomDocument {
         return true;
     }
 
+    /** Publish save-time checksum corrections only if no newer edit has occurred. */
+    public synchronized boolean acceptSavedCopy(byte[] expected, byte[] written) {
+        if (expected == null || written == null || written.length != current.length
+                || !Arrays.equals(current, expected)) return false;
+        current = written.clone();
+        saved = written.clone();
+        return true;
+    }
+
     public synchronized void write(OutputStream output) throws IOException {
         if (output == null) throw new IllegalArgumentException(
                 "A ROM output stream is required");

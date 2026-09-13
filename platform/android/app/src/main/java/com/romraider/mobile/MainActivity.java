@@ -50,6 +50,7 @@ import com.romraider.portable.PortableRecordingRecovery;
 import com.romraider.portable.PortableRomDocument;
 import com.romraider.portable.editor.PortableEcuDefinition;
 import com.romraider.portable.editor.PortableEcuDefinitionReader;
+import com.romraider.portable.editor.PortableRomChecksum;
 import com.romraider.portable.editor.PortableRomTable;
 import com.romraider.mobile.usb.OpenPortUsbTransport;
 import com.romraider.mobile.logger.ReadOnlyRecording;
@@ -174,6 +175,7 @@ public final class MainActivity extends Activity {
             "Open a ROM, then load a RomRaider ECU definition.";
     private PortableRomTable selectedTable;
     private TextView ecuDefinitionSummary;
+    private TextView checksumSummary;
     private EditText tableSearch;
     private LinearLayout tableList;
     private LinearLayout tableDetail;
@@ -1121,7 +1123,8 @@ public final class MainActivity extends Activity {
         actions.addView(reset, weighted());
         actions.addView(save, weighted());
         hexCard.addView(actions, matchWrap(dp(10)));
-        TextView warning = text("CHECKSUM WARNING  /  Android does not correct ROM checksums. Save copies only for review and desktop validation. Do not flash Android-edited files.", 12, Color.rgb(255, 190, 92));
+        TextView warning = text("", 12, Color.rgb(255, 190, 92));
+        checksumSummary = warning;
         warning.setBackground(rounded(Color.rgb(52, 39, 22),
                 Color.rgb(116, 83, 34), 7));
         warning.setPadding(dp(12), dp(11), dp(12), dp(11));
@@ -1151,6 +1154,27 @@ public final class MainActivity extends Activity {
             notice("Open a ROM first.");
             return;
         }
+        PortableRomChecksum.Status status = ecuDefinition == null
+                ? PortableRomChecksum.Status.UNSUPPORTED
+                : ecuDefinition.getChecksum().validate(rom.snapshot());
+        if (status == PortableRomChecksum.Status.INVALID) {
+            notice(checksumDescription(ecuDefinition, rom.snapshot()));
+            return;
+        }
+        if (status == PortableRomChecksum.Status.UNSUPPORTED
+                || status == PortableRomChecksum.Status.DISABLED) {
+            new AlertDialog.Builder(this).setTitle("Save a review copy?")
+                    .setMessage(checksumDescription(ecuDefinition, rom.snapshot())
+                            + " Do not flash this copy without desktop validation.")
+                    .setNegativeButton("Cancel", null)
+                    .setPositiveButton("Save review copy", (dialog, which) -> chooseRomCopyDestination()).show();
+            return;
+        }
+        chooseRomCopyDestination();
+    }
+
+    private void chooseRomCopyDestination() {
+        if (rom == null) return;
         Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         intent.setType("application/octet-stream");
@@ -1233,14 +1257,16 @@ public final class MainActivity extends Activity {
         } else if (requestCode == SAVE_ROM && rom != null) {
             PortableRomDocument saving = rom;
             byte[] savedBytes = saving.snapshot();
+            PortableEcuDefinition savingDefinition = ecuDefinition;
             workerExecutor.execute(() -> {
                 try {
                     boolean clean = MobileRomSave.save(saving, savedBytes,
+                            savingDefinition == null ? null : savingDefinition.getChecksum(),
                             () -> getContentResolver().openOutputStream(uri, "w"));
                     runOnUiThread(() -> {
                         if (activityDestroyed) return;
                         if (rom == saving) refreshRom();
-                        notice(clean ? "Saved a separate ROM copy."
+                        notice(clean ? "Saved a separate ROM copy. " + checksumDescription(savingDefinition, saving.snapshot())
                                 : "ROM copy saved; newer edits remain unsaved.");
                         scheduleWorkspaceRecovery();
                     });
@@ -2934,6 +2960,9 @@ public final class MainActivity extends Activity {
         romSummary.setText(getString(R.string.rom_summary,
                 rom.getName(), sizeSummary, changeSummary));
         byte[] bytes = rom.snapshot();
+        if (checksumSummary != null) checksumSummary.setText(
+                "CHECKSUMS  /  " + checksumDescription(ecuDefinition, bytes)
+                + " Checksum validation does not validate the tune or flashing compatibility.");
         StringBuilder preview = new StringBuilder();
         for (int start = 0; start < Math.min(bytes.length, 256); start += 16) {
             preview.append(String.format(Locale.ROOT, "%06X  ", start));
@@ -2943,6 +2972,12 @@ public final class MainActivity extends Activity {
             preview.append('\n');
         }
         hexPreview.setText(preview.toString());
+    }
+
+    private static String checksumDescription(PortableEcuDefinition definition, byte[] bytes) {
+        return definition == null
+                ? "Load a matching ECU definition for checksum validation. Without one, copies are for review and desktop validation only."
+                : definition.getChecksum().description(bytes);
     }
 
     private String displayName(Uri uri) {

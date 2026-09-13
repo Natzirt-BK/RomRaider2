@@ -2,7 +2,7 @@
 
 Updated September 13, 2026.
 
-The next candidate is [1.1.11 RC1](RELEASE_1_1_11.md), being qualified for Android,
+The current candidate is [1.1.11 RC1](RELEASE_1_1_11.md), published for Android,
 Windows, Linux, SteamOS Desktop Mode and macOS. The
 [qualification record](RELEASE_1_1_11_QUALIFICATION.md) identifies automated
 checks and outstanding physical-device tests.
@@ -35,17 +35,17 @@ current publication status.
 
 ## Next priorities
 
-Complete 1.1.11 package qualification and publication for confirmed SSM channel
-filtering, side-by-side startup, restored editor tools and the DTC-tab fix.
+1.1.11 package qualification and publication are complete for confirmed SSM
+channel filtering, side-by-side startup, restored editor tools and the DTC-tab fix.
 Keep vehicle tests together in the acceptance session below.
 
-Next editor feature: Android ROM checksum support. Start with the Subaru scheme
-used by the Forester's matching definition. Preserve checksum metadata in the
-portable definition reader, validate on open, and offer correction when saving
-a copy. Verify byte-for-byte parity with desktop output, invalid range handling,
-disabled checksums and failure atomicity before enabling it. Unsupported schemes
-must stay explicitly unsupported. The 1.1.11 Android editor still requires
-desktop checksum validation; checksum correction is not part of this candidate.
+Next editor feature: [Android ROM checksum support](ANDROID_ROM_CHECKSUMS.md).
+Definition-backed Subaru correction is implemented and locally tested for the
+next update, including desktop algorithm parity, editor emulator checks, malformed
+ranges, disabled checksums and failed-save preservation. Physical-phone provider
+acceptance and the exact current Forester ROM remain to be checked. Unsupported
+schemes remain explicitly unsupported. The packaged 1.1.11 Android editor still
+requires desktop checksum validation; correction is not part of that download.
 
 Version 1.1.10 includes [desktop XML Save/Save As/Reload](DESKTOP_LOGGER_PROFILES.md)
 with named-file ownership separate from automatic recovery. Android includes

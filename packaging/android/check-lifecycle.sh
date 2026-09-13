@@ -40,6 +40,7 @@ run_phase() {
 "$adb_command" -s "$serial" install -r "$test_apk"
 "$adb_command" -s "$serial" shell pm grant com.romraider.mobile.automation android.permission.POST_NOTIFICATIONS
 run_phase seed
+run_phase rom-checksums
 run_phase mut2-definition
 run_phase seed
 run_phase verify

@@ -2,6 +2,10 @@
 package com.romraider.mobile;
 
 import com.romraider.portable.PortableRomDocument;
+import com.romraider.portable.editor.PortableEcuDefinitionReader;
+import com.romraider.portable.editor.PortableRomChecksum;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.io.*;
 import java.nio.file.*;
 import java.util.*;
@@ -108,6 +112,75 @@ public class MobileRomSaveTest {
         MobileRomRecoveryStore.save(directory, document);
         assertArrayEquals(recoveryBefore, Files.readAllBytes(recoveryPath()));
         assertArrayEquals(document.snapshot(), MobileRomRecoveryStore.restore(directory).snapshot());
+    }
+
+    private PortableRomChecksum checksumFixture() throws Exception {
+        byte[] bytes = new byte[256];
+        ByteBuffer.wrap(bytes).putInt(0, 0x54455354).putInt(64, 123)
+                .putInt(128, 64).putInt(132, 68);
+        document = new PortableRomDocument("Synthetic ROM", bytes);
+        document.replace(64, new byte[] {1});
+        String xml = "<roms><rom><romid><xmlid>TEST</xmlid><make>Subaru</make>"
+                + "<internalidaddress>0</internalidaddress><internalidstring>TEST</internalidstring>"
+                + "<filesize>256</filesize></romid><table name='Checksum Fix' type='Switch'"
+                + " storageaddress='80' sizey='12'/><table name='Value' type='2D' sizey='1'"
+                + " storageaddress='40' storagetype='uint8'><scaling expression='x' to_byte='x'/>"
+                + "</table></rom></roms>";
+        return PortableEcuDefinitionReader.read(new ByteArrayInputStream(
+                xml.getBytes(StandardCharsets.UTF_8)), document).getChecksum();
+    }
+
+    @Test public void checksumCorrectionIsWrittenAndOnlyThenMarkedSaved() throws Exception {
+        PortableRomChecksum plan = checksumFixture();
+        byte[] snapshot = document.snapshot();
+        ByteArrayOutputStream sink = new ByteArrayOutputStream() {
+            @Override public void close() {
+                assertArrayEquals(snapshot, document.snapshot());
+                assertTrue(document.hasChanges());
+            }
+        };
+        assertTrue(MobileRomSave.save(document, snapshot, plan, () -> sink));
+        assertEquals(PortableRomChecksum.Status.VALID, plan.validate(sink.toByteArray()));
+        assertArrayEquals(sink.toByteArray(), document.snapshot());
+        assertFalse(document.hasChanges());
+    }
+
+    @Test public void checksumCloseFailureDoesNotPublishCorrections() throws Exception {
+        PortableRomChecksum plan = checksumFixture();
+        byte[] snapshot = document.snapshot();
+        byte[] saved = document.savedSnapshot();
+        try {
+            MobileRomSave.save(document, snapshot, plan, () -> new ByteArrayOutputStream() {
+                @Override public void close() throws IOException { throw new IOException("close failed"); }
+            });
+            fail("Expected close failure");
+        } catch (IOException expected) { }
+        assertArrayEquals(snapshot, document.snapshot());
+        assertArrayEquals(saved, document.savedSnapshot());
+        assertTrue(document.hasChanges());
+    }
+
+    @Test public void invalidChecksumDoesNotOpenDestination() throws Exception {
+        PortableRomChecksum plan = checksumFixture();
+        document.replace(131, new byte[] {65});
+        try {
+            MobileRomSave.save(document, document.snapshot(), plan, () -> {
+                fail("Invalid checksum opened destination");
+                return null;
+            });
+            fail("Invalid checksum accepted");
+        } catch (IllegalArgumentException expected) { }
+    }
+
+    @Test public void checksumSavePreservesConcurrentEdits() throws Exception {
+        PortableRomChecksum plan = checksumFixture();
+        ByteArrayOutputStream sink = new ByteArrayOutputStream() {
+            @Override public void close() { document.replace(64, new byte[] {9}); }
+        };
+        assertFalse(MobileRomSave.save(document, document.snapshot(), plan, () -> sink));
+        assertEquals(PortableRomChecksum.Status.VALID, plan.validate(sink.toByteArray()));
+        assertEquals(9, document.byteAt(64));
+        assertTrue(document.hasChanges());
     }
 
     private Path recoveryPath() { return directory.toPath().resolve("unsaved-rom.workspace"); }
