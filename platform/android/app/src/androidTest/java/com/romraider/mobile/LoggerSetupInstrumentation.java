@@ -441,7 +441,7 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
         StringWriter csv = new StringWriter();
         PortableRomRaiderCsvWriter.writeSpool(recording, csv);
         check(csv.toString().equals("Time (msec),Engine Speed (rpm),Battery Voltage (V)\n"
-                + "0,750,13.25\n100,800,13.24\n"), "Retained recording/export changed across restart or upgrade");
+                + "0,750.00,13.25\n100,800.00,13.24\n"), "Retained recording/export changed across restart or upgrade");
         Files.write(new File(getTargetContext().getFilesDir(), "automation-export.csv").toPath(),
                 csv.toString().getBytes(StandardCharsets.UTF_8));
     }
@@ -1839,7 +1839,7 @@ public final class LoggerSetupInstrumentation extends Instrumentation {
         File destination = new File(folder, "automation-recovery-export.csv");
         String prefix = "500,a,Engine Speed,750,rpm\n500,b,Battery Voltage,13.25,V\n"
                 + "600,a,Engine Speed,800,rpm\n600,b,Battery Voltage,13.24,V\n";
-        String csv = "Time (msec),Engine Speed (rpm),Battery Voltage (V)\n0,750,13.25\n100,800,13.24\n";
+        String csv = "Time (msec),Engine Speed (rpm),Battery Voltage (V)\n0,750.00,13.25\n100,800.00,13.24\n";
         String partial = prefix + "700,c,\"unfinished";
         String sentinel = "Existing destination must survive validation and cancellation";
         try {

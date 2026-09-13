@@ -13,7 +13,7 @@ public final class PortableRecordingRecoveryCheck {
         File source = folder.resolve("source.csv.part").toFile();
         File temporary = Files.createDirectory(folder.resolve("temporary")).toFile();
         String prefix = "500,a,Engine Speed,750,rpm\n500,b,Battery Voltage,13.2,V\n";
-        String expected = "Time (msec),Engine Speed (rpm),Battery Voltage (V)\n0,750,13.2\n";
+        String expected = "Time (msec),Engine Speed (rpm),Battery Voltage (V)\n0,750.00,13.20\n";
         try {
             succeeds(source, temporary, prefix.getBytes(StandardCharsets.UTF_8), 0, 2, expected);
             succeeds(source, temporary, prefix.replace("\n", "\r\n").getBytes(StandardCharsets.UTF_8), 0, 2, expected);
@@ -26,7 +26,7 @@ public final class PortableRecordingRecoveryCheck {
                 succeeds(source, temporary, input, count, 2, expected);
             }
             succeeds(source, temporary, (prefix + new String(tail, StandardCharsets.UTF_8)).getBytes(StandardCharsets.UTF_8),
-                    0, 3, "Time (msec),Engine Speed (rpm),Battery Voltage (V),Air (%)\n0,750,13.2,\n100,,,1.25\n");
+                    0, 3, "Time (msec),Engine Speed (rpm),Battery Voltage (V),Air (%)\n0,750.00,13.20,\n100,,,1.25\n");
             for (String corrupt : new String[] {"", "1,a,A,1,V", "1,a,A,1\n", "1,a,A,bad,V\n",
                     "1,a,A,1,V,extra\n", "1,a,A\"bad,1,V\n", "1,a,\"A\"junk,1,V\n",
                     "1,a,A,1,V\r2,a,A,2,V\n", "-1,a,A,1,V\n", "1,a,\"A\nB\",1,V\n",

@@ -18,6 +18,10 @@ import org.w3c.dom.Element;
 final class FxLoggerConnectionChoices {
     private final Map<String, Map<String, List<String>>> choices;
     private final java.util.Set<String> fastPolling = new java.util.HashSet<>();
+    record RecordingSwitch(String id, String name) {
+        @Override public String toString() { return name + " — " + id; }
+    }
+    private final Map<String, List<RecordingSwitch>> recordingSwitches = new LinkedHashMap<>();
 
     private FxLoggerConnectionChoices(Map<String, Map<String, List<String>>> choices) {
         this.choices = choices;
@@ -36,9 +40,19 @@ final class FxLoggerConnectionChoices {
         if (!"logger".equals(root.getTagName())) throw new IOException("Choose a logger XML, not an editor definition.");
         Map<String, Map<String, List<String>>> choices = new LinkedHashMap<>();
         java.util.Set<String> fastPolling = new java.util.HashSet<>();
+        Map<String, List<RecordingSwitch>> switches = new LinkedHashMap<>();
         for (Element group : children(root, "protocols")) {
             for (Element protocol : children(group, "protocol")) {
                 String id = protocol.getAttribute("id");
+                Map<String, RecordingSwitch> byId = new LinkedHashMap<>();
+                for (Element switchGroup : children(protocol, "switches")) {
+                    for (Element candidate : children(switchGroup, "switch")) {
+                        String switchId = candidate.getAttribute("id"), name = candidate.getAttribute("name");
+                        if (!switchId.isBlank() && !name.isBlank())
+                            byId.putIfAbsent(switchId, new RecordingSwitch(switchId, name));
+                    }
+                }
+                switches.putIfAbsent(id, List.copyOf(byId.values()));
                 Map<String, List<String>> transports = new LinkedHashMap<>();
                 for (Element transportGroup : children(protocol, "transports")) {
                     for (Element transport : children(transportGroup, "transport")) {
@@ -60,6 +74,7 @@ final class FxLoggerConnectionChoices {
         if (choices.isEmpty()) throw new IOException("No supported protocol/transport combinations in this definition.");
         FxLoggerConnectionChoices result = new FxLoggerConnectionChoices(choices);
         result.fastPolling.addAll(fastPolling);
+        result.recordingSwitches.putAll(switches);
         return result;
     }
 
@@ -68,6 +83,10 @@ final class FxLoggerConnectionChoices {
     }
 
     List<String> protocols() { return List.copyOf(choices.keySet()); }
+
+    List<RecordingSwitch> recordingSwitches(String protocol) {
+        return recordingSwitches.getOrDefault(protocol, List.of());
+    }
 
     List<String> transports(String protocol) {
         if (protocol == null) return List.of();

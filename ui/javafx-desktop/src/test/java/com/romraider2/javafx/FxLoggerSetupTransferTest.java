@@ -25,6 +25,141 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 class FxLoggerSetupTransferTest {
+    @Test void recordingSwitchSelectionReloadsTheMonitorAndRollsBackOnFailure() throws Exception {
+        try (Fixture fixture = new Fixture()) {
+            fixture.apply(ordered("P1", "V"));
+            var s = fixture.settings;
+            String oldId = s.getFileLoggingControllerSwitchId();
+            var capture = new LoggerCaptureOptions(false, true, false, s.isUsNumberFormat(), "");
+            java.util.function.BiConsumer<String, Runnable> apply = (id, persist) -> fixture.runtime.applySetup(
+                    s.getLoggerDefinitionFilePath(), s.getLoggerOutputDirPath(), s.getLoggerPort(),
+                    s.getLoggerProtocol(), s.getTransportProtocol(), s.getTargetModule(), s.getAutoConnectOnStartup(), capture, id, persist);
+            assertThrows(IllegalStateException.class, () -> apply.accept("S1", () -> { throw new IllegalStateException("Disk full"); }));
+            assertEquals(oldId, s.getFileLoggingControllerSwitchId());
+            assertEquals(List.of("P1"), fixture.selected());
+            apply.accept("S1", () -> {});
+            assertEquals("S1", s.getFileLoggingControllerSwitchId());
+            assertTrue(s.isFileLoggingControllerSwitchActive());
+            assertTrue(fixture.runtime.getRecordingSwitchDescription().contains("Flag"));
+            assertEquals(List.of("P1"), fixture.selected());
+            assertThrows(RuntimeException.class, () -> apply.accept("MISSING", () -> fail("Unavailable switch saved")));
+            assertEquals("S1", s.getFileLoggingControllerSwitchId());
+            assertTrue(s.isFileLoggingControllerSwitchActive());
+            assertTrue(fixture.runtime.isFileLoggingSwitchAvailable());
+        }
+    }
+
+    @Test void switchMenuMetadataContainsOnlyDefinedSwitchesForTheChosenProtocol() throws Exception {
+        try (Fixture fixture = new Fixture()) {
+            var catalog = FxLoggerConnectionChoices.read(fixture.definition.toString());
+            assertEquals(List.of("S1"), catalog.recordingSwitches("SSM").stream().map(FxLoggerConnectionChoices.RecordingSwitch::id).toList());
+            assertTrue(catalog.recordingSwitches("MUT2").isEmpty());
+            assertTrue(catalog.recordingSwitches("SSM").getFirst().toString().contains("Flag"));
+        }
+    }
+
+    @Test void recordingNameValidatesAndRollsBackWithoutReloadingChannels() throws Exception {
+        try (Fixture fixture = new Fixture()) {
+            fixture.apply(ordered("P1", "V"));
+            fixture.runtime.setRecordingName(" idle-test ", () -> {});
+            assertEquals("idle-test", fixture.settings.getLogfileNameText());
+            assertEquals(List.of("P1"), fixture.selected());
+            assertThrows(IllegalArgumentException.class, () -> fixture.runtime.setRecordingName("../bad", () -> fail("Invalid name saved")));
+            assertEquals("idle-test", fixture.settings.getLogfileNameText());
+            assertThrows(IllegalStateException.class, () -> fixture.runtime.setRecordingName("new-name", () -> { throw new IllegalStateException("Disk full"); }));
+            assertEquals("idle-test", fixture.settings.getLogfileNameText());
+            fixture.runtime.setRecordingName("", () -> {});
+            assertEquals("", fixture.settings.getLogfileNameText());
+        }
+    }
+
+    @Test
+    @org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable(named = "RR2_FX_WINDOW_SMOKE", matches = "1")
+    void setupPreservesFullscreenAndMaximizedGeometryAndCancelsCleanly() throws Exception {
+        try (Fixture fixture = new Fixture()) {
+            for (boolean fullscreen : List.of(false, true)) {
+                String savedSwitch = fixture.settings.getFileLoggingControllerSwitchId();
+                var owner = new AtomicReference<javafx.stage.Stage>();
+                var original = new javafx.scene.layout.StackPane();
+                try {
+                    FxTestRuntime.run(() -> {
+                        var stage = new javafx.stage.Stage(); owner.set(stage);
+                        stage.setScene(new javafx.scene.Scene(original, 900, 600));
+                        FxTheme.apply(stage, stage.getScene());
+                        stage.show();
+                        if (fullscreen) stage.setFullScreen(true); else stage.setMaximized(true);
+                    });
+                    windowPulses();
+                    double[] geometry = new double[4];
+                    FxTestRuntime.run(() -> {
+                        var stage = owner.get();
+                        geometry[0] = stage.getX(); geometry[1] = stage.getY();
+                        geometry[2] = stage.getWidth(); geometry[3] = stage.getHeight();
+                        FxLoggerSetup.show(stage, fixture.runtime, () -> {}, new FxSerialPortSelector(List::of));
+                    });
+                    windowPulses();
+                    var switchesReady = new CountDownLatch(1);
+                    FxTestRuntime.run(() -> {
+                        var scene = owner.get().getScene();
+                        var tabs = (javafx.scene.control.TabPane) scene.lookup(".tab-pane");
+                        tabs.getSelectionModel().select(1); scene.getRoot().applyCss();
+                        var menu = (javafx.scene.control.ComboBox<?>) scene.lookup("#logger-recording-switch");
+                        if (!menu.getItems().isEmpty()) switchesReady.countDown();
+                        else menu.getItems().addListener((javafx.collections.ListChangeListener<Object>) change -> {
+                            if (!menu.getItems().isEmpty()) switchesReady.countDown();
+                        });
+                    });
+                    assertTrue(switchesReady.await(5, TimeUnit.SECONDS), "Recording switch metadata did not load");
+                    FxTestRuntime.run(() -> {
+                        var stage = owner.get();
+                        assertEquals(fullscreen, stage.isFullScreen());
+                        if (!fullscreen) assertTrue(stage.isMaximized());
+                        assertEquals(geometry[0], stage.getX(), 1); assertEquals(geometry[1], stage.getY(), 1);
+                        assertEquals(geometry[2], stage.getWidth(), 1); assertEquals(geometry[3], stage.getHeight(), 1);
+                        var overlay = stage.getScene().lookup("#logger-setup-overlay");
+                        assertNotNull(overlay); assertTrue(original.isDisabled());
+                        var tabs = (javafx.scene.control.TabPane) overlay.lookup(".tab-pane");
+                        tabs.getSelectionModel().select(1); stage.getScene().getRoot().applyCss();
+                        assertNotNull(overlay.lookup("#logger-recording-switch-description"));
+                        var switchMenu = (javafx.scene.control.ComboBox<?>) overlay.lookup("#logger-recording-switch");
+                        assertEquals(1, switchMenu.getItems().size());
+                        assertTrue(switchMenu.getItems().getFirst().toString().contains("Flag"));
+                        assertEquals("Choose a recording switch", switchMenu.getPromptText());
+                        switchMenu.getSelectionModel().selectFirst(); // An unsaved edit must not change the monitor.
+                        String directory = System.getenv("RR2_SETUP_CAPTURE_DIR");
+                        if (directory != null) {
+                            stage.getScene().getRoot().layout();
+                            var image = stage.getScene().getRoot().snapshot(null, null);
+                            var bitmap = new java.awt.image.BufferedImage((int) image.getWidth(), (int) image.getHeight(), java.awt.image.BufferedImage.TYPE_INT_ARGB);
+                            for (int y = 0; y < bitmap.getHeight(); y++) for (int x = 0; x < bitmap.getWidth(); x++)
+                                bitmap.setRGB(x, y, image.getPixelReader().getArgb(x, y));
+                            javax.imageio.ImageIO.write(bitmap, "png", new File(directory, fullscreen ? "setup-fullscreen.png" : "setup-maximized.png"));
+                        }
+                        javafx.event.Event.fireEvent(overlay, new javafx.scene.input.KeyEvent(javafx.scene.input.KeyEvent.KEY_PRESSED,
+                                "", "", javafx.scene.input.KeyCode.ESCAPE, false, false, false, false));
+                        assertSame(original, stage.getScene().getRoot()); assertFalse(original.isDisabled());
+                        assertEquals(savedSwitch, fixture.settings.getFileLoggingControllerSwitchId());
+                    });
+                    windowPulses();
+                    FxTestRuntime.run(() -> {
+                        assertEquals(fullscreen, owner.get().isFullScreen());
+                        assertEquals(geometry[2], owner.get().getWidth(), 1);
+                        assertEquals(geometry[3], owner.get().getHeight(), 1);
+                    });
+                } finally { FxTestRuntime.run(() -> { if (owner.get() != null) owner.get().close(); }); }
+            }
+        }
+    }
+
+    private static void windowPulses() throws Exception {
+        var completed = new CountDownLatch(1);
+        FxTestRuntime.run(() -> new javafx.animation.AnimationTimer() {
+            int pulses;
+            public void handle(long now) { if (++pulses == 12) { stop(); completed.countDown(); } }
+        }.start());
+        assertTrue(completed.await(5, TimeUnit.SECONDS));
+    }
+
     @Test void namedProfileSaveReloadAndSaveAsKeepRecoverySeparate() throws Exception {
         try (Fixture fixture = new Fixture()) {
             fixture.apply(ordered("P2", "mV", "S1", "On/Off", "P1", "V"));
@@ -421,7 +556,7 @@ class FxLoggerSetupTransferTest {
                     }
                     var tabs = (javafx.scene.control.TabPane) root.lookup(".tab-pane");
                     tabs.getSelectionModel().select(1); root.applyCss(); root.layout();
-                    for (String id : List.of("logger-fast-polling", "logger-switch-recording", "logger-absolute-time", "logger-us-numbers", "logger-log-name")) {
+                    for (String id : List.of("logger-fast-polling", "logger-switch-recording", "logger-recording-switch", "logger-absolute-time", "logger-us-numbers", "logger-log-name")) {
                         var control = root.lookup("#" + id); assertNotNull(control, id);
                         var bounds = control.localToScene(control.getBoundsInLocal());
                         assertTrue(bounds.getMinX() >= 0 && bounds.getMaxX() <= stage.getScene().getWidth(), id);

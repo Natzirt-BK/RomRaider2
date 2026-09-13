@@ -1,6 +1,6 @@
 # Active work plan
 
-Updated September 9, 2026.
+Updated September 12, 2026.
 
 The current candidate is [1.1.9 RC1](RELEASE_1_1_9.md), available for Android,
 Windows, Linux, SteamOS Desktop Mode and macOS. The
@@ -58,6 +58,12 @@ Current development adds [serial-port dropdowns and troubleshooting
 controls](DESKTOP_LOGGER_USABILITY.md). These are not yet published. The same
 review records the remaining retained-tool lifecycle issues; no new ECU-write
 controls are exposed by those usability changes.
+
+The same development batch adds fullscreen/maximized in-window Logger Setup,
+a definition-backed recording-switch selector, a main-window filename prefix
+and two-decimal CSV values on desktop and Android. These remain unpublished;
+vehicle-switch operation and physical window-manager behavior belong to the
+consolidated acceptance session below.
 
 1. Finish desktop usability and reliability before adding adapter transports:
    detected serial-port selection/refresh, profile file operations, plugin setup,

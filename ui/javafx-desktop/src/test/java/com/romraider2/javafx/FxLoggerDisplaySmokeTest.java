@@ -32,6 +32,10 @@ class FxLoggerDisplaySmokeTest {
                 var elapsed = (javafx.scene.control.Label) stage.getScene().lookup("#logger-recording-elapsed");
                 assertEquals("00:00:00", elapsed.getText());
                 assertNotNull(elapsed.getTooltip());
+                var name = (javafx.scene.control.TextField) stage.getScene().lookup("#logger-recording-name");
+                assertNotNull(name);
+                assertEquals("Automatic filename", name.getPromptText());
+                assertTrue(name.getTooltip().getText().contains("never overwritten"));
                 var menu = (javafx.scene.control.MenuBar) stage.getScene().lookup(".menu-bar");
                 var file = menu.getMenus().getFirst();
                 var profileActions = file.getItems().stream()

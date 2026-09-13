@@ -1,6 +1,34 @@
 # Desktop Logger usability and remaining parity
 
-Development checkpoint, September 9, 2026. Public 1.1.9 packages are unchanged.
+Development checkpoint, September 12, 2026. Public 1.1.9 packages are unchanged.
+
+## Recording and fullscreen setup
+
+The Windows/Linux logger header has an optional **Log name** field. Enter or
+leaving the field applies the filename prefix; clearing it restores automatic
+naming. The timestamp and ECU ID remain automatic, and repeated recordings never
+overwrite existing files. Invalid names are rejected and highlighted. A name
+cannot change an active recording, and a failed preference save restores the
+previous name. The same name is used by the header, menu, fullscreen controls
+and vehicle-switch recording.
+
+**Logger Setup → Recording** lists the selected protocol's defined switches in
+a dropdown. The saved switch and the rear-window defogger default (`S20`) are
+also shown. Switching definitions refreshes the choices in the background; Save
+checks the actual loaded definition/ECU and replaces the recording monitor while
+disconnected. An unavailable switch or failed save restores the old monitor,
+preferences and channel selections. This only watches the switch: ON starts
+recording and OFF stops it; no switch-actuation command is sent.
+
+Opening Logger Setup in a fullscreen or maximized logger uses an in-window modal
+panel, preserving the main window's geometry and fullscreen state. Cancel or
+Escape dismisses the panel and restores focus; background logger controls are
+disabled while setup is open. Normal windowed setup remains a separate dialog.
+
+Desktop and Android CSV channel values now have exactly two decimal places,
+rounded only when written/exported. Timestamps, headers, units and missing-value
+cells retain their existing format. Live values, calculations and Android
+recovery samples keep their original precision. Existing CSV files are unchanged.
 
 ## Serial-port selection
 
@@ -65,16 +93,22 @@ one later acceptance session.
 
 ## Local verification
 
-- Core: 757 tests, 754 passed and three optional skips; Linux and Windows core
+- Core: 759 tests, 756 passed and three optional skips; Linux and Windows core
   builds passed.
-- Desktop UI: 333 JavaFX tests (331 passed, two optional skips) and 48 Compose
-  tests passed, with native-window tests enabled on an isolated display.
+- Desktop UI: 337 JavaFX tests (336 passed, one optional skip) and 48 Compose
+  tests passed, with native-window tests and compact audit captures enabled on
+  an isolated display. Regression cases cover fullscreen/maximized setup,
+  recording-switch replacement/rollback and filename validation/rollback.
 - Shared checks passed, including 132 fitted-layout combinations and compact
   rendering bounds, channel/unit retention and explicit state/warning labels.
 - Android: 137 JVM tests, lint and automation APK builds passed. Isolated emulator
   checks passed gauge recording controls, compact portrait/landscape rendering,
   all 25 seamless styles, 1–6 mounted layouts, fullscreen/keep-awake, demo toggling
   and recording continuity across views. Actual rendered captures were reviewed.
+- Two-decimal CSV checks passed on desktop and Android, including missing values,
+  negative/rounding-boundary values, unchanged source precision and recovery
+  spools. Android export/recovery, gauge controls, compact rendering and live
+  view-switch recording checks were rerun after the CSV change.
 
 No physical adapter was opened, no vehicle was contacted and no public release
 asset was replaced. The compact Android gauge work is described in the

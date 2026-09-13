@@ -98,8 +98,10 @@ public final class FileUpdateHandlerImpl implements FileUpdateHandler, Convertor
         if (fileLogger.isStarted()) {
             for (LoggerData loggerData : response.getData()) {
                 double value = response.getDataValue(loggerData);
-                currentLine.updateParamValue(loggerData, Double.isFinite(value)
-                        ? loggerData.getSelectedConvertor().format(value) : "");
+                String formatted = Double.isFinite(value) ? java.math.BigDecimal.valueOf(value)
+                        .setScale(2, java.math.RoundingMode.HALF_UP).toPlainString() : "";
+                currentLine.updateParamValue(loggerData, SEMICOLON.equals(delimiter)
+                        ? formatted.replace('.', ',') : formatted);
             }
             if (currentLine.isFull()) {
                 fileLogger.writeLine(currentLine.values(), response.getTimestamp());
@@ -141,6 +143,12 @@ public final class FileUpdateHandlerImpl implements FileUpdateHandler, Convertor
 
     public long getRecordingElapsedMillis() {
         return fileLogger.getRecordingElapsedMillis();
+    }
+
+    /** Run a filename preference change atomically against every recording start path. */
+    public synchronized void configureNextRecording(Runnable change) {
+        if (fileLogger.isStarted()) throw new IllegalStateException("Stop recording before changing the log name.");
+        change.run();
     }
 
     @Override

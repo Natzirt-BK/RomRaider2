@@ -43,13 +43,16 @@ final class FxLoggerSetup {
         stage.initOwner(owner);
         stage.initModality(Modality.WINDOW_MODAL);
         stage.setTitle("Logger Setup");
+        boolean inWindow = owner instanceof Stage parent && (parent.isFullScreen() || parent.isMaximized());
+        Window dialogOwner = inWindow ? owner : stage;
+        Runnable[] close = {stage::close};
 
         TextField definition = field(settings.getLoggerDefinitionFilePath());
         Button browseDefinition = new Button("Browse…");
         browseDefinition.setMinWidth(Region.USE_PREF_SIZE);
         browseDefinition.setOnAction(event -> {
             File current = path(definition.getText());
-            File selected = FxDialogs.chooseLoggerDefinition(stage,
+            File selected = FxDialogs.chooseLoggerDefinition(dialogOwner,
                     current == null ? settings.getLastDefinitionDir()
                             : current.getParentFile());
             if (selected != null) definition.setText(selected.getAbsolutePath());
@@ -58,7 +61,7 @@ final class FxLoggerSetup {
         Button browseOutput = new Button("Browse…");
         browseOutput.setMinWidth(Region.USE_PREF_SIZE);
         browseOutput.setOnAction(event -> {
-            File selected = FxDialogs.chooseDirectory(stage,
+            File selected = FxDialogs.chooseDirectory(dialogOwner,
                     "Select log output directory", path(output.getText()));
             if (selected != null) output.setText(selected.getAbsolutePath());
         });
@@ -118,9 +121,16 @@ final class FxLoggerSetup {
 
         Region fill = new Region();
         HBox.setHgrow(fill, Priority.ALWAYS);
+        Label applyError = new Label();
+        applyError.setWrapText(true);
+        applyError.setMaxWidth(400);
+        applyError.setMinWidth(0);
+        applyError.setId("logger-setup-error");
         Button cancel = new Button("Cancel");
-        cancel.setOnAction(event -> stage.close());
+        cancel.setMinWidth(Region.USE_PREF_SIZE);
+        cancel.setOnAction(event -> close[0].run());
         Button save = new Button("Save setup");
+        save.setMinWidth(Region.USE_PREF_SIZE);
         SetupChoices choices = new SetupChoices(definition, protocol, transport, target, save,
                 settings.getLoggerProtocol(), settings.getTransportProtocol(), settings.getTargetModule());
         CheckBox fast = option("Fast Polling", "logger-fast-polling", settings.isFastPoll(),
@@ -135,6 +145,29 @@ final class FxLoggerSetup {
         CheckBox controlSwitch = option("Control recording with the vehicle switch", "logger-switch-recording",
                 settings.isFileLoggingControllerSwitchActive(),
                 "Uses the recording switch defined by the logger definition, normally the rear-window defogger. Save validates availability; this does not activate the vehicle switch.");
+        Label switchHelp = new Label("Saved recording switch: " + runtime.getRecordingSwitchDescription()
+                + ". Default: rear-window defogger (S20). Availability is checked when saving.");
+        switchHelp.setId("logger-recording-switch-description");
+        switchHelp.setWrapText(true);
+        ComboBox<FxLoggerConnectionChoices.RecordingSwitch> recordingSwitch = new ComboBox<>();
+        recordingSwitch.setId("logger-recording-switch");
+        recordingSwitch.setMaxWidth(Double.MAX_VALUE);
+        recordingSwitch.setPromptText("No switch choices in this definition");
+        recordingSwitch.setTooltip(new Tooltip("Select the vehicle switch to watch: ON starts recording, OFF stops it. This does not operate the switch. Disconnect before changing it."));
+        String[] wantedSwitch = {settings.getFileLoggingControllerSwitchId()};
+        boolean[] updatingSwitch = {false};
+        recordingSwitch.valueProperty().addListener((o, before, after) -> {
+            if (!updatingSwitch[0] && after != null) wantedSwitch[0] = after.id();
+        });
+        choices.changed = () -> {
+            updatingSwitch[0] = true;
+            var available = choices.catalog.recordingSwitches(protocol.getValue());
+            recordingSwitch.getItems().setAll(available);
+            recordingSwitch.setValue(available.stream().filter(value -> value.id().equals(wantedSwitch[0])).findFirst().orElse(null));
+            recordingSwitch.setDisable(available.isEmpty());
+            recordingSwitch.setPromptText(available.isEmpty() ? "No switch choices in this definition" : "Choose a recording switch");
+            updatingSwitch[0] = false;
+        };
         CheckBox absolute = option("Use clock time in CSV instead of elapsed milliseconds", "logger-absolute-time",
                 settings.isFileLoggingAbsoluteTimestamp(), "Off keeps the standard Time (msec) column. Applies to the next recording.");
         CheckBox numbers = option("Use US numeric formatting (restart required)", "logger-us-numbers",
@@ -146,7 +179,7 @@ final class FxLoggerSetup {
         Label captureHelp = new Label("Disconnect before changing capture options. Disabled Fast Polling means the selected module does not declare support. Switch availability is checked when saving.");
         captureHelp.setWrapText(true);
         javafx.scene.layout.VBox capture = new javafx.scene.layout.VBox(12,
-                new Label("Log filename prefix"), logName, nameHelp, fast, controlSwitch, absolute, numbers, captureHelp);
+                new Label("Log filename prefix"), logName, nameHelp, fast, controlSwitch, recordingSwitch, switchHelp, absolute, numbers, captureHelp);
         capture.setPadding(new Insets(18));
         javafx.scene.control.Tab connectionTab = new javafx.scene.control.Tab("Connection", scroll(form));
         javafx.scene.control.Tab captureTab = new javafx.scene.control.Tab("Recording", scroll(capture));
@@ -161,17 +194,24 @@ final class FxLoggerSetup {
                         j2534 ? originalPort : port.address(), protocol.getValue(), transport.getValue(), target.getValue(),
                         autoConnect.isSelected(), new LoggerCaptureOptions(!fast.isDisabled() && fast.isSelected(),
                                 controlSwitch.isSelected(), absolute.isSelected(), numbers.isSelected(), logName.getText()),
+                        recordingSwitch.getValue() == null ? settings.getFileLoggingControllerSwitchId() : recordingSwitch.getValue().id(),
                         () -> SettingsManager.save(settings));
                 applied.run();
-                stage.close();
+                close[0].run();
             } catch (RuntimeException failure) {
-                FxDialogs.error(stage, "Logger setup could not be applied",
-                        FxDialogs.rootMessage(failure));
+                applyError.setText("Setup not applied: " + FxDialogs.rootMessage(failure));
             }
         });
-        HBox actions = new HBox(8, fill, cancel, save);
+        HBox actions = new HBox(8, applyError, fill, cancel, save);
         actions.setPadding(new Insets(10));
         BorderPane root = new BorderPane(setupTabs, introduction, null, actions, null);
+        if (inWindow) {
+            var dialog = new FxInWindowDialog((Stage) owner, root, () -> { choices.close(); port.close(); });
+            close[0] = dialog::close;
+            choices.refresh();
+            port.scan();
+            return null; // Modal content belongs to the existing fullscreen/maximized owner.
+        }
         Scene scene = new Scene(root, 780, 560);
         FxTheme.apply(stage, scene);
         FxTheme.closeOnEscape(stage, scene);
@@ -206,6 +246,7 @@ final class FxLoggerSetup {
         private long revision;
         private boolean updating, closed;
         private String wantedProtocol, wantedTransport, wantedTarget;
+        private Runnable changed = () -> {};
 
         SetupChoices(TextField definition, ComboBox<String> protocol, ComboBox<String> transport,
                 ComboBox<String> target, Button save, String initialProtocol, String initialTransport, String initialTarget) {
@@ -233,6 +274,8 @@ final class FxLoggerSetup {
                 selector.getItems().clear(); selector.setValue(null); selector.setDisable(true);
             }
             updating = false;
+            catalog = FxLoggerConnectionChoices.empty();
+            changed.run();
             protocol.setPromptText("Reading definition…");
             debounce.playFromStart();
         }
@@ -273,6 +316,7 @@ final class FxLoggerSetup {
             select(transport, catalog.transports(protocol.getValue()), wantedTransport);
             select(target, catalog.modules(protocol.getValue(), transport.getValue()), wantedTarget);
             updating = false;
+            changed.run();
             updateSave();
         }
 

@@ -13,6 +13,29 @@ import org.junit.Rule;
 import org.junit.rules.TemporaryFolder;
 
 public class RecordingReliabilityTest {
+    @Test public void filenamePreferenceCannotChangeDuringRecording() {
+        Sink sink = new Sink(); var handler = new FileUpdateHandlerImpl(sink);
+        var changes = new java.util.concurrent.atomic.AtomicInteger();
+        handler.configureNextRecording(changes::incrementAndGet);
+        handler.start();
+        try { handler.configureNextRecording(changes::incrementAndGet); fail("Active filename changed"); }
+        catch (IllegalStateException expected) { }
+        assertEquals(1, changes.get());
+        handler.stop();
+        handler.configureNextRecording(changes::incrementAndGet);
+        assertEquals(2, changes.get());
+    }
+
+    @Test public void csvRoundsOnlyTheOutputAndKeepsTimestampAndSourcePrecision() {
+        Sink sink = new Sink(); var handler = new FileUpdateHandlerImpl(sink);
+        var channel = parameter("a", "Value"); handler.registerData(channel); handler.start();
+        var source = response(channel, 1.125);
+        handler.handleDataUpdate(source);
+        String delimiter = sink.lines.get(0).substring(0, 1);
+        assertEquals(delimiter + (delimiter.equals(";") ? "1,13" : "1.13"), sink.lines.get(0));
+        assertEquals(1.125, source.getDataValue(channel), 0);
+        handler.stop();
+    }
     @Rule public TemporaryFolder temporary = new TemporaryFolder();
     @Test public void elapsedTimerFollowsCaptureLifecycleNotSamplesOrWallClock() throws Exception {
         var settings = SettingsManager.getSettings();

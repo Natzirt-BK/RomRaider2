@@ -104,7 +104,7 @@ public class VehicleCatalogTest {
         owner[0].run();
         assertEquals(1, reads[0]);
         StringWriter csv = new StringWriter(); log.writeRomRaiderCsv(csv);
-        assertEquals("Time (msec),Supported (V)\n0,12\n", csv.toString());
+        assertEquals("Time (msec),Supported (V)\n0,12.00\n", csv.toString());
         assertEquals(3, profile.size());
     }
 }

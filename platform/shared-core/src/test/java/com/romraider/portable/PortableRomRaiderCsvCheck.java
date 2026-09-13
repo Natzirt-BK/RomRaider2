@@ -13,7 +13,7 @@ public final class PortableRomRaiderCsvCheck {
         PortableLogSession memory = new PortableLogSession();
         samples(memory);
         String expected = "Time (msec),Engine Speed (rpm),Battery Voltage (V)\n"
-                + "0,750,13.24\n100,800,13.25\n";
+                + "0,750.00,13.24\n100,800.00,13.25\n";
         Locale previous = Locale.getDefault();
         try {
             Locale.setDefault(Locale.GERMANY);
@@ -68,10 +68,16 @@ public final class PortableRomRaiderCsvCheck {
         gaps.append(new PortableLogSample(20, "a", "A", 1, ""));
         gaps.append(new PortableLogSample(20, "a", "A", 2, ""));
         gaps.append(new PortableLogSample(21, "b", "B", Double.NaN, "V"));
-        equal("Time (msec),A (),B (V)\n0,1,\n0,2,\n1,,\n", export(gaps));
+        equal("Time (msec),A (),B (V)\n0,1.00,\n0,2.00,\n1,,\n", export(gaps));
         PortableLogSession quoted = new PortableLogSession();
         quoted.append(new PortableLogSample(99, "a", "Air, \"entrée\"", 1.125, "%"));
-        equal("Time (msec),\"Air, \"\"entrée\"\" (%)\"\n0,1.125\n", export(quoted));
+        equal("Time (msec),\"Air, \"\"entrée\"\" (%)\"\n0,1.13\n", export(quoted));
+        check(quoted.snapshot().get(0).getValue() == 1.125, "CSV rounding altered the source reading");
+        equal("-1.13", PortableCsvNumbers.twoDecimals(-1.125));
+        equal("0.00", PortableCsvNumbers.twoDecimals(-0.001));
+        equal("0.00", PortableCsvNumbers.twoDecimals(-0.0));
+        equal("1000.00", PortableCsvNumbers.twoDecimals(999.999));
+        equal("", PortableCsvNumbers.twoDecimals(Double.POSITIVE_INFINITY));
         quoted.append(new PortableLogSample(100, "a", "Changed label", 1, "%"));
         rejects(quoted);
         PortableLogSession backwards = new PortableLogSession();
@@ -84,7 +90,7 @@ public final class PortableRomRaiderCsvCheck {
         equal("Time (msec)\n", export(new PortableLogSession()));
 
         spoolCase("10,a,\"Air, \"\"entrée\"\"\",1.25,%\r\n11,a,\"Air, \"\"entrée\"\"\",2,%",
-                "Time (msec),\"Air, \"\"entrée\"\" (%)\"\n0,1.25\n1,2\n");
+                "Time (msec),\"Air, \"\"entrée\"\" (%)\"\n0,1.25\n1,2.00\n");
         for (String corrupt : new String[] {"1,a,A,1", "1,a,\"A,1,V", "1,a,A,bad,V\n",
                 "-1,a,A,1,V\n", "1,a,A,1,V,extra\n", "1,a,\"A\"junk,1,V\n",
                 "1,a,A,1,V\n2,a,A", "1,a,A\"oops,1,V\n"}) spoolCase(corrupt, null);

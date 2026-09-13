@@ -192,7 +192,7 @@ public class ReadOnlyRecordingTest {
             assertEquals(2, rows.length);
             String[] cells = rows[1].split(",");
             assertEquals(2500, Double.parseDouble(cells[1]), 0);
-            assertEquals(13.194, Double.parseDouble(cells[2]), 1e-9);
+            assertEquals(13.19, Double.parseDouble(cells[2]), 1e-9);
             assertThrows(IllegalStateException.class, () -> h.log.append(sample()));
             assertThrows(IllegalStateException.class, h.recording::start);
         }
@@ -416,7 +416,7 @@ public class ReadOnlyRecordingTest {
         StringWriter output = new StringWriter(); recording.completedLog().writeRomRaiderCsv(output);
         assertTrue(output.toString().startsWith("Time (msec),Battery (scaled),RPM (scaled)\n"));
         String[] cells = output.toString().split("\n")[1].split(",");
-        assertEquals(13.194, Double.parseDouble(cells[1]), 1e-9);
+        assertEquals(13.19, Double.parseDouble(cells[1]), 1e-9);
         assertEquals(2500, Double.parseDouble(cells[2]), 0);
     }
 

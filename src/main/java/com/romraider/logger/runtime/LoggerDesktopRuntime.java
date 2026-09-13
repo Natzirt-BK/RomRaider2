@@ -528,6 +528,18 @@ public final class LoggerDesktopRuntime implements EcuRelatedMessageListener,
     public synchronized void applySetup(String definition, String output, String port,
             String protocol, String transport, String target, boolean automatic,
             LoggerCaptureOptions capture, Runnable persist) {
+        applySetup(definition, output, port, protocol, transport, target, automatic, capture,
+                settings.getFileLoggingControllerSwitchId(), persist);
+    }
+
+    public synchronized void applySetup(String definition, String output, String port,
+            String protocol, String transport, String target, boolean automatic,
+            LoggerCaptureOptions capture, String recordingSwitchId, Runnable persist) {
+        String previousSwitchId = settings.getFileLoggingControllerSwitchId();
+        String nextSwitchId = clean(recordingSwitchId);
+        if (nextSwitchId.isEmpty()) throw new IllegalArgumentException("Choose a recording switch.");
+        boolean switchChanged = !nextSwitchId.equals(previousSwitchId);
+        if (switchChanged) requireSetupTransferIdle();
         LoggerCaptureOptions previousCapture = LoggerCaptureOptions.from(settings);
         String previousLocale = settings.getLocale();
         java.util.Locale processLocale = java.util.Locale.getDefault();
@@ -537,7 +549,7 @@ public final class LoggerDesktopRuntime implements EcuRelatedMessageListener,
         String[] previous = {settings.getLoggerDefinitionFilePath(), settings.getLoggerOutputDirPath(),
                 settings.getLoggerPort(), settings.getLoggerProtocol(), settings.getTransportProtocol(), settings.getTargetModule()};
         boolean previousAuto = settings.getAutoConnectOnStartup();
-        boolean preferenceOnly = true;
+        boolean preferenceOnly = !switchChanged;
         for (int i = 0; i < next.length; i++) preferenceOnly &= i == 5
                 ? next[i].equalsIgnoreCase(clean(previous[i])) : sameSetupValue(next[i], previous[i]);
         if (!preferenceOnly) {
@@ -552,10 +564,13 @@ public final class LoggerDesktopRuntime implements EcuRelatedMessageListener,
         for (String id : previousSelection) previousConversions.put(id, dataById.get(id).getSelectedConvertor());
         try {
             setSetupValues(next, automatic);
+            settings.setFileLoggingControllerSwitchId(nextSwitchId);
             if (!preferenceOnly) {
                 if (!next[0].isEmpty()) settings.setLastDefinitionDir(new File(next[0]).getParentFile());
                 reloadConfiguration();
             }
+            if (switchChanged && !fileLoggingSwitchAvailable)
+                throw new ConfigurationException("The selected recording switch is not available for this definition and ECU.");
             if (capture != null) {
                 if (capture.fastPolling() && (settings.getDestinationTarget() == null
                         || !settings.getDestinationTarget().getFastPoll()))
@@ -567,6 +582,7 @@ public final class LoggerDesktopRuntime implements EcuRelatedMessageListener,
             persist.run();
         } catch (RuntimeException failure) {
             setSetupValues(previous, previousAuto);
+            settings.setFileLoggingControllerSwitchId(previousSwitchId);
             settings.setLastDefinitionDir(previousDir);
             settings.setFastPoll(previousFast);
             if (!preferenceOnly) {
@@ -603,6 +619,29 @@ public final class LoggerDesktopRuntime implements EcuRelatedMessageListener,
     }
 
     public synchronized boolean isFileLoggingSwitchAvailable() { return fileLoggingSwitchAvailable; }
+
+    public synchronized String getRecordingSwitchDescription() {
+        String id = settings.getFileLoggingControllerSwitchId();
+        LoggerData data = dataById.get(id);
+        String name = data instanceof EcuSwitch ? data.getName()
+                : "S20".equals(id) ? "Rear-window defogger (default)" : "Configured switch";
+        return name + " — " + id + (fileLoggingSwitchAvailable ? "" : " (not available in the loaded definition)");
+    }
+
+    /** Filename-only preference: live sampling need not be disconnected. */
+    public synchronized void setRecordingName(String name, Runnable persist) {
+        if (closed) throw new IllegalStateException("Logger is closed.");
+        LoggerCaptureOptions current = LoggerCaptureOptions.from(settings);
+        String validated = new LoggerCaptureOptions(current.fastPolling(), current.switchRecording(),
+                current.absoluteTimestamp(), current.usNumbers(), name).logName();
+        fileHandler.configureNextRecording(() -> {
+            String previous = settings.getLogfileNameText();
+            if (java.util.Objects.equals(previous, validated)) return;
+            settings.setLogfileNameText(validated);
+            try { persist.run(); }
+            catch (RuntimeException failure) { settings.setLogfileNameText(previous); throw failure; }
+        });
+    }
 
     private static String clean(String value) { return value == null ? "" : value.trim(); }
 

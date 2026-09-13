@@ -2,7 +2,6 @@
 package com.romraider.portable;
 
 import java.io.*;
-import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.nio.charset.CodingErrorAction;
 import java.util.*;
@@ -92,7 +91,7 @@ public final class PortableRomRaiderCsvWriter {
         for (PortableLogSample sample : row) {
             output.write(',');
             if (sample != null && Double.isFinite(sample.getValue())) {
-                output.write(BigDecimal.valueOf(sample.getValue()).stripTrailingZeros().toPlainString());
+                output.write(PortableCsvNumbers.twoDecimals(sample.getValue()));
             }
         }
         output.write('\n');

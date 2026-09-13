@@ -130,6 +130,7 @@ final class FxLoggerWindow {
     private final Button connect = new Button("Connect");
     private final Button disconnect = new Button("Disconnect");
     private final Button record = new Button("Start recording");
+    private final javafx.scene.control.TextField recordingName = new javafx.scene.control.TextField();
     private final Label recordingElapsed = new Label("00:00:00");
     private final Button mountedStartRecording = new Button("Start recording");
     private final Button mountedStopRecording = new Button("Stop recording");
@@ -310,7 +311,7 @@ final class FxLoggerWindow {
                 item("Disconnect", event -> context.getSession().disconnect()),
                 new SeparatorMenuItem(),
                 item("Start recording",
-                        event -> context.getSession().startRecording()),
+                        event -> startRecording()),
                 item("Stop recording",
                         event -> context.getSession().stopRecording()),
                 new SeparatorMenuItem(),
@@ -363,7 +364,7 @@ final class FxLoggerWindow {
         record.setOnAction(event -> {
             if (context.getSession().getState() == LoggerSessionState.RECORDING) {
                 context.getSession().stopRecording();
-            } else context.getSession().startRecording();
+            } else startRecording();
         });
         Button setup = new Button("Logger Setup");
         setup.setOnAction(event -> showSetup());
@@ -395,7 +396,19 @@ final class FxLoggerWindow {
         record.setMinWidth(Region.USE_PREF_SIZE);
         HBox recordingControls = new HBox(7, record, recordingElapsed);
         recordingControls.setAlignment(Pos.CENTER_LEFT);
-        FlowPane actions = new FlowPane(9, 6, connect, disconnect, recordingControls, loadDefinition, loadProfile, setup);
+        recordingName.setId("logger-recording-name");
+        recordingName.setText(runtime.getSettings().getLogfileNameText());
+        recordingName.setPromptText("Automatic filename");
+        recordingName.setAccessibleText("Log filename prefix");
+        recordingName.setPrefWidth(175);
+        recordingName.setTooltip(new Tooltip("Optional filename prefix, e.g. idle-test. Press Enter or leave this field to apply. A timestamp and ECU ID are added; existing files are never overwritten. Clear for automatic naming."));
+        recordingName.setOnAction(event -> applyRecordingName());
+        recordingName.focusedProperty().addListener((o, before, focused) -> {
+            if (!focused && !recordingName.isDisabled()) applyRecordingName();
+        });
+        HBox nameControls = new HBox(5, styled("LOG NAME", "studio-kicker"), recordingName);
+        nameControls.setAlignment(Pos.CENTER_LEFT);
+        FlowPane actions = new FlowPane(9, 6, connect, disconnect, recordingControls, nameControls, loadDefinition, loadProfile, setup);
         actions.setId("logger-header-actions");
         actions.setMinWidth(0);
         HBox.setHgrow(actions, Priority.ALWAYS);
@@ -879,7 +892,7 @@ final class FxLoggerWindow {
         mountedStartRecording.setMinHeight(48); mountedStopRecording.setMinHeight(48);
         mountedStartRecording.setMinWidth(Region.USE_PREF_SIZE); mountedStopRecording.setMinWidth(Region.USE_PREF_SIZE);
         mountedStartRecording.setOnAction(event -> {
-            context.getSession().startRecording(); updateMountedRecordingControls(); showMountedMenu();
+            startRecording(); updateMountedRecordingControls(); showMountedMenu();
         });
         mountedStopRecording.setOnAction(event -> {
             context.getSession().stopRecording(); updateMountedRecordingControls(); showMountedMenu();
@@ -1332,6 +1345,7 @@ final class FxLoggerWindow {
         record.setDisable(!canRecord);
         record.setText(next == LoggerSessionState.RECORDING
                 ? "Stop recording" : "Start recording");
+        recordingName.setDisable(next == LoggerSessionState.RECORDING);
         refreshRecordingElapsed();
     }
 
@@ -1368,8 +1382,30 @@ final class FxLoggerWindow {
         FxLoggerSetup.show(stage, runtime, () -> {
             status.setText("Logger configuration loaded");
             channelRail.update(channelSnapshot);
+            recordingName.setText(runtime.getSettings().getLogfileNameText());
             considerAutoConnect();
         });
+    }
+
+    private boolean applyRecordingName() {
+        if (java.util.Objects.equals(recordingName.getText(), runtime.getSettings().getLogfileNameText())) {
+            recordingName.pseudoClassStateChanged(javafx.css.PseudoClass.getPseudoClass("invalid"), false);
+            return true;
+        }
+        try {
+            runtime.setRecordingName(recordingName.getText(), () -> SettingsManager.save(runtime.getSettings()));
+            recordingName.setText(runtime.getSettings().getLogfileNameText());
+            recordingName.pseudoClassStateChanged(javafx.css.PseudoClass.getPseudoClass("invalid"), false);
+            return true;
+        } catch (RuntimeException failure) {
+            status.setText("Log name not applied: " + FxDialogs.rootMessage(failure));
+            recordingName.pseudoClassStateChanged(javafx.css.PseudoClass.getPseudoClass("invalid"), true);
+            return false;
+        }
+    }
+
+    private void startRecording() {
+        if (applyRecordingName()) context.getSession().startRecording();
     }
 
     private void showAdapterTest() {

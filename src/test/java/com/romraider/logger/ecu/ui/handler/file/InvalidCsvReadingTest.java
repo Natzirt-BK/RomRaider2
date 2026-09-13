@@ -29,7 +29,8 @@ public class InvalidCsvReadingTest {
         }
         assertEquals(6, lines.size());
         String delimiter = lines.get(0).substring(0, 1);
-        assertEquals(Arrays.asList(delimiter + "12", delimiter, delimiter, delimiter,
-                delimiter + "0", delimiter + "14"), lines);
+        String decimal = delimiter.equals(";") ? "," : ".";
+        assertEquals(Arrays.asList(delimiter + "12" + decimal + "00", delimiter, delimiter, delimiter,
+                delimiter + "0" + decimal + "00", delimiter + "14" + decimal + "00"), lines);
     }
 }

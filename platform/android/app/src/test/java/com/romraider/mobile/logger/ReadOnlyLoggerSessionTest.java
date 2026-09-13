@@ -47,7 +47,8 @@ public class ReadOnlyLoggerSessionTest {
         assertEquals("V", h.log.snapshot().get(1).getUnits());
         StringWriter csv = new StringWriter();
         h.log.writeRomRaiderCsv(csv);
-        assertEquals("Time (msec),RPM (rpm),Battery (V)\n0,2500,13.194\n", csv.toString());
+        assertEquals("Time (msec),RPM (rpm),Battery (V)\n0,2500.00,13.19\n", csv.toString());
+        assertEquals(13.194, h.log.snapshot().get(1).getValue(), 1e-9);
         assertEquals(2, com.romraider.portable.PortableLogCsvReader.read(new StringReader(csv.toString())).size());
     }
 

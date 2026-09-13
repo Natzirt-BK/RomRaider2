@@ -33,7 +33,7 @@ public final class PortableInvalidReadingCheck {
         session.append(new PortableLogSample(3, "p", "Fixture", converter("x", "uint8", "big").convert(new byte[] {0}), "V"));
         StringWriter csv = new StringWriter();
         session.writeRomRaiderCsv(csv);
-        require(csv.toString().equals("Time (msec),Fixture (V)\n0,5\n1,\n2,2\n3,0\n"),
+        require(csv.toString().equals("Time (msec),Fixture (V)\n0,5.00\n1,\n2,2.00\n3,0.00\n"),
                 "CSV lost a gap, recovery or legitimate zero: " + csv);
         require(Double.isNaN(PortableLogCsvReader.read(new StringReader(csv.toString()))
                 .snapshot().get(1).getValue()), "CSV import fabricated a zero");
