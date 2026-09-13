@@ -40,22 +40,22 @@ restores the regular cards without replacing gauge instances or the recording.
 The same borderless presentation is used in JavaFX and Compose mounted views;
 their normal workspace theme is restored on exit.
 
-Current Android development additionally tightens the mounted face bounds:
+Android 1.1.10 tightens the mounted face bounds:
 circular dials use their own narrow viewport instead of the wide card canvas.
 The channel name is centered close to the dial; the outer RR2 badge, peak footer
 and reference/recent-scale caption are omitted. Units, dial artwork and explicit
 SIMULATED, unavailable/stale and warning states remain. Internal peak displays
 that belong to a style remain labeled. Normal setup cards and desktop artwork
 are unchanged. Mixed styles use their individual aspect ratios when choosing a
-layout. This compact presentation is not yet in the published 1.1.9 APK.
+layout.
 
 Tap anywhere on the mounted gauges or backdrop to reveal an overlay menu with
-**EXIT FULL SCREEN** and recording controls. Development after the published
-1.1.9 / 110414 APK adds green **START** and red **STOP** to both Gauges setup and
+**EXIT FULL SCREEN** and recording controls. Version 1.1.10 adds green **START**
+and red **STOP** to both Gauges setup and
 this overlay, matching Logger's recording actions. START is disabled while the
 service is busy or setup is loading; STOP is disabled while idle or already
 stopping. Unknown service state disables both. Text, pressed feedback and dimmed
-disabled states supplement color. These additions are not in that published APK.
+disabled states supplement color.
 
 The menu hides after five seconds of inactivity;
 another tap resets the timer. Android's accessibility timeout preference is respected.

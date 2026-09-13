@@ -1,6 +1,6 @@
 # Desktop Logger usability and remaining parity
 
-Development checkpoint, September 12, 2026. Public 1.1.9 packages are unchanged.
+Included in 1.1.10 RC1. See the [package qualification record](RELEASE_1_1_10_QUALIFICATION.md).
 
 ## Recording and fullscreen setup
 
@@ -110,6 +110,6 @@ one later acceptance session.
   spools. Android export/recovery, gauge controls, compact rendering and live
   view-switch recording checks were rerun after the CSV change.
 
-No physical adapter was opened, no vehicle was contacted and no public release
-asset was replaced. The compact Android gauge work is described in the
+No physical adapter was opened and no vehicle was contacted by these checks.
+The compact Android gauge work is described in the
 [mounted-display guide](ANDROID_MOUNTED_DISPLAY.md).

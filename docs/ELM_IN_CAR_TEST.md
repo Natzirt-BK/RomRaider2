@@ -1,8 +1,7 @@
 # Read-only adapter qualification
 
-The test window is included in desktop 1.1.9. Current development adds a
-detected-port dropdown with device descriptions, Refresh and manual entry;
-that selector is not yet in the published packages. Offline tests and port
+Desktop 1.1.10 includes a detected-port dropdown with device descriptions,
+Refresh and manual entry. Offline tests and port
 enumeration are not evidence of vehicle compatibility.
 
 ## Scope
@@ -44,7 +43,7 @@ automatically reconnect. A new test creates a new connection.
    **Logger → Read-only adapter test…**. Select the adapter's explicit OS
    serial port, its configured host baud, and Automatic or the known standard
    OBD-II protocol. The default 38,400 baud is a starting selection, not a
-   detected value. In current development, the dropdown lists OS-reported ports
+   detected value. The dropdown lists OS-reported ports
    when the window opens; **Refresh** repeats that enumeration after plugging in
    an adapter. Descriptions help identify devices but do not prove compatibility.
    A selected/custom address is retained across refresh, even if the port is no

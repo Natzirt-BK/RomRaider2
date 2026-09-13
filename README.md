@@ -11,7 +11,7 @@ RomRaider2 is in development. **Builds are release candidates; a stable
 release is not available yet.**
 
 Version **1.1.10** refines mounted gauges, recording controls and desktop setup.
-The source candidate is **1.1.10 RC1**. See the
+The current candidate is **1.1.10 RC1**. See the
 [package qualification record](docs/RELEASE_1_1_10_QUALIFICATION.md) for completed
 checks and remaining hardware testing.
 

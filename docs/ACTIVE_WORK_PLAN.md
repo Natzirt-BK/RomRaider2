@@ -2,9 +2,9 @@
 
 Updated September 12, 2026.
 
-The current candidate is [1.1.9 RC1](RELEASE_1_1_9.md), available for Android,
+The current candidate is [1.1.10 RC1](RELEASE_1_1_10.md), available for Android,
 Windows, Linux, SteamOS Desktop Mode and macOS. The
-[qualification record](RELEASE_1_1_9_QUALIFICATION.md) identifies passed automated
+[qualification record](RELEASE_1_1_10_QUALIFICATION.md) identifies passed automated
 checks and outstanding physical-device tests.
 
 ## Shipped in 1.1.9
@@ -35,16 +35,13 @@ current publication status.
 
 ## Next priorities
 
-Development after 1.1.9 adds [desktop XML Save/Save As/Reload](DESKTOP_LOGGER_PROFILES.md)
-with named-file ownership separate from automatic recovery. These changes are
-not yet packaged or published; native file-picker acceptance remains pending.
-Android development also adds matching green START/red STOP controls to Gauges
-and its fullscreen overlay, sharing Logger's session and disabled states. The
-published 1.1.9 / 110414 APK contains the definition-message fix, not these controls.
-See the [development checkpoint](PROFILE_GAUGE_CONTROLS_CHECKPOINT_2026-09-09.md)
-for automated checks and remaining physical acceptance.
+Version 1.1.10 includes [desktop XML Save/Save As/Reload](DESKTOP_LOGGER_PROFILES.md)
+with named-file ownership separate from automatic recovery. Android includes
+matching green START/red STOP controls in Gauges and fullscreen, sharing
+Logger's session and disabled states. Native file-picker and physical-device
+acceptance remains pending despite the completed automated/package checks.
 
-Desktop DimeMod development now verifies full identification and discovery
+Desktop DimeMod now verifies full identification and discovery
 metadata on reconnect and on the polling connection, without turning automatic
 retry/cache rejection into extra discovery writes. See the
 [reconnect contract](DESKTOP_DIMEMOD_RECONNECT.md). Physical acceptance remains
@@ -54,20 +51,19 @@ In-car tests are deferred into the single acceptance session below. Work that
 can be verified offline continues first; deferral does not count as a test pass.
 Custom ECU firmware/ROM-patch development is on hold until RR2 is stable.
 
-Current development adds [serial-port dropdowns and troubleshooting
-controls](DESKTOP_LOGGER_USABILITY.md). These are not yet published. The same
+Version 1.1.10 includes [serial-port dropdowns and troubleshooting
+controls](DESKTOP_LOGGER_USABILITY.md). The same
 review records the remaining retained-tool lifecycle issues; no new ECU-write
 controls are exposed by those usability changes.
 
-The same development batch adds fullscreen/maximized in-window Logger Setup,
+The release also includes fullscreen/maximized in-window Logger Setup,
 a definition-backed recording-switch selector, a main-window filename prefix
-and two-decimal CSV values on desktop and Android. These remain unpublished;
-vehicle-switch operation and physical window-manager behavior belong to the
+and two-decimal CSV values on desktop and Android. Vehicle-switch operation
+and physical window-manager behavior belong to the
 consolidated acceptance session below.
 
-1. Finish desktop usability and reliability before adding adapter transports:
-   detected serial-port selection/refresh, profile file operations, plugin setup,
-   logger debugging and diagnostic-tool entry points. Review retained diagnostic
+1. Finish remaining desktop reliability before adding adapter transports:
+   plugin setup and retained diagnostic-tool entry points. Review retained diagnostic
    tools for responsiveness. Do not add controls for unimplemented workflows.
 2. Continue desktop definition-installer acceptance across native pickers and
    platforms. Automated tests cover isolated rollback snapshots, frozen-byte
